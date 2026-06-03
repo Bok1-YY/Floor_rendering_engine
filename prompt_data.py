@@ -1432,5 +1432,338 @@ def extract_floor_colors(image_pil):
         return {}
 
 
+# ── CIE DE2000 色差计算 ──────────────────────────────────────────
+
+def _delta_e_2000(lab1_pil, lab2_pil):
+    """CIE DE2000 色差公式——公认最接近人眼感知的颜色距离。
+
+    Args:
+        lab1_pil: (L, A, B) 三元组，PIL LAB 编码 [0,255]
+        lab2_pil: (L, A, B) 三元组，PIL LAB 编码 [0,255]
+
+    Returns:
+        float: DE2000 值。 <2=不可分辨, 2-5=轻微, 5-10=明显, >10=严重
+    """
+    import numpy as np
+
+    # PIL LAB → 标准 CIELAB
+    def _pil_to_std(pil_lab):
+        L, A, B = pil_lab
+        return np.array([L * 100.0 / 255.0, A - 128.0, B - 128.0])
+
+    L1, a1, b1 = _pil_to_std(lab1_pil)
+    L2, a2, b2 = _pil_to_std(lab2_pil)
+
+    # 1. 色度
+    C1 = np.sqrt(a1**2 + b1**2)
+    C2 = np.sqrt(a2**2 + b2**2)
+    C_bar = (C1 + C2) / 2.0
+
+    # 2. G 因子（修正蓝色区域色度）
+    C_bar_7 = C_bar ** 7
+    G = 0.5 * (1.0 - np.sqrt(C_bar_7 / (C_bar_7 + 25.0**7)))
+
+    # 3. 修正 a'
+    a1p = a1 * (1.0 + G)
+    a2p = a2 * (1.0 + G)
+
+    # 4. 修正色度与色相角
+    C1p = np.sqrt(a1p**2 + b1**2)
+    C2p = np.sqrt(a2p**2 + b2**2)
+
+    def _hue_deg(ap, b):
+        h = np.degrees(np.arctan2(b, ap)) % 360.0
+        return h
+
+    h1p = _hue_deg(a1p, b1)
+    h2p = _hue_deg(a2p, b2)
+
+    # 5. 色相角差
+    dh = h2p - h1p
+    if abs(dh) > 180.0:
+        dh = dh - 360.0 if dh > 0 else dh + 360.0
+
+    # 6. ΔL', ΔC', ΔH'
+    dLp = L2 - L1
+    dCp = C2p - C1p
+    dHp = 2.0 * np.sqrt(C1p * C2p) * np.sin(np.radians(dh / 2.0))
+    if C1p * C2p < 1e-9:
+        dHp = 0.0
+
+    # 7. 加权因子
+    Lp_bar = (L1 + L2) / 2.0
+    Cp_bar = (C1p + C2p) / 2.0
+
+    # 平均色相角（处理环绕）
+    if abs(h1p - h2p) <= 180.0:
+        hp_bar = (h1p + h2p) / 2.0
+    else:
+        hp_bar = (h1p + h2p + 360.0) / 2.0
+        if hp_bar >= 360.0:
+            hp_bar -= 360.0
+
+    T = (1.0
+         - 0.17 * np.cos(np.radians(hp_bar - 30.0))
+         + 0.24 * np.cos(np.radians(2.0 * hp_bar))
+         + 0.32 * np.cos(np.radians(3.0 * hp_bar + 6.0))
+         - 0.20 * np.cos(np.radians(4.0 * hp_bar - 63.0)))
+
+    # 色相角对色度差的依赖
+    dtheta = 30.0 * np.exp(-((hp_bar - 275.0) / 25.0)**2)
+
+    Cp_bar_7 = Cp_bar ** 7
+    Rc = 2.0 * np.sqrt(Cp_bar_7 / (Cp_bar_7 + 25.0**7))
+
+    # SL, SC, SH
+    SL = 1.0 + (0.015 * (Lp_bar - 50.0)**2) / np.sqrt(20.0 + (Lp_bar - 50.0)**2)
+    SC = 1.0 + 0.045 * Cp_bar
+    SH = 1.0 + 0.015 * Cp_bar * T
+
+    # RT 旋转项
+    RT = -np.sin(np.radians(2.0 * dtheta)) * Rc
+
+    # 8. DE2000
+    kL, kC, kH = 1.0, 1.0, 1.0  # 标准参考条件
+    term_L = (dLp / (kL * SL))**2
+    term_C = (dCp / (kC * SC))**2
+    term_H = (dHp / (kH * SH))**2
+    term_R = RT * (dCp / (kC * SC)) * (dHp / (kH * SH))
+
+    return float(np.sqrt(term_L + term_C + term_H + term_R))
+
+
+def _extract_lab_palette(img_pil):
+    """从 PIL Image 提取 LAB 主色板（复用高斯模糊 + k-means 管线）。
+
+    Returns:
+        list of (L_pil, A_pil, B_pil, coverage_pct) 按覆盖率降序，最多 5 个
+    """
+    import numpy as np
+    from PIL import ImageFilter
+
+    img = img_pil.convert('RGB')
+    blurred = img.filter(ImageFilter.GaussianBlur(radius=25))
+    w, h = blurred.size
+    target = 128
+    if w > h:
+        new_w, new_h = target, max(1, int(h * target / w))
+    else:
+        new_h, new_w = target, max(1, int(w * target / h))
+    small = blurred.resize((new_w, new_h), Image.Resampling.LANCZOS)
+    lab_img = small.convert('LAB')
+    lab_arr = np.array(lab_img, dtype=np.float32).reshape(-1, 3)
+
+    k = 5
+    n = lab_arr.shape[0]
+    sorted_idx = np.argsort(lab_arr[:, 0])
+    step = max(1, n // (k + 1))
+    init_idx = [sorted_idx[step * (i + 1)] for i in range(k)]
+    centers = lab_arr[init_idx].copy().astype(np.float64)
+
+    labels = np.zeros(n, dtype=np.int32)
+    for _ in range(30):
+        dists = np.zeros((n, k), dtype=np.float64)
+        for j in range(k):
+            diff = lab_arr - centers[j]
+            dists[:, j] = np.sum(diff * diff, axis=1)
+        new_labels = np.argmin(dists, axis=1)
+        new_centers = np.zeros((k, 3), dtype=np.float64)
+        for j in range(k):
+            mask = new_labels == j
+            if mask.sum() > 0:
+                new_centers[j] = lab_arr[mask].mean(axis=0)
+            else:
+                new_centers[j] = centers[j]
+        shift = np.sqrt(np.sum((new_centers - centers) ** 2))
+        labels = new_labels
+        centers = new_centers
+        if shift < 0.3:
+            break
+
+    cluster_counts = np.bincount(labels[labels >= 0], minlength=k)
+    total = max(cluster_counts.sum(), 1)
+    order = np.argsort(-cluster_counts)
+    palette = []
+    for i in range(min(k, 5)):
+        cnt = cluster_counts[order[i]]
+        if cnt == 0:
+            continue
+        L, A, B = [float(centers[order[i]][c]) for c in range(3)]
+        coverage = round(cnt / total * 100, 1)
+        palette.append((L, A, B, coverage))
+    return palette
+
+
+def compare_floor_colors(swatch_path, generated_img):
+    """对比地板小样与生成图地板区域的颜色差异。
+
+    从生成图底部裁取 35% 作为地板区域（建筑摄影中地板通常位于画面下部），
+    用与 swatch 相同的"高斯模糊 + LAB k-means"管线提取色板，
+    然后计算加权 Delta E 2000 色差。
+
+    Args:
+        swatch_path:   地板小样图路径（已做 sRGB 转换的 _优化图.png）
+        generated_img: 生成的效果图 (PIL Image, RGB)
+
+    Returns:
+        dict: {
+            'score':        int      0-100 整体匹配度百分比
+            'avg_de':       float    加权平均 ΔE2000
+            'de_verdict':   str      'excellent'/'good'/'fair'/'poor'
+            'delta_L':      float    明度偏差（正=偏亮，负=偏暗）
+            'delta_C':      float    色度偏差（正=偏艳，负=偏灰）
+            'delta_H':      float    色相偏差（度）
+            'swatch_hex':   str      小样主色 hex
+            'floor_hex':    str      生成图地板主色 hex
+            'swatch_temp':  str      小样色温
+            'floor_temp':   str      生成图地板色温
+            'per_dim':      list     每维度的人类可读描述
+        }
+        失败返回空 dict {}
+    """
+    try:
+        import numpy as np
+
+        # 1. 提取小样色板
+        swatch_img = Image.open(swatch_path).convert('RGB')
+        swatch_palette = _extract_lab_palette(swatch_img)
+        if not swatch_palette:
+            return {}
+
+        # 2. 裁取生成图底部 35%（地板区域）
+        w, h = generated_img.size
+        floor_region = generated_img.crop((0, int(h * 0.65), w, h))
+        floor_palette = _extract_lab_palette(floor_region)
+        if not floor_palette:
+            return {}
+
+        # 3. 计算加权色差
+        # 对于小样每个色，找到生成图地板中最接近的色，按小样覆盖率加权
+        total_de = 0.0
+        total_weight = 0.0
+        per_color_deltas = []
+        for sw_L, sw_A, sw_B, sw_cov in swatch_palette[:3]:  # 只取前 3 个色
+            best_de = float('inf')
+            best_floor = None
+            for fl_L, fl_A, fl_B, _ in floor_palette:
+                de = _delta_e_2000((sw_L, sw_A, sw_B), (fl_L, fl_A, fl_B))
+                if de < best_de:
+                    best_de = de
+                    best_floor = (fl_L, fl_A, fl_B)
+            total_de += best_de * sw_cov
+            total_weight += sw_cov
+            per_color_deltas.append((sw_L, sw_A, sw_B, best_floor, best_de, sw_cov))
+
+        if total_weight < 1:
+            return {}
+        avg_de = total_de / total_weight
+
+        # 4. 整体评分映射
+        if avg_de < 2:
+            score = 95 + int((2 - avg_de) / 2 * 5)
+            de_verdict = 'excellent'
+        elif avg_de < 5:
+            score = 80 + int((5 - avg_de) / 3 * 15)
+            de_verdict = 'good'
+        elif avg_de < 10:
+            score = 55 + int((10 - avg_de) / 5 * 25)
+            de_verdict = 'fair'
+        else:
+            score = max(10, 55 - int((avg_de - 10) / 10 * 45))
+            de_verdict = 'poor'
+        score = min(100, max(0, score))
+
+        # 5. 逐维度分析（使用加权平均的 LAB 值）
+        sw_weighted_L = sum(p[0] * p[5] for p in per_color_deltas) / total_weight
+        sw_weighted_A = sum(p[1] * p[5] for p in per_color_deltas) / total_weight
+        sw_weighted_B = sum(p[2] * p[5] for p in per_color_deltas) / total_weight
+
+        # 生成图地板侧取最大簇
+        fl_L, fl_A, fl_B, _ = floor_palette[0]
+
+        # PIL LAB → 标准 CIELAB 用于维度分析
+        sw_L_std = sw_weighted_L * 100.0 / 255.0
+        sw_A_std = sw_weighted_A - 128.0
+        sw_B_std = sw_weighted_B - 128.0
+        fl_L_std = fl_L * 100.0 / 255.0
+        fl_A_std = fl_A - 128.0
+        fl_B_std = fl_B - 128.0
+
+        delta_L = fl_L_std - sw_L_std              # 正=偏亮
+        delta_C = (np.sqrt(fl_A_std**2 + fl_B_std**2)
+                   - np.sqrt(sw_A_std**2 + sw_B_std**2))  # 正=偏艳
+
+        # 色相角差
+        sw_h = np.degrees(np.arctan2(sw_B_std, sw_A_std)) % 360
+        fl_h = np.degrees(np.arctan2(fl_B_std, fl_A_std)) % 360
+        delta_H = fl_h - sw_h
+        if delta_H > 180:
+            delta_H -= 360
+        elif delta_H < -180:
+            delta_H += 360
+
+        # 6. 逐维度描述
+        per_dim = []
+        if abs(delta_L) < 2:
+            per_dim.append(f"明度: ✅ 一致 (偏差 {delta_L:+.1f})")
+        elif delta_L > 0:
+            per_dim.append(f"明度: ⚠️ 偏亮 {delta_L:+.1f} (约 {abs(delta_L)/10:.1f} 档)")
+        else:
+            per_dim.append(f"明度: ⚠️ 偏暗 {delta_L:+.1f} (约 {abs(delta_L)/10:.1f} 档)")
+
+        if abs(delta_C) < 3:
+            per_dim.append(f"饱和度: ✅ 一致 (偏差 {delta_C:+.1f})")
+        elif delta_C > 0:
+            per_dim.append(f"饱和度: ⚠️ 偏艳 {delta_C:+.1f}")
+        else:
+            per_dim.append(f"饱和度: ⚠️ 偏灰 {delta_C:+.1f}")
+
+        if abs(delta_H) < 5:
+            per_dim.append(f"色相: ✅ 一致 (偏差 {delta_H:+.1f}°)")
+        elif delta_H > 0:
+            per_dim.append(f"色相: ⚠️ 偏暖/偏红 {delta_H:+.1f}°")
+        else:
+            per_dim.append(f"色相: ⚠️ 偏冷/偏绿蓝 {delta_H:+.1f}°")
+
+        # 7. hex 获取
+        def _lab_to_hex(L, A, B):
+            lab_pixel = np.array([[[L, A, B]]], dtype=np.uint8)
+            rgb = Image.fromarray(lab_pixel, mode='LAB').convert('RGB')
+            r, g, b = rgb.getpixel((0, 0))
+            return f"#{r:02X}{g:02X}{b:02X}"
+
+        swatch_hex = _lab_to_hex(sw_weighted_L, sw_weighted_A, sw_weighted_B)
+        floor_hex = _lab_to_hex(fl_L, fl_A, fl_B)
+
+        # 色温判断
+        def _temp_name(A_std, B_std):
+            if A_std > 6 and B_std > 6:
+                return "暖色 Warm"
+            elif A_std < -5 and B_std < -5:
+                return "冷色 Cool"
+            elif abs(A_std) < 5 and abs(B_std) < 5:
+                return "中性 Neutral"
+            else:
+                h = np.degrees(np.arctan2(B_std, A_std)) % 360
+                return "暖色 Warm" if 10 <= h <= 170 else "冷色 Cool"
+
+        return {
+            'score': score,
+            'avg_de': round(avg_de, 1),
+            'de_verdict': de_verdict,
+            'delta_L': round(delta_L, 1),
+            'delta_C': round(delta_C, 1),
+            'delta_H': round(delta_H, 1),
+            'swatch_hex': swatch_hex,
+            'floor_hex': floor_hex,
+            'swatch_temp': _temp_name(sw_A_std, sw_B_std),
+            'floor_temp': _temp_name(fl_A_std, fl_B_std),
+            'per_dim': per_dim,
+        }
+
+    except Exception:
+        return {}
+
+
 __all__ = [n for n in dir() if not n.startswith('__')]
 

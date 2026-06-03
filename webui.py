@@ -371,6 +371,7 @@ async def main_page():
                                     ui.label(f'🕐 {job.ts}').classes('text-xs').style('color: var(--text-secondary);')
                                 time_lbl = ui.label('').classes('text-xs').style('color: var(--text-secondary);'); time_lbl.visible = False
                                 err_lbl = ui.label('').classes('text-xs text-red-400'); err_lbl.visible = False
+                                conf_lbl = ui.html('').classes('text-xs q-mt-xs'); conf_lbl.visible = False
                                 img_row = ui.row().classes('w-full q-mt-xs').style('gap:6px; flex-wrap:wrap;'); img_row.visible = False
                                 pro_polish_btn = None; pro_polish_img = None; pro_polish_dl = None
                                 with img_row:
@@ -390,7 +391,7 @@ async def main_page():
                                     else:
                                         pro_img = None; pro_dl = None
                             _job_ui_refs[job.job_id] = dict(
-                                card=card, status_lbl=status_lbl, err_lbl=err_lbl, time_lbl=time_lbl,
+                                card=card, status_lbl=status_lbl, err_lbl=err_lbl, conf_lbl=conf_lbl, time_lbl=time_lbl,
                                 img_row=img_row, b2_img=b2_img, b2_dl=b2_dl,
                                 pro_img=pro_img, pro_dl=pro_dl,
                                 pro_polish_btn=pro_polish_btn, pro_polish_img=pro_polish_img, pro_polish_dl=pro_polish_dl,
@@ -454,6 +455,27 @@ async def main_page():
                                 tl.visible = False
                         if job.error:
                             refs['err_lbl'].text = job.error[:120]; refs['err_lbl'].visible = True
+                        # 颜色置信度展示
+                        _conf = refs.get('conf_data')
+                        if _conf:
+                            _verdict_icons = {'excellent': '🌟', 'good': '✅', 'fair': '⚠️', 'poor': '❌'}
+                            _vi = _verdict_icons.get(_conf.get('de_verdict', ''), '')
+                            _score = _conf.get('score', 0)
+                            _avg_de = _conf.get('avg_de', 0)
+                            _swatch_hex = _conf.get('swatch_hex', '#000')
+                            _floor_hex = _conf.get('floor_hex', '#000')
+                            _dim_lines = ''.join(f'<div>{d}</div>' for d in _conf.get('per_dim', []))
+                            refs['conf_lbl'].content = (
+                                f'<div style="margin-top:6px;padding:6px 10px;background:#1a1a12;'
+                                f'border-left:3px solid #a0826d;border-radius:0 4px 4px 0;'
+                                f'font-size:0.78em;color:#c8a87a;line-height:1.5;">'
+                                f'{_vi} <b>地板色彩匹配度：{_score}%</b> &nbsp;·&nbsp; ΔE={_avg_de}'
+                                f' &nbsp;·&nbsp; 上传 <span style="background:{_swatch_hex};display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:middle;">'
+                                f'</span> → 生成 <span style="background:{_floor_hex};display:inline-block;width:10px;height:10px;border-radius:2px;vertical-align:middle;"></span>'
+                                f'{_dim_lines}'
+                                f'</div>'
+                            )
+                            refs['conf_lbl'].visible = True
                         has_img = False
                         if job.b2_path and os.path.exists(str(job.b2_path)) and refs.get('b2_img') is not None:
                             url = _to_url(job.b2_path)
@@ -1211,6 +1233,17 @@ async def main_page():
 
                 if b2_img  is not None: await asyncio.to_thread(_api_write_to_record, b2_img,  'Nano Banana 2',  jpt, rid)
                 if pro_img is not None: await asyncio.to_thread(_api_write_to_record, pro_img, 'Nano Banana Pro', jpt, rid)
+
+                # ── 地板颜色置信度分析 ──────────────────────────────────
+                if pnp:
+                    try:
+                        _img_for_conf = pro_img or b2_img
+                        if _img_for_conf is not None:
+                            _conf_result = await asyncio.to_thread(compare_floor_colors, pnp, _img_for_conf)
+                            if _conf_result:
+                                _job_ui_refs[job.job_id]['conf_data'] = _conf_result
+                    except Exception as conf_ex:
+                        logger.warning(f"[颜色分析] 失败 job={job.job_id}: {conf_ex}")
 
                 err_msg = ('B2: ' + b2_err if b2_err else '') + (' Pro: ' + pro_err if pro_err else '')
                 if b2_err:
