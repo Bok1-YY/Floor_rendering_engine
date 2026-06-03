@@ -2,6 +2,21 @@ from .config import *
 from .prompt_data import *
 from .records import *
 
+# 地板整体颜色锁定指令：强制生成图地板的整体颜色与上传小样完全一致。
+# 取代旧的"提取色码注入 + 生成后自动校色"方案，改由提示词直接、人眼可校地约束模型。
+FLOOR_COLOR_MATCH_INSTRUCTION = (
+    "**[FLOOR COLOR — MANDATORY EXACT MATCH]** "
+    "The overall color of the wooden floor in the final image MUST be IDENTICAL to the uploaded floor swatch — "
+    "the same hue, the same warm/cool register, the same lightness/darkness, and the same saturation. "
+    "The uploaded swatch is the SINGLE source of truth for the floor color: read the floor's base color directly "
+    "from it and reproduce that exact color consistently across the entire floor. "
+    "Do NOT shift the floor warmer, cooler, lighter, darker, more golden, more orange, more grey, or more/less "
+    "saturated to suit the room's style, furniture or ambient lighting. "
+    "Only natural light falloff may change brightness (slightly brighter near windows, gradually softer away from "
+    "them) — the underlying material color stays exactly the swatch's color everywhere. "
+    "The finished floor must be instantly recognizable as the very same product as the uploaded swatch."
+)
+
 def _floor_spec_block(core_material, spec_line, visibility, quality, avoid_en, extra_cmd_en,
                       furniture_contrast=None):
     """四套工作流共享的提示词尾巴：地板规格 → 可见性 →(家具对比)→ 质量 → 负向。
@@ -14,40 +29,13 @@ def _floor_spec_block(core_material, spec_line, visibility, quality, avoid_en, e
         f"**[Negative Prompt]** Strictly avoid: {avoid_en}.{extra_cmd_en}"
     )
 
-def _build_color_calibration_block(color_data):
-    """将颜色提取结果组装为 prompt 块。color_data 为空时返回空字符串。"""
-    if not color_data or 'hex_codes' not in color_data or not color_data['hex_codes']:
-        return ""
-    hexes = color_data['hex_codes']
-    covers = color_data.get('coverages', [])
-    temp = color_data.get('color_temp', 'unknown')
-    role_names = ["dominant base", "secondary grain", "highlight accent", "shadow undertone", "micro-variation"]
-    lines = [
-        "**[Precise Color Calibration]** "
-        "The uploaded floor swatch has been numerically analyzed (Gaussian-blurred to remove grain noise, "
-        "then k-means clustered in CIELAB perceptual color space). "
-        "Use these measured values as the primary color reference for the floor material:",
-    ]
-    for i, h in enumerate(hexes):
-        role = role_names[i] if i < len(role_names) else f"variant {i+1}"
-        cov = covers[i] if i < len(covers) else 0
-        lines.append(f"  • Color {i+1} ({role}, {cov:.0f}% coverage): {h}")
-    lines.append(
-        f"Color temperature register: {temp.upper()}. "
-        f"The floor in the generated image should closely match these colors — "
-        f"they define the floor's identity palette."
-    )
-    return "\n".join(lines)
-
-
 def save_task_files_html(workflow_mode, model_choice, image_path, continent, country, city, neighborhood, property_type, style_type, room_type, view, lighting, pet_type, pet_action, pet_focus, angle, aspect_ratio, resolution, glossiness, seam_type, avoid_items, floor_size, custom_addition, floor_tone, market_furniture, last_image_path,
                          cn_mode=False, cn_developer="── 不指定 ──", cn_city="上海",
                          cn_tier="── 不指定 ──", cn_unit_type="── 不指定 ──",
                          cn_delivery="🏆 样板间 / 展示单位",
                          cn_room_type="客餐厅一体", cn_view="自然通透景观",
                          cn_space_features=None, cn_facilities=None,
-                         style_ref_correction="", style_analysis_text="",
-                         enable_color_calibration=True):
+                         style_ref_correction="", style_analysis_text=""):
     if not image_path: return None, "⚠️ 请上传图片", "", "", "", "", ""
     json_path, base_name, target_dir = _get_json_path(image_path)
     png_path = os.path.join(target_dir, f"{base_name}_优化图.png")
@@ -76,9 +64,6 @@ def save_task_files_html(workflow_mode, model_choice, image_path, continent, cou
             return None, f"❌ 图片处理失败: {e}", "", last_image_path, "", "", ""
     else:
         processed_img = Image.open(png_path); msg_prefix = "⚡ 图片未改变，秒速"
-
-    # ── 纹理鲁棒颜色提取（高斯模糊 + LAB k-means）──────────────────────
-    _color_data = extract_floor_colors(image_pil=processed_img)
 
     # ── 动态翻译与映射 ────────────────────────────────────────────────
     # 国内模式：覆盖位置、房间参数；风格始终使用顶部全局 Style
@@ -512,13 +497,10 @@ def save_task_files_html(workflow_mode, model_choice, image_path, continent, cou
             "Recalculate floor perspective to perfectly match the existing room's vanishing points."
         )
 
-    # ── 颜色校准块注入（仅当用户开启时追加到 CORE_MATERIAL_INSTRUCTION）──
-    if enable_color_calibration:
-        _color_cal_block = _build_color_calibration_block(_color_data)
-        if _color_cal_block:
-            CORE_MATERIAL_INSTRUCTION = CORE_MATERIAL_INSTRUCTION + "\n\n" + _color_cal_block
-            if CORE_MATERIAL_INSTRUCTION_PRO is not None:
-                CORE_MATERIAL_INSTRUCTION_PRO = CORE_MATERIAL_INSTRUCTION_PRO + "\n\n" + _color_cal_block
+    # ── 地板整体颜色锁定：强制与上传小样一致（无条件追加到 CORE_MATERIAL_INSTRUCTION）──
+    CORE_MATERIAL_INSTRUCTION = CORE_MATERIAL_INSTRUCTION + "\n\n" + FLOOR_COLOR_MATCH_INSTRUCTION
+    if CORE_MATERIAL_INSTRUCTION_PRO is not None:
+        CORE_MATERIAL_INSTRUCTION_PRO = CORE_MATERIAL_INSTRUCTION_PRO + "\n\n" + FLOOR_COLOR_MATCH_INSTRUCTION
 
     # ── 四模式提示词组装 (SCHEMA 顺序: Style→Composition→Lighting→Floor→Output) ──
     if "地板替换" in workflow_mode:
