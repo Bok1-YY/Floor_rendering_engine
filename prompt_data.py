@@ -1393,7 +1393,13 @@ def extract_floor_colors(image_pil):
             coverages.append(round(cnt / total * 100, 1))
 
         # 7. 色温和饱和度分析（基于最大簇 LAB）
-        L, A, B = float(sorted_centers[0][0]), float(sorted_centers[0][1]), float(sorted_centers[0][2])
+        # ⚠️ sorted_centers 是 PIL LAB 编码（L:0-255, A/B:0-255 且中性=128），
+        #    必须先转成标准 CIELAB（中性=0）再做阈值判断，否则 A/B≈128 恒 >6，
+        #    会把任何地板都判成 warm + saturated（与 compare_floor_colors 的判定保持一致）。
+        L_pil, A_pil, B_pil = float(sorted_centers[0][0]), float(sorted_centers[0][1]), float(sorted_centers[0][2])
+        L = L_pil * 100.0 / 255.0
+        A = A_pil - 128.0
+        B = B_pil - 128.0
         # A>0 偏红, A<0 偏绿; B>0 偏黄, B<0 偏蓝
         # 暖色：红+黄象限; 冷色：绿+蓝象限
         if A > 6 and B > 6:
@@ -1434,12 +1440,15 @@ def extract_floor_colors(image_pil):
 
 # ── CIE DE2000 色差计算 ──────────────────────────────────────────
 
-def _delta_e_2000(lab1_pil, lab2_pil):
+def _delta_e_2000(lab1_pil, lab2_pil, ignore_L=False):
     """CIE DE2000 色差公式——公认最接近人眼感知的颜色距离。
 
     Args:
         lab1_pil: (L, A, B) 三元组，PIL LAB 编码 [0,255]
         lab2_pil: (L, A, B) 三元组，PIL LAB 编码 [0,255]
+        ignore_L: True 时不计入明度差（仅比较色相/彩度）。室内光会让床产生
+                  天然的明暗渐变，平面小样与透视床的 ΔL 几乎恒非零，会污染
+                  色差判定——只想衡量"色味是否一致"时应置 True。
 
     Returns:
         float: DE2000 值。 <2=不可分辨, 2-5=轻微, 5-10=明显, >10=严重
@@ -1524,7 +1533,7 @@ def _delta_e_2000(lab1_pil, lab2_pil):
 
     # 8. DE2000
     kL, kC, kH = 1.0, 1.0, 1.0  # 标准参考条件
-    term_L = (dLp / (kL * SL))**2
+    term_L = 0.0 if ignore_L else (dLp / (kL * SL))**2
     term_C = (dCp / (kC * SC))**2
     term_H = (dHp / (kH * SH))**2
     term_R = RT * (dCp / (kC * SC)) * (dHp / (kH * SH))
@@ -1646,7 +1655,9 @@ def compare_floor_colors(swatch_path, generated_img):
             best_de = float('inf')
             best_floor = None
             for fl_L, fl_A, fl_B, _ in floor_palette:
-                de = _delta_e_2000((sw_L, sw_A, sw_B), (fl_L, fl_A, fl_B))
+                # 仅比较色味（色相/彩度），忽略室内光带来的明度差，
+                # 否则 verdict 会因正常光影被判 fair/poor 而触发不必要的校色
+                de = _delta_e_2000((sw_L, sw_A, sw_B), (fl_L, fl_A, fl_B), ignore_L=True)
                 if de < best_de:
                     best_de = de
                     best_floor = (fl_L, fl_A, fl_B)

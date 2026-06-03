@@ -312,8 +312,9 @@ async def main_page():
                                 _cfg0 = _load_config()
                                 api_key_inp = ui.input('API Key', value=_cfg0.get('gemini_api_key',''), password=True).classes('w-full')
                                 api_proxy_inp = ui.input('本地代理', value=_cfg0.get('proxy','')).classes('w-full')
-                                # 精确色码注入开关
+                                # 精确色码注入 + 自动校色开关
                                 auto_cc_check = ui.checkbox('🎨 提示词注入精确色码 (提升颜色准确度)', value=True).classes('w-full text-xs')
+                                auto_correct_check = ui.checkbox('🪄 生成后自动校色 (根据 ΔE 分析定向微调)', value=True).classes('w-full text-xs')
                                 ui.button('💾 保存', on_click=lambda: (save_api_key(api_key_inp.value, api_proxy_inp.value), ui.notify('保存成功', type='positive'))).classes('w-full').props('outline color=amber-8')
 
                         ui.separator()
@@ -1228,13 +1229,7 @@ async def main_page():
                     except Exception as ex: logger.warning(f"刷新任务卡片失败: {ex}")
                     return
 
-                b2j  = _save_api_result_jpg(b2_img,  'Nano Banana 2',  pnp) if b2_img  is not None else None
-                proj = _save_api_result_jpg(pro_img, 'Nano Banana Pro', pnp) if pro_img is not None else None
-
-                if b2_img  is not None: await asyncio.to_thread(_api_write_to_record, b2_img,  'Nano Banana 2',  jpt, rid)
-                if pro_img is not None: await asyncio.to_thread(_api_write_to_record, pro_img, 'Nano Banana Pro', jpt, rid)
-
-                # ── 地板颜色置信度分析 ──────────────────────────────────
+                # ── 地板颜色置信度分析 + 自动校色 ──────────────────────
                 if pnp:
                     try:
                         _img_for_conf = pro_img or b2_img
@@ -1242,8 +1237,28 @@ async def main_page():
                             _conf_result = await asyncio.to_thread(compare_floor_colors, pnp, _img_for_conf)
                             if _conf_result:
                                 _job_ui_refs[job.job_id]['conf_data'] = _conf_result
+                                # 自动校色（仅当偏差明显且用户开启时）
+                                if auto_correct_check.value and _conf_result.get('de_verdict') in ('fair', 'poor'):
+                                    try:
+                                        _img_for_conf_corrected = await asyncio.to_thread(
+                                            auto_correct_floor_color, _img_for_conf, _conf_result, 0.7)
+                                        if b2_img is not None:
+                                            b2_img = await asyncio.to_thread(
+                                                auto_correct_floor_color, b2_img, _conf_result, 0.7)
+                                        if pro_img is not None:
+                                            pro_img = await asyncio.to_thread(
+                                                auto_correct_floor_color, pro_img, _conf_result, 0.7)
+                                        _job_ui_refs[job.job_id]['conf_data']['_corrected'] = True
+                                    except Exception as cc_ex:
+                                        logger.warning(f"[自动校色] 失败 job={job.job_id}: {cc_ex}")
                     except Exception as conf_ex:
                         logger.warning(f"[颜色分析] 失败 job={job.job_id}: {conf_ex}")
+
+                b2j  = _save_api_result_jpg(b2_img,  'Nano Banana 2',  pnp) if b2_img  is not None else None
+                proj = _save_api_result_jpg(pro_img, 'Nano Banana Pro', pnp) if pro_img is not None else None
+
+                if b2_img  is not None: await asyncio.to_thread(_api_write_to_record, b2_img,  'Nano Banana 2',  jpt, rid)
+                if pro_img is not None: await asyncio.to_thread(_api_write_to_record, pro_img, 'Nano Banana Pro', jpt, rid)
 
                 err_msg = ('B2: ' + b2_err if b2_err else '') + (' Pro: ' + pro_err if pro_err else '')
                 if b2_err:
