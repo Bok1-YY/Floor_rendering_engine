@@ -100,7 +100,7 @@ async def main_page():
 
     with ui.header().classes('q-py-xs q-px-md items-center justify-between').style('height:50px; background: var(--bg-header);'):
         with ui.row().classes('items-center'):
-            ui.label('🪵 地板 AI 提示词引擎 v5.2.1').classes('text-h6').style('color: var(--text-accent);')
+            ui.label('🪵 地板 AI 提示词引擎 v5.3.6').classes('text-h6').style('color: var(--text-accent);')
         with ui.tabs().classes('flex-grow') as main_tabs:
             t_workspace = ui.tab('workspace', label='🎨 工作台 (生成 & 队列)')
             t_records   = ui.tab('records', label='📋 记录管理')
