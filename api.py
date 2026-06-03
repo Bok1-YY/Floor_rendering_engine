@@ -1,6 +1,9 @@
 from .config import *
 from .records import *
 
+def _redact_api_key(text):
+    return re.sub(r'([?&]key=)[^&\s)]+', r'\1***', str(text or ""))
+
 def call_gemini_generate(api_key: str, model_id: str, prompt_text: str, image_path: str,
                          image_size: str = "4K", aspect_ratio: str = "4:3",
                          room_image_path: str = None, style_ref_image_path: str = None):
@@ -40,7 +43,7 @@ def call_gemini_generate(api_key: str, model_id: str, prompt_text: str, image_pa
             last_err = None; break
         except (_req.exceptions.SSLError, _req.exceptions.ConnectionError, _req.exceptions.ChunkedEncodingError) as e:
             last_err = e
-            logger.warning(f"[API生成] 网络异常 attempt={attempt+1}/3 model={model_id}: {e}")
+            logger.warning(f"[API生成] 网络异常 attempt={attempt+1}/3 model={model_id}: {_redact_api_key(e)}")
             if attempt < 2: time.sleep(2 ** attempt)
         except _req.exceptions.Timeout:
             logger.error(f"[API生成] 请求超时 model={model_id}")
@@ -49,8 +52,8 @@ def call_gemini_generate(api_key: str, model_id: str, prompt_text: str, image_pa
             logger.exception(f"[API生成] 未预期网络错误 model={model_id}")
             return None, f"网络错误: {e}"
     if last_err is not None:
-        logger.error(f"[API生成] 网络重试失败 model={model_id}: {last_err}")
-        return None, f"网络错误: {last_err}"
+        logger.error(f"[API生成] 网络重试失败 model={model_id}: {_redact_api_key(last_err)}")
+        return None, f"网络错误: {_redact_api_key(last_err)}"
     if resp.status_code != 200:
         try:
             err_info = resp.json()
@@ -133,7 +136,7 @@ EDITING RULES:
             last_err = None; break
         except (_req.exceptions.SSLError, _req.exceptions.ConnectionError, _req.exceptions.ChunkedEncodingError) as e:
             last_err = e
-            logger.warning(f"[API二改] 网络异常 attempt={attempt+1}/3 model={model_id}: {e}")
+            logger.warning(f"[API二改] 网络异常 attempt={attempt+1}/3 model={model_id}: {_redact_api_key(e)}")
             if attempt < 2: time.sleep(2 ** attempt)
         except _req.exceptions.Timeout:
             logger.error(f"[API二改] 请求超时 model={model_id}")
@@ -142,8 +145,8 @@ EDITING RULES:
             logger.exception(f"[API二改] 未预期网络错误 model={model_id}")
             return None, f"网络错误: {e}"
     if last_err is not None:
-        logger.error(f"[API二改] 网络重试失败 model={model_id}: {last_err}")
-        return None, f"网络错误: {last_err}"
+        logger.error(f"[API二改] 网络重试失败 model={model_id}: {_redact_api_key(last_err)}")
+        return None, f"网络错误: {_redact_api_key(last_err)}"
     if resp.status_code != 200:
         try:
             err_info = resp.json()
@@ -175,9 +178,13 @@ EDITING RULES:
 FLOOR_DESEAM_INSTRUCTION = (
     "Smooth away and remove ALL the joint lines, seam lines and plank-edge grooves on the WOODEN FLOOR only, "
     "so the floor becomes ONE single continuous, seamless surface — like one solid printed sheet. "
-    "Keep the exact same wood color, wood tone and the staggered herringbone visual layout, but draw it PURELY "
-    "with wood-grain direction (the offset, broken zigzag look — NOT pointed continuous chevron V's): only the grain "
-    "direction changes, with no joint line, no groove and no gap anywhere on the floor. "
+    "CRITICAL — KEEP THE FLOOR'S EXISTING LAYOUT EXACTLY AS IT IS: whatever plank pattern the input floor already "
+    "shows (straight parallel planks, herringbone, square grid, etc.) MUST stay the SAME pattern. Do NOT convert it to "
+    "another layout — do NOT turn straight planks into herringbone, and do NOT turn herringbone into straight planks. "
+    "Express that SAME pattern PURELY through wood-grain direction: only the grain direction follows the original "
+    "layout, with no joint line, no groove and no gap anywhere on the floor. "
+    "Keep the EXACT same wood color, wood tone, brightness and saturation as the input floor — do NOT lighten, darken, "
+    "warm up, cool down or otherwise shift the floor's color in any way. "
     "Do NOT change anything else in the image: keep every piece of furniture, every plant, the walls, windows, "
     "ceiling, lighting, sunlight, shadows, camera angle and perspective exactly as they already are. "
     "Preserve ultra-sharp, pixel-level detail everywhere — do NOT blur, soften, smear or denoise any part of the "
@@ -255,13 +262,20 @@ def analyze_style_image(api_key: str, image_path: str) -> str:
             else:
                 return f"(Style analysis failed: HTTP {resp.status_code} on {model_name})"
         except Exception as e:
-            logger.warning(f"[参照模式] 模型 {model_name} 请求异常: {e}")
+            logger.warning(f"[参照模式] 模型 {model_name} 请求异常: {_redact_api_key(e)}")
             continue
     return "(Style analysis failed: 所有备选模型均不可用，请检查 API Key 和网络)"
 
-def _match_color_to_reference(src_img, ref_img):
+def _match_color_to_reference(src_img, ref_img, strength=1.0):
     """把 src 的整体色彩统计对齐到 ref（LAB 空间均值/方差迁移，Reinhard 色彩迁移）。
-    用于消除 img2img 磨缝带来的全局偏色——内容几乎一致，只把色温/饱和度拉回原图。"""
+
+    用于消除 img2img 磨缝带来的全局偏色——内容几乎一致，只把色温/饱和度拉回原图。
+
+    Args:
+        src_img: 待校色的 PIL Image
+        ref_img: 颜色参考 PIL Image
+        strength: 0.0~1.0，迁移强度。1.0=完全迁移(原行为)，0.0=保持原图不变
+    """
     import numpy as np
     src = src_img.convert('LAB'); ref = ref_img.convert('LAB')
     if ref.size != src.size:
@@ -276,7 +290,33 @@ def _match_color_to_reference(src_img, ref_img):
         else:
             out[..., c] = (s[..., c] - s_mean) * (r_std / s_std) + r_mean
     out = np.clip(out, 0, 255).astype(np.uint8)
-    return Image.fromarray(out, mode='LAB').convert('RGB')
+    transferred = Image.fromarray(out, mode='LAB').convert('RGB')
+
+    # 按强度与原图混合（strength=1.0 时等价于原行为）
+    if strength < 1.0:
+        src_rgb = src_img.convert('RGB')
+        return Image.blend(src_rgb, transferred, strength)
+    return transferred
+
+
+def create_blurred_reference(swatch_path):
+    """生成用于颜色迁移的模糊参考图。
+
+    对地板小样图施加大半径高斯模糊以消除木纹/矿物线等纹理噪声，
+    保留纯粹的"感知颜色"统计量用于 Reinhard 色彩迁移。
+
+    Args:
+        swatch_path: 地板小样图路径
+
+    Returns:
+        PIL.Image 或 None（失败时）
+    """
+    try:
+        from PIL import ImageFilter
+        img = Image.open(swatch_path).convert('RGB')
+        return img.filter(ImageFilter.GaussianBlur(radius=30))
+    except Exception:
+        return None
 
 def _infer_aspect_ratio_from_b64(b64_str: str) -> str:
     img = _b64_to_pil(b64_str)

@@ -198,6 +198,29 @@ STYLES = [
     "🌊 澳洲 Hamptons 海岸风 (Coastal Hamptons) - 浅色调，白橡木地板，自然麻布，通透明亮。",
     "🖤 暗黑摩登奢华风 (Dark Moody Luxury) - 深色墙面，金属配件，戏剧性灯光，欧洲高端都市感。",
     "🪵 日式北欧极简风 (Japandi Minimal) - 克制留白，原木色，亚麻棉麻，绝对平静。",
+    # ── 并入：原「国内装修风格」22 款（括号内英文名 = STYLE_ATMOSPHERE_MAP 的 key）──
+    "🪵 原木风 (Raw Wood) - 原木暖调，自然留白，地板即主角。",
+    "🎭 中古风 (Mid-Century Vintage) - 胡桃木+藤编，复古杏灰，岁月感。",
+    "🤍 奶油风 (Cream Tone) - 奶油色一统，圆润治愈，零对比。",
+    "🌿 极简日式 (Minimal Japanese) - 克制留白，原木低矮，禅意安静。",
+    "🌸 法式奶油 (French Cream) - 巴黎公寓感，轻复古，奶油浪漫。",
+    "🏮 新中式 (Neo-Chinese) - 水墨留白，乌木格栅，东方底蕴。",
+    "🏡 现代美式 (Modern American) - 温暖耐住，石材原木，自在不做作。",
+    "🇮🇹 意式极简 (Italian Minimalist) - 建筑感留白，隐形饰面，材质至上。",
+    "🌿 现代简约 (Modern Minimalist) - 干净中性，百搭基本款，大面留白。",
+    "💎 轻奢风 (Light Luxury) - 香槟金+大理石，样板间精致感。",
+    "🎞️ 港式复古 (Hong Kong Retro) - 墨绿藤编，黄铜玻璃，港片故事感。",
+    "🪨 侘寂风 (Wabi-Sabi Raw) - 原始素材，岁月痕迹，禅意极致。",
+    "🟤 美拉德风 (Maillard) - 焦糖可可暖褐，威士忌般包裹感。",
+    "🖤 静奢风 (Quiet Luxury) - 老钱风，材质与比例的安静高级。",
+    "🔩 工业风 (Industrial Loft) - 裸砖管线，黑钢做旧，LOFT 硬核。",
+    "🌊 地中海风 (Mediterranean) - 灰泥拱门，赤陶海蓝，度假通透。",
+    "⛺ 山系风 (Mountain Camp) - 大地色机能，露营基地感，自然质朴。",
+    "🌈 多巴胺风 (Dopamine) - 高饱和撞色，圆润俏皮，解压快乐。",
+    "❄️ 北欧风 (Nordic Scandi) - 浅木+白，hygge 温暖，明亮百搭。",
+    "📐 包豪斯 (Bauhaus) - 三原色块，几何机能，形随功能。",
+    "🏰 复古洋房 (Shanghai Deco) - 老上海 Art Deco，东西混搭，摩登复古。",
+    "🍵 禅意茶室 (Zen Tea Room) - 东方留白，茶仪式空间，侘寂极静。",
 ]
 
 STYLE_ATMOSPHERE_MAP = {
@@ -361,6 +384,361 @@ STYLE_ATMOSPHERE_MAP = {
             "patterned textiles or wallpapers",
         ],
     },
+
+    # ── 并入：原「国内装修风格」22 款 atm/must/ban（key 与 STYLES 括号内英文名一致）──
+    "Raw Wood": {
+        "atm": "Unforced naturalness, quiet warmth — the floor IS the design statement, all other elements subordinate to it. China's #1 trending style 2025.",
+        "must": [
+            "pale-to-medium warm-toned wood floor occupying 50–60% of image area, grain clearly visible",
+            "low-profile furniture in light natural oak or ash: sofa ≤70cm tall, coffee table near floor level",
+            "track lighting rail on ceiling (磁吸轨道灯)",
+            "clean white or warm beige walls, zero decorative mouldings, TV flush-mounted on plain wall",
+            "one or two indoor plants in natural clay pots: monstera, fiddle-leaf fig, or olive tree",
+            "cotton and linen soft furnishings in undyed cream and off-white, concealed storage throughout",
+        ],
+        "ban": [
+            "chandelier, decorative ceiling light, or 吊顶 cove lighting",
+            "marble TV wall or ornate wall panelling",
+            "dark walnut or espresso-tone furniture",
+            "any visible clutter or open storage",
+        ],
+    },
+    "Mid-Century Vintage": {
+        "atm": "Nostalgic warmth, vintage confidence — 'found over time' rather than 'bought all at once'. 1950s–70s mid-century modern fused with warm vintage sensibility.",
+        "must": [
+            "dark walnut or teak-tone furniture with tapered solid wood legs: sofa, sideboard, coffee table",
+            "rattan or cane accent element: woven cabinet door, rattan pendant light, or cane-back chair",
+            "vintage color accent: olive green velvet cushion, mustard throw, rust-orange ceramic vase, or aged brass side table",
+            "wall color: warm cream, apricot-grey (杏灰色), or oat — NOT bright white",
+            "one statement vintage object: geometric brass floor lamp, rounded arch mirror, or abstract ceramic sculpture",
+        ],
+        "ban": [
+            "cool white or grey walls",
+            "modern minimalist furniture with no visible wood grain",
+            "chrome or brushed silver metal hardware",
+            "bright saturated accent colors",
+        ],
+    },
+    "Cream Tone": {
+        "atm": "Stepping into a marshmallow — all pressure dissolves immediately. Monochromatic cream-to-warm-beige with zero color contrast anywhere in the architecture.",
+        "must": [
+            "monochromatic cream-to-warm-beige palette: walls, ceiling, large furniture ALL within the same creamy family",
+            "curved rounded furniture everywhere: barrel-round sofa arms, egg-shaped occasional chair, circular pedestal coffee table",
+            "bouclé, chunky linen, or waffle-weave fabric on all upholstery",
+            "round or globe-form pendant lamp in cream, oat, or matte white",
+            "abundant diffused soft lighting — no hard shadows anywhere",
+        ],
+        "ban": [
+            "sharp corners on any furniture piece",
+            "bold color contrast anywhere in the room",
+            "dark or cool-toned walls",
+            "strong directional or dramatic lighting",
+        ],
+    },
+    "Minimal Japanese": {
+        "atm": "Profound interior silence — a room that asks nothing of you. Disciplined negative space; floor clearly visible across ≥60% of frame.",
+        "must": [
+            "maximum 30% of visible wall surface has any object — rest is pure uninterrupted wall plane",
+            "low floor-level furniture: platform sofa 30–40cm off ground, floor cushions, low rectangular coffee table",
+            "palette strictly: warm white, ash grey, pale birch, undyed linen — zero saturated color",
+            "one single intentional object per surface: one ceramic bowl, one dried branch, one folded cloth",
+            "completely concealed storage — all doors flush, all handles invisible or recessed",
+        ],
+        "ban": [
+            "any saturated color anywhere in the room",
+            "more than one object per surface",
+            "chandelier or decorative ceiling light",
+            "patterned textiles or wallpapers",
+        ],
+    },
+    "French Cream": {
+        "atm": "Sunday morning Paris apartment — effortless, romantic, deeply comfortable. Light Parisian softness, not Baroque grandeur.",
+        "must": [
+            "warm cream or antique white walls with ONE subtle detail: simple panel moulding or single arched doorway",
+            "curved-silhouette sofa in cream linen or ivory textured fabric",
+            "delicate aged-brass or antique-gold pendant lamp with fabric shade",
+            "dried botanicals in stone or unglazed ceramic vase: lavender, pampas grass, or eucalyptus",
+            "one oval or arched mirror with aged gold frame as focal accent",
+        ],
+        "ban": [
+            "elaborate ornate plasterwork or Baroque decorative details",
+            "cool grey or blue-toned dominant palette",
+            "chrome or silver hardware",
+            "modern minimalist or industrial aesthetics",
+        ],
+    },
+    "Neo-Chinese": {
+        "atm": "Dignified cultural restraint, quiet depth, contemporary livability — cultural identity expressed through refined material choices.",
+        "must": [
+            "ink-wash color palette: warm off-white, aged gold, dark ebony-stained timber, muted sage",
+            "low-profile platform furniture with clean rectilinear silhouettes referencing Ming-dynasty joinery",
+            "lattice-screen dividers or door panels in dark walnut or black steel",
+            "one large-format Chinese ink painting or calligraphy scroll as the single focal wall element",
+            "ceramic vessels in celadon, blanc de chine, or tea-glazed finishes as the only decorative objects",
+        ],
+        "ban": [
+            "Western ornate or Baroque furniture",
+            "bright saturated colors",
+            "chandelier or non-Chinese lighting forms",
+            "patterned Western textiles or wallpapers",
+        ],
+    },
+    "Modern American": {
+        "atm": "American ease without formality — capable, warm, genuinely inhabitable. This style feels lived-in, not showroom-staged.",
+        "must": [
+            "natural stone surface, warm timber, aged brass or brushed nickel hardware and fixture materials",
+            "deep-seated comfortable sofa in warm linen or performance fabric, clean leg profile",
+            "board-and-batten or shiplap wall panelling on one accent wall in warm white",
+            "statement pendant light: large cage, lantern, or industrial-feel fixture in black or brass",
+            "green plant or fresh botanicals as primary decorative element",
+        ],
+        "ban": [
+            "French or European ornate styling",
+            "cool grey minimalist aesthetics",
+            "chrome or polished silver surfaces dominating",
+            "sparse or over-minimal layouts",
+        ],
+    },
+    "Italian Minimalist": {
+        "atm": "The quiet confidence of good taste that never needs to announce itself — architectural rigour, material quality over quantity.",
+        "must": [
+            "architectural palette: dove grey, warm stone, raw linen, warm white — zero pattern anywhere",
+            "furniture with architectural rigour: clean geometric profiles, visible material quality",
+            "one statement material surface: honed travertine or stone slab side table — not marble-look wallpaper",
+            "completely flush-face cabinetry with push-to-open or recessed grip, zero visible hardware",
+            "maximum two decorative objects in entire room: one sculptural ceramic, one art print",
+        ],
+        "ban": [
+            "any visible pattern or texture on walls",
+            "ornate or decorative hardware",
+            "plants or biophilic elements",
+            "more than two decorative objects total",
+        ],
+    },
+    "Modern Minimalist": {
+        "atm": "Calm, ordered, effortlessly livable — the universally reliable base style. Clean surfaces, large unobstructed floor areas.",
+        "must": [
+            "clean uncluttered surfaces, neutral palette of white, light grey, warm beige",
+            "slim-profile furniture with straight clean lines",
+            "concealed storage — nothing visible on surfaces",
+            "natural materials: light oak, concrete, linen",
+            "controlled even lighting with no drama",
+        ],
+        "ban": [
+            "decorative clutter or ornamental objects",
+            "bold accent colors",
+            "ornate or traditional furniture styles",
+            "patterned textiles or wallpapers",
+        ],
+    },
+    "Light Luxury": {
+        "atm": "Polished, aspirational — hotel suite quality rather than someone's actual home. NOTE: Associated with 2019–2022 developer show flats; use only when client specifically requests.",
+        "must": [
+            "champagne gold or brushed brass metal accents on handles and light fixtures",
+            "grey, warm white, or greige walls with light fluted or ribbed wall panels",
+            "marble or stone-look surfaces with soft veining on coffee tables",
+            "velvet or bouclé upholstery in dusty rose, deep teal, or warm grey",
+            "geometric pendant lights in metal and glass",
+        ],
+        "ban": [
+            "casual or informal styling elements",
+            "raw or unfinished natural materials",
+            "visible clutter or personal objects",
+            "bold color contrasts",
+        ],
+    },
+    "Hong Kong Retro": {
+        "atm": "Nostalgic warmth, cultured eclecticism, urban storytelling — 1970s–1990s Hong Kong domestic nostalgia.",
+        "must": [
+            "forest green, mustard, or coral accents against warm cream walls",
+            "rattan and cane furniture throughout",
+            "aged brass hardware on all fixtures",
+            "vintage-look ribbed glass panels or doors",
+            "warm incandescent-temperature lighting",
+        ],
+        "ban": [
+            "cool Scandinavian or minimalist aesthetics",
+            "chrome or silver hardware",
+            "white or cool-grey walls",
+            "contemporary designer furniture",
+        ],
+    },
+    "Wabi-Sabi Raw": {
+        "atm": "Profound stillness, acceptance of transience, material honesty — visible material history as the highest decoration.",
+        "must": [
+            "raw undyed unfinished natural materials: linen, unpolished stone, hand-thrown ceramics, weathered timber",
+            "muted earth palette: ash, raw umber, clay, stone grey, bone white",
+            "visible material history: cracks in plaster, patina on metal, grain irregularity in wood",
+            "minimal asymmetrically arranged objects",
+            "indirect low-temperature warm lighting",
+        ],
+        "ban": [
+            "polished or glossy surfaces of any kind",
+            "saturated colors",
+            "symmetrical arrangements",
+            "modern or industrial clean aesthetics",
+        ],
+    },
+    "Maillard": {
+        "atm": "Like sinking into a glass of whisky by firelight — warm, enveloping, quietly indulgent. A tonal study in caramel, cocoa, coffee and toasted brown, named after the Maillard browning reaction. 2025 autumn-winter breakout.",
+        "must": [
+            "tone-on-tone brown palette: caramel, toffee, espresso, cocoa, toasted almond — every surface a different shade of warm brown",
+            "rich tactile textures stacked together: chocolate-brown bouclé sofa, cognac leather armchair, chunky brown wool throw",
+            "warm walnut or teak timber furniture with visible grain",
+            "earthy ceramic and aged-brass accents in burnt-orange, rust and amber tones",
+            "warm low-Kelvin (≈2700K) ambient lighting with soft pools of glow, no cool light anywhere",
+        ],
+        "ban": [
+            "cool white, grey or blue tones anywhere in the room",
+            "high-contrast black-and-white pairings",
+            "bright saturated non-earth colors",
+            "sterile minimalist emptiness with no texture",
+        ],
+    },
+    "Quiet Luxury": {
+        "atm": "Old-money confidence that whispers instead of shouts — wealth expressed through impeccable material and proportion, never logos or sparkle. Quiet luxury / stealth wealth.",
+        "must": [
+            "restrained tonal palette: greige, taupe, oat, charcoal, ivory — depth from texture, not color",
+            "top-tier natural materials understated in form: honed marble, full-grain leather, cashmere, brushed solid timber",
+            "impeccable proportion and symmetry, generous negative space, nothing crowded",
+            "matte metal accents in bronze or blackened steel — never shiny gold or chrome",
+            "one or two museum-quality understated objects: a single sculptural lamp, one large abstract canvas",
+        ],
+        "ban": [
+            "visible brand logos or ostentatious decoration",
+            "champagne-gold, glossy or glittery 'bling' surfaces",
+            "saturated or trend-driven accent colors",
+            "cluttered surfaces or excessive ornamentation",
+        ],
+    },
+    "Industrial Loft": {
+        "atm": "Raw, honest, unpolished — a converted warehouse where structure IS the decoration. Confident, masculine, urban edge.",
+        "must": [
+            "exposed structural elements: bare brick or micro-cement wall, visible ceiling ducts/pipes, raw concrete surfaces",
+            "black steel framing: metal-framed glass partitions, black iron shelving, factory-style window grids",
+            "aged leather and distressed wood: cognac leather sofa, reclaimed-timber table with metal legs",
+            "exposed Edison-bulb or cage pendant lighting in black metal",
+            "neutral industrial palette: concrete grey, black, rust, weathered brown",
+        ],
+        "ban": [
+            "soft pastel or cream feminine palettes",
+            "ornate, classical or French decorative detailing",
+            "glossy polished or precious luxury finishes",
+            "fully concealed, seamless built-in cabinetry",
+        ],
+    },
+    "Mediterranean": {
+        "atm": "A whitewashed seaside villa where sunlight bounces off lime-plaster walls — breezy, relaxed, perpetually on holiday.",
+        "must": [
+            "hand-troweled lime-plaster (微水泥/灰泥) walls in warm white or sand, with soft rounded arched doorways or niches",
+            "palette of whitewashed white, terracotta, olive green and sea/sky blue accents",
+            "natural textures: rattan, jute rug, rough linen, unglazed terracotta pots",
+            "rustic warm-toned wood or terracotta-tile flooring and ceiling beams",
+            "Mediterranean greenery: olive tree, potted citrus, or trailing greenery in clay vessels",
+        ],
+        "ban": [
+            "cool grey minimalist or high-gloss modern surfaces",
+            "sharp all-rectilinear forms with zero curves or arches",
+            "dark moody or industrial palettes",
+            "ornate gilded or formal European styling",
+        ],
+    },
+    "Mountain Camp": {
+        "atm": "Bring the trail indoors — a basecamp aesthetic of muted earth tones, functional gear and unfussy natural materials. Calm, grounded, quietly outdoorsy.",
+        "must": [
+            "muted outdoor palette: olive, khaki, sand, clay, charcoal, faded forest green",
+            "functional gear-inspired textures: canvas, raw wood, matte metal, woven jute, technical fabric throws",
+            "low solid-wood or log furniture with an unpolished, handcrafted feel",
+            "camp-style accents: folding stool, canvas storage, a single framed mountain/landscape print, dried grasses",
+            "soft diffuse daylight with warm low-key supplementary lighting",
+        ],
+        "ban": [
+            "glossy, refined or luxury showroom finishes",
+            "bright saturated or pastel colors",
+            "ornate classical or glam decorative detailing",
+            "cool sterile minimalism with no natural texture",
+        ],
+    },
+    "Dopamine": {
+        "atm": "An instant mood lift — joyful, playful, unapologetically colorful. Saturated color blocking designed to spark happiness.",
+        "must": [
+            "bold high-saturation color blocking: 2–3 vivid hues clashing happily (e.g. cobalt + coral + lemon, or grass-green + pink)",
+            "a clean light base (white or pale wall) so the saturated furniture and decor pop",
+            "playful rounded furniture shapes: curvy sofa, blob/kidney coffee table, wavy mirror",
+            "graphic patterns and fun objects: checkerboard rug, abstract art, quirky ceramics",
+            "bright, even, cheerful lighting that keeps colors vivid",
+        ],
+        "ban": [
+            "muted, beige, greige or all-neutral palettes",
+            "moody dark or somber atmospheres",
+            "heavy ornate traditional furniture",
+            "minimalist emptiness with no color",
+        ],
+    },
+    "Nordic Scandi": {
+        "atm": "Bright, airy, hygge warmth — Scandinavian functionalism that makes long winters feel cozy. Light, clean and genuinely comfortable.",
+        "must": [
+            "bright base of crisp white or pale-grey walls maximizing the sense of daylight",
+            "light wood everywhere: pale ash, birch or white-oak floor and furniture with clean simple lines",
+            "cozy hygge layering: chunky knit throw, sheepskin, soft wool cushions in muted tones",
+            "one gentle accent color: dusty blue, sage, soft mustard or pale terracotta",
+            "simple iconic Scandinavian forms: a sculptural pendant lamp, a clean-lined lounge chair, green plants in simple pots",
+        ],
+        "ban": [
+            "dark heavy or ornate traditional furniture",
+            "glossy luxury or glam metallic finishes",
+            "cluttered surfaces or busy patterns",
+            "warm-dim moody low-light atmospheres",
+        ],
+    },
+    "Bauhaus": {
+        "atm": "Form follows function — rational, geometric, honest. Early-modernist design where primary colors and pure shapes do all the talking.",
+        "must": [
+            "primary-color accents (red, yellow, blue) used as bold geometric blocks against a neutral white/grey/black base",
+            "pure geometric forms: tubular chrome/steel-framed furniture, cantilever chair, cube and cylinder volumes",
+            "honest industrial materials shown plainly: tubular steel, glass, leather, smooth lacquer",
+            "clean functional layout with zero superfluous ornament, everything purposeful",
+            "one iconic modernist piece: Wassily-style chair, Barcelona-style bench, or a geometric grid artwork",
+        ],
+        "ban": [
+            "decorative ornamentation, mouldings or carved detail",
+            "soft pastel, beige or muted earthy palettes",
+            "rustic, distressed or handcraft-rough textures",
+            "curvy romantic or classical furniture",
+        ],
+    },
+    "Shanghai Deco": {
+        "atm": "1930s Shanghai concession-era glamour — Art Deco elegance meets East-West eclecticism. Cultured, nostalgic, quietly opulent.",
+        "must": [
+            "Art Deco lines: geometric inlay, fluted panels, stepped forms, rounded corners in dark lacquered wood",
+            "rich jewel-and-earth palette: emerald green, deep teal, oxblood, mustard against warm cream walls",
+            "period materials: terrazzo or mosaic-tile floor, brass and frosted-glass fixtures, velvet upholstery",
+            "East-West eclectic mix: a Chinese ceramic or screen alongside a Western leather club chair",
+            "vintage details: arched windows, herringbone wood floor, a gramophone-era or rotary-style decorative object",
+        ],
+        "ban": [
+            "cool minimalist or Scandinavian plainness",
+            "raw industrial or unfinished surfaces",
+            "bright contemporary saturated 'pop' colors",
+            "flat-pack modern furniture with no craftsmanship",
+        ],
+    },
+    "Zen Tea Room": {
+        "atm": "A breath held in stillness — an Eastern tea space built for slow ritual. Profound calm, emptiness as luxury, nature brought indoors.",
+        "must": [
+            "disciplined negative space: large empty floor and wall planes, only a few intentional objects",
+            "natural raw materials: undyed linen, raw timber, stone, bamboo, hand-thrown clay teaware",
+            "muted earthen palette: oatmeal, ash grey, tea-brown, moss green, ink black",
+            "a defined tea-ritual zone: low tea table with floor cushions or a raised tatami/platform seating area",
+            "a single natural focal element: one ikebana branch, a bonsai, a stone, or a hanging scroll",
+        ],
+        "ban": [
+            "saturated or bright colors",
+            "glossy, glam or luxury metallic finishes",
+            "crowded surfaces or symmetrical formal arrangements",
+            "Western ornate or industrial styling",
+        ],
+    },
 }
 
 PET_TYPES = [
@@ -437,6 +815,73 @@ FLOOR_TONE_STYLE_RECOMMEND_MAP = {
     "石纹·深灰/炭灰": {"Dark Moody Luxury": "✨✨", "Pinterest Editorial": "✨✨", "Cinematic Wabi-Sabi": "✨", "Japandi Minimal": "✨", "English Country Estate": "🟡", "IG Influencer Home": "", "Coastal Hamptons": "", "Alpine Chalet": "", "Biophilic Oasis": "", "Lazy Sunday Morning": ""},
     "石纹·近白/极浅": {"Pinterest Editorial": "✨✨", "Coastal Hamptons": "✨✨", "Japandi Minimal": "✨✨", "IG Influencer Home": "✨", "Biophilic Oasis": "✨", "Lazy Sunday Morning": "🟡", "Dark Moody Luxury": "", "Alpine Chalet": "", "English Country Estate": "", "Cinematic Wabi-Sabi": ""},
 }
+
+_DOMESTIC_STYLE_RECOMMEND_MAP = {
+    "木纹·暖色浅调": {
+        "Raw Wood": "✨✨", "Cream Tone": "✨✨", "French Cream": "✨✨",
+        "Modern Minimalist": "✨", "Minimal Japanese": "✨", "Nordic Scandi": "✨",
+        "Modern American": "✨", "Neo-Chinese": "🟡", "Zen Tea Room": "🟡",
+        "Light Luxury": "🟡", "Dopamine": "🟡",
+    },
+    "木纹·暖色中深调": {
+        "Mid-Century Vintage": "✨✨", "Modern American": "✨✨", "Maillard": "✨✨",
+        "Neo-Chinese": "✨", "Quiet Luxury": "✨", "Hong Kong Retro": "✨",
+        "Shanghai Deco": "🟡", "Wabi-Sabi Raw": "🟡", "Mountain Camp": "🟡",
+    },
+    "木纹·暖色深调": {
+        "Maillard": "✨✨", "Quiet Luxury": "✨✨", "Neo-Chinese": "✨✨",
+        "Hong Kong Retro": "✨", "Shanghai Deco": "✨", "Modern American": "🟡",
+        "Industrial Loft": "🟡", "Light Luxury": "🟡",
+    },
+    "木纹·中性灰米": {
+        "Italian Minimalist": "✨✨", "Modern Minimalist": "✨✨", "Quiet Luxury": "✨✨",
+        "Minimal Japanese": "✨", "Wabi-Sabi Raw": "✨", "Cream Tone": "✨",
+        "Raw Wood": "🟡", "French Cream": "🟡", "Bauhaus": "🟡",
+    },
+    "木纹·冷色浅调": {
+        "Italian Minimalist": "✨✨", "Minimal Japanese": "✨✨", "Nordic Scandi": "✨✨",
+        "Modern Minimalist": "✨", "Bauhaus": "✨", "Raw Wood": "🟡",
+        "Dopamine": "🟡", "Zen Tea Room": "🟡",
+    },
+    "木纹·冷色深调": {
+        "Quiet Luxury": "✨✨", "Industrial Loft": "✨✨", "Shanghai Deco": "✨",
+        "Italian Minimalist": "✨", "Bauhaus": "✨", "Neo-Chinese": "🟡",
+        "Wabi-Sabi Raw": "🟡",
+    },
+    "木纹·近白/漂白色": {
+        "Nordic Scandi": "✨✨", "Raw Wood": "✨✨", "Modern Minimalist": "✨✨",
+        "Italian Minimalist": "✨", "Dopamine": "✨", "Bauhaus": "✨",
+        "Minimal Japanese": "🟡", "Mediterranean": "🟡",
+    },
+    "石纹·奶油/洞石": {
+        "Italian Minimalist": "✨✨", "French Cream": "✨✨", "Light Luxury": "✨",
+        "Quiet Luxury": "✨", "Mediterranean": "✨", "Cream Tone": "🟡",
+        "Modern Minimalist": "🟡",
+    },
+    "石纹·暖灰/沙灰": {
+        "Italian Minimalist": "✨✨", "Quiet Luxury": "✨✨", "Modern Minimalist": "✨",
+        "Light Luxury": "✨", "Neo-Chinese": "🟡", "French Cream": "🟡",
+        "Bauhaus": "🟡",
+    },
+    "石纹·冷灰/水泥灰": {
+        "Industrial Loft": "✨✨", "Italian Minimalist": "✨✨", "Bauhaus": "✨",
+        "Modern Minimalist": "✨", "Quiet Luxury": "✨", "Wabi-Sabi Raw": "🟡",
+        "Dopamine": "🟡",
+    },
+    "石纹·深灰/炭灰": {
+        "Quiet Luxury": "✨✨", "Industrial Loft": "✨✨", "Shanghai Deco": "✨",
+        "Italian Minimalist": "✨", "Light Luxury": "🟡", "Neo-Chinese": "🟡",
+        "Bauhaus": "🟡",
+    },
+    "石纹·近白/极浅": {
+        "Italian Minimalist": "✨✨", "Modern Minimalist": "✨✨", "Nordic Scandi": "✨",
+        "Bauhaus": "✨", "Dopamine": "✨", "Mediterranean": "🟡",
+        "French Cream": "🟡", "Light Luxury": "🟡",
+    },
+}
+
+for _tone_key, _recs in _DOMESTIC_STYLE_RECOMMEND_MAP.items():
+    FLOOR_TONE_STYLE_RECOMMEND_MAP.setdefault(_tone_key, {}).update(_recs)
 
 MARKET_FURNITURE_CHOICES = [
     "🌐 通用国际 (Generic International)",
@@ -712,238 +1157,6 @@ CN_DELIVERY_MAP = {
     "🏗️ 全装修交付": "Full fit-out delivery standard residential unit. Complete developer fit-out package with coordinated finishes — a complete, move-in-ready home that clearly communicates quality.",
 }
 
-CN_DECO_STYLES = [
-    # ── 2025 小红书爆款 ──────────────────────────────────────────
-    "── 不指定 (沿用海外风格) ──",
-    "🪵 原木风          🔥 2025最热 搜索量↑180%",
-    "🎭 中古风          🔥 2025黑马 搜索量↑217%",
-    "🤍 奶油风          🔥 持续爆款 治愈系天花板",
-    "🌿 极简日式        ✨ 高级感 留白美学",
-    "🌸 法式奶油        ✨ 小户型首选 轻复古",
-    # ── 稳定流行 ────────────────────────────────────────────────
-    "🏮 新中式          📈 改善型热选 文化底蕴",
-    "🏡 现代美式        📈 2025新增热度",
-    "🇮🇹 意式极简       📈 关注度持续上升",
-    "🌿 现代简约        ⭐ 经久不衰 百搭基本款",
-    # ── 小众精品 ────────────────────────────────────────────────
-    "💎 轻奢风          🌡️ 热度渐退 样板间感",
-    "🎞️ 港式复古        ✨ 小众精品 城市故事感",
-    "🪨 侘寂风          ✨ 文青钟爱 禅意极致",
-]
-
-CN_DECO_STYLE_MAP = {
-    "── 不指定 (沿用海外风格) ──": "",
-
-    # ── 2025 爆款 ──────────────────────────────────────────────────────────
-    "🪵 原木风          🔥 2025最热 搜索量↑180%": {
-        "atm": "Unforced naturalness, quiet warmth — the floor IS the design statement, all other elements subordinate to it. China's #1 trending style 2025.",
-        "must": [
-            "pale-to-medium warm-toned wood floor occupying 50–60% of image area, grain clearly visible",
-            "low-profile furniture in light natural oak or ash: sofa ≤70cm tall, coffee table near floor level",
-            "track lighting rail on ceiling (磁吸轨道灯)",
-            "clean white or warm beige walls, zero decorative mouldings, TV flush-mounted on plain wall",
-            "one or two indoor plants in natural clay pots: monstera, fiddle-leaf fig, or olive tree",
-            "cotton and linen soft furnishings in undyed cream and off-white, concealed storage throughout",
-        ],
-        "ban": [
-            "chandelier, decorative ceiling light, or 吊顶 cove lighting",
-            "marble TV wall or ornate wall panelling",
-            "dark walnut or espresso-tone furniture",
-            "any visible clutter or open storage",
-        ],
-    },
-
-    "🎭 中古风          🔥 2025黑马 搜索量↑217%": {
-        "atm": "Nostalgic warmth, vintage confidence — 'found over time' rather than 'bought all at once'. 1950s–70s mid-century modern fused with warm vintage sensibility.",
-        "must": [
-            "dark walnut or teak-tone furniture with tapered solid wood legs: sofa, sideboard, coffee table",
-            "rattan or cane accent element: woven cabinet door, rattan pendant light, or cane-back chair",
-            "vintage color accent: olive green velvet cushion, mustard throw, rust-orange ceramic vase, or aged brass side table",
-            "wall color: warm cream, apricot-grey (杏灰色), or oat — NOT bright white",
-            "one statement vintage object: geometric brass floor lamp, rounded arch mirror, or abstract ceramic sculpture",
-        ],
-        "ban": [
-            "cool white or grey walls",
-            "modern minimalist furniture with no visible wood grain",
-            "chrome or brushed silver metal hardware",
-            "bright saturated accent colors",
-        ],
-    },
-
-    "🤍 奶油风          🔥 持续爆款 治愈系天花板": {
-        "atm": "Stepping into a marshmallow — all pressure dissolves immediately. Monochromatic cream-to-warm-beige with zero color contrast anywhere in the architecture.",
-        "must": [
-            "monochromatic cream-to-warm-beige palette: walls, ceiling, large furniture ALL within the same creamy family",
-            "curved rounded furniture everywhere: barrel-round sofa arms, egg-shaped occasional chair, circular pedestal coffee table",
-            "bouclé, chunky linen, or waffle-weave fabric on all upholstery",
-            "round or globe-form pendant lamp in cream, oat, or matte white",
-            "abundant diffused soft lighting — no hard shadows anywhere",
-        ],
-        "ban": [
-            "sharp corners on any furniture piece",
-            "bold color contrast anywhere in the room",
-            "dark or cool-toned walls",
-            "strong directional or dramatic lighting",
-        ],
-    },
-
-    "🌿 极简日式        ✨ 高级感 留白美学": {
-        "atm": "Profound interior silence — a room that asks nothing of you. Disciplined negative space; floor clearly visible across ≥60% of frame.",
-        "must": [
-            "maximum 30% of visible wall surface has any object — rest is pure uninterrupted wall plane",
-            "low floor-level furniture: platform sofa 30–40cm off ground, floor cushions, low rectangular coffee table",
-            "palette strictly: warm white, ash grey, pale birch, undyed linen — zero saturated color",
-            "one single intentional object per surface: one ceramic bowl, one dried branch, one folded cloth",
-            "completely concealed storage — all doors flush, all handles invisible or recessed",
-        ],
-        "ban": [
-            "any saturated color anywhere in the room",
-            "more than one object per surface",
-            "chandelier or decorative ceiling light",
-            "patterned textiles or wallpapers",
-        ],
-    },
-
-    "🌸 法式奶油        ✨ 小户型首选 轻复古": {
-        "atm": "Sunday morning Paris apartment — effortless, romantic, deeply comfortable. Light Parisian softness, not Baroque grandeur.",
-        "must": [
-            "warm cream or antique white walls with ONE subtle detail: simple panel moulding or single arched doorway",
-            "curved-silhouette sofa in cream linen or ivory textured fabric",
-            "delicate aged-brass or antique-gold pendant lamp with fabric shade",
-            "dried botanicals in stone or unglazed ceramic vase: lavender, pampas grass, or eucalyptus",
-            "one oval or arched mirror with aged gold frame as focal accent",
-        ],
-        "ban": [
-            "elaborate ornate plasterwork or Baroque decorative details",
-            "cool grey or blue-toned dominant palette",
-            "chrome or silver hardware",
-            "modern minimalist or industrial aesthetics",
-        ],
-    },
-
-    # ── 稳定流行 ─────────────────────────────────────────────────────────────
-    "🏮 新中式          📈 改善型热选 文化底蕴": {
-        "atm": "Dignified cultural restraint, quiet depth, contemporary livability — cultural identity expressed through refined material choices.",
-        "must": [
-            "ink-wash color palette: warm off-white, aged gold, dark ebony-stained timber, muted sage",
-            "low-profile platform furniture with clean rectilinear silhouettes referencing Ming-dynasty joinery",
-            "lattice-screen dividers or door panels in dark walnut or black steel",
-            "one large-format Chinese ink painting or calligraphy scroll as the single focal wall element",
-            "ceramic vessels in celadon, blanc de chine, or tea-glazed finishes as the only decorative objects",
-        ],
-        "ban": [
-            "Western ornate or Baroque furniture",
-            "bright saturated colors",
-            "chandelier or non-Chinese lighting forms",
-            "patterned Western textiles or wallpapers",
-        ],
-    },
-
-    "🏡 现代美式        📈 2025新增热度": {
-        "atm": "American ease without formality — capable, warm, genuinely inhabitable. This style feels lived-in, not showroom-staged.",
-        "must": [
-            "natural stone surface, warm timber, aged brass or brushed nickel hardware and fixture materials",
-            "deep-seated comfortable sofa in warm linen or performance fabric, clean leg profile",
-            "board-and-batten or shiplap wall panelling on one accent wall in warm white",
-            "statement pendant light: large cage, lantern, or industrial-feel fixture in black or brass",
-            "green plant or fresh botanicals as primary decorative element",
-        ],
-        "ban": [
-            "French or European ornate styling",
-            "cool grey minimalist aesthetics",
-            "chrome or polished silver surfaces dominating",
-            "sparse or over-minimal layouts",
-        ],
-    },
-
-    "🇮🇹 意式极简       📈 关注度持续上升": {
-        "atm": "The quiet confidence of good taste that never needs to announce itself — architectural rigour, material quality over quantity.",
-        "must": [
-            "architectural palette: dove grey, warm stone, raw linen, warm white — zero pattern anywhere",
-            "furniture with architectural rigour: clean geometric profiles, visible material quality",
-            "one statement material surface: honed travertine or stone slab side table — not marble-look wallpaper",
-            "completely flush-face cabinetry with push-to-open or recessed grip, zero visible hardware",
-            "maximum two decorative objects in entire room: one sculptural ceramic, one art print",
-        ],
-        "ban": [
-            "any visible pattern or texture on walls",
-            "ornate or decorative hardware",
-            "plants or biophilic elements",
-            "more than two decorative objects total",
-        ],
-    },
-
-    "🌿 现代简约        ⭐ 经久不衰 百搭基本款": {
-        "atm": "Calm, ordered, effortlessly livable — the universally reliable base style. Clean surfaces, large unobstructed floor areas.",
-        "must": [
-            "clean uncluttered surfaces, neutral palette of white, light grey, warm beige",
-            "slim-profile furniture with straight clean lines",
-            "concealed storage — nothing visible on surfaces",
-            "natural materials: light oak, concrete, linen",
-            "controlled even lighting with no drama",
-        ],
-        "ban": [
-            "decorative clutter or ornamental objects",
-            "bold accent colors",
-            "ornate or traditional furniture styles",
-            "patterned textiles or wallpapers",
-        ],
-    },
-
-    # ── 小众精品 ─────────────────────────────────────────────────────────────
-    "💎 轻奢风          🌡️ 热度渐退 样板间感": {
-        "atm": "Polished, aspirational — hotel suite quality rather than someone's actual home. NOTE: Associated with 2019–2022 developer show flats; use only when client specifically requests.",
-        "must": [
-            "champagne gold or brushed brass metal accents on handles and light fixtures",
-            "grey, warm white, or greige walls with light fluted or ribbed wall panels",
-            "marble or stone-look surfaces with soft veining on coffee tables",
-            "velvet or bouclé upholstery in dusty rose, deep teal, or warm grey",
-            "geometric pendant lights in metal and glass",
-        ],
-        "ban": [
-            "casual or informal styling elements",
-            "raw or unfinished natural materials",
-            "visible clutter or personal objects",
-            "bold color contrasts",
-        ],
-    },
-
-    "🎞️ 港式复古        ✨ 小众精品 城市故事感": {
-        "atm": "Nostalgic warmth, cultured eclecticism, urban storytelling — 1970s–1990s Hong Kong domestic nostalgia.",
-        "must": [
-            "forest green, mustard, or coral accents against warm cream walls",
-            "rattan and cane furniture throughout",
-            "aged brass hardware on all fixtures",
-            "vintage-look ribbed glass panels or doors",
-            "warm incandescent-temperature lighting",
-        ],
-        "ban": [
-            "cool Scandinavian or minimalist aesthetics",
-            "chrome or silver hardware",
-            "white or cool-grey walls",
-            "contemporary designer furniture",
-        ],
-    },
-
-    "🪨 侘寂风          ✨ 文青钟爱 禅意极致": {
-        "atm": "Profound stillness, acceptance of transience, material honesty — visible material history as the highest decoration.",
-        "must": [
-            "raw undyed unfinished natural materials: linen, unpolished stone, hand-thrown ceramics, weathered timber",
-            "muted earth palette: ash, raw umber, clay, stone grey, bone white",
-            "visible material history: cracks in plaster, patina on metal, grain irregularity in wood",
-            "minimal asymmetrically arranged objects",
-            "indirect low-temperature warm lighting",
-        ],
-        "ban": [
-            "polished or glossy surfaces of any kind",
-            "saturated colors",
-            "symmetrical arrangements",
-            "modern or industrial clean aesthetics",
-        ],
-    },
-}
-
-
 CN_SPACE_FEATURES = {
     "南北通透": "cross-ventilated apartment layout with windows on both north and south elevations, excellent natural light penetration from multiple directions simultaneously",
     "落地窗 / 超大采光面": "dramatic floor-to-ceiling windows spanning the full wall height, flooding the interior with natural light and framing outdoor views",
@@ -1084,4 +1297,140 @@ def _get_srgb_save_kwargs():
 
 
 
+def extract_floor_colors(image_pil):
+    """纹理鲁棒的地板颜色提取。
+
+    用大半径高斯模糊消除木纹/矿物线/结疤等纹理噪声后，在 CIELAB 空间做 k-means 聚类，
+    提取人眼感知到的"整体色调"而非纹理细节。
+
+    Args:
+        image_pil: PIL.Image, RGB 模式的地板小样图
+
+    Returns:
+        dict: {
+            'hex_codes':  list[str]    5 个主色 hex (#RRGGBB)，按覆盖率降序
+            'coverages':  list[float]  各色覆盖率百分比
+            'base_color': str          最大簇 hex（感知主色）
+            'color_temp': str          'warm' / 'cool' / 'neutral'
+            'saturated':  bool         是否偏高饱和
+        }
+        失败返回空 dict {}
+    """
+    try:
+        import numpy as np
+        from PIL import ImageFilter
+
+        # 1. 高斯模糊消除纹理（半径 25，彻底抹平木纹线、结疤、矿物纹）
+        img = image_pil.convert('RGB')
+        blurred = img.filter(ImageFilter.GaussianBlur(radius=25))
+
+        # 2. 降采样到 128x128 加速（仍保留足够颜色统计信息）
+        w, h = blurred.size
+        target = 128
+        if w > h:
+            new_w, new_h = target, max(1, int(h * target / w))
+        else:
+            new_h, new_w = target, max(1, int(w * target / h))
+        small = blurred.resize((new_w, new_h), Image.Resampling.LANCZOS)
+
+        # 3. 转到 CIELAB 感知均匀空间
+        lab_img = small.convert('LAB')
+        lab_arr = np.array(lab_img, dtype=np.float32).reshape(-1, 3)
+
+        # 4. 纯 numpy k-means (k=5)，确定性初始化
+        k = 5
+        n = lab_arr.shape[0]
+        # 按 L 通道均匀取初始中心（确定性）
+        sorted_idx = np.argsort(lab_arr[:, 0])
+        step = max(1, n // (k + 1))
+        init_idx = [sorted_idx[step * (i + 1)] for i in range(k)]
+        centers = lab_arr[init_idx].copy().astype(np.float64)
+
+        labels = np.zeros(n, dtype=np.int32)
+        for _ in range(30):
+            # 分配：每个像素到最近中心
+            dists = np.zeros((n, k), dtype=np.float64)
+            for j in range(k):
+                diff = lab_arr - centers[j]
+                dists[:, j] = np.sum(diff * diff, axis=1)
+            new_labels = np.argmin(dists, axis=1)
+
+            # 更新中心
+            new_centers = np.zeros((k, 3), dtype=np.float64)
+            for j in range(k):
+                mask = new_labels == j
+                if mask.sum() > 0:
+                    new_centers[j] = lab_arr[mask].mean(axis=0)
+                else:
+                    new_centers[j] = centers[j]  # 空簇保持
+
+            # 收敛检查
+            shift = np.sqrt(np.sum((new_centers - centers) ** 2))
+            labels = new_labels
+            centers = new_centers
+            if shift < 0.3:
+                break
+
+        # 5. 各簇统计
+        cluster_counts = np.bincount(labels[labels >= 0], minlength=k)
+        total = cluster_counts.sum()
+        # 按像素数降序排列
+        order = np.argsort(-cluster_counts)
+        sorted_counts = cluster_counts[order]
+        sorted_centers = centers[order]
+
+        # 6. LAB → RGB → hex
+        hex_codes = []
+        coverages = []
+        for i in range(k):
+            cnt = sorted_counts[i]
+            if cnt == 0:
+                continue
+            lab_pixel = sorted_centers[i].reshape(1, 1, 3).astype(np.uint8)
+            rgb_pixel = Image.fromarray(lab_pixel, mode='LAB').convert('RGB')
+            r, g, b = rgb_pixel.getpixel((0, 0))
+            hex_codes.append(f"#{r:02X}{g:02X}{b:02X}")
+            coverages.append(round(cnt / total * 100, 1))
+
+        # 7. 色温和饱和度分析（基于最大簇 LAB）
+        L, A, B = float(sorted_centers[0][0]), float(sorted_centers[0][1]), float(sorted_centers[0][2])
+        # A>0 偏红, A<0 偏绿; B>0 偏黄, B<0 偏蓝
+        # 暖色：红+黄象限; 冷色：绿+蓝象限
+        if A > 6 and B > 6:
+            color_temp = "warm"
+        elif A < -5 and B < -5:
+            color_temp = "cool"
+        elif abs(A) < 5 and abs(B) < 5:
+            color_temp = "neutral"
+        elif A > 6:
+            color_temp = "warm"
+        elif B < -5:
+            color_temp = "cool"
+        else:
+            # 用色相角判断
+            hue_angle = np.degrees(np.arctan2(B, A)) % 360
+            if 10 <= hue_angle <= 170:
+                color_temp = "warm"
+            elif 190 <= hue_angle <= 350:
+                color_temp = "cool"
+            else:
+                color_temp = "neutral"
+
+        # 饱和度：LAB 中 chroma = sqrt(A² + B²)，>25 为偏高饱和
+        chroma = np.sqrt(A**2 + B**2)
+        saturated = chroma > 25
+
+        return {
+            'hex_codes': hex_codes,
+            'coverages': coverages,
+            'base_color': hex_codes[0] if hex_codes else '#000000',
+            'color_temp': color_temp,
+            'saturated': saturated,
+        }
+
+    except Exception:
+        return {}
+
+
 __all__ = [n for n in dir() if not n.startswith('__')]
+

@@ -254,7 +254,6 @@ async def main_page():
                                     with ui.tab_panel('cn').classes('q-pa-none'):
                                         with ui.column().classes('w-full q-gutter-y-sm q-pt-xs'):
                                             cn_delivery_sel   = ui.select(CN_DELIVERY_CHOICES, value=CN_DELIVERY_CHOICES[0], label='🏆 交付/装修状态').classes('w-full').props(_editable)
-                                            cn_deco_style_sel = ui.select(CN_DECO_STYLES, value=CN_DECO_STYLES[0], label='🎨 国内装修风格').classes('w-full').props(_editable)
                                             cn_developer_sel  = ui.select(CN_DEVELOPERS, value=CN_DEVELOPERS[0], label='🏢 开发商').classes('w-full').props(_editable)
                                             cn_city_sel       = ui.select(CN_CITIES, value=CN_CITIES[0] if CN_CITIES else '上海', label='🏙️ 城市').classes('w-full').props(_editable)
                                             cn_tier_sel       = ui.select(CN_TIERS, value=CN_TIERS[0], label='📊 楼盘定位').classes('w-full').props(_editable)
@@ -306,7 +305,6 @@ async def main_page():
                             pet_sec.visible = '宠物友好' in m
                             ref_sec.visible = _is_ref
                             _style_sel_box.visible = not _is_ref
-                            cn_deco_style_sel.visible = not _is_ref
                         workflow_radio.on('update:modelValue', lambda e: _on_mode())
 
                         with ui.expansion('🔑 API 设置').classes('w-full').props('dense'):
@@ -314,6 +312,8 @@ async def main_page():
                                 _cfg0 = _load_config()
                                 api_key_inp = ui.input('API Key', value=_cfg0.get('gemini_api_key',''), password=True).classes('w-full')
                                 api_proxy_inp = ui.input('本地代理', value=_cfg0.get('proxy','')).classes('w-full')
+                                # 精确色码注入开关
+                                auto_cc_check = ui.checkbox('🎨 提示词注入精确色码 (提升颜色准确度)', value=True).classes('w-full text-xs')
                                 ui.button('💾 保存', on_click=lambda: (save_api_key(api_key_inp.value, api_proxy_inp.value), ui.notify('保存成功', type='positive'))).classes('w-full').props('outline color=amber-8')
 
                         ui.separator()
@@ -1135,13 +1135,13 @@ async def main_page():
                     cn_tier=cn_tier_sel.value if _is_cn else "── 不指定 ──",
                     cn_unit_type=cn_unit_sel.value if _is_cn else "── 不指定 ──",
                     cn_delivery=cn_delivery_sel.value if _is_cn else "── 不指定 ──",
-                    cn_deco_style=cn_deco_style_sel.value if _is_cn else "── 不指定 (沿用海外风格) ──",
                     cn_room_type=cn_room_type_sel.value if _is_cn else room_type_sel.value,
                     cn_view=cn_view_sel.value if _is_cn else view_sel.value,
                     cn_space_features=[k for k, cb in cn_space_checks.items() if cb.value] if _is_cn else [],
                     cn_facilities=[k for k, cb in cn_fac_checks.items() if cb.value] if _is_cn else [],
                     style_ref_correction=_sref_text,
                     style_analysis_text=_style_analysis,
+                    enable_color_calibration=auto_cc_check.value,
                 )
                 last_img['v'] = saved_image_path or floor_path['v']
                 logger.info(
@@ -1256,4 +1256,3 @@ async def main_page():
 
     # 已用时间计时器：建在页面根槽位（最稳），避免卡片容器销毁后计时器报 parent slot 错误
     ui.timer(1.0, _tick_job_times)
-

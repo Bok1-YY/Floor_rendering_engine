@@ -15,5 +15,8 @@ if __name__ in {'__main__', '__mp_main__'}:
     # PyInstaller 多进程支持（打包运行时必须调用）
     multiprocessing.freeze_support()
     run_port = int(os.environ.get('FLOOR_AI_PORT', '7869'))
+    # 热重载默认关闭（兼容 python -m 启动与 PyInstaller 打包）。
+    # 开发想要自动重载，请改用 D:\test\dev_floor.py（python dev_floor.py）。
+    _reload = os.environ.get('FLOOR_AI_RELOAD', '0') != '0'
     threading.Thread(target=lambda: _open_browser(run_port), daemon=True).start()
-    ui.run(port=run_port, title='地板 AI 提示词引擎 v5.2.1', dark=True, reload=False, show=False)
+    ui.run(port=run_port, title='地板 AI 提示词引擎 v5.2.1', dark=True, reload=_reload, show=False)

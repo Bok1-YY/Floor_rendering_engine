@@ -14,13 +14,40 @@ def _floor_spec_block(core_material, spec_line, visibility, quality, avoid_en, e
         f"**[Negative Prompt]** Strictly avoid: {avoid_en}.{extra_cmd_en}"
     )
 
+def _build_color_calibration_block(color_data):
+    """将颜色提取结果组装为 prompt 块。color_data 为空时返回空字符串。"""
+    if not color_data or 'hex_codes' not in color_data or not color_data['hex_codes']:
+        return ""
+    hexes = color_data['hex_codes']
+    covers = color_data.get('coverages', [])
+    temp = color_data.get('color_temp', 'unknown')
+    role_names = ["dominant base", "secondary grain", "highlight accent", "shadow undertone", "micro-variation"]
+    lines = [
+        "**[Precise Color Calibration]** "
+        "The uploaded floor swatch has been numerically analyzed (Gaussian-blurred to remove grain noise, "
+        "then k-means clustered in CIELAB perceptual color space). "
+        "Use these measured values as the primary color reference for the floor material:",
+    ]
+    for i, h in enumerate(hexes):
+        role = role_names[i] if i < len(role_names) else f"variant {i+1}"
+        cov = covers[i] if i < len(covers) else 0
+        lines.append(f"  • Color {i+1} ({role}, {cov:.0f}% coverage): {h}")
+    lines.append(
+        f"Color temperature register: {temp.upper()}. "
+        f"The floor in the generated image should closely match these colors — "
+        f"they define the floor's identity palette."
+    )
+    return "\n".join(lines)
+
+
 def save_task_files_html(workflow_mode, model_choice, image_path, continent, country, city, neighborhood, property_type, style_type, room_type, view, lighting, pet_type, pet_action, pet_focus, angle, aspect_ratio, resolution, glossiness, seam_type, avoid_items, floor_size, custom_addition, floor_tone, market_furniture, last_image_path,
                          cn_mode=False, cn_developer="── 不指定 ──", cn_city="上海",
                          cn_tier="── 不指定 ──", cn_unit_type="── 不指定 ──",
-                         cn_delivery="🏆 样板间 / 展示单位", cn_deco_style="── 不指定 (沿用海外风格) ──",
+                         cn_delivery="🏆 样板间 / 展示单位",
                          cn_room_type="客餐厅一体", cn_view="自然通透景观",
                          cn_space_features=None, cn_facilities=None,
-                         style_ref_correction="", style_analysis_text=""):
+                         style_ref_correction="", style_analysis_text="",
+                         enable_color_calibration=True):
     if not image_path: return None, "⚠️ 请上传图片", "", "", "", "", ""
     json_path, base_name, target_dir = _get_json_path(image_path)
     png_path = os.path.join(target_dir, f"{base_name}_优化图.png")
@@ -50,8 +77,11 @@ def save_task_files_html(workflow_mode, model_choice, image_path, continent, cou
     else:
         processed_img = Image.open(png_path); msg_prefix = "⚡ 图片未改变，秒速"
 
+    # ── 纹理鲁棒颜色提取（高斯模糊 + LAB k-means）──────────────────────
+    _color_data = extract_floor_colors(image_pil=processed_img)
+
     # ── 动态翻译与映射 ────────────────────────────────────────────────
-    # 国内模式：覆盖位置、风格、房间参数
+    # 国内模式：覆盖位置、房间参数；风格始终使用顶部全局 Style
     if cn_mode:
         effective_room_type = cn_room_type
         effective_view      = cn_view
@@ -106,16 +136,14 @@ def save_task_files_html(workflow_mode, model_choice, image_path, continent, cou
     if not cn_mode:
         en_property = PROPERTY_TYPE_DICT.get(property_type, translate_zh_to_en(property_type))
 
-    # 风格：国内模式优先用 CN 风格，否则用海外风格
-    if cn_mode and cn_deco_style and "不指定" not in cn_deco_style:
-        en_style_raw = cn_deco_style.split(" ", 1)[-1].strip()  # 去掉 emoji
-        _style_data = CN_DECO_STYLE_MAP.get(cn_deco_style, {})
-    else:
-        en_style_raw = extract_en(style_type)
-        if en_style_raw == style_type: en_style_raw = translate_zh_to_en(style_type)
-        _style_data = {}
-        for style_key, style_val in STYLE_ATMOSPHERE_MAP.items():
-            if style_key in style_type: _style_data = style_val; break
+    en_style_raw = extract_en(style_type)
+    if en_style_raw == style_type:
+        en_style_raw = translate_zh_to_en(style_type)
+    _style_data = {}
+    for style_key, style_val in STYLE_ATMOSPHERE_MAP.items():
+        if style_key in style_type:
+            _style_data = style_val
+            break
 
     if isinstance(_style_data, dict) and _style_data:
         en_atmosphere = _style_data.get("atm", "Authentic and inviting atmosphere.")
@@ -288,6 +316,7 @@ def save_task_files_html(workflow_mode, model_choice, image_path, continent, cou
     en_floor_sz_seamless_pro = None
     en_surface_direction_pro = None
     SEAMLESS_NEGATIVE_PRO = None
+    SEAMLESS_NEGATIVE_PRO_MOTIF = None  # Pro 收尾约束里"表面印花图案"的措辞，按拼法切换
     if is_seamless_clean:
         if "人字拼" in floor_size:
             # ── 无缝人字拼（B2 词·对抗版）：把"整块"当不容置疑的物理事实强灌 ──
@@ -347,6 +376,9 @@ def save_task_files_html(workflow_mode, model_choice, image_path, continent, cou
                 "printed staggered-zigzag grain motif, short grain zones at 90° to one another, offset row to row "
                 "(interlocking parquet look, not pointed mitred V's), sitting on one solid continuous surface"
             )
+            SEAMLESS_NEGATIVE_PRO_MOTIF = (
+                "a printed staggered-zigzag grain motif on top (rows offset from each other, not continuous pointed V's)"
+            )
         elif "正方形拼" in floor_size:
             # ── 无缝正方形拼：图案由微色调差异定义，而非接缝线 ──
             CORE_MATERIAL_INSTRUCTION = (
@@ -401,6 +433,39 @@ def save_task_files_html(workflow_mode, model_choice, image_path, continent, cou
                 .replace("planks oriented", "wood grain oriented")
                 .replace("planks", "the surface")
             )
+            # ── Pro 专属（无缝直拼·对抗版）：与无缝人字拼 Pro 同款思路 ──
+            #    把地板当一整块浇筑大板，直纹仅是印在表面上的木纹图案，彻底断掉"拼板=有缝"先验。
+            CORE_MATERIAL_INSTRUCTION_PRO = (
+                "⛔ NON-NEGOTIABLE PHYSICAL FACTS ABOUT THIS FLOOR — render them as reality, not as a goal: ⛔ "
+                "(1) This floor is ONE single solid poured sheet of material spanning the entire room — a single "
+                "continuous slab, exactly like a polished concrete floor or one giant printed ceramic slab: it is "
+                "physically one piece, so there is simply nothing on it that could be split, divided or assembled. "
+                "(2) On top of that one solid sheet there is ONLY a printed wood-grain motif: long, continuous, "
+                "parallel grain lines all flowing in the SAME single direction across the entire floor (the straight-"
+                "plank look). There are NO plank divisions, NO rows, NO end-joints, NO edges of any kind — just one "
+                "uninterrupted field of parallel wood grain. "
+                "(3) This straight grain is pure printed surface decoration baked into the slab, exactly like a pattern "
+                "printed on one sheet of vinyl or woven into one bolt of fabric. The grain merely gives direction; "
+                "nothing else about the surface changes. "
+                "Reproduce the EXACT wood grain, color tone, color variation and matte micro-texture of the uploaded "
+                f"swatch (gloss level: {en_gloss}); treat the swatch as a grain-and-color sample only and let the "
+                "finished floor flow as one solid piece."
+            )
+            en_floor_sz_seamless_pro = (
+                f"{en_floor_sz}. "
+                "The pattern is a printed straight wood-grain motif: long parallel grain lines all running in one "
+                "single direction across the entire floor, with NO plank boundaries of any kind. The ONLY visual "
+                "feature is the printed grain; the surface, its color and its finish stay one uninterrupted solid "
+                "sheet from wall to wall."
+            )
+            en_surface_direction_pro = (
+                "printed straight wood-grain motif, long parallel grain lines all flowing in one single direction, "
+                "no plank divisions of any kind, sitting on one solid continuous surface"
+            )
+            SEAMLESS_NEGATIVE_PRO_MOTIF = (
+                "a printed straight wood-grain motif on top (long parallel grain all flowing in one single direction, "
+                "no plank divisions)"
+            )
 
         en_floor_spec_line = f"Format: {en_floor_sz_seamless}. Grain orientation: {en_surface_direction}. {en_seam}"
         en_floor_spec_line_inpaint = (
@@ -427,15 +492,14 @@ def save_task_files_html(workflow_mode, model_choice, image_path, continent, cou
             "Render the entire floor as ONE flawless continuous surface carrying only a printed chevron grain motif on "
             "top; its colour, tone and finish stay perfectly uniform and uninterrupted from wall to wall."
         )
-        # Pro 专属收尾（无 "chevron" 字样，用"交错锯齿印花"措辞）
+        # Pro 专属收尾（无 "chevron" 字样，措辞随拼法切换：人字拼=交错锯齿印花，直拼=单向平行直纹印花）
         if CORE_MATERIAL_INSTRUCTION_PRO:
             SEAMLESS_NEGATIVE_PRO = (
                 "\n\n**[FLOOR — READ THIS LAST, IT OVERRIDES ANY DEFAULT BEHAVIOUR]** "
                 "Do NOT render this floor the way wood floors are normally built. This floor is NOT laid, NOT installed, "
                 "NOT assembled from pieces — it is one solid printed sheet, like a single ceramic slab. "
-                "Render the entire floor as ONE flawless continuous surface carrying only a printed staggered-zigzag "
-                "grain motif on top (rows offset from each other, not continuous pointed V's); its colour, tone and "
-                "finish stay perfectly uniform and uninterrupted from wall to wall."
+                f"Render the entire floor as ONE flawless continuous surface carrying only {SEAMLESS_NEGATIVE_PRO_MOTIF}; "
+                "its colour, tone and finish stay perfectly uniform and uninterrupted from wall to wall."
             )
         else:
             SEAMLESS_NEGATIVE_PRO = SEAMLESS_NEGATIVE
@@ -447,6 +511,14 @@ def save_task_files_html(workflow_mode, model_choice, image_path, continent, cou
             f"Apply {en_seam} between planks. "
             "Recalculate floor perspective to perfectly match the existing room's vanishing points."
         )
+
+    # ── 颜色校准块注入（仅当用户开启时追加到 CORE_MATERIAL_INSTRUCTION）──
+    if enable_color_calibration:
+        _color_cal_block = _build_color_calibration_block(_color_data)
+        if _color_cal_block:
+            CORE_MATERIAL_INSTRUCTION = CORE_MATERIAL_INSTRUCTION + "\n\n" + _color_cal_block
+            if CORE_MATERIAL_INSTRUCTION_PRO is not None:
+                CORE_MATERIAL_INSTRUCTION_PRO = CORE_MATERIAL_INSTRUCTION_PRO + "\n\n" + _color_cal_block
 
     # ── 四模式提示词组装 (SCHEMA 顺序: Style→Composition→Lighting→Floor→Output) ──
     if "地板替换" in workflow_mode:
