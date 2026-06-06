@@ -1,13 +1,60 @@
-from .config import *
-from .api import *
-from .prompt_data import *
-from .prompts import *
-from .records import *
+import os
+import sys
+import time
+import base64
+import json
+import io as _io_mod
+import threading as _threading
+import asyncio
+import logging
+import traceback
+from typing import Optional, List, Dict
+
+from PIL import Image
+
+from .config import (
+    BASE_DIR, MAIN_OUTPUT_DIR, CONFIG_FILE,
+    GEMINI_MODEL_MAP,
+    _build_theme_css,
+    logger, _short_text, _load_config, _save_config, save_api_key,
+    extract_clean_prompt, is_seamless_herringbone,
+)
+from .api import (
+    call_gemini_generate, call_gemini_edit,
+    analyze_style_image,
+    FLOOR_DESEAM_INSTRUCTION,
+    _match_color_to_reference,
+    _infer_aspect_ratio_from_b64,
+)
+from .prompt_data import (
+    FLOOR_TONES, FLOOR_SIZES,
+    LIGHTINGS, ANGLES,
+    ROOM_TYPES, PROPERTY_TYPES, VIEWS,
+    STYLES, STYLE_ATMOSPHERE_MAP,
+    CONTINENTS, LOCATION_MAP,
+    PET_TYPES, PET_ACTIONS, PET_FOCUS_OPTIONS,
+    MARKET_FURNITURE_CHOICES, MARKET_FURNITURE_MAP,
+    AVOID_LIST,
+    CN_DEVELOPERS, CN_CITIES, CN_TIERS,
+    CN_UNIT_TYPES, CN_ROOM_TYPES,
+    CN_DELIVERY_CHOICES,
+    CN_SPACE_FEATURES, CN_FACILITIES,
+    analyze_floor_tone, get_style_choices,
+)
+from .prompts import (
+    save_task_files_html,
+)
+from .records import (
+    _img_to_b64, _b64_to_pil, _load_records, _save_records,
+    _delete_record, _delete_result_image,
+    scan_json_files, get_record_labels, export_html_from_json,
+    append_result_to_log, append_edited_result_to_record,
+    _save_api_result_jpg, _api_write_to_record,
+    reveal_prompt_fn,
+)
+from .models import JobRecord
 
 from nicegui import ui, app, events as ng_events
-from dataclasses import dataclass
-from typing import Optional, List
-from .models import JobRecord
 
 UPLOAD_DIR = os.path.join(os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else BASE_DIR, '_ng_uploads')
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -60,38 +107,9 @@ async def main_page():
     global _gen_semaphore
     if _gen_semaphore is None: _gen_semaphore = asyncio.Semaphore(5)
 
-    # ── 主题初始化 ──
-    cfg = _load_config()
-    _current_theme = cfg.get("theme", "暗黑工业风")
-    if _current_theme not in THEMES:
-        _current_theme = "暗黑工业风"
-
-    _theme_css = _build_theme_css(_current_theme)
-    ui.add_head_html(f'<style id="theme-style">{_theme_css}</style>')
-
-    if THEMES[_current_theme].get("is_dark", True):
-        ui.dark_mode().enable()
-    else:
-        ui.dark_mode().disable()
-
-    async def _switch_theme(theme_name: str):
-        nonlocal _current_theme
-        if theme_name == _current_theme:
-            return
-        _current_theme = theme_name
-        new_css = _build_theme_css(theme_name)
-        # 转义 CSS 中的特殊字符用于 JS 字符串
-        css_escaped = new_css.replace('\\', '\\\\').replace("'", "\\'").replace('\n', '\\n')
-        ui.run_javascript(f"document.getElementById('theme-style').textContent = '{css_escaped}';")
-        if THEMES[theme_name].get("is_dark", True):
-            ui.dark_mode().enable()
-        else:
-            ui.dark_mode().disable()
-        # 持久化
-        cfg2 = _load_config()
-        cfg2["theme"] = theme_name
-        _save_config(cfg2)
-        ui.notify(f'主题切换：{theme_name}', type='positive')
+    # ── 主题：固定暗黑工业风（浅色主题有对比度问题，已禁用切换）──
+    ui.add_head_html(f'<style id="theme-style">{_build_theme_css("暗黑工业风")}</style>')
+    ui.dark_mode().enable()
 
     floor_path = {'v': ''}; room_path = {'v': ''}; ref_path = {'v': ''}; last_img = {'v': ''}
     _cancel_generation = [0]; _cancel_jobs = set()
@@ -104,10 +122,6 @@ async def main_page():
         with ui.tabs().classes('flex-grow') as main_tabs:
             t_workspace = ui.tab('workspace', label='🎨 工作台 (生成 & 队列)')
             t_records   = ui.tab('records', label='📋 记录管理')
-        theme_sel = ui.select(
-            list(THEMES.keys()), value=_current_theme, label='🎨'
-        ).props('dense borderless').style('width: 130px;').classes('q-ml-auto')
-        theme_sel.on_value_change(lambda e: _switch_theme(e.value))
 
     with ui.tab_panels(main_tabs, value='workspace').classes('w-full').style('height:calc(100vh - 50px); overflow:hidden;'):
 
@@ -1069,6 +1083,9 @@ async def main_page():
         if not floor_path['v']:
             logger.warning("[任务] 提交失败：未上传地板图")
             ui.notify('⚠️ 请上传地板图', type='warning'); return
+        if not os.path.exists(str(floor_path['v'])):
+            logger.error(f"[任务] 提交失败：地板图文件不存在 path={floor_path['v']}")
+            ui.notify('⚠️ 地板图文件不存在，请重新上传', type='warning'); return
 
         model_label = {'b2': '[B2]', 'pro': '[Pro]', 'both': '[双模型]'}.get(model_filter, '')
         display_room_type = cn_room_type_sel.value if _market_mode['v'] == 'cn' else room_type_sel.value

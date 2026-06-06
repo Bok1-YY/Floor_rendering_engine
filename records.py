@@ -1,4 +1,19 @@
-from .config import *
+import os
+import json
+import time
+import io
+import base64
+import base64 as b64mod
+import hashlib
+import html
+from typing import List, Tuple, Optional
+
+from PIL import Image
+
+from .config import (
+    BASE_DIR, MAIN_OUTPUT_DIR, CONFIG_FILE,
+    logger, _short_text, _load_config, _save_config,
+)
 
 def _get_json_path(image_path):
     base_name = os.path.splitext(os.path.basename(image_path))[0]
@@ -46,8 +61,7 @@ def _delete_result_image(json_path, record_id, result_index):
     logger.warning(f"[记录] 删除效果图失败 json={json_path}, record={record_id}, index={result_index}")
     return False
 
-def _img_to_b64(img_or_path, max_width=None):
-    import io, base64 as b64mod
+def _img_to_b64(img_or_path, max_width: Optional[int] = None) -> str:
     try:
         img = Image.open(img_or_path) if isinstance(img_or_path, str) else img_or_path.copy()
         if max_width and img.width > max_width: img = img.resize((max_width, int(img.height * max_width / img.width)), Image.Resampling.LANCZOS)
@@ -59,7 +73,6 @@ def _img_to_b64(img_or_path, max_width=None):
         return ''
 
 def _b64_to_pil(b64_str):
-    import io, base64 as b64mod
     if not b64_str: return None
     try: return Image.open(io.BytesIO(b64mod.b64decode(b64_str)))
     except Exception as e:
@@ -144,9 +157,23 @@ def append_result_to_log(img1_path, img2_path, json_path, record_id, comment1=""
         logger.exception(f"[记录] 手动追加写入失败 json={json_path}, record={record_id}")
         return f"❌ 写入失败: {e}"
 
-# 数据安全层
+# ── 数据安全层 ────────────────────────────────────────────────
 _PROMPT_KEY = b"braag2026floor_engine_v5_xor"
-_REVEAL_HASH = "455c459b728d459e5acf0373c929afc894ddb049515cd88cb046945e235e279e"
+
+# 密码哈希加载优先级：环境变量 > 配置文件 > 内置默认值（仅开发用）
+_DEFAULT_REVEAL_HASH = "455c459b728d459e5acf0373c929afc894ddb049515cd88cb046945e235e279e"
+
+def _load_reveal_hash() -> str:
+    """Load the reveal-password hash from env var, config, or built-in default."""
+    import os as _os
+    env_hash = _os.environ.get('FLOOR_ENGINE_REVEAL_HASH', '').strip()
+    if env_hash:
+        return env_hash
+    cfg = _load_config()
+    cfg_hash = cfg.get('reveal_hash', '').strip()
+    if cfg_hash:
+        return cfg_hash
+    return _DEFAULT_REVEAL_HASH
 
 def _obfuscate(text: str) -> str:
     if not text: return ""
@@ -159,7 +186,7 @@ def _deobfuscate(encoded: str) -> str:
 
 def reveal_prompt_fn(json_path, record_id, input_password):
     if not input_password: return "🔒 请输入密码"
-    if hashlib.sha256(input_password.strip().encode('utf-8')).hexdigest() != _REVEAL_HASH: return "❌ 密码错误"
+    if hashlib.sha256(input_password.strip().encode('utf-8')).hexdigest() != _load_reveal_hash(): return "❌ 密码错误"
     for r in _load_records(json_path):
         if r.get('id') == record_id:
             pe = r.get('_pe', '')

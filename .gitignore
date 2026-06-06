@@ -1,0 +1,15 @@
+# Python 缓存
+__pycache__/
+*.py[cod]
+*.pyo
+
+# 临时/锁文件 (Word、编辑器等生成)
+~$*
+
+# 虚拟环境
+.venv/
+venv/
+env/
+
+# 日志
+*.log

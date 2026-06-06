@@ -1,4 +1,22 @@
-from .config import *
+import os
+import re
+import time
+import logging
+from typing import List, Tuple, Dict, Optional
+
+import numpy as np
+from PIL import Image
+
+from .config import (
+    BASE_DIR, MAIN_OUTPUT_DIR,
+    logger, _short_text, TRANSLATOR_AVAILABLE,
+    is_seamless_herringbone,
+)
+
+try:
+    from deep_translator import MyMemoryTranslator
+except ImportError:
+    MyMemoryTranslator = None
 
 FALLBACK_DICT = {
     "通用现代都市": "modern urban area", "通用自然郊区": "natural suburban area", "通用海滨小镇": "coastal town",

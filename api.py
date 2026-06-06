@@ -1,12 +1,28 @@
-from .config import *
-from .records import *
+import os
+import time
+import base64
+import io as _io_mod
+import re
+from typing import Optional, Tuple
+
+from PIL import Image
+
+from .config import (
+    BASE_DIR, MAIN_OUTPUT_DIR, CONFIG_FILE,
+    GEMINI_MODEL_MAP,
+    logger, _short_text, _load_config, _save_config,
+)
+from .records import (
+    _img_to_b64, _b64_to_pil, _save_api_result_jpg, _api_write_to_record,
+)
 
 def _redact_api_key(text):
     return re.sub(r'([?&]key=)[^&\s)]+', r'\1***', str(text or ""))
 
 def call_gemini_generate(api_key: str, model_id: str, prompt_text: str, image_path: str,
                          image_size: str = "4K", aspect_ratio: str = "4:3",
-                         room_image_path: str = None, style_ref_image_path: str = None):
+                         room_image_path: Optional[str] = None,
+                         style_ref_image_path: Optional[str] = None) -> Tuple[Optional[object], Optional[str]]:
     import requests as _req
     logger.info(
         f"[API生成] start model={model_id}, size={image_size}, ar={aspect_ratio}, "
