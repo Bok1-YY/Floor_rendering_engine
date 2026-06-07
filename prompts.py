@@ -158,17 +158,28 @@ def save_task_files_html(workflow_mode, model_choice, image_path, continent, cou
         en_atmosphere = _style_data.get("atm", "Authentic and inviting atmosphere.")
         _style_must = _style_data.get("must", [])
         _style_ban  = _style_data.get("ban", [])
+        _style_may  = _style_data.get("may", [])
     else:
         en_atmosphere = _style_data if isinstance(_style_data, str) and _style_data else "Authentic and inviting atmosphere."
         _style_must = []
         _style_ban  = []
+        _style_may  = []
 
-    # ── SCHEMA 强化块：MANDATORY & PROHIBITIONS ───────────────────────────
+    # ── SCHEMA 强化块：MANDATORY & OPTIONAL & PROHIBITIONS ────────────────
     _mandatory_block = ""
     if _style_must:
         _mandatory_block = (
             "**[MANDATORY STYLE ELEMENTS]** Include ALL of the following without exception:\n"
             + "\n".join(f"• {item}" for item in _style_must)
+        )
+    # 可选点缀：仅在自然契合时出现，不强制、不得喧宾夺主（如绿植不应被当作画面中心）
+    _optional_block = ""
+    if _style_may:
+        _optional_block = (
+            "**[OPTIONAL STYLE ACCENTS]** You MAY include one or two of the following ONLY if they "
+            "naturally suit the composition. They are NOT required — the scene must look complete and "
+            "intentional without them — and none of them may become the visual centre of the image:\n"
+            + "\n".join(f"◦ {item}" for item in _style_may)
         )
     _prohibitions_block = ""
     if _style_ban:
@@ -559,6 +570,8 @@ Professional photorealistic pet-friendly interior photography. {en_property}, {e
 
 {_mandatory_block}
 
+{_optional_block}
+
 {_prohibitions_block}
 
 **[Camera & Composition]** {en_angle}. {en_focus}
@@ -661,6 +674,8 @@ Professional photorealistic interior architectural photography. {en_property}, {
 **[Style & Atmosphere]** {en_style_raw} aesthetic. {en_atmosphere}{no_sofa_note}{en_market_furniture}{en_cn_context}
 
 {_mandatory_block}
+
+{_optional_block}
 
 {_prohibitions_block}
 

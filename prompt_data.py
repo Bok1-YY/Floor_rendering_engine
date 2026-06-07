@@ -216,7 +216,7 @@ STYLES = [
     "🌊 澳洲 Hamptons 海岸风 (Coastal Hamptons) - 浅色调，白橡木地板，自然麻布，通透明亮。",
     "🖤 暗黑摩登奢华风 (Dark Moody Luxury) - 深色墙面，金属配件，戏剧性灯光，欧洲高端都市感。",
     "🪵 日式北欧极简风 (Japandi Minimal) - 克制留白，原木色，亚麻棉麻，绝对平静。",
-    # ── 并入：原「国内装修风格」22 款（括号内英文名 = STYLE_ATMOSPHERE_MAP 的 key）──
+    # ── 扩充风格 22 款（国内外市场通用，括号内英文名 = STYLE_ATMOSPHERE_MAP 的 key）──
     "🪵 原木风 (Raw Wood) - 原木暖调，自然留白，地板即主角。",
     "🎭 中古风 (Mid-Century Vintage) - 胡桃木+藤编，复古杏灰，岁月感。",
     "🤍 奶油风 (Cream Tone) - 奶油色一统，圆润治愈，零对比。",
@@ -246,11 +246,13 @@ STYLE_ATMOSPHERE_MAP = {
         "atm": "Aspirational domesticity — the home that makes people stop scrolling. Styled but never staged, curated but never cold.",
         "must": [
             "neutral base palette: white, cream, or greige walls",
-            "trailing pothos or fiddle-leaf fig in oversized terracotta or matte ceramic pot",
             "2–3 coffee-table books stacked with spines facing outward",
             "bouclé or waffle-knit throw casually displaced from seating",
             "dried pampas grass or eucalyptus in a tall sculptural vase",
             "one rattan or wicker accent piece",
+        ],
+        "may": [
+            "trailing pothos or fiddle-leaf fig in an oversized terracotta or matte ceramic pot, placed off to one side",
         ],
         "ban": [
             "personal clutter or storage visible anywhere",
@@ -403,7 +405,7 @@ STYLE_ATMOSPHERE_MAP = {
         ],
     },
 
-    # ── 并入：原「国内装修风格」22 款 atm/must/ban（key 与 STYLES 括号内英文名一致）──
+    # ── 扩充风格 22 款 atm/must/ban（国内外市场通用，key 与 STYLES 括号内英文名一致）──
     "Raw Wood": {
         "atm": "Unforced naturalness, quiet warmth — the floor IS the design statement, all other elements subordinate to it. China's #1 trending style 2025.",
         "must": [
@@ -411,8 +413,10 @@ STYLE_ATMOSPHERE_MAP = {
             "low-profile furniture in light natural oak or ash: sofa ≤70cm tall, coffee table near floor level",
             "track lighting rail on ceiling (磁吸轨道灯)",
             "clean white or warm beige walls, zero decorative mouldings, TV flush-mounted on plain wall",
-            "one or two indoor plants in natural clay pots: monstera, fiddle-leaf fig, or olive tree",
             "cotton and linen soft furnishings in undyed cream and off-white, concealed storage throughout",
+        ],
+        "may": [
+            "one indoor plant in a natural clay pot (monstera, fiddle-leaf fig, or olive tree) as a quiet side accent",
         ],
         "ban": [
             "chandelier, decorative ceiling light, or 吊顶 cove lighting",
@@ -508,7 +512,10 @@ STYLE_ATMOSPHERE_MAP = {
             "deep-seated comfortable sofa in warm linen or performance fabric, clean leg profile",
             "board-and-batten or shiplap wall panelling on one accent wall in warm white",
             "statement pendant light: large cage, lantern, or industrial-feel fixture in black or brass",
-            "green plant or fresh botanicals as primary decorative element",
+            "layered casual styling: stacked books, woven basket, ceramic vessel, framed art on the accent wall",
+        ],
+        "may": [
+            "a green plant or fresh botanicals as a secondary accent — never the focal centre of the room",
         ],
         "ban": [
             "French or European ornate styling",
@@ -652,7 +659,10 @@ STYLE_ATMOSPHERE_MAP = {
             "palette of whitewashed white, terracotta, olive green and sea/sky blue accents",
             "natural textures: rattan, jute rug, rough linen, unglazed terracotta pots",
             "rustic warm-toned wood or terracotta-tile flooring and ceiling beams",
-            "Mediterranean greenery: olive tree, potted citrus, or trailing greenery in clay vessels",
+            "sun-bleached natural styling: rough linen drapery, woven baskets, handmade ceramic vessels",
+        ],
+        "may": [
+            "Mediterranean greenery (olive tree, potted citrus, or trailing greenery in clay vessels) as a relaxed side accent",
         ],
         "ban": [
             "cool grey minimalist or high-gloss modern surfaces",
@@ -700,7 +710,10 @@ STYLE_ATMOSPHERE_MAP = {
             "light wood everywhere: pale ash, birch or white-oak floor and furniture with clean simple lines",
             "cozy hygge layering: chunky knit throw, sheepskin, soft wool cushions in muted tones",
             "one gentle accent color: dusty blue, sage, soft mustard or pale terracotta",
-            "simple iconic Scandinavian forms: a sculptural pendant lamp, a clean-lined lounge chair, green plants in simple pots",
+            "simple iconic Scandinavian forms: a sculptural pendant lamp and a clean-lined lounge chair",
+        ],
+        "may": [
+            "a few green plants in simple pots as light, optional greenery",
         ],
         "ban": [
             "dark heavy or ornate traditional furniture",
@@ -834,71 +847,95 @@ FLOOR_TONE_STYLE_RECOMMEND_MAP = {
     "石纹·近白/极浅": {"Pinterest Editorial": "✨✨", "Coastal Hamptons": "✨✨", "Japandi Minimal": "✨✨", "IG Influencer Home": "✨", "Biophilic Oasis": "✨", "Lazy Sunday Morning": "🟡", "Dark Moody Luxury": "", "Alpine Chalet": "", "English Country Estate": "", "Cinematic Wabi-Sabi": ""},
 }
 
-_DOMESTIC_STYLE_RECOMMEND_MAP = {
+# 扩充风格 × 花色推荐度（国内外市场通用；与上方海外 10 款合并进 FLOOR_TONE_STYLE_RECOMMEND_MAP）
+_EXTENDED_STYLE_RECOMMEND_MAP = {
+    # 暖色浅木：暖系轻盈 + 自然留白；新增 中古(浅柚木)/美拉德/山系，禅意升 ✨
     "木纹·暖色浅调": {
         "Raw Wood": "✨✨", "Cream Tone": "✨✨", "French Cream": "✨✨",
         "Modern Minimalist": "✨", "Minimal Japanese": "✨", "Nordic Scandi": "✨",
-        "Modern American": "✨", "Neo-Chinese": "🟡", "Zen Tea Room": "🟡",
-        "Light Luxury": "🟡", "Dopamine": "🟡",
+        "Modern American": "✨", "Mid-Century Vintage": "✨", "Zen Tea Room": "✨",
+        "Neo-Chinese": "🟡", "Light Luxury": "🟡", "Dopamine": "🟡",
+        "Maillard": "🟡", "Mountain Camp": "🟡",
     },
+    # 暖色中深木：暖系核心场；山系升 ✨，补 原木
     "木纹·暖色中深调": {
         "Mid-Century Vintage": "✨✨", "Modern American": "✨✨", "Maillard": "✨✨",
         "Neo-Chinese": "✨", "Quiet Luxury": "✨", "Hong Kong Retro": "✨",
-        "Shanghai Deco": "🟡", "Wabi-Sabi Raw": "🟡", "Mountain Camp": "🟡",
+        "Mountain Camp": "✨", "Raw Wood": "✨",
+        "Shanghai Deco": "🟡", "Wabi-Sabi Raw": "🟡",
     },
+    # 深胡桃：中古经典木种升 ✨✨，港式暗调升 ✨✨，补 山系
     "木纹·暖色深调": {
         "Maillard": "✨✨", "Quiet Luxury": "✨✨", "Neo-Chinese": "✨✨",
-        "Hong Kong Retro": "✨", "Shanghai Deco": "✨", "Modern American": "🟡",
-        "Industrial Loft": "🟡", "Light Luxury": "🟡",
+        "Mid-Century Vintage": "✨✨", "Hong Kong Retro": "✨✨",
+        "Shanghai Deco": "✨",
+        "Modern American": "🟡", "Industrial Loft": "🟡", "Light Luxury": "🟡",
+        "Mountain Camp": "🟡",
     },
+    # 中性灰米：万能底，承载面最广；禅意/侘寂升 ✨✨，补 美拉德/山系/中古/轻奢
     "木纹·中性灰米": {
         "Italian Minimalist": "✨✨", "Modern Minimalist": "✨✨", "Quiet Luxury": "✨✨",
-        "Minimal Japanese": "✨", "Wabi-Sabi Raw": "✨", "Cream Tone": "✨",
+        "Wabi-Sabi Raw": "✨✨", "Zen Tea Room": "✨✨",
+        "Minimal Japanese": "✨", "Cream Tone": "✨",
         "Raw Wood": "🟡", "French Cream": "🟡", "Bauhaus": "🟡",
+        "Maillard": "🟡", "Mountain Camp": "🟡", "Mid-Century Vintage": "🟡",
+        "Light Luxury": "🟡",
     },
+    # 冷色浅木：冷调极简；补 侘寂
     "木纹·冷色浅调": {
         "Italian Minimalist": "✨✨", "Minimal Japanese": "✨✨", "Nordic Scandi": "✨✨",
-        "Modern Minimalist": "✨", "Bauhaus": "✨", "Raw Wood": "🟡",
-        "Dopamine": "🟡", "Zen Tea Room": "🟡",
+        "Modern Minimalist": "✨", "Bauhaus": "✨",
+        "Raw Wood": "🟡", "Dopamine": "🟡", "Zen Tea Room": "🟡", "Wabi-Sabi Raw": "🟡",
     },
+    # 冷色深木：暗调高级；补 港式/现代简约
     "木纹·冷色深调": {
-        "Quiet Luxury": "✨✨", "Industrial Loft": "✨✨", "Shanghai Deco": "✨",
-        "Italian Minimalist": "✨", "Bauhaus": "✨", "Neo-Chinese": "🟡",
-        "Wabi-Sabi Raw": "🟡",
+        "Quiet Luxury": "✨✨", "Industrial Loft": "✨✨",
+        "Shanghai Deco": "✨", "Italian Minimalist": "✨", "Bauhaus": "✨",
+        "Neo-Chinese": "🟡", "Wabi-Sabi Raw": "🟡",
+        "Hong Kong Retro": "🟡", "Modern Minimalist": "🟡",
     },
+    # 近白木：明亮通透；补 奶油/禅意
     "木纹·近白/漂白色": {
         "Nordic Scandi": "✨✨", "Raw Wood": "✨✨", "Modern Minimalist": "✨✨",
-        "Italian Minimalist": "✨", "Dopamine": "✨", "Bauhaus": "✨",
-        "Minimal Japanese": "🟡", "Mediterranean": "🟡",
+        "Italian Minimalist": "✨", "Dopamine": "✨", "Bauhaus": "✨", "Cream Tone": "✨",
+        "Minimal Japanese": "🟡", "Mediterranean": "🟡", "Zen Tea Room": "🟡",
     },
+    # 奶油/洞石：地中海招牌升 ✨✨，奶油升 ✨，补 现代美式
     "石纹·奶油/洞石": {
-        "Italian Minimalist": "✨✨", "French Cream": "✨✨", "Light Luxury": "✨",
-        "Quiet Luxury": "✨", "Mediterranean": "✨", "Cream Tone": "🟡",
-        "Modern Minimalist": "🟡",
+        "Italian Minimalist": "✨✨", "French Cream": "✨✨", "Mediterranean": "✨✨",
+        "Cream Tone": "✨", "Light Luxury": "✨", "Quiet Luxury": "✨",
+        "Modern Minimalist": "🟡", "Modern American": "🟡",
     },
+    # 暖灰/沙灰石：暖中性硬装；补 侘寂/地中海
     "石纹·暖灰/沙灰": {
-        "Italian Minimalist": "✨✨", "Quiet Luxury": "✨✨", "Modern Minimalist": "✨",
-        "Light Luxury": "✨", "Neo-Chinese": "🟡", "French Cream": "🟡",
-        "Bauhaus": "🟡",
+        "Italian Minimalist": "✨✨", "Quiet Luxury": "✨✨",
+        "Modern Minimalist": "✨", "Light Luxury": "✨",
+        "Neo-Chinese": "🟡", "French Cream": "🟡", "Bauhaus": "🟡",
+        "Wabi-Sabi Raw": "🟡", "Mediterranean": "🟡",
     },
+    # 冷灰/水泥灰石：工业冷调；补 轻奢
     "石纹·冷灰/水泥灰": {
-        "Industrial Loft": "✨✨", "Italian Minimalist": "✨✨", "Bauhaus": "✨",
-        "Modern Minimalist": "✨", "Quiet Luxury": "✨", "Wabi-Sabi Raw": "🟡",
-        "Dopamine": "🟡",
+        "Industrial Loft": "✨✨", "Italian Minimalist": "✨✨",
+        "Bauhaus": "✨", "Modern Minimalist": "✨", "Quiet Luxury": "✨",
+        "Wabi-Sabi Raw": "🟡", "Dopamine": "🟡", "Light Luxury": "🟡",
     },
+    # 深灰/炭灰石：暗调奢华；补 港式/现代简约
     "石纹·深灰/炭灰": {
-        "Quiet Luxury": "✨✨", "Industrial Loft": "✨✨", "Shanghai Deco": "✨",
-        "Italian Minimalist": "✨", "Light Luxury": "🟡", "Neo-Chinese": "🟡",
-        "Bauhaus": "🟡",
+        "Quiet Luxury": "✨✨", "Industrial Loft": "✨✨",
+        "Shanghai Deco": "✨", "Italian Minimalist": "✨",
+        "Light Luxury": "🟡", "Neo-Chinese": "🟡", "Bauhaus": "🟡",
+        "Hong Kong Retro": "🟡", "Modern Minimalist": "🟡",
     },
+    # 近白/极浅石：极简通透；补 奶油/静奢
     "石纹·近白/极浅": {
-        "Italian Minimalist": "✨✨", "Modern Minimalist": "✨✨", "Nordic Scandi": "✨",
-        "Bauhaus": "✨", "Dopamine": "✨", "Mediterranean": "🟡",
-        "French Cream": "🟡", "Light Luxury": "🟡",
+        "Italian Minimalist": "✨✨", "Modern Minimalist": "✨✨",
+        "Nordic Scandi": "✨", "Bauhaus": "✨", "Dopamine": "✨",
+        "Mediterranean": "🟡", "French Cream": "🟡", "Light Luxury": "🟡",
+        "Cream Tone": "🟡", "Quiet Luxury": "🟡",
     },
 }
 
-for _tone_key, _recs in _DOMESTIC_STYLE_RECOMMEND_MAP.items():
+for _tone_key, _recs in _EXTENDED_STYLE_RECOMMEND_MAP.items():
     FLOOR_TONE_STYLE_RECOMMEND_MAP.setdefault(_tone_key, {}).update(_recs)
 
 MARKET_FURNITURE_CHOICES = [
