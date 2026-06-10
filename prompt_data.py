@@ -158,6 +158,11 @@ TECH_DICT = {
         "window light keep the very SAME soft rounded edges as the planks in shadow. The whole floor must read as ONE consistent "
         "material with ONE consistent edge style from end to end — it is unacceptable for one half of the floor to have soft seams "
         "while the other half has dark or sharp lines. "
+        "PAY SPECIAL ATTENTION to the SHORT END JOINTS (the butt joints where one plank ends and the next begins) and to ANY seam "
+        "running across the view / roughly PERPENDICULAR to the camera: due to perspective foreshortening these are the seams most "
+        "often wrongly rendered as hard dark or black lines. They MUST stay exactly as soft, faint and light as the long seams that "
+        "run away into the distance — never darker, never black, never a sharp recessed groove. Treat a perpendicular/end seam and a "
+        "lengthwise seam as the SAME soft rounded edge. "
         "In the foreground the rounded edges may be just faintly visible as soft light-catching transitions; in the distance they fade to essentially nothing. "
         "Negative: NO sharp V-groove, NO dark joint line, NO black or grey seam, NO recessed groove or valley, NO gap, NO grout line, NO hard drawn pen line, NO pronounced bevel, NO deep shadow, NO darker or harder seams in the sunlit areas, NO left/right inconsistency in seam style."
     ),
