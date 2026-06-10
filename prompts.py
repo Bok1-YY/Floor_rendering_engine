@@ -42,14 +42,15 @@ FLOOR_COLOR_MATCH_INSTRUCTION = (
 )
 
 # 圆弧倒角(Pressed Bevel)性格补丁：人字拼/正方形拼的 en_seam 会被几何描述整段覆盖，
-# 倒角性格会丢，故选了圆弧倒角时把"截面性格"(压圆凹、纹理连续、软渐变阴影+圆肩高光、非尖V)
-# 追加到几何描述后面。直拼无需此补丁(直拼直接用 TECH_DICT 里的完整圆弧倒角块)。
+# 倒角性格会丢，故选了圆弧倒角时把"截面性格"追加到几何描述后面。
+# 本质=无缝拼接，只把板边直角磨成圆弧：接缝几乎不可见，以圆边高光为主、几乎无暗线，曲线平缓。
+# 直拼无需此补丁(直拼直接用 TECH_DICT 里的完整圆弧倒角块)。
 PRESSED_BEVEL_CHARACTER = (
-    " EDGE PROFILE — PRESSED ROUNDED BEVEL: every joint between planks is a pressed, rounded bevel, NOT a sharp V-groove. "
-    "Each edge is gently compressed into the surface, forming a soft, shallow, concave valley with rounded shoulders; "
-    "the wood grain and finish continue smoothly across it — never a cut groove, never a hard black line. "
-    "Render each joint as a soft gradient shadow with a faint highlight on the rounded lip — soft and rounded, "
-    "never an angular cut or hard dark line — and let the bevels be gently irregular like a real hand-pressed edge."
+    " EDGE PROFILE — SOFT ROUNDED-OVER EDGES, NEAR-SEAMLESS: the planks meet almost seamlessly; the ONLY edge treatment "
+    "is that each plank's top corner is gently rounded over into a smooth, soft convex arc (a gentle quarter-round). "
+    "Grain and color flow continuously across the joints — NO dark line, NO V-groove, NO recessed valley, NO gap, NO grout. "
+    "Each joint reads mainly as a faint soft highlight skimming the rounded lips, with at most a whisper of diffuse self-shadow — "
+    "never a crisp, dark, black or grey line. The curve is broad, flat and gradual, a gentle easing of the edge, NOT a pronounced bevel."
 )
 
 
