@@ -1162,13 +1162,14 @@ async def main_page():
             pnp = ctx['pnp']; ims = ctx['ims']; ar = ctx['ar']; rp = ctx['rp']; sref = ctx['sref']
             jpt = ctx['jpt']; rid = ctx['rid']; cpt = ctx['cpt']; cpt_pro = ctx['cpt_pro']
 
+            _should_cancel = lambda: _is_cancelled(job.job_id)
             async def _one(model_id, prompt_text, stage_key, model_name):
                 _t0 = time.time()
                 def _on_stage(text):
                     try: setattr(job, f'{stage_key}_stage', text)
                     except Exception: pass
                 try:
-                    img, err = await asyncio.to_thread(call_image_generate, api_key, model_id, prompt_text, pnp, ims, ar, rp, sref, _on_stage)
+                    img, err = await asyncio.to_thread(call_image_generate, api_key, model_id, prompt_text, pnp, ims, ar, rp, sref, _on_stage, _should_cancel)
                 except Exception as e:
                     img, err = None, str(e)
                 finally:
@@ -1322,6 +1323,7 @@ async def main_page():
 
                 # 单模型：生成 → 存图 → 立刻刷新卡片(谁先好谁先单独显示) → 写记录。返回 (jpg路径或None, 错误)
                 # stage_key ∈ {'b2','pro'}：on_stage 在 worker 线程只写 job.{key}_stage，UI 的 1 秒 timer 读。
+                _should_cancel = lambda: _is_cancelled(jid, cancel_generation)
                 async def _gen_one(model_id, prompt_text, stage_key, model_name):
                     _t0 = time.time()
                     def _on_stage(text):
@@ -1330,7 +1332,7 @@ async def main_page():
                     try:
                         img, err = await asyncio.to_thread(
                             call_image_generate, api_key, model_id, prompt_text,
-                            pnp, ims, ar, rp, _sref_api, _on_stage)
+                            pnp, ims, ar, rp, _sref_api, _on_stage, _should_cancel)
                     except Exception as e:
                         img, err = None, str(e)
                     finally:
@@ -1338,7 +1340,8 @@ async def main_page():
                         except Exception: pass
                     setattr(job, f'{stage_key}_secs', round(time.time() - _t0, 1))
                     path = None
-                    if img is not None and not _is_cancelled(jid, cancel_generation):
+                    # 图已生成 = 已计费,即便任务已取消也存盘,避免白花钱(C)
+                    if img is not None:
                         path = _save_api_result_jpg(img, model_name, pnp)
                         setattr(job, f'{stage_key}_path', path)
                         try: _refresh_job_card(job)   # ← 这张图立刻单独显示，不等另一个模型
@@ -1361,7 +1364,13 @@ async def main_page():
                         else: proj = _path; pro_err = _err
 
                 if _is_cancelled(jid, cancel_generation):
-                    _update_job(job, status='failed', error='已取消（结果未保存）')
+                    # 取消后:已返回的图(已计费)已在 _gen_one 里存盘,这里据实标注，不再丢弃
+                    if b2j or proj:
+                        _final = 'done' if (b2j and proj) else 'partial'
+                        _update_job(job, status=_final, b2_path=b2j, pro_path=proj,
+                                    error='已取消，但已出图已保留（已付费）')
+                    else:
+                        _update_job(job, status='failed', error='已取消（无结果）')
                     try: _refresh_job_card(job)
                     except Exception as ex: logger.warning(f"刷新任务卡片失败: {ex}")
                     return

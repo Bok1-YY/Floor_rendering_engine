@@ -52,13 +52,14 @@ def call_gemini_generate(api_key: str, model_id: str, prompt_text: str, image_pa
                          image_size: str = "4K", aspect_ratio: str = "4:3",
                          room_image_path: Optional[str] = None,
                          style_ref_image_path: Optional[str] = None,
-                         on_stage=None) -> Tuple[Optional[object], Optional[str]]:
+                         on_stage=None, should_cancel=None) -> Tuple[Optional[object], Optional[str]]:
     """流式文生图/图生图。
 
     - Pro 模型(model_id 含 'pro')额外请求 includeThoughts，实时回传思考标题。
     - on_stage(text): 可选回调，在「本(worker)线程」内被调用，用于把实时状态
       （📡连接中 / 🧠思考标题 / 🎨渲染中 / 🔁网络重试 N/M）写回 UI。必须自身吞异常。
     - 网络中断（含流式中途 IncompleteRead）按指数退避重试。
+    - should_cancel(): 可选回调，返回 True 表示任务已取消 → 立即停止后续重试，不再发起新请求。
     - 返回 (PIL.Image, None) 或 (None, 错误字符串)，契约与旧版一致。
     """
     import requests as _req
@@ -124,8 +125,13 @@ def call_gemini_generate(api_key: str, model_id: str, prompt_text: str, image_pa
                  _req.exceptions.ChunkedEncodingError, _ProtocolError)
 
     def _sleep_backoff(attempt):
+        # 取消感知:退避期间每 0.5s 检查一次,取消则立即返回(不再触发下一次请求)
         d = backoffs[min(attempt, len(backoffs) - 1)] + random.uniform(0, 1.5)
-        time.sleep(d)
+        end = time.time() + d
+        while time.time() < end:
+            if should_cancel and should_cancel():
+                return
+            time.sleep(0.5)
 
     # 硬性时限：防"半死连接"无限挂起。
     #   idle_deadline: 连接 N 秒收不到任何新数据(行)即判假死、强制关闭。
@@ -139,6 +145,10 @@ def call_gemini_generate(api_key: str, model_id: str, prompt_text: str, image_pa
 
     last_err = None
     for attempt in range(max_attempts):
+        if should_cancel and should_cancel():
+            logger.info(f"[API生成] 任务已取消,停止重试(不再发起新请求) model={model_id}")
+            last_err = last_err or "已取消"
+            break
         if time.time() - call_t0 >= total_deadline:
             logger.error(f"[API生成] 总时限 {total_deadline:.0f}s 到，放弃 model={model_id}")
             last_err = last_err or "超过总时限"
@@ -319,13 +329,15 @@ def call_fal_generate(api_key: str, model_id: str, prompt_text: str, image_path:
                       image_size: str = "4K", aspect_ratio: str = "4:3",
                       room_image_path: Optional[str] = None,
                       style_ref_image_path: Optional[str] = None,
-                      on_stage=None) -> Tuple[Optional[object], Optional[str]]:
+                      on_stage=None, should_cancel=None) -> Tuple[Optional[object], Optional[str]]:
     """经 Fal 路由调用 Nano Banana 系列(图生图 /edit 端点)。
 
     与 call_gemini_generate 同契约:返回 (PIL.Image, None) 或 (None, 错误字符串),并支持 on_stage 回调。
     同一个 Gemini 模型,只换更稳的线路(国内→Fal→Google),保真/4K 不变。
     - model_id 仍用 Gemini 的 id,内部经 FAL_MODEL_MAP 映射到 Fal endpoint。
     - 用 sync_mode=true:响应内联返回 data URI 图,整次生图只需一次请求(软路由下最稳)。
+    - should_cancel(): 可选回调,返回 True 表示任务已被用户取消 → 立刻停止后续重试,
+      不再发起新的(会计费的)Fal 请求。已在途的那一次无法召回,但本次若已拿到图仍会正常返回。
     """
     import requests as _req
     from urllib3.exceptions import ProtocolError as _ProtocolError
@@ -381,13 +393,24 @@ def call_fal_generate(api_key: str, model_id: str, prompt_text: str, image_path:
     try: total_deadline = float(cfg.get("gen_total_deadline", 600))
     except Exception: total_deadline = 600.0
 
+    # Fal 单独的重试上限(默认 3,可经 engine_config.json 的 fal_retry_attempts 调)。
+    # 比 Google 直连(默认 6)更克制:软路由把连接掐断时 Fal 服务端往往已经收到并在跑,
+    # 盲目重发会让同一张图被重复计费,故少重试以省钱。
     max_attempts, backoffs = _retry_plan()
+    try: fal_attempts = int(cfg.get("fal_retry_attempts", 3))
+    except Exception: fal_attempts = 3
+    max_attempts = max(1, min(max_attempts, fal_attempts))
     RETRYABLE = (_req.exceptions.SSLError, _req.exceptions.ConnectionError,
                  _req.exceptions.ChunkedEncodingError, _ProtocolError)
 
     def _sleep_backoff(attempt):
+        # 取消感知:退避期间每 0.5s 检查一次,取消则立即返回(避免白等 + 不再触发下一次请求)
         d = backoffs[min(attempt, len(backoffs) - 1)] + random.uniform(0, 1.5)
-        time.sleep(d)
+        end = time.time() + d
+        while time.time() < end:
+            if should_cancel and should_cancel():
+                return
+            time.sleep(0.5)
 
     def _decode_image(url_or_uri):
         """把 Fal 返回的 images[].url(sync 下是 data URI,否则是 http URL)解成 PIL。"""
@@ -404,6 +427,10 @@ def call_fal_generate(api_key: str, model_id: str, prompt_text: str, image_path:
     call_t0 = time.time()
     last_err = None
     for attempt in range(max_attempts):
+        if should_cancel and should_cancel():
+            logger.info(f"[Fal生成] 任务已取消,停止重试(不再发起新请求) model={model_id}")
+            last_err = last_err or "已取消"
+            break
         if time.time() - call_t0 >= total_deadline:
             logger.error(f"[Fal生成] 总时限 {total_deadline:.0f}s 到,放弃 model={model_id}")
             last_err = last_err or "超过总时限"
@@ -463,11 +490,12 @@ def call_image_generate(api_key: str, model_id: str, prompt_text: str, image_pat
                         image_size: str = "4K", aspect_ratio: str = "4:3",
                         room_image_path: Optional[str] = None,
                         style_ref_image_path: Optional[str] = None,
-                        on_stage=None) -> Tuple[Optional[object], Optional[str]]:
+                        on_stage=None, should_cancel=None) -> Tuple[Optional[object], Optional[str]]:
     """生图调度器:按 engine_config.json 的 image_provider 选线路,两条线路同契约。
 
     - 'google'(默认):直连 Google AI Studio,沿用传入的 Gemini api_key。
     - 'fal':走 Fal 路由,改用 config 里的 fal_api_key(忽略传入的 Gemini key)。
+    - should_cancel(): 透传给底层,任务取消后立即停止重试,不再产生新的计费请求。
     """
     cfg = _load_config()
     provider = (cfg.get("image_provider") or DEFAULT_IMAGE_PROVIDER).strip().lower()
@@ -477,9 +505,9 @@ def call_image_generate(api_key: str, model_id: str, prompt_text: str, image_pat
             logger.error("[生图调度] 线路=fal 但未配置 Fal API Key")
             return None, "未配置 Fal API Key(请在 API 设置里填写 Fal Key)"
         return call_fal_generate(fal_key, model_id, prompt_text, image_path, image_size,
-                                 aspect_ratio, room_image_path, style_ref_image_path, on_stage)
+                                 aspect_ratio, room_image_path, style_ref_image_path, on_stage, should_cancel)
     return call_gemini_generate(api_key, model_id, prompt_text, image_path, image_size,
-                                aspect_ratio, room_image_path, style_ref_image_path, on_stage)
+                                aspect_ratio, room_image_path, style_ref_image_path, on_stage, should_cancel)
 
 
 def call_gemini_edit(api_key: str, model_id: str, edit_instruction: str, source_image_b64: str,
