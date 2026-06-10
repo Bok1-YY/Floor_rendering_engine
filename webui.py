@@ -326,11 +326,18 @@ async def main_page():
                         with ui.expansion('🔑 API 设置').classes('w-full').props('dense'):
                             with ui.column().classes('w-full q-gutter-y-sm'):
                                 _cfg0 = _load_config()
-                                provider_sel = ui.select(
-                                    {'google': 'Google 直连', 'fal': 'Fal 路由'},
-                                    value=(_cfg0.get('image_provider') or 'google'),
-                                    label='生图线路',
-                                ).classes('w-full')
+                                with ui.row().classes('w-full no-wrap items-center').style('gap:6px'):
+                                    provider_sel = ui.select(
+                                        {'google': 'Google 直连', 'fal': 'Fal 路由'},
+                                        value=(_cfg0.get('image_provider') or 'google'),
+                                        label='生图线路',
+                                    ).classes('flex-1')
+                                    with ui.icon('info', size='sm').classes('cursor-pointer').style('color: var(--text-secondary);'):
+                                        ui.tooltip(
+                                            '⚠️ Fal 路由开销较大：同 4K 比 Google 直连贵约 40–50%'
+                                            '（双模型每次约 $0.46 vs $0.30，Fal 对 flash/B2 与 4K 加价明显）。'
+                                            '建议日常用 Google 直连，仅在直连被重置/卡住时切到 Fal 应急。'
+                                        ).style('max-width:260px; font-size:12px; line-height:1.5;')
                                 api_key_inp = ui.input('Gemini API Key', value=_cfg0.get('gemini_api_key',''), password=True).classes('w-full')
                                 fal_key_inp = ui.input('Fal API Key', value=_cfg0.get('fal_api_key',''), password=True).classes('w-full')
                                 api_proxy_inp = ui.input('本地代理', value=_cfg0.get('proxy','')).classes('w-full')
