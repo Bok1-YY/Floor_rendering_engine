@@ -41,6 +41,18 @@ FLOOR_COLOR_MATCH_INSTRUCTION = (
     "The finished floor must be instantly recognizable as the very same product as the uploaded swatch."
 )
 
+# 圆弧倒角(Pressed Bevel)性格补丁：人字拼/正方形拼的 en_seam 会被几何描述整段覆盖，
+# 倒角性格会丢，故选了圆弧倒角时把"截面性格"(压圆凹、纹理连续、软渐变阴影+圆肩高光、非尖V)
+# 追加到几何描述后面。直拼无需此补丁(直拼直接用 TECH_DICT 里的完整圆弧倒角块)。
+PRESSED_BEVEL_CHARACTER = (
+    " EDGE PROFILE — PRESSED ROUNDED BEVEL: every joint between planks is a pressed, rounded bevel, NOT a sharp V-groove. "
+    "Each edge is gently compressed into the surface, forming a soft, shallow, concave valley with rounded shoulders; "
+    "the wood grain and finish continue smoothly across it — never a cut groove, never a hard black line. "
+    "Render each joint as a soft gradient shadow with a faint highlight on the rounded lip — soft and rounded, "
+    "never an angular cut or hard dark line — and let the bevels be gently irregular like a real hand-pressed edge."
+)
+
+
 def _floor_spec_block(core_material, spec_line, visibility, quality, avoid_en, extra_cmd_en,
                       furniture_contrast=None):
     """四套工作流共享的提示词尾巴：地板规格 → 可见性 →(家具对比)→ 质量 → 负向。
@@ -141,6 +153,10 @@ def save_task_files_html(workflow_mode, model_choice, image_path, continent, cou
             "Shadow tone is warm and subtle, not black or dark grey. "
             "The grid reads as a quiet, regular background rhythm — never as a dominant geometric overlay."
         )
+
+    # 圆弧倒角(直拼直接用 TECH_DICT 完整块；人字拼/正方形拼的 en_seam 已被几何描述覆盖，故在此补回倒角性格)
+    if "圆弧倒角" in seam_type and "无缝" not in seam_type and ("人字拼" in floor_size or "正方形拼" in floor_size):
+        en_seam += PRESSED_BEVEL_CHARACTER
 
     # 地板色调 → 家具对比色指令
     en_furniture_contrast = ""

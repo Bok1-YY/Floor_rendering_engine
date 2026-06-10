@@ -296,7 +296,7 @@ async def main_page():
                                 light_sel = ui.select(LIGHTINGS, value=LIGHTINGS[0], label='💡 光线').classes('w-full').props(_editable)
                                 angle_sel = ui.select(ANGLES, value=ANGLES[0], label='📷 镜头').classes('w-full').props(_editable)
                                 floor_size_sel = ui.select(FLOOR_SIZES, value=FLOOR_SIZES[0], label='📏 板材尺寸').classes('w-full').props(_editable)
-                                seam_sel = ui.select(['无缝拼接 (SPC/LVT专用)','常规倒角缝 (如强化/木地板)'], value='无缝拼接 (SPC/LVT专用)', label='🔩 拼缝').classes('w-full').props(_editable)
+                                seam_sel = ui.select(['无缝拼接 (SPC/LVT专用)','常规倒角缝 (如强化/木地板)','圆弧倒角 (Pressed Bevel)'], value='无缝拼接 (SPC/LVT专用)', label='🔩 拼缝').classes('w-full').props(_editable)
                                 gloss_sel = ui.select(['超哑光 (0-3°)','哑光 (3-5°)','高光 (High Gloss)'], value='哑光 (3-5°)', label='✨ 光泽度').classes('w-full').props(_editable)
 
                                 pet_sec = ui.column().classes('w-full q-gutter-y-sm'); pet_sec.visible = False

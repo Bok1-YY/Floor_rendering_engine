@@ -139,6 +139,24 @@ TECH_DICT = {
         "In the foreground, joint lines must be unmistakably visible — at least as prominent as a fine pen stroke, warm-toned not dark. "
         "A floor rendered without any visible joint lines is incorrect and commercially unusable."
     ),
+    "圆弧倒角 (Pressed Bevel)": (
+        "Every plank-to-plank boundary is a PRESSED (rounded) bevel — NOT a sharp V-groove. "
+        "The edge is gently compressed into the board's surface, forming a soft, shallow, CONCAVE rounded valley "
+        "(a U-shaped dip with rounded shoulders, like the soft edge of a pillow), never an angular cut and never two flat faces meeting at a sharp point. "
+        "Critically, the wood grain, color and surface finish CONTINUE smoothly down into and across the bevel — "
+        "it is part of the same pressed wood surface, NOT a cut groove exposing a darker core or a printed black line. "
+        "Shade the dip with a SOFT, GRADUAL ambient shadow that fades in and out (a gentle gradient), "
+        "plus a faint soft highlight catching the rounded upper lip of each plank edge — "
+        "this rounded-lip highlight is what makes it read as 'pressed' rather than 'cut'. "
+        "The shadow tone is derived strictly from the floor's own wood tone, only about 8-12% darker than the adjacent plank surface — "
+        "no pure black, no dark grey, no hard drawn line. "
+        "It is shallower and softer than a standard V-groove, giving subtle dimension without a deep dark gap, "
+        "sitting visually between a square (flat) edge and a full bevel. "
+        "Let it be gently and naturally irregular along its length — slightly varying in width and depth like a real hand-pressed edge — "
+        "rather than a perfectly uniform machined line. "
+        "In the foreground each pressed bevel must still read as a soft rounded seam; in the distance it fades to a faint soft line. "
+        "Negative: NO sharp V-groove, NO angular chamfer, NO hard black joint line, NO deep open gap, NO drawn pen line."
+    ),
 }
 
 def translate_zh_to_en(text):
