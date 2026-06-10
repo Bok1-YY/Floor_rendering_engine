@@ -152,8 +152,14 @@ TECH_DICT = {
         "visible only as a delicate rounded edge that gently catches the light. "
         "Any seam tone comes strictly from the floor's own wood color and is at most ~5% softer/lighter than the surface, "
         "and only ever as a soft gradient — never a crisp or contrasting edge. "
+        "CRITICAL — UNIFORM ACROSS THE ENTIRE FLOOR: every seam must look EXACTLY the same everywhere — the same soft, faint, "
+        "near-invisible rounded edge — with NO difference between the LEFT and RIGHT sides, the near and far areas, or the shaded "
+        "and brightly sunlit areas. Direct sunlight must NEVER turn a seam into a hard, dark or black line: planks lit by strong "
+        "window light keep the very SAME soft rounded edges as the planks in shadow. The whole floor must read as ONE consistent "
+        "material with ONE consistent edge style from end to end — it is unacceptable for one half of the floor to have soft seams "
+        "while the other half has dark or sharp lines. "
         "In the foreground the rounded edges may be just faintly visible as soft light-catching transitions; in the distance they fade to essentially nothing. "
-        "Negative: NO sharp V-groove, NO dark joint line, NO black or grey seam, NO recessed groove or valley, NO gap, NO grout line, NO hard drawn pen line, NO pronounced bevel, NO deep shadow."
+        "Negative: NO sharp V-groove, NO dark joint line, NO black or grey seam, NO recessed groove or valley, NO gap, NO grout line, NO hard drawn pen line, NO pronounced bevel, NO deep shadow, NO darker or harder seams in the sunlit areas, NO left/right inconsistency in seam style."
     ),
 }
 

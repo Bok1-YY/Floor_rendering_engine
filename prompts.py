@@ -50,7 +50,9 @@ PRESSED_BEVEL_CHARACTER = (
     "is that each plank's top corner is gently rounded over into a smooth, soft convex arc (a gentle quarter-round). "
     "Grain and color flow continuously across the joints — NO dark line, NO V-groove, NO recessed valley, NO gap, NO grout. "
     "Each joint reads mainly as a faint soft highlight skimming the rounded lips, with at most a whisper of diffuse self-shadow — "
-    "never a crisp, dark, black or grey line. The curve is broad, flat and gradual, a gentle easing of the edge, NOT a pronounced bevel."
+    "never a crisp, dark, black or grey line. The curve is broad, flat and gradual, a gentle easing of the edge, NOT a pronounced bevel. "
+    "UNIFORM EVERYWHERE: every joint looks identical across the whole floor — left and right, near and far, shaded and sunlit; "
+    "direct sunlight must never turn a joint into a hard or dark line."
 )
 
 
