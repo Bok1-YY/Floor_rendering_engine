@@ -46,13 +46,11 @@ FLOOR_COLOR_MATCH_INSTRUCTION = (
 # 本质=无缝拼接，只把板边直角磨成圆弧：接缝几乎不可见，以圆边高光为主、几乎无暗线，曲线平缓。
 # 直拼无需此补丁(直拼直接用 TECH_DICT 里的完整圆弧倒角块)。
 PRESSED_BEVEL_CHARACTER = (
-    " EDGE PROFILE — SOFT ROUNDED-OVER EDGES, NEAR-SEAMLESS: the planks meet almost seamlessly; the ONLY edge treatment "
-    "is that each plank's top corner is gently rounded over into a smooth, soft convex arc (a gentle quarter-round). "
-    "Grain and color flow continuously across the joints — NO dark line, NO V-groove, NO recessed valley, NO gap, NO grout. "
-    "Each joint reads mainly as a faint soft highlight skimming the rounded lips, with at most a whisper of diffuse self-shadow — "
-    "never a crisp, dark, black or grey line. The curve is broad, flat and gradual, a gentle easing of the edge, NOT a pronounced bevel. "
-    "UNIFORM EVERYWHERE: every joint looks identical across the whole floor — left and right, near and far, shaded and sunlit; "
-    "direct sunlight must never turn a joint into a hard or dark line."
+    " EDGE PROFILE — SOFT ROUNDED, NEAR-SEAMLESS: each plank edge is softly rounded over into a gentle pressed/eased convex edge, "
+    "so the grain and color flow continuously across every joint and the planks meet almost seamlessly. Every joint on the whole "
+    "floor is the SAME barely-there soft line — side joints and end joints, near and far, shaded and sunlit all identical — showing "
+    "only a faint soft highlight on the rounded lip, matte and flush even under direct sunlight, like a high-end Coretec floor where "
+    "the joints almost disappear."
 )
 
 
