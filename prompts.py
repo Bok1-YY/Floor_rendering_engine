@@ -319,22 +319,27 @@ def save_task_files_html(workflow_mode, model_choice, image_path, continent, cou
     else:
         en_plank_direction = "planks oriented to maximize visible floor area from camera angle"
 
-    # 避免项翻译
+    # 避免项翻译。
+    #   硬性排除(人物/宠物/地毯/顺色家具)→ 留负向(无好正向写法, Gemini 执行得好)。
+    #   地板表面项(过曝/反光/色偏)→ 改正向描述(生图模型对"别出X"易招X, 正向陈述想要的样子更稳)。
     avoid_en_list = []
+    surface_pos_list = []
     for item in avoid_items:
         if "地毯" in item: avoid_en_list.append("rugs, carpets of any size or style")
         elif "人物" in item: avoid_en_list.append("any people or human figures")
         elif "宠物" in item: avoid_en_list.append("any animals or pets")
-        elif "过曝" in item: avoid_en_list.append("blown-out overexposure that destroys floor surface detail — pure white hotspots with zero visible texture")
         elif "顺色" in item: avoid_en_list.append("furniture in similar color to floor (must have clear contrast)")
-        elif "反光" in item: avoid_en_list.append("floor reflections, mirror-like glare, light spots on floor surface")
-        elif "粉红" in item: avoid_en_list.append("pink tint, magenta color cast, magenta artifacts")
+        elif "过曝" in item: surface_pos_list.append("keep the floor evenly and softly lit with its full surface texture and wood grain clearly visible everywhere, including the sunlit areas, which stay gently bright and richly detailed")
+        elif "反光" in item: surface_pos_list.append("render the floor finish as matte, scattering light softly and evenly so the wood grain reads clearly across the whole surface")
+        elif "粉红" in item: surface_pos_list.append("hold a true, neutral, accurately white-balanced wood color faithful to the uploaded swatch")
         else: avoid_en_list.append(translate_zh_to_en(item))
     avoid_en = ", ".join(filter(None, avoid_en_list)) or "none"
     ar_value = aspect_ratio.split(" ")[0]
     extra_cmd_en = f"\n**Additional Requirements**: {translate_zh_to_en(custom_addition)}" if custom_addition else ""
+    if surface_pos_list:
+        extra_cmd_en += "\n**[Floor Surface]** " + "; ".join(surface_pos_list) + "."
 
-    en_quality = "**[Quality Requirements]** Ultra-sharp texture details at pixel level. Physically accurate colors with zero color drift, zero tinting, zero magenta artifacts."
+    en_quality = "**[Quality Requirements]** Ultra-sharp texture details at pixel level. Physically accurate, true-to-swatch colors with clean, faithful white balance and natural, consistent tone across the entire floor."
 
     # 核心材质指令
     CORE_MATERIAL_INSTRUCTION = (
