@@ -1,5 +1,8 @@
 import os
 import time
+import json
+import random
+import threading
 import base64
 import io as _io_mod
 import re
@@ -19,11 +22,53 @@ from .records import (
 def _redact_api_key(text):
     return re.sub(r'([?&]key=)[^&\s)]+', r'\1***', str(text or ""))
 
+def _extract_thought_title(text: str) -> str:
+    """从思考文本里抽取 **加粗标题** 作为简短状态；没有标题则取前 40 字。"""
+    if not text:
+        return ""
+    m = re.search(r'\*\*(.+?)\*\*', text)
+    if m:
+        return m.group(1).strip()
+    t = re.sub(r'\s+', ' ', text).strip()
+    return t[:40]
+
+
+def _retry_plan() -> Tuple[int, list]:
+    """从 engine_config.json 读取重试参数；缺省 6 次尝试、退避 2/5/12/25/45s(+抖动)。"""
+    cfg = _load_config()
+    backoffs = cfg.get("retry_backoffs") or [2, 5, 12, 25, 45]
+    try:
+        backoffs = [float(x) for x in backoffs]
+    except Exception:
+        backoffs = [2, 5, 12, 25, 45]
+    try:
+        attempts = int(cfg.get("retry_attempts", len(backoffs) + 1))
+    except Exception:
+        attempts = len(backoffs) + 1
+    return max(1, attempts), backoffs
+
+
 def call_gemini_generate(api_key: str, model_id: str, prompt_text: str, image_path: str,
                          image_size: str = "4K", aspect_ratio: str = "4:3",
                          room_image_path: Optional[str] = None,
-                         style_ref_image_path: Optional[str] = None) -> Tuple[Optional[object], Optional[str]]:
+                         style_ref_image_path: Optional[str] = None,
+                         on_stage=None) -> Tuple[Optional[object], Optional[str]]:
+    """流式文生图/图生图。
+
+    - Pro 模型(model_id 含 'pro')额外请求 includeThoughts，实时回传思考标题。
+    - on_stage(text): 可选回调，在「本(worker)线程」内被调用，用于把实时状态
+      （📡连接中 / 🧠思考标题 / 🎨渲染中 / 🔁网络重试 N/M）写回 UI。必须自身吞异常。
+    - 网络中断（含流式中途 IncompleteRead）按指数退避重试。
+    - 返回 (PIL.Image, None) 或 (None, 错误字符串)，契约与旧版一致。
+    """
     import requests as _req
+    from urllib3.exceptions import ProtocolError as _ProtocolError
+
+    def _stage(txt):
+        if on_stage:
+            try: on_stage(txt)
+            except Exception: pass
+
     logger.info(
         f"[API生成] start model={model_id}, size={image_size}, ar={aspect_ratio}, "
         f"floor={image_path}, room_ref={bool(room_image_path)}, style_ref={bool(style_ref_image_path)}, "
@@ -43,59 +88,215 @@ def call_gemini_generate(api_key: str, model_id: str, prompt_text: str, image_pa
         ext = os.path.splitext(style_ref_image_path)[1].lower()
         sref_mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}.get(ext.lstrip('.'), "image/jpeg")
         with open(style_ref_image_path, 'rb') as f: sref_b64 = base64.b64encode(f.read()).decode('utf-8')
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_id}:generateContent?key={api_key}"
+
     parts = [{"text": prompt_text}]
     if sref_b64: parts.append({"inlineData": {"mimeType": sref_mime, "data": sref_b64}})
     if room_b64: parts.append({"inlineData": {"mimeType": room_mime, "data": room_b64}})
     parts.append({"inlineData": {"mimeType": "image/png", "data": floor_b64}})
-    payload = {"contents": [{"parts": parts}], "generationConfig": {"responseModalities": ["IMAGE"], "imageConfig": {"imageSize": image_size, "aspectRatio": aspect_ratio}}}
+
     cfg = _load_config(); proxy = cfg.get("proxy", "").strip()
     proxies = {"http": proxy, "https": proxy} if proxy else None
     import urllib3; urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+    # 默认走【非流式】generateContent —— 实测在软路由/透明代理下又快又稳(单图 ~48s)。
+    # 流式 streamGenerateContent 能拿实时思考，但该网络下慢 ~9 倍且长连接易被重置，
+    # 故设为可选：engine_config.json 里 "use_streaming": true 才启用流式 + 思考显示。
+    use_streaming = bool(cfg.get("use_streaming", False))
+    wants_thoughts = use_streaming and ('pro' in (model_id or '').lower())
+    if use_streaming:
+        gen_cfg = {
+            "responseModalities": ["TEXT", "IMAGE"] if wants_thoughts else ["IMAGE"],
+            "imageConfig": {"imageSize": image_size, "aspectRatio": aspect_ratio},
+        }
+        if wants_thoughts:
+            gen_cfg["thinkingConfig"] = {"includeThoughts": True}
+        url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
+               f"{model_id}:streamGenerateContent?alt=sse&key={api_key}")
+    else:
+        gen_cfg = {"responseModalities": ["IMAGE"],
+                   "imageConfig": {"imageSize": image_size, "aspectRatio": aspect_ratio}}
+        url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
+               f"{model_id}:generateContent?key={api_key}")
+    payload = {"contents": [{"parts": parts}], "generationConfig": gen_cfg}
+
+    max_attempts, backoffs = _retry_plan()
+    RETRYABLE = (_req.exceptions.SSLError, _req.exceptions.ConnectionError,
+                 _req.exceptions.ChunkedEncodingError, _ProtocolError)
+
+    def _sleep_backoff(attempt):
+        d = backoffs[min(attempt, len(backoffs) - 1)] + random.uniform(0, 1.5)
+        time.sleep(d)
+
+    # 硬性时限：防"半死连接"无限挂起。
+    #   idle_deadline: 连接 N 秒收不到任何新数据(行)即判假死、强制关闭。
+    #     合法渲染的静默期实测最长 ~190s，故默认 240s，留足余量不误杀。
+    #   total_deadline: 整次调用(含所有重试)的墙钟上限，到点放弃、释放队列槽位。
+    try: idle_deadline = float(cfg.get("gen_idle_deadline", 240))
+    except Exception: idle_deadline = 240.0
+    try: total_deadline = float(cfg.get("gen_total_deadline", 600))
+    except Exception: total_deadline = 600.0
+    call_t0 = time.time()
+
     last_err = None
-    for attempt in range(3):
+    for attempt in range(max_attempts):
+        if time.time() - call_t0 >= total_deadline:
+            logger.error(f"[API生成] 总时限 {total_deadline:.0f}s 到，放弃 model={model_id}")
+            last_err = last_err or "超过总时限"
+            break
+        _stage("📡 连接中…" if attempt == 0 else f"🔁 网络重试 {attempt}/{max_attempts - 1}")
+        resp = None
+        _wd_stop = threading.Event()
+        _wd_fired = [False]
+        _last_data = [time.time()]
         try:
-            resp = _req.post(url, json=payload, timeout=300, proxies=proxies, verify=False)
-            last_err = None; break
-        except (_req.exceptions.SSLError, _req.exceptions.ConnectionError, _req.exceptions.ChunkedEncodingError) as e:
-            last_err = e
-            logger.warning(f"[API生成] 网络异常 attempt={attempt+1}/3 model={model_id}: {_redact_api_key(e)}")
-            if attempt < 2: time.sleep(2 ** attempt)
-        except _req.exceptions.Timeout:
-            logger.error(f"[API生成] 请求超时 model={model_id}")
-            return None, "请求超时"
-        except Exception as e:
-            logger.exception(f"[API生成] 未预期网络错误 model={model_id}")
-            return None, f"网络错误: {e}"
-    if last_err is not None:
-        logger.error(f"[API生成] 网络重试失败 model={model_id}: {_redact_api_key(last_err)}")
-        return None, f"网络错误: {_redact_api_key(last_err)}"
-    if resp.status_code != 200:
-        try:
-            err_info = resp.json()
-            err_msg = err_info.get('error', {}).get('message', resp.text[:400]) if 'error' in err_info else resp.text[:400]
-        except Exception:
-            err_msg = resp.text[:400]
-        logger.error(f"[API生成] HTTP失败 model={model_id}, status={resp.status_code}, err={_short_text(err_msg, 800)}")
-        return None, f"HTTP {resp.status_code}: {err_msg}"
-    data = resp.json()
-    for candidate in data.get('candidates', []):
-        for part in candidate.get('content', {}).get('parts', []):
-            if 'inlineData' in part:
-                try:
-                    img_bytes = base64.b64decode(part['inlineData']['data'])
-                    pil_img = Image.open(_io_mod.BytesIO(img_bytes)); pil_img.load()
+            if not use_streaming:
+                # ── 非流式（默认）：一次性拿全图，软路由/透明代理下又快又稳 ──
+                _stage("🎨 生成中…")  # post 会阻塞至整图返回(~60s)，先把卡片置为生成中
+                resp = _req.post(url, json=payload, timeout=(30, 300), proxies=proxies, verify=False)
+                if resp.status_code != 200:
+                    try:
+                        err_info = resp.json()
+                        err_msg = err_info.get('error', {}).get('message', resp.text[:400]) if isinstance(err_info, dict) and 'error' in err_info else resp.text[:400]
+                    except Exception:
+                        err_msg = resp.text[:400]
+                    if resp.status_code in (429, 500, 502, 503, 504) and attempt < max_attempts - 1:
+                        last_err = f"HTTP {resp.status_code}: {err_msg}"
+                        logger.warning(f"[API生成] HTTP可重试 attempt={attempt+1}/{max_attempts} model={model_id}, status={resp.status_code}")
+                        _sleep_backoff(attempt); continue
+                    logger.error(f"[API生成] HTTP失败 model={model_id}, status={resp.status_code}, err={_short_text(err_msg, 800)}")
+                    return None, f"HTTP {resp.status_code}: {err_msg}"
+                _stage("🎨 渲染中…")
+                data = resp.json()
+                img_bytes = None; safety_blocks = []
+                for cand in data.get('candidates', []):
+                    for part in cand.get('content', {}).get('parts', []):
+                        if 'inlineData' in part and part['inlineData'].get('data'):
+                            img_bytes = base64.b64decode(part['inlineData']['data'])
+                    for r in cand.get('safetyRatings', []):
+                        if r.get('blocked'): safety_blocks.append(r.get('category', ''))
+                if img_bytes is not None:
+                    try:
+                        pil_img = Image.open(_io_mod.BytesIO(img_bytes)); pil_img.load()
+                    except Exception as e:
+                        logger.exception(f"[API生成] 图片解码失败 model={model_id}")
+                        return None, f"解码失败: {e}"
                     logger.info(f"[API生成] success model={model_id}, image={pil_img.width}x{pil_img.height}")
                     return pil_img, None
+                if safety_blocks:
+                    logger.error(f"[API生成] 安全拦截 model={model_id}: {', '.join(safety_blocks)}")
+                    return None, f"安全拦截: {', '.join(safety_blocks)}"
+                logger.error(f"[API生成] API未返回图片 model={model_id}")
+                return None, "API 未返回图片"
+
+            # ── 流式（可选）：实时思考 + 看门狗防假死 ──
+            resp = _req.post(url, json=payload, stream=True, timeout=(30, 300),
+                             proxies=proxies, verify=False)
+            if resp.status_code != 200:
+                try:
+                    err_info = resp.json()
+                    err_msg = err_info.get('error', {}).get('message', resp.text[:400]) if isinstance(err_info, dict) and 'error' in err_info else resp.text[:400]
+                except Exception:
+                    err_msg = resp.text[:400]
+                # 5xx / 429 视为暂时性，可重试；其它(如 400/403)直接失败
+                if resp.status_code in (429, 500, 502, 503, 504) and attempt < max_attempts - 1:
+                    last_err = f"HTTP {resp.status_code}: {err_msg}"
+                    logger.warning(f"[API生成] HTTP可重试 attempt={attempt+1}/{max_attempts} model={model_id}, status={resp.status_code}")
+                    _sleep_backoff(attempt); continue
+                logger.error(f"[API生成] HTTP失败 model={model_id}, status={resp.status_code}, err={_short_text(err_msg, 800)}")
+                return None, f"HTTP {resp.status_code}: {err_msg}"
+
+            # 看门狗：每 5s 检查一次；连接 idle_deadline 秒无新数据、或整次超总时限 → 强关
+            def _watchdog(_r=resp, _ev=_wd_stop, _fired=_wd_fired, _last=_last_data):
+                while not _ev.wait(5):
+                    idle = time.time() - _last[0]
+                    over_total = (time.time() - call_t0) >= total_deadline
+                    if idle > idle_deadline or over_total:
+                        _fired[0] = True
+                        why = f"假死{idle:.0f}s无数据" if idle > idle_deadline else "超总时限"
+                        logger.warning(f"[API生成] 看门狗触发({why})，强制关闭连接 model={model_id}")
+                        try: _r.close()
+                        except Exception: pass
+                        return
+            threading.Thread(target=_watchdog, daemon=True).start()
+
+            # flash 无思考摘要，连上即进入渲染；pro 先吐思考标题，最后才是图片
+            if not wants_thoughts:
+                _stage("🎨 渲染中…")
+
+            img_bytes = None
+            safety_blocks = []
+            for raw in resp.iter_lines(decode_unicode=True):
+                _last_data[0] = time.time()   # 收到任何一行就刷新活性时钟
+                if not raw:
+                    continue
+                line = raw[5:].strip() if raw.startswith("data:") else raw.strip()
+                if not line or line == "[DONE]":
+                    continue
+                try:
+                    obj = json.loads(line)
+                except Exception:
+                    continue
+                for cand in obj.get('candidates', []):
+                    for part in cand.get('content', {}).get('parts', []):
+                        if part.get('thought') is True and part.get('text'):
+                            title = _extract_thought_title(part['text'])
+                            if title: _stage(f"🧠 {title}")
+                        elif 'inlineData' in part and part['inlineData'].get('data'):
+                            img_bytes = base64.b64decode(part['inlineData']['data'])
+                            _stage("🎨 渲染中…")
+                    for r in cand.get('safetyRatings', []):
+                        if r.get('blocked'):
+                            safety_blocks.append(r.get('category', ''))
+
+            if img_bytes is not None:
+                try:
+                    pil_img = Image.open(_io_mod.BytesIO(img_bytes)); pil_img.load()
                 except Exception as e:
                     logger.exception(f"[API生成] 图片解码失败 model={model_id}")
                     return None, f"解码失败: {e}"
-    safety_blocks = [r.get('category', '') for c in data.get('candidates', []) for r in c.get('safetyRatings', []) if r.get('blocked')]
-    if safety_blocks:
-        logger.error(f"[API生成] 安全拦截 model={model_id}: {', '.join(safety_blocks)}")
-        return None, f"安全拦截: {', '.join(safety_blocks)}"
-    logger.error(f"[API生成] API未返回图片 model={model_id}, response={_short_text(data, 1000)}")
-    return None, "API 未返回图片"
+                logger.info(f"[API生成] success model={model_id}, image={pil_img.width}x{pil_img.height}")
+                return pil_img, None
+            if safety_blocks:
+                logger.error(f"[API生成] 安全拦截 model={model_id}: {', '.join(safety_blocks)}")
+                return None, f"安全拦截: {', '.join(safety_blocks)}"
+            # 200 但流正常结束却没拿到图片：可能是被看门狗掐断的半截流 → 当作可重试
+            if _wd_fired[0]:
+                last_err = "连接假死被看门狗中断"
+                logger.warning(f"[API生成] 看门狗中断(流空) attempt={attempt+1}/{max_attempts} model={model_id}")
+                if attempt < max_attempts - 1:
+                    _sleep_backoff(attempt); continue
+            else:
+                logger.error(f"[API生成] API未返回图片 model={model_id}")
+                return None, "API 未返回图片"
+
+        except _req.exceptions.Timeout:
+            last_err = "请求超时"
+            logger.warning(f"[API生成] 请求超时 attempt={attempt+1}/{max_attempts} model={model_id}")
+            if attempt < max_attempts - 1:
+                _sleep_backoff(attempt); continue
+        except RETRYABLE as e:
+            last_err = e
+            logger.warning(f"[API生成] 网络异常 attempt={attempt+1}/{max_attempts} model={model_id}: {_redact_api_key(e)}")
+            if attempt < max_attempts - 1:
+                _sleep_backoff(attempt); continue
+        except Exception as e:
+            # 看门狗强关连接会让阻塞的 iter_lines 抛出各种异常，归类为可重试
+            if _wd_fired[0]:
+                last_err = "连接假死被看门狗中断"
+                logger.warning(f"[API生成] 看门狗中断 attempt={attempt+1}/{max_attempts} model={model_id}")
+                if attempt < max_attempts - 1:
+                    _sleep_backoff(attempt); continue
+            else:
+                logger.exception(f"[API生成] 未预期错误 model={model_id}")
+                return None, f"网络错误: {_redact_api_key(e)}"
+        finally:
+            _wd_stop.set()
+            if resp is not None:
+                try: resp.close()
+                except Exception: pass
+
+    logger.error(f"[API生成] 网络重试失败 model={model_id}: {_redact_api_key(last_err)}")
+    return None, f"网络错误: {_redact_api_key(last_err)}"
 
 def call_gemini_edit(api_key: str, model_id: str, edit_instruction: str, source_image_b64: str,
                      image_size: str = "4K", aspect_ratio: str = "4:3", preserve_floor_geometry: bool = True):

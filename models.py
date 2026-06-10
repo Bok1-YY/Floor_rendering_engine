@@ -26,6 +26,9 @@ class JobRecord:
     pro_secs: Optional[float] = None         # Pro model generation time in seconds
     pro_polish_path: Optional[str] = None    # seam-polished Pro result image path
     pro_polishing: bool = False              # True while polish is in progress
+    b2_stage: str = ''                       # live status text for B2 (思考标题/渲染中/重试) — worker thread writes, UI timer reads
+    pro_stage: str = ''                      # live status text for Pro
+    retry_ctx: Optional[dict] = None         # 生成上下文快照，供失败后「重试」按钮重放(只重跑未成图的模型)
 
 
 @dataclass

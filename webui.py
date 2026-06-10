@@ -73,6 +73,7 @@ _job_lock = _threading.Lock()
 _gen_semaphore: Optional[asyncio.Semaphore] = None
 _job_ui_refs: dict = {}   # job_id → {card, status_lbl, err_lbl, img_row, b2_img, b2_dl, pro_img, pro_dl}
 _job_stop_btns: dict = {}  # job_id → stop button element
+_job_retry_btns: dict = {} # job_id → retry button element (失败/部分完成时显示)
 
 def _new_job(display_name, ts, model_filter='both') -> JobRecord:
     job = JobRecord(job_id=f"job_{int(time.time()*1000)}", display_name=display_name, ts=ts, model_filter=model_filter)
@@ -380,6 +381,9 @@ async def main_page():
                                         stop_single_btn = ui.button('⏹', on_click=lambda j=job: _request_stop_job(j)).props('flat color=red-8 dense round size=sm').tooltip('停止此任务')
                                         stop_single_btn.visible = False  # 排队中或运行中才显示
                                         _job_stop_btns[job.job_id] = stop_single_btn
+                                        retry_btn = ui.button('🔁', on_click=lambda j=job: _retry_job(j)).props('flat color=primary dense round size=sm').tooltip('重新生成失败的部分')
+                                        retry_btn.visible = False  # 失败/部分完成才显示
+                                        _job_retry_btns[job.job_id] = retry_btn
                                     ui.label(f'🕐 {job.ts}').classes('text-xs').style('color: var(--text-secondary);')
                                 time_lbl = ui.label('').classes('text-xs').style('color: var(--text-secondary);'); time_lbl.visible = False
                                 err_lbl = ui.label('').classes('text-xs text-red-400'); err_lbl.visible = False
@@ -413,6 +417,15 @@ async def main_page():
                     def _job_time_text(job: JobRecord) -> str:
                         def _fmt(s):
                             return f'{s:.1f}s' if s is not None else '—'
+                        # 运行中：已用秒数 + 各模型实时阶段（🧠思考标题 / 🎨渲染中 / 🔁重试）
+                        if job.status == 'running' and job.started_at:
+                            base = f'⏱ 已用 {time.time() - job.started_at:.0f}s'
+                            stages = []
+                            if job.model_filter in ('b2', 'both') and job.b2_stage:
+                                stages.append(job.b2_stage if job.model_filter != 'both' else f'B2 {job.b2_stage}')
+                            if job.model_filter in ('pro', 'both') and job.pro_stage:
+                                stages.append(job.pro_stage if job.model_filter != 'both' else f'Pro {job.pro_stage}')
+                            return base + ('　·　' + '　·　'.join(stages) if stages else '')
                         has_secs = (job.b2_secs is not None) or (job.pro_secs is not None)
                         if has_secs:
                             if job.model_filter == 'both':
@@ -421,8 +434,6 @@ async def main_page():
                                 return f'⏱ B2 {_fmt(job.b2_secs)}'
                             else:
                                 return f'⏱ Pro {_fmt(job.pro_secs)}'
-                        if job.status == 'running' and job.started_at:
-                            return f'⏱ 已用 {time.time() - job.started_at:.0f}s'
                         return ''
 
                     # 每秒刷新"运行中"任务的已用时间
@@ -454,6 +465,11 @@ async def main_page():
                         if stop_btn:
                             try: stop_btn.visible = (job.status in ('queued', 'running'))
                             except Exception as ex: logger.warning(f"更新停止按钮状态失败: {ex}")
+                        # 重试按钮：失败/部分完成 且 存在重试上下文 才显示
+                        retry_btn = _job_retry_btns.get(job.job_id)
+                        if retry_btn:
+                            try: retry_btn.visible = (job.status in ('failed', 'partial')) and bool(job.retry_ctx)
+                            except Exception as ex: logger.warning(f"更新重试按钮状态失败: {ex}")
                         border_var = {'done':'var(--border-success)','partial':'var(--border-partial)','failed':'var(--border-failed)','running':'var(--border-running)'}.get(job.status,'')
                         if border_var: refs['card'].style(f'border-left:4px solid {border_var};')
                         # 耗时显示
@@ -1027,8 +1043,7 @@ async def main_page():
 
             def _do_refresh():
                 files = scan_json_files()
-                mgr_json_sel._props['options'] = [{'value': f, 'label': f} for f in files]
-                mgr_json_sel.update()
+                mgr_json_sel.set_options(files)
                 ui.notify(f'已刷新，{len(files)} 个文件', type='positive')
 
             def _do_export():
@@ -1074,6 +1089,100 @@ async def main_page():
         try: _refresh_job_card(job)
         except Exception as ex: logger.warning(f"刷新取消任务卡片失败: {ex}")
         ui.notify(f'已停止：{job.display_name}', type='warning')
+
+    def _notify_job_end(job: JobRecord):
+        """任务进入终态(完成/部分完成/失败)时：系统通知 + 提示音 + 页内横幅。
+        用户主动停止(已取消)的不打扰。"""
+        if job.error and '已取消' in job.error:
+            return
+        import json as _json
+        label = {'done': '✅ 生成成功', 'partial': '⚠️ 部分完成', 'failed': '❌ 生成失败'}.get(job.status, job.status)
+        ntype = {'done': 'positive', 'partial': 'warning', 'failed': 'negative'}.get(job.status, 'info')
+        try:
+            ui.notify(f'{label}：{job.display_name}', type=ntype, position='top', timeout=6000, close_button='✕')
+        except Exception: pass
+        title = _json.dumps(label, ensure_ascii=False)
+        body = _json.dumps(job.display_name + (f'  ·  {job.error[:80]}' if job.error else ''), ensure_ascii=False)
+        good = 'true' if job.status in ('done', 'partial') else 'false'
+        js = f"""(function(){{
+  try {{ if (window.Notification && Notification.permission==='granted') new Notification({title}, {{body:{body}}}); }} catch(e) {{}}
+  try {{
+    var c=new (window.AudioContext||window.webkitAudioContext)(), o=c.createOscillator(), g=c.createGain();
+    o.connect(g); g.connect(c.destination); o.type='sine'; o.frequency.value={good}?880:300;
+    g.gain.setValueAtTime(0.0001,c.currentTime); g.gain.exponentialRampToValueAtTime(0.3,c.currentTime+0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001,c.currentTime+0.45); o.start(); o.stop(c.currentTime+0.45);
+  }} catch(e) {{}}
+}})();"""
+        try: ui.run_javascript(js)
+        except Exception as ex: logger.warning(f"通知JS执行失败 job={job.job_id}: {ex}")
+
+    async def _retry_job(job: JobRecord):
+        """重试失败/部分完成的任务：用提交时存下的生成上下文，只重跑还没出图的模型。"""
+        ctx = job.retry_ctx
+        if not ctx:
+            ui.notify('该任务缺少重试信息，请重新提交', type='warning'); return
+        if job.status not in ('failed', 'partial'):
+            return
+        api_key = ctx.get('api_key', '')
+        if not api_key:
+            ui.notify('⚠️ 缺少 API Key', type='warning'); return
+        mf = ctx['model_filter']
+        need_b2  = (mf in ('b2', 'both'))  and not (job.b2_path  and os.path.exists(str(job.b2_path)))
+        need_pro = (mf in ('pro', 'both')) and not (job.pro_path and os.path.exists(str(job.pro_path)))
+        if not (need_b2 or need_pro):
+            _update_job(job, status='done')
+            try: _refresh_job_card(job)
+            except Exception: pass
+            return
+        _update_job(job, status='running', started_at=time.time(), error='', b2_stage='', pro_stage='')
+        try: _refresh_job_card(job)
+        except Exception: pass
+        logger.info(f"[任务] retry job={job.job_id}, need_b2={need_b2}, need_pro={need_pro}")
+        async with _gen_semaphore:
+            pnp = ctx['pnp']; ims = ctx['ims']; ar = ctx['ar']; rp = ctx['rp']; sref = ctx['sref']
+            jpt = ctx['jpt']; rid = ctx['rid']; cpt = ctx['cpt']; cpt_pro = ctx['cpt_pro']
+
+            async def _one(model_id, prompt_text, stage_key, model_name):
+                _t0 = time.time()
+                def _on_stage(text):
+                    try: setattr(job, f'{stage_key}_stage', text)
+                    except Exception: pass
+                try:
+                    img, err = await asyncio.to_thread(call_gemini_generate, api_key, model_id, prompt_text, pnp, ims, ar, rp, sref, _on_stage)
+                except Exception as e:
+                    img, err = None, str(e)
+                finally:
+                    try: setattr(job, f'{stage_key}_stage', '')
+                    except Exception: pass
+                setattr(job, f'{stage_key}_secs', round(time.time() - _t0, 1))
+                if img is not None:
+                    setattr(job, f'{stage_key}_path', _save_api_result_jpg(img, model_name, pnp))
+                    try: _refresh_job_card(job)   # ← 重试成功的那张立刻显示
+                    except Exception: pass
+                    try: await asyncio.to_thread(_api_write_to_record, img, model_name, jpt, rid)
+                    except Exception as ex: logger.warning(f"写记录失败 job={job.job_id} {model_name}: {ex}")
+                return (err or '')
+
+            b2_err = ''; pro_err = ''
+            _tasks = []
+            if need_b2:  _tasks.append(('b2',  _one(GEMINI_MODEL_MAP['Nano Banana 2'], cpt, 'b2', 'Nano Banana 2')))
+            if need_pro: _tasks.append(('pro', _one(GEMINI_MODEL_MAP['Nano Banana Pro'], cpt_pro, 'pro', 'Nano Banana Pro')))
+            _results = await asyncio.gather(*[c for _, c in _tasks], return_exceptions=True)
+            for (_k, _), _res in zip(_tasks, _results):
+                _e = str(_res) if isinstance(_res, Exception) else _res
+                if _k == 'b2': b2_err = _e
+                else: pro_err = _e
+
+            b2j = job.b2_path; proj = job.pro_path   # _one 里已写入成图路径；失败的保留原值
+            err_msg = ('B2: ' + b2_err if b2_err else '') + (' Pro: ' + pro_err if pro_err else '')
+            if mf == 'b2':   final = 'done' if b2j else 'failed'
+            elif mf == 'pro': final = 'done' if proj else 'failed'
+            else:            final = 'done' if (b2j and proj) else ('partial' if (b2j or proj) else 'failed')
+            _update_job(job, status=final, b2_path=b2j, pro_path=proj, error=err_msg.strip())
+            logger.info(f"[任务] retry_finished job={job.job_id}, status={final}, b2={bool(b2j)}, pro={bool(proj)}")
+            try: _refresh_job_card(job)
+            except Exception as ex: logger.warning(f"刷新重试卡片失败: {ex}")
+            _notify_job_end(job)
 
     async def _run_job(model_filter='both'):
         api_key = api_key_inp.value.strip()
@@ -1173,6 +1282,11 @@ async def main_page():
                 rp = None if _is_ref_mode else (room_path['v'] or None)
                 _sref_api = None  # 参照模式风格已转成文字，无需图片注入
 
+                # 存下生成上下文：失败后「重试」按钮据此只重跑未成图的模型(不依赖当前表单)
+                job.retry_ctx = dict(api_key=api_key, pnp=pnp, cpt=cpt, cpt_pro=cpt_pro,
+                                     ims=ims, ar=ar, rp=rp, sref=_sref_api,
+                                     jpt=jpt, rid=rid, model_filter=model_filter)
+
                 # 耗时操作后再次检查取消标志
                 if _is_cancelled(jid, cancel_generation):
                     _update_job(job, status='failed', error='已取消（用户停止）')
@@ -1184,47 +1298,53 @@ async def main_page():
                 run_b2 = model_filter in ('b2', 'both')
                 run_pro = model_filter in ('pro', 'both')
 
-                b2_img = None; pro_img = None; b2_err = ''; pro_err = ''
-                b2_secs = None; pro_secs = None
+                b2_err = ''; pro_err = ''; b2j = None; proj = None
 
-                # 单模型计时包装：返回 (结果, 耗时秒)
-                async def _timed_gen(model_id, prompt_text):
+                # 单模型：生成 → 存图 → 立刻刷新卡片(谁先好谁先单独显示) → 写记录。返回 (jpg路径或None, 错误)
+                # stage_key ∈ {'b2','pro'}：on_stage 在 worker 线程只写 job.{key}_stage，UI 的 1 秒 timer 读。
+                async def _gen_one(model_id, prompt_text, stage_key, model_name):
                     _t0 = time.time()
-                    _res = await asyncio.to_thread(call_gemini_generate, api_key, model_id, prompt_text, pnp, ims, ar, rp, _sref_api)
-                    return _res, round(time.time() - _t0, 1)
+                    def _on_stage(text):
+                        try: setattr(job, f'{stage_key}_stage', text)
+                        except Exception: pass
+                    try:
+                        img, err = await asyncio.to_thread(
+                            call_gemini_generate, api_key, model_id, prompt_text,
+                            pnp, ims, ar, rp, _sref_api, _on_stage)
+                    except Exception as e:
+                        img, err = None, str(e)
+                    finally:
+                        try: setattr(job, f'{stage_key}_stage', '')
+                        except Exception: pass
+                    setattr(job, f'{stage_key}_secs', round(time.time() - _t0, 1))
+                    path = None
+                    if img is not None and not _is_cancelled(jid, cancel_generation):
+                        path = _save_api_result_jpg(img, model_name, pnp)
+                        setattr(job, f'{stage_key}_path', path)
+                        try: _refresh_job_card(job)   # ← 这张图立刻单独显示，不等另一个模型
+                        except Exception as ex: logger.warning(f"刷新单模型卡片失败: {ex}")
+                        try: await asyncio.to_thread(_api_write_to_record, img, model_name, jpt, rid)
+                        except Exception as ex: logger.warning(f"写记录失败 job={job.job_id} {model_name}: {ex}")
+                    return path, (err or '')
 
-                if run_b2 and run_pro:
-                    (b2t, pet) = await asyncio.gather(
-                        _timed_gen(GEMINI_MODEL_MAP['Nano Banana 2'], cpt),
-                        _timed_gen(GEMINI_MODEL_MAP['Nano Banana Pro'], cpt_pro),
-                        return_exceptions=True
-                    )
-                    if isinstance(b2t, Exception): b2_err = str(b2t)
+                _tasks = []
+                if run_b2:  _tasks.append(('b2',  _gen_one(GEMINI_MODEL_MAP['Nano Banana 2'],  cpt,     'b2',  'Nano Banana 2')))
+                if run_pro: _tasks.append(('pro', _gen_one(GEMINI_MODEL_MAP['Nano Banana Pro'], cpt_pro, 'pro', 'Nano Banana Pro')))
+                _results = await asyncio.gather(*[c for _, c in _tasks], return_exceptions=True)
+                for (_k, _), _res in zip(_tasks, _results):
+                    if isinstance(_res, Exception):
+                        if _k == 'b2': b2_err = str(_res)
+                        else: pro_err = str(_res)
                     else:
-                        b2r, b2_secs = b2t; b2_img = b2r[0]; b2_err = b2r[1] if b2_img is None else ''
-                    if isinstance(pet, Exception): pro_err = str(pet)
-                    else:
-                        per, pro_secs = pet; pro_img = per[0]; pro_err = per[1] if pro_img is None else ''
-                elif run_b2:
-                    (b2r, b2_secs) = await _timed_gen(GEMINI_MODEL_MAP['Nano Banana 2'], cpt)
-                    b2_img = b2r[0]; b2_err = b2r[1] if b2_img is None else ''
-                elif run_pro:
-                    (per, pro_secs) = await _timed_gen(GEMINI_MODEL_MAP['Nano Banana Pro'], cpt_pro)
-                    pro_img = per[0]; pro_err = per[1] if pro_img is None else ''
-
-                _update_job(job, b2_secs=b2_secs, pro_secs=pro_secs)
+                        _path, _err = _res
+                        if _k == 'b2': b2j = _path; b2_err = _err
+                        else: proj = _path; pro_err = _err
 
                 if _is_cancelled(jid, cancel_generation):
                     _update_job(job, status='failed', error='已取消（结果未保存）')
                     try: _refresh_job_card(job)
                     except Exception as ex: logger.warning(f"刷新任务卡片失败: {ex}")
                     return
-
-                b2j  = _save_api_result_jpg(b2_img,  'Nano Banana 2',  pnp) if b2_img  is not None else None
-                proj = _save_api_result_jpg(pro_img, 'Nano Banana Pro', pnp) if pro_img is not None else None
-
-                if b2_img  is not None: await asyncio.to_thread(_api_write_to_record, b2_img,  'Nano Banana 2',  jpt, rid)
-                if pro_img is not None: await asyncio.to_thread(_api_write_to_record, pro_img, 'Nano Banana Pro', jpt, rid)
 
                 err_msg = ('B2: ' + b2_err if b2_err else '') + (' Pro: ' + pro_err if pro_err else '')
                 if b2_err:
@@ -1247,11 +1367,11 @@ async def main_page():
                 )
                 try: _refresh_job_card(job)
                 except Exception as ex: logger.warning(f"刷新任务卡片失败: {ex}")
+                _notify_job_end(job)
 
                 try:
                     files = scan_json_files()
-                    mgr_json_sel._props['options'] = [{'value': f, 'label': f} for f in files]
-                    mgr_json_sel.update()
+                    mgr_json_sel.set_options(files)
                 except Exception as ex: logger.warning(f"刷新记录文件列表失败: {ex}")
 
             except Exception as e:
@@ -1259,6 +1379,7 @@ async def main_page():
                 _update_job(job, status='failed', b2_path=b2j, pro_path=proj, error=str(e))
                 try: _refresh_job_card(job)
                 except Exception as ex: logger.warning(f"刷新失败任务卡片失败: {ex}")
+                _notify_job_end(job)
             finally:
                 logger.info(f"[任务] cleanup job={job.job_id}, cancelled={jid in _cancel_jobs}")
                 _cancel_jobs.discard(jid)
@@ -1270,3 +1391,11 @@ async def main_page():
 
     # 已用时间计时器：建在页面根槽位（最稳），避免卡片容器销毁后计时器报 parent slot 错误
     ui.timer(1.0, _tick_job_times)
+
+    # 进页面后请求一次浏览器通知权限（任务完成/失败时弹系统通知用），用户点“允许”即可
+    def _request_notify_perm():
+        try:
+            ui.run_javascript("try{if(window.Notification&&Notification.permission==='default'){Notification.requestPermission();}}catch(e){}")
+        except Exception as ex:
+            logger.warning(f"请求通知权限失败: {ex}")
+    ui.timer(1.5, _request_notify_perm, once=True)

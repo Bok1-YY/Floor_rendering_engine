@@ -111,6 +111,12 @@ def save_task_files_html(workflow_mode, model_choice, image_path, continent, cou
         en_room = TECH_DICT.get(room_type, translate_zh_to_en(extract_zh(room_type)))
         en_property = PROPERTY_TYPE_DICT.get(property_type, translate_zh_to_en(property_type))
 
+    # 兜底：上游可能传入 None，统一归一为空串，避免 `in`/翻译对 None 报错
+    floor_size = floor_size or ""
+    seam_type  = seam_type or ""
+    glossiness = glossiness or ""
+    floor_tone = floor_tone or ""
+
     en_floor_sz = TECH_DICT.get(floor_size, translate_zh_to_en(floor_size))
     en_gloss = TECH_DICT.get(glossiness, translate_zh_to_en(glossiness))
     en_seam = TECH_DICT.get(seam_type, translate_zh_to_en(seam_type))

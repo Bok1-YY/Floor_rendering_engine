@@ -102,12 +102,22 @@ TECH_DICT = {
     "多功能房": "multipurpose room", "榻榻米房": "tatami platform room",
     "生活阳台": "service balcony", "景观阳台": "scenic balcony",
     "飘窗卧室": "bedroom with bay window", "卫生间": "bathroom",
-    "常规直拼：1524 x 187 mm": "standard plank pattern (1524 x 187 mm)",
+    # —— 直拼 straight plank（按板宽从窄到宽的完整阶梯；接近的尺寸已取中位数合并）——
+    "窄板直拼：910 x 122 mm": "narrow strip plank pattern (910 x 122 mm)",
+    "短板直拼：808 x 130 mm": "short plank pattern (808 x 130 mm)",
+    "标准直拼：1200 x 150 mm": "standard plank pattern (1200 x 150 mm)",
     "常规直拼：1220 x 180 mm": "standard plank pattern (1220 x 180 mm)",
-    "大板直拼：1830 x 230 mm": "large plank pattern (1830 x 230 mm)",
+    "经典长板直拼：1524 x 187 mm": "classic long plank pattern (1524 x 187 mm)",
+    "宽板直拼：1830 x 230 mm": "wide plank pattern (1830 x 230 mm)",
+    "超宽大板直拼：2200 x 260 mm": "extra-wide oversized plank pattern (2200 x 260 mm)",
+    "巨幅大板直拼：2400 x 300 mm": "grand-format oversized plank pattern (2400 x 300 mm)",
+    # —— 人字拼 herringbone ——
+    "小人字拼：90 x 450 mm": "small herringbone pattern (90 x 450 mm)",
     "常规人字拼：125 x 625 mm": "standard herringbone pattern (125 x 625 mm)",
     "大人字拼：155 x 775 mm": "large herringbone pattern (155 x 775 mm)",
+    # —— 正方形拼 square ——
     "正方形拼：609 x 609 mm": "square tile staggered layout (609 x 609 mm)",
+    "大正方形拼：900 x 900 mm": "large square tile layout (900 x 900 mm)",
     "超哑光 (0-3°)": "ultra-matte", "哑光 (3-5°)": "matte", "高光 (High Gloss)": "high gloss",
     "无缝拼接 (SPC/LVT专用)": (
         "A high-end continuous floor surface engineered with optical continuity. "
@@ -802,10 +812,22 @@ LIGHTING_INSTRUCTION_MAP = {
 ANGLES = ["24mm lens (Wide)", "28mm lens (Wide)", "35mm lens (Standard Wide)", "50mm lens (Standard)", "85mm lens (Telephoto)", "135mm lens (Telephoto)"]
 
 FLOOR_SIZES = [
-    "常规直拼：1524 x 187 mm", "常规直拼：1220 x 180 mm",
-    "大板直拼：1830 x 230 mm",
-    "常规人字拼：125 x 625 mm", "大人字拼：155 x 775 mm",
+    # 直拼 straight plank（窄→宽完整阶梯；接近尺寸取中位数合并）
+    "常规直拼：1220 x 180 mm",        # 默认：市面最通用住宅板
+    "窄板直拼：910 x 122 mm",
+    "短板直拼：808 x 130 mm",
+    "标准直拼：1200 x 150 mm",
+    "经典长板直拼：1524 x 187 mm",
+    "宽板直拼：1830 x 230 mm",
+    "超宽大板直拼：2200 x 260 mm",
+    "巨幅大板直拼：2400 x 300 mm",
+    # 人字拼 herringbone
+    "小人字拼：90 x 450 mm",
+    "常规人字拼：125 x 625 mm",
+    "大人字拼：155 x 775 mm",
+    # 正方形拼 square
     "正方形拼：609 x 609 mm",
+    "大正方形拼：900 x 900 mm",
 ]
 
 FLOOR_TONES = [
