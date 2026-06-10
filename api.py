@@ -12,7 +12,7 @@ from PIL import Image
 
 from .config import (
     BASE_DIR, MAIN_OUTPUT_DIR, CONFIG_FILE,
-    GEMINI_MODEL_MAP,
+    GEMINI_MODEL_MAP, FAL_MODEL_MAP, DEFAULT_IMAGE_PROVIDER,
     logger, _short_text, _load_config, _save_config,
 )
 from .records import (
@@ -297,6 +297,190 @@ def call_gemini_generate(api_key: str, model_id: str, prompt_text: str, image_pa
 
     logger.error(f"[API生成] 网络重试失败 model={model_id}: {_redact_api_key(last_err)}")
     return None, f"网络错误: {_redact_api_key(last_err)}"
+
+
+# ── Fal 路由 ────────────────────────────────────────────────────────────────
+_FAL_RESOLUTIONS = {"1K", "2K", "4K"}
+_FAL_ASPECT_RATIOS = {"auto", "21:9", "16:9", "3:2", "4:3", "5:4", "1:1", "4:5", "3:4", "2:3", "9:16"}
+
+
+def _file_to_data_uri(path: str) -> Optional[str]:
+    """把本地图片读成 data URI(base64),用作 Fal 的 image_urls 输入。"""
+    if not path or not os.path.exists(path):
+        return None
+    ext = os.path.splitext(path)[1].lower().lstrip('.')
+    mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}.get(ext, "image/jpeg")
+    with open(path, 'rb') as f:
+        b64 = base64.b64encode(f.read()).decode('utf-8')
+    return f"data:{mime};base64,{b64}"
+
+
+def call_fal_generate(api_key: str, model_id: str, prompt_text: str, image_path: str,
+                      image_size: str = "4K", aspect_ratio: str = "4:3",
+                      room_image_path: Optional[str] = None,
+                      style_ref_image_path: Optional[str] = None,
+                      on_stage=None) -> Tuple[Optional[object], Optional[str]]:
+    """经 Fal 路由调用 Nano Banana 系列(图生图 /edit 端点)。
+
+    与 call_gemini_generate 同契约:返回 (PIL.Image, None) 或 (None, 错误字符串),并支持 on_stage 回调。
+    同一个 Gemini 模型,只换更稳的线路(国内→Fal→Google),保真/4K 不变。
+    - model_id 仍用 Gemini 的 id,内部经 FAL_MODEL_MAP 映射到 Fal endpoint。
+    - 用 sync_mode=true:响应内联返回 data URI 图,整次生图只需一次请求(软路由下最稳)。
+    """
+    import requests as _req
+    from urllib3.exceptions import ProtocolError as _ProtocolError
+
+    def _stage(txt):
+        if on_stage:
+            try: on_stage(txt)
+            except Exception: pass
+
+    cfg = _load_config()
+    fal_map = cfg.get("fal_model_map") or FAL_MODEL_MAP
+    endpoint = fal_map.get(model_id) or FAL_MODEL_MAP.get(model_id)
+    if not endpoint:
+        logger.error(f"[Fal生成] 未知模型,无 Fal 端点映射: model={model_id}")
+        return None, f"该模型未配置 Fal 端点: {model_id}"
+
+    logger.info(
+        f"[Fal生成] start model={model_id} -> {endpoint}, size={image_size}, ar={aspect_ratio}, "
+        f"floor={image_path}, room_ref={bool(room_image_path)}, style_ref={bool(style_ref_image_path)}, "
+        f"prompt={_short_text(prompt_text, 240)}"
+    )
+    if not os.path.exists(image_path):
+        logger.error(f"[Fal生成] 素材图不存在: {image_path}")
+        return None, f"素材图不存在: {image_path}"
+
+    # image_urls 顺序与 Gemini 直连保持一致:风格参考 → 房间参考 → 地板小样(地板最后/最关键)
+    image_urls = []
+    for p in (style_ref_image_path, room_image_path, image_path):
+        uri = _file_to_data_uri(p)
+        if uri:
+            image_urls.append(uri)
+    if not image_urls:
+        return None, "无可用的输入图片"
+
+    resolution = image_size if image_size in _FAL_RESOLUTIONS else "1K"
+    ar = aspect_ratio if aspect_ratio in _FAL_ASPECT_RATIOS else "auto"
+    payload = {
+        "prompt": prompt_text,
+        "image_urls": image_urls,
+        "num_images": 1,
+        "output_format": "png",
+        "aspect_ratio": ar,
+        "resolution": resolution,
+        "sync_mode": True,   # 内联返回 data URI,只需一次请求
+    }
+    url = f"https://fal.run/{endpoint}"
+    headers = {"Authorization": f"Key {api_key}", "Content-Type": "application/json"}
+
+    proxy = cfg.get("proxy", "").strip()
+    proxies = {"http": proxy, "https": proxy} if proxy else None
+    import urllib3; urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+    try: total_deadline = float(cfg.get("gen_total_deadline", 600))
+    except Exception: total_deadline = 600.0
+
+    max_attempts, backoffs = _retry_plan()
+    RETRYABLE = (_req.exceptions.SSLError, _req.exceptions.ConnectionError,
+                 _req.exceptions.ChunkedEncodingError, _ProtocolError)
+
+    def _sleep_backoff(attempt):
+        d = backoffs[min(attempt, len(backoffs) - 1)] + random.uniform(0, 1.5)
+        time.sleep(d)
+
+    def _decode_image(url_or_uri):
+        """把 Fal 返回的 images[].url(sync 下是 data URI,否则是 http URL)解成 PIL。"""
+        if isinstance(url_or_uri, str) and url_or_uri.startswith("data:"):
+            b64 = url_or_uri.split(",", 1)[1] if "," in url_or_uri else ""
+            raw = base64.b64decode(b64)
+        else:
+            r = _req.get(url_or_uri, timeout=(30, 300), proxies=proxies, verify=False)
+            r.raise_for_status()
+            raw = r.content
+        img = Image.open(_io_mod.BytesIO(raw)); img.load()
+        return img
+
+    call_t0 = time.time()
+    last_err = None
+    for attempt in range(max_attempts):
+        if time.time() - call_t0 >= total_deadline:
+            logger.error(f"[Fal生成] 总时限 {total_deadline:.0f}s 到,放弃 model={model_id}")
+            last_err = last_err or "超过总时限"
+            break
+        _stage("📡 连接中…" if attempt == 0 else f"🔁 网络重试 {attempt}/{max_attempts - 1}")
+        try:
+            _stage("🎨 生成中…")
+            resp = _req.post(url, json=payload, headers=headers,
+                             timeout=(30, 300), proxies=proxies, verify=False)
+            if resp.status_code != 200:
+                try:
+                    err_info = resp.json()
+                    err_msg = (err_info.get('detail') or err_info.get('error') or err_info.get('message')
+                               or resp.text[:400]) if isinstance(err_info, dict) else resp.text[:400]
+                except Exception:
+                    err_msg = resp.text[:400]
+                if resp.status_code in (408, 409, 425, 429, 500, 502, 503, 504) and attempt < max_attempts - 1:
+                    last_err = f"HTTP {resp.status_code}: {err_msg}"
+                    logger.warning(f"[Fal生成] HTTP可重试 attempt={attempt+1}/{max_attempts} model={model_id}, status={resp.status_code}")
+                    _sleep_backoff(attempt); continue
+                logger.error(f"[Fal生成] HTTP失败 model={model_id}, status={resp.status_code}, err={_short_text(err_msg, 800)}")
+                return None, f"HTTP {resp.status_code}: {err_msg}"
+
+            _stage("🎨 渲染中…")
+            data = resp.json()
+            images = data.get("images") or []
+            if images and images[0].get("url"):
+                try:
+                    pil_img = _decode_image(images[0]["url"])
+                except Exception as e:
+                    logger.exception(f"[Fal生成] 图片解码/下载失败 model={model_id}")
+                    return None, f"解码失败: {_redact_api_key(e)}"
+                logger.info(f"[Fal生成] success model={model_id}, image={pil_img.width}x{pil_img.height}")
+                return pil_img, None
+            logger.error(f"[Fal生成] API未返回图片 model={model_id}, resp={_short_text(data, 600)}")
+            return None, "API 未返回图片"
+
+        except _req.exceptions.Timeout:
+            last_err = "请求超时"
+            logger.warning(f"[Fal生成] 请求超时 attempt={attempt+1}/{max_attempts} model={model_id}")
+            if attempt < max_attempts - 1:
+                _sleep_backoff(attempt); continue
+        except RETRYABLE as e:
+            last_err = e
+            logger.warning(f"[Fal生成] 网络异常 attempt={attempt+1}/{max_attempts} model={model_id}: {_redact_api_key(e)}")
+            if attempt < max_attempts - 1:
+                _sleep_backoff(attempt); continue
+        except Exception as e:
+            logger.exception(f"[Fal生成] 未预期错误 model={model_id}")
+            return None, f"网络错误: {_redact_api_key(e)}"
+
+    logger.error(f"[Fal生成] 网络重试失败 model={model_id}: {_redact_api_key(last_err)}")
+    return None, f"网络错误: {_redact_api_key(last_err)}"
+
+
+def call_image_generate(api_key: str, model_id: str, prompt_text: str, image_path: str,
+                        image_size: str = "4K", aspect_ratio: str = "4:3",
+                        room_image_path: Optional[str] = None,
+                        style_ref_image_path: Optional[str] = None,
+                        on_stage=None) -> Tuple[Optional[object], Optional[str]]:
+    """生图调度器:按 engine_config.json 的 image_provider 选线路,两条线路同契约。
+
+    - 'google'(默认):直连 Google AI Studio,沿用传入的 Gemini api_key。
+    - 'fal':走 Fal 路由,改用 config 里的 fal_api_key(忽略传入的 Gemini key)。
+    """
+    cfg = _load_config()
+    provider = (cfg.get("image_provider") or DEFAULT_IMAGE_PROVIDER).strip().lower()
+    if provider == "fal":
+        fal_key = (cfg.get("fal_api_key") or "").strip()
+        if not fal_key:
+            logger.error("[生图调度] 线路=fal 但未配置 Fal API Key")
+            return None, "未配置 Fal API Key(请在 API 设置里填写 Fal Key)"
+        return call_fal_generate(fal_key, model_id, prompt_text, image_path, image_size,
+                                 aspect_ratio, room_image_path, style_ref_image_path, on_stage)
+    return call_gemini_generate(api_key, model_id, prompt_text, image_path, image_size,
+                                aspect_ratio, room_image_path, style_ref_image_path, on_stage)
+
 
 def call_gemini_edit(api_key: str, model_id: str, edit_instruction: str, source_image_b64: str,
                      image_size: str = "4K", aspect_ratio: str = "4:3", preserve_floor_geometry: bool = True):

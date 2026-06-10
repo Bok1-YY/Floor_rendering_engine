@@ -17,10 +17,11 @@ from .config import (
     GEMINI_MODEL_MAP,
     _build_theme_css,
     logger, _short_text, _load_config, _save_config, save_api_key,
+    save_provider_settings,
     extract_clean_prompt, is_seamless_herringbone,
 )
 from .api import (
-    call_gemini_generate, call_gemini_edit,
+    call_gemini_generate, call_gemini_edit, call_image_generate,
     analyze_style_image,
     FLOOR_DESEAM_INSTRUCTION,
     _match_color_to_reference,
@@ -325,9 +326,21 @@ async def main_page():
                         with ui.expansion('🔑 API 设置').classes('w-full').props('dense'):
                             with ui.column().classes('w-full q-gutter-y-sm'):
                                 _cfg0 = _load_config()
-                                api_key_inp = ui.input('API Key', value=_cfg0.get('gemini_api_key',''), password=True).classes('w-full')
+                                provider_sel = ui.select(
+                                    {'google': 'Google 直连', 'fal': 'Fal 路由'},
+                                    value=(_cfg0.get('image_provider') or 'google'),
+                                    label='生图线路',
+                                ).classes('w-full')
+                                api_key_inp = ui.input('Gemini API Key', value=_cfg0.get('gemini_api_key',''), password=True).classes('w-full')
+                                fal_key_inp = ui.input('Fal API Key', value=_cfg0.get('fal_api_key',''), password=True).classes('w-full')
                                 api_proxy_inp = ui.input('本地代理', value=_cfg0.get('proxy','')).classes('w-full')
-                                ui.button('💾 保存', on_click=lambda: (save_api_key(api_key_inp.value, api_proxy_inp.value), ui.notify('保存成功', type='positive'))).classes('w-full').props('outline color=amber-8')
+
+                                def _save_api_settings():
+                                    save_api_key(api_key_inp.value, api_proxy_inp.value)
+                                    save_provider_settings(fal_key_inp.value, provider_sel.value)
+                                    _route = 'Fal 路由' if provider_sel.value == 'fal' else 'Google 直连'
+                                    ui.notify(f'保存成功 · 当前线路: {_route}', type='positive')
+                                ui.button('💾 保存', on_click=_save_api_settings).classes('w-full').props('outline color=amber-8')
 
                         ui.separator()
                         gen_status_lbl = ui.label('就绪').classes('text-caption w-full text-center').style('color: var(--text-secondary);')
@@ -1148,7 +1161,7 @@ async def main_page():
                     try: setattr(job, f'{stage_key}_stage', text)
                     except Exception: pass
                 try:
-                    img, err = await asyncio.to_thread(call_gemini_generate, api_key, model_id, prompt_text, pnp, ims, ar, rp, sref, _on_stage)
+                    img, err = await asyncio.to_thread(call_image_generate, api_key, model_id, prompt_text, pnp, ims, ar, rp, sref, _on_stage)
                 except Exception as e:
                     img, err = None, str(e)
                 finally:
@@ -1309,7 +1322,7 @@ async def main_page():
                         except Exception: pass
                     try:
                         img, err = await asyncio.to_thread(
-                            call_gemini_generate, api_key, model_id, prompt_text,
+                            call_image_generate, api_key, model_id, prompt_text,
                             pnp, ims, ar, rp, _sref_api, _on_stage)
                     except Exception as e:
                         img, err = None, str(e)

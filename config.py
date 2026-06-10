@@ -48,6 +48,18 @@ GEMINI_MODEL_MAP = {
     "Nano Banana Pro": "gemini-3-pro-image-preview",
 }
 
+# ── Fal 路由模型映射 ────────────────────────────────────────────
+# 把同一批 Nano Banana 模型改走 Fal 的图生图(/edit)端点：同模型、保真/4K 不变，
+# 只换更稳的线路(国内→Fal→Google)。key = 上面 GEMINI_MODEL_MAP 里的 Gemini model_id，
+# value = Fal endpoint id。可在 engine_config.json 的 "fal_model_map" 里覆盖。
+FAL_MODEL_MAP = {
+    "gemini-3.1-flash-image-preview": "fal-ai/nano-banana-2/edit",   # Nano Banana 2
+    "gemini-3-pro-image-preview":     "fal-ai/nano-banana-pro/edit",  # Nano Banana Pro
+}
+
+# 生图线路：'google' = 直连 Google AI Studio(默认)；'fal' = 走 Fal 路由
+DEFAULT_IMAGE_PROVIDER = "google"
+
 
 # ── 工具函数 ────────────────────────────────────────────────────
 
@@ -95,6 +107,24 @@ def save_api_key(api_key_val: str, proxy_val: str = "") -> None:
     cfg["gemini_api_key"] = key
     cfg["proxy"] = proxy
     _save_config(cfg)
+
+
+def save_provider_settings(fal_api_key_val: Optional[str] = None,
+                           image_provider_val: Optional[str] = None) -> None:
+    """保存 Fal API key 和生图线路选择(google / fal)。传 None 的字段不改动。"""
+    cfg = _load_config()
+    if fal_api_key_val is not None:
+        cfg["fal_api_key"] = (fal_api_key_val or "").strip()
+    if image_provider_val is not None:
+        prov = (image_provider_val or "").strip().lower()
+        cfg["image_provider"] = prov if prov in ("google", "fal") else "google"
+    _save_config(cfg)
+
+
+def get_image_provider() -> str:
+    """读取当前生图线路；非法值回落到 google。"""
+    prov = (_load_config().get("image_provider") or DEFAULT_IMAGE_PROVIDER).strip().lower()
+    return prov if prov in ("google", "fal") else "google"
 
 
 def extract_clean_prompt(prompt_combined: str) -> str:
