@@ -19,6 +19,7 @@ from .config import (
     logger, _short_text, _load_config, _save_config, save_api_key,
     save_provider_settings,
     extract_clean_prompt, is_seamless_herringbone,
+    get_bevel_ref_image,
 )
 from .api import (
     call_gemini_generate, call_gemini_edit, call_image_generate,
@@ -107,7 +108,12 @@ async def _extract_upload_data(e: ng_events.UploadEventArguments):
 @ui.page('/')
 async def main_page():
     global _gen_semaphore
-    if _gen_semaphore is None: _gen_semaphore = asyncio.Semaphore(5)
+    if _gen_semaphore is None:
+        try: _max_jobs = max(1, int(_load_config().get('max_concurrent_jobs', 5)))
+        except Exception as ex:
+            logger.warning(f"读取 max_concurrent_jobs 配置失败，用默认 5: {ex}")
+            _max_jobs = 5
+        _gen_semaphore = asyncio.Semaphore(_max_jobs)
 
     # ── 主题：固定「Anthropic 暖陶米色」（唯一主题，浅色；字体走系统微软雅黑、完全离线）──
     ui.add_head_html(f'<style id="theme-style">{_build_theme_css("Anthropic 暖陶米色")}</style>')
@@ -465,7 +471,7 @@ async def main_page():
                                 if tl is not None:
                                     try:
                                         tl.text = _job_time_text(j); tl.visible = True
-                                    except Exception: pass
+                                    except Exception as ex: logger.debug(f"刷新耗时标签失败 job={j.job_id}: {ex}")
 
                     # ── 原地更新（改属性，不销毁 DOM，不闪烁） ───────────────
                     def _refresh_job_card(job: JobRecord):
@@ -543,7 +549,7 @@ async def main_page():
                             ui.notify('⚠️ 缺少 API Key', type='warning'); return
                         _update_job(job, pro_polishing=True)
                         try: _refresh_job_card(job)
-                        except Exception: pass
+                        except Exception as ex: logger.debug(f"刷新磨缝卡片失败 job={job.job_id}: {ex}")
                         ui.notify('已提交磨缝，请稍候…', type='info')
                         try:
                             src_pil = Image.open(job.pro_path); src_pil.load()
@@ -577,7 +583,7 @@ async def main_page():
                         finally:
                             _update_job(job, pro_polishing=False)
                             try: _refresh_job_card(job)
-                            except Exception: pass
+                            except Exception as ex: logger.debug(f"刷新磨缝卡片失败 job={job.job_id}: {ex}")
 
                     # 清除按钮同时清理 refs
                     def _clear_done():
@@ -956,8 +962,8 @@ async def main_page():
                 mgr_comment_box.value = res.get('comment', '')
                 try:
                     edit_source_lbl.text = f'当前修改对象：第 {idx + 1} 张效果图'
-                except Exception:
-                    pass
+                except Exception as ex:
+                    logger.debug(f"更新修改对象标签失败: {ex}")
                 mgr_dl_holder.clear()
                 if b64:
                     with mgr_dl_holder:
@@ -1120,7 +1126,7 @@ async def main_page():
         ntype = {'done': 'positive', 'partial': 'warning', 'failed': 'negative'}.get(job.status, 'info')
         try:
             ui.notify(f'{label}：{job.display_name}', type=ntype, position='top', timeout=6000, close_button='✕')
-        except Exception: pass
+        except Exception as ex: logger.debug(f"页内通知失败 job={job.job_id}: {ex}")
         title = _json.dumps(label, ensure_ascii=False)
         body = _json.dumps(job.display_name + (f'  ·  {job.error[:80]}' if job.error else ''), ensure_ascii=False)
         good = 'true' if job.status in ('done', 'partial') else 'false'
@@ -1135,6 +1141,40 @@ async def main_page():
 }})();"""
         try: ui.run_javascript(js)
         except Exception as ex: logger.warning(f"通知JS执行失败 job={job.job_id}: {ex}")
+
+    # 单模型生成（主流程与重试流程共用）：调 API → 存盘 → 立刻刷新卡片(谁先好谁先显示) → 写记录。
+    # stage_key ∈ {'b2','pro'}：on_stage 在 worker 线程只写 job.{key}_stage，UI 的 1 秒 timer 读。
+    # 图已生成 = 已计费，即便任务已取消也存盘，避免白花钱。返回 (jpg路径或None, 错误字符串)。
+    async def _generate_one_model(job: JobRecord, model_id, prompt_text, stage_key, model_name, *,
+                                  api_key, pnp, ims, ar, rp, sref, bevel_ref, jpt, rid, should_cancel):
+        _t0 = time.time()
+        def _on_stage(text):
+            try: setattr(job, f'{stage_key}_stage', text)
+            except Exception as ex: logger.debug(f"写入阶段状态失败 job={job.job_id}: {ex}")
+        try:
+            img, err = await asyncio.to_thread(
+                call_image_generate, api_key, model_id, prompt_text,
+                pnp, ims, ar, rp, sref, _on_stage, should_cancel, bevel_ref)
+        except Exception as e:
+            img, err = None, str(e)
+        finally:
+            try: setattr(job, f'{stage_key}_stage', '')
+            except Exception as ex: logger.debug(f"清空阶段状态失败 job={job.job_id}: {ex}")
+        setattr(job, f'{stage_key}_secs', round(time.time() - _t0, 1))
+        path = None
+        if img is not None:
+            path = _save_api_result_jpg(img, model_name, pnp)
+            setattr(job, f'{stage_key}_path', path)
+            try: _refresh_job_card(job)   # ← 这张图立刻单独显示，不等另一个模型
+            except Exception as ex: logger.warning(f"刷新单模型卡片失败: {ex}")
+            try: await asyncio.to_thread(_api_write_to_record, img, model_name, jpt, rid)
+            except Exception as ex: logger.warning(f"写记录失败 job={job.job_id} {model_name}: {ex}")
+        return path, (err or '')
+
+    def _compute_final_status(model_filter: str, b2_path, pro_path) -> str:
+        if model_filter == 'b2':  return 'done' if b2_path else 'failed'
+        if model_filter == 'pro': return 'done' if pro_path else 'failed'
+        return 'done' if (b2_path and pro_path) else ('partial' if (b2_path or pro_path) else 'failed')
 
     async def _retry_job(job: JobRecord):
         """重试失败/部分完成的任务：用提交时存下的生成上下文，只重跑还没出图的模型。"""
@@ -1152,53 +1192,36 @@ async def main_page():
         if not (need_b2 or need_pro):
             _update_job(job, status='done')
             try: _refresh_job_card(job)
-            except Exception: pass
+            except Exception as ex: logger.debug(f"刷新重试卡片失败 job={job.job_id}: {ex}")
             return
         _update_job(job, status='running', started_at=time.time(), error='', b2_stage='', pro_stage='')
         try: _refresh_job_card(job)
-        except Exception: pass
+        except Exception as ex: logger.debug(f"刷新重试卡片失败 job={job.job_id}: {ex}")
         logger.info(f"[任务] retry job={job.job_id}, need_b2={need_b2}, need_pro={need_pro}")
         async with _gen_semaphore:
             pnp = ctx['pnp']; ims = ctx['ims']; ar = ctx['ar']; rp = ctx['rp']; sref = ctx['sref']
             jpt = ctx['jpt']; rid = ctx['rid']; cpt = ctx['cpt']; cpt_pro = ctx['cpt_pro']
+            bevel_ref = ctx.get('bevel_ref')  # 圆弧倒角参考图(老任务 ctx 没有此键 → None)
 
             _should_cancel = lambda: _is_cancelled(job.job_id)
-            async def _one(model_id, prompt_text, stage_key, model_name):
-                _t0 = time.time()
-                def _on_stage(text):
-                    try: setattr(job, f'{stage_key}_stage', text)
-                    except Exception: pass
-                try:
-                    img, err = await asyncio.to_thread(call_image_generate, api_key, model_id, prompt_text, pnp, ims, ar, rp, sref, _on_stage, _should_cancel)
-                except Exception as e:
-                    img, err = None, str(e)
-                finally:
-                    try: setattr(job, f'{stage_key}_stage', '')
-                    except Exception: pass
-                setattr(job, f'{stage_key}_secs', round(time.time() - _t0, 1))
-                if img is not None:
-                    setattr(job, f'{stage_key}_path', _save_api_result_jpg(img, model_name, pnp))
-                    try: _refresh_job_card(job)   # ← 重试成功的那张立刻显示
-                    except Exception: pass
-                    try: await asyncio.to_thread(_api_write_to_record, img, model_name, jpt, rid)
-                    except Exception as ex: logger.warning(f"写记录失败 job={job.job_id} {model_name}: {ex}")
-                return (err or '')
+            def _retry_one(model_id, prompt_text, stage_key, model_name):
+                return _generate_one_model(job, model_id, prompt_text, stage_key, model_name,
+                                           api_key=api_key, pnp=pnp, ims=ims, ar=ar, rp=rp, sref=sref,
+                                           bevel_ref=bevel_ref, jpt=jpt, rid=rid, should_cancel=_should_cancel)
 
             b2_err = ''; pro_err = ''
             _tasks = []
-            if need_b2:  _tasks.append(('b2',  _one(GEMINI_MODEL_MAP['Nano Banana 2'], cpt, 'b2', 'Nano Banana 2')))
-            if need_pro: _tasks.append(('pro', _one(GEMINI_MODEL_MAP['Nano Banana Pro'], cpt_pro, 'pro', 'Nano Banana Pro')))
+            if need_b2:  _tasks.append(('b2',  _retry_one(GEMINI_MODEL_MAP['Nano Banana 2'], cpt, 'b2', 'Nano Banana 2')))
+            if need_pro: _tasks.append(('pro', _retry_one(GEMINI_MODEL_MAP['Nano Banana Pro'], cpt_pro, 'pro', 'Nano Banana Pro')))
             _results = await asyncio.gather(*[c for _, c in _tasks], return_exceptions=True)
             for (_k, _), _res in zip(_tasks, _results):
-                _e = str(_res) if isinstance(_res, Exception) else _res
+                _e = str(_res) if isinstance(_res, Exception) else _res[1]
                 if _k == 'b2': b2_err = _e
                 else: pro_err = _e
 
-            b2j = job.b2_path; proj = job.pro_path   # _one 里已写入成图路径；失败的保留原值
+            b2j = job.b2_path; proj = job.pro_path   # _generate_one_model 里已写入成图路径；失败的保留原值
             err_msg = ('B2: ' + b2_err if b2_err else '') + (' Pro: ' + pro_err if pro_err else '')
-            if mf == 'b2':   final = 'done' if b2j else 'failed'
-            elif mf == 'pro': final = 'done' if proj else 'failed'
-            else:            final = 'done' if (b2j and proj) else ('partial' if (b2j or proj) else 'failed')
+            final = _compute_final_status(mf, b2j, proj)
             _update_job(job, status=final, b2_path=b2j, pro_path=proj, error=err_msg.strip())
             logger.info(f"[任务] retry_finished job={job.job_id}, status={final}, b2={bool(b2j)}, pro={bool(proj)}")
             try: _refresh_job_card(job)
@@ -1262,8 +1285,17 @@ async def main_page():
                 if _is_ref_mode and ref_path['v']:
                     _update_job(job, status='running')
                     try: _refresh_job_card(job)
-                    except Exception: pass
-                    _style_analysis = await asyncio.to_thread(analyze_style_image, api_key, ref_path['v'])
+                    except Exception as ex: logger.debug(f"刷新任务卡片失败: {ex}")
+                    _style_analysis, _sa_err = await asyncio.to_thread(analyze_style_image, api_key, ref_path['v'])
+                    if _sa_err or not _style_analysis:
+                        # 分析失败必须中止：错误文本一旦混进提示词，会照常发起计费生成、产出废图
+                        _update_job(job, status='failed',
+                                    error=f'风格分析失败，已中止（未发起生图）: {_sa_err or "返回为空"}')
+                        try: _refresh_job_card(job)
+                        except Exception as ex: logger.warning(f"刷新任务卡片失败: {ex}")
+                        logger.error(f"[参照模式] 风格分析失败，任务中止 job={job.job_id}: {_sa_err}")
+                        _notify_job_end(job)
+                        return
                     logger.info(f"[参照模式] 风格提取完成: {_style_analysis[:120]}...")
 
                 _, sms, prt, saved_image_path, jpt, rid, pnp, prt_pro = await asyncio.to_thread(
@@ -1296,16 +1328,26 @@ async def main_page():
                 cpt = extract_clean_prompt(prt); ar = aspect_sel.value.split(' ')[0]
                 # Pro 模型专属提示词（无缝人字拼时与 B2 不同；否则与 cpt 相同）
                 cpt_pro = extract_clean_prompt(prt_pro) if prt_pro else cpt
-                # 让 B2 也使用 Pro 的终极指令（实测 B2 用此词无缝效果最佳）
-                cpt = cpt_pro
+                # 让 B2 也使用 Pro 的终极指令（实测 B2 用此词无缝效果最佳）；
+                # 但圆弧倒角·直拼例外——B2 用自己的专属软细缝词(cpt 保持 B2 版不动)。
+                _seam_v = seam_sel.value or ''
+                _size_v = floor_size_sel.value or ''
+                _is_straight_bevel = ('圆弧倒角' in _seam_v and '无缝' not in _seam_v
+                                      and '人字拼' not in _size_v and '正方形拼' not in _size_v)
+                if not _is_straight_bevel:
+                    cpt = cpt_pro
                 ims = res_sel.value.split(' ')[0]
                 # 参照模式：生图 API 只收地板图，不传风格参照图
                 rp = None if _is_ref_mode else (room_path['v'] or None)
                 _sref_api = None  # 参照模式风格已转成文字，无需图片注入
+                # 圆弧倒角(任意拼法)：自动附内置倒角参考图(只供模型抄板边圆弧形状)；B2/Pro 同带。
+                _is_pressed_bevel = ('圆弧倒角' in _seam_v and '无缝' not in _seam_v)
+                _bevel_ref = get_bevel_ref_image() if _is_pressed_bevel else None
 
                 # 存下生成上下文：失败后「重试」按钮据此只重跑未成图的模型(不依赖当前表单)
                 job.retry_ctx = dict(api_key=api_key, pnp=pnp, cpt=cpt, cpt_pro=cpt_pro,
                                      ims=ims, ar=ar, rp=rp, sref=_sref_api,
+                                     bevel_ref=_bevel_ref,
                                      jpt=jpt, rid=rid, model_filter=model_filter)
 
                 # 耗时操作后再次检查取消标志
@@ -1321,34 +1363,11 @@ async def main_page():
 
                 b2_err = ''; pro_err = ''; b2j = None; proj = None
 
-                # 单模型：生成 → 存图 → 立刻刷新卡片(谁先好谁先单独显示) → 写记录。返回 (jpg路径或None, 错误)
-                # stage_key ∈ {'b2','pro'}：on_stage 在 worker 线程只写 job.{key}_stage，UI 的 1 秒 timer 读。
                 _should_cancel = lambda: _is_cancelled(jid, cancel_generation)
-                async def _gen_one(model_id, prompt_text, stage_key, model_name):
-                    _t0 = time.time()
-                    def _on_stage(text):
-                        try: setattr(job, f'{stage_key}_stage', text)
-                        except Exception: pass
-                    try:
-                        img, err = await asyncio.to_thread(
-                            call_image_generate, api_key, model_id, prompt_text,
-                            pnp, ims, ar, rp, _sref_api, _on_stage, _should_cancel)
-                    except Exception as e:
-                        img, err = None, str(e)
-                    finally:
-                        try: setattr(job, f'{stage_key}_stage', '')
-                        except Exception: pass
-                    setattr(job, f'{stage_key}_secs', round(time.time() - _t0, 1))
-                    path = None
-                    # 图已生成 = 已计费,即便任务已取消也存盘,避免白花钱(C)
-                    if img is not None:
-                        path = _save_api_result_jpg(img, model_name, pnp)
-                        setattr(job, f'{stage_key}_path', path)
-                        try: _refresh_job_card(job)   # ← 这张图立刻单独显示，不等另一个模型
-                        except Exception as ex: logger.warning(f"刷新单模型卡片失败: {ex}")
-                        try: await asyncio.to_thread(_api_write_to_record, img, model_name, jpt, rid)
-                        except Exception as ex: logger.warning(f"写记录失败 job={job.job_id} {model_name}: {ex}")
-                    return path, (err or '')
+                def _gen_one(model_id, prompt_text, stage_key, model_name):
+                    return _generate_one_model(job, model_id, prompt_text, stage_key, model_name,
+                                               api_key=api_key, pnp=pnp, ims=ims, ar=ar, rp=rp, sref=_sref_api,
+                                               bevel_ref=_bevel_ref, jpt=jpt, rid=rid, should_cancel=_should_cancel)
 
                 _tasks = []
                 if run_b2:  _tasks.append(('b2',  _gen_one(GEMINI_MODEL_MAP['Nano Banana 2'],  cpt,     'b2',  'Nano Banana 2')))
@@ -1381,12 +1400,7 @@ async def main_page():
                 if pro_err:
                     logger.error(f"[任务] Pro失败 job={job.job_id}, record={rid}, err={_short_text(pro_err, 1000)}")
 
-                if model_filter == 'b2':
-                    final_status = 'done' if b2j else 'failed'
-                elif model_filter == 'pro':
-                    final_status = 'done' if proj else 'failed'
-                else:
-                    final_status = 'done' if (b2j and proj) else ('partial' if (b2j or proj) else 'failed')
+                final_status = _compute_final_status(model_filter, b2j, proj)
 
                 _update_job(job, status=final_status, b2_path=b2j, pro_path=proj, error=err_msg.strip(),
                             json_path=jpt, record_id=rid, png_path=pnp)

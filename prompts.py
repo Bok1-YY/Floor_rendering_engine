@@ -23,7 +23,7 @@ from .prompt_data import (
 )
 from .records import (
     _get_json_path, _load_records, _save_records,
-    _img_to_b64, _obfuscate,
+    _img_to_b64, _obfuscate, record_file_lock,
 )
 
 # 地板整体颜色锁定指令：强制生成图地板的整体颜色与上传小样完全一致。
@@ -51,6 +51,43 @@ PRESSED_BEVEL_CHARACTER = (
     "floor is the SAME barely-there soft line — side joints and end joints, near and far, shaded and sunlit all identical — showing "
     "only a faint soft highlight on the rounded lip, matte and flush even under direct sunlight, like a high-end Coretec floor where "
     "the joints almost disappear."
+)
+
+# 圆弧倒角·直拼【B2 专属】：B2 用 Pro 那套"near-seamless / joints almost disappear"会抽风——
+# 要么把缝打成生硬细黑线、要么强光区吃掉。改成对症的"可见但柔和"目标(对标用户给的浅木参考图)：
+# 缝清楚可见但是一条暖调软细缝(深 ~10-15%、错缝端头更淡),不再追求隐形。Pro 仍用 TECH_DICT 原块。
+# 注:这是直拼场景 en_seam 的完整替换块(直拼直接拿 en_seam 当整段缝描述)；不含颜色断言,颜色交给小样。
+PRESSED_BEVEL_B2 = (
+    "Every plank edge is lightly eased / rounded into a soft micro-bevel, so each joint reads as "
+    "a CLEARLY VISIBLE but gentle, fine line — present and easy to see, never hidden, never "
+    "seamless. A joint is a shallow soft groove: the rounded shoulder on the lit side catches a "
+    "faint pale sheen, and the groove holds a thin, warm, soft-edged shadow only about 10-15% "
+    "darker than the plank surface beside it — warm and neutral in tone, taken from the wood "
+    "itself, never black, never cool grey, never a hard crisp stroke. "
+    "Long side joints run as continuous fine soft lines along the planks; short end (butt) joints "
+    "are even finer and fainter, staggered in a brick-bond offset so they never line up into one "
+    "continuous cross-line. Keep every joint soft-edged and low-contrast, the same warm fine "
+    "character from foreground to far background; in the bright sunlit area near a window the "
+    "joints stay the same soft warm line — they must NOT darken into black lines and must NOT wash "
+    "out and disappear. Matte finish with no glossy sheen on the joints. The floor reads as one "
+    "calm continuous wood surface with a quiet, regular rhythm of soft, fine, lightly-rounded "
+    "plank joints."
+)
+
+# 圆弧倒角【参考图指令】：选圆弧倒角时,生图会自动附带一张压圆弧倒角实拍(config.get_bevel_ref_image)。
+# 这段文字告诉模型"那张实拍只用来抄板边的圆弧倒角凹槽形状,颜色/木纹/光线一概不要从它身上取"。
+# 放进 extra_cmd_en,B2/Pro 都带;附图与文字由同一个 is_pressed_bevel 条件一起触发。
+BEVEL_REF_IMAGE_INSTRUCTION = (
+    "\n\n**[ROUNDED PRESSED-BEVEL EDGE — COPY THE EDGE SHAPE FROM THE BEVEL REFERENCE PHOTO]** "
+    "One of the provided images is a close-up angled photo of a real wood floor whose planks have rounded "
+    "pressed-bevel edges. Use that photo ONLY as the geometric reference for the edge shape: copy how every plank "
+    "edge is rounded and chamfered DOWN into a soft, wide, U-shaped micro-bevel — the plank surface curves gently "
+    "downward into the joint across a few millimetres of smooth graduated shading, the rounded shoulders on each "
+    "side catch a little light, and the bottom of the groove is soft, with NO sharp thin drawn line and NO hard "
+    "black hairline. Reproduce that exact rounded, three-dimensional eased-edge profile on EVERY joint of this "
+    "floor, so the edges look gently rounded rather than sharply cut. "
+    "Take ONLY the edge geometry from that photo — completely ignore its color, wood species, grain pattern, "
+    "brightness and lighting, which all come exclusively from the floor material swatch."
 )
 
 
@@ -158,6 +195,15 @@ def save_task_files_html(workflow_mode, model_choice, image_path, continent, cou
     # 圆弧倒角(直拼直接用 TECH_DICT 完整块；人字拼/正方形拼的 en_seam 已被几何描述覆盖，故在此补回倒角性格)
     if "圆弧倒角" in seam_type and "无缝" not in seam_type and ("人字拼" in floor_size or "正方形拼" in floor_size):
         en_seam += PRESSED_BEVEL_CHARACTER
+
+    # 圆弧倒角·直拼：B2 走专属"可见但柔和的暖调软细缝"词；Pro 保留 TECH_DICT 原块(靠抽卡命中)。
+    # base 提示词(final_prompt_en=B2)用 B2 版；末尾 Pro 派生时把缝换回原块(en_seam_bevel_pro)。
+    is_pressed_bevel = ("圆弧倒角" in seam_type and "无缝" not in seam_type)  # 任意拼法的圆弧倒角(触发参考图)
+    en_seam_bevel_pro = None
+    if (is_pressed_bevel
+            and "人字拼" not in floor_size and "正方形拼" not in floor_size):
+        en_seam_bevel_pro = en_seam      # 原 TECH_DICT 圆弧倒角块 = Pro 版
+        en_seam = PRESSED_BEVEL_B2       # B2 专属软细缝版
 
     # 地板色调 → 家具对比色指令
     en_furniture_contrast = ""
@@ -559,6 +605,18 @@ def save_task_files_html(workflow_mode, model_choice, image_path, continent, cou
             f"Apply {en_seam} between planks. "
             "Recalculate floor perspective to perfectly match the existing room's vanishing points."
         )
+        # 圆弧倒角·直拼：Pro 版 spec 行(把 B2 软细缝缝描述换回 TECH_DICT 原块)
+        if en_seam_bevel_pro is not None:
+            en_floor_spec_line_pro = f"Laid in {en_floor_sz}{en_floor_extra}, {en_plank_direction}. Joints: {en_seam_bevel_pro}"
+            en_floor_spec_line_inpaint_pro = (
+                f"Laid in {en_floor_sz}{en_floor_extra}, {en_plank_direction}. "
+                f"Apply {en_seam_bevel_pro} between planks. "
+                "Recalculate floor perspective to perfectly match the existing room's vanishing points."
+            )
+
+    # 圆弧倒角(任意拼法)：附倒角参考图 + 文字指令(B2/Pro 同带)。附图由 webui 据同条件挂载。
+    if is_pressed_bevel:
+        extra_cmd_en += BEVEL_REF_IMAGE_INSTRUCTION
 
     # ── 地板整体颜色锁定：强制与上传小样一致（无条件追加到 CORE_MATERIAL_INSTRUCTION）──
     CORE_MATERIAL_INSTRUCTION = CORE_MATERIAL_INSTRUCTION + "\n\n" + FLOOR_COLOR_MATCH_INSTRUCTION
@@ -735,6 +793,13 @@ Professional photorealistic interior architectural photography. {en_property}, {
             .replace(en_floor_spec_line, en_floor_spec_line_pro)
             .replace(SEAMLESS_NEGATIVE, SEAMLESS_NEGATIVE_PRO)
         )
+    elif en_seam_bevel_pro is not None:
+        # 圆弧倒角·直拼：B2 base 用专属软细缝词，Pro 换回 TECH_DICT 原块
+        final_prompt_en_pro = (
+            final_prompt_en
+            .replace(en_floor_spec_line_inpaint, en_floor_spec_line_inpaint_pro)
+            .replace(en_floor_spec_line, en_floor_spec_line_pro)
+        )
     else:
         final_prompt_en_pro = final_prompt_en
 
@@ -749,8 +814,7 @@ Professional photorealistic interior architectural photography. {en_property}, {
          country if country and country not in ("通用", "") else continent),
         aspect_ratio, resolution,
     ]))
-    records = _load_records(json_path)
-    records.append({
+    new_record = {
         "id": record_id,
         "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         "workflow_mode": workflow_mode,
@@ -762,8 +826,11 @@ Professional photorealistic interior architectural photography. {en_property}, {
         "_pe": _obfuscate(final_prompt_en),
         "sample_image_b64": _img_to_b64(processed_img, max_width=400),
         "results": []
-    })
-    _save_records(json_path, records)
+    }
+    with record_file_lock(json_path):
+        records = _load_records(json_path)
+        records.append(new_record)
+        _save_records(json_path, records)
     return processed_img, f"{msg_prefix}生成成功！当前模式：{workflow_mode}", final_prompt_combined, image_path, json_path, record_id, png_path, final_prompt_en_pro
 
 

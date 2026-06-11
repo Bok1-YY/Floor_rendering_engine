@@ -6,6 +6,8 @@ import base64
 import base64 as b64mod
 import hashlib
 import html
+import tempfile
+import threading
 from typing import List, Tuple, Optional
 
 from PIL import Image
@@ -14,6 +16,21 @@ from .config import (
     BASE_DIR, MAIN_OUTPUT_DIR, CONFIG_FILE,
     logger, _short_text, _load_config, _save_config,
 )
+
+# ── 记录文件并发保护 ──────────────────────────────────────────────
+# 同一记录 JSON 的「读-改-写」必须串行：双模型生成时 B2/Pro 在两个 worker 线程里
+# 并发 append 同一文件，无锁会丢结果。按文件路径取锁，不同素材的记录互不阻塞。
+_path_locks_guard = threading.Lock()
+_path_locks: dict = {}
+
+def record_file_lock(json_path) -> threading.Lock:
+    key = os.path.normcase(os.path.abspath(str(json_path)))
+    with _path_locks_guard:
+        lock = _path_locks.get(key)
+        if lock is None:
+            lock = threading.Lock()
+            _path_locks[key] = lock
+        return lock
 
 def _get_json_path(image_path):
     base_name = os.path.splitext(os.path.basename(image_path))[0]
@@ -24,40 +41,62 @@ def _get_json_path(image_path):
 def _load_records(json_path):
     try:
         with open(json_path, 'r', encoding='utf-8') as f: return json.load(f)
+    except json.JSONDecodeError as e:
+        # 文件损坏：改名备份留待人工抢救。若原样留下，下一次保存会用空列表把整个历史覆盖掉。
+        backup = f"{json_path}.corrupt_{time.strftime('%Y%m%d_%H%M%S')}"
+        try:
+            os.replace(json_path, backup)
+            logger.error(f"记录文件损坏，已备份到 {backup} / {e}")
+        except OSError as be:
+            logger.error(f"记录文件损坏且备份失败: {json_path} / {e} / 备份错误: {be}")
+        return []
     except Exception as e:
         if json_path and os.path.exists(json_path):
             logger.error(f"记录读取失败: {json_path} / {e}")
         return []
 
 def _save_records(json_path, records):
+    # 先写同目录临时文件再原子替换：写一半崩溃/断电不会截断原文件
+    tmp_path = None
     try:
-        with open(json_path, 'w', encoding='utf-8') as f: json.dump(records, f, ensure_ascii=False, indent=2)
+        dir_path = os.path.dirname(json_path) or '.'
+        fd, tmp_path = tempfile.mkstemp(prefix='.records_', suffix='.tmp', dir=dir_path)
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            json.dump(records, f, ensure_ascii=False, indent=2)
+        os.replace(tmp_path, json_path)
+        tmp_path = None
     except Exception as e:
         logger.error(f"记录保存失败: {json_path} / {e}")
         raise
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try: os.remove(tmp_path)
+            except OSError: pass
 
 def _delete_record(json_path, record_id):
     """删除 JSON 文件中指定 ID 的记录"""
-    records = _load_records(json_path)
-    new_records = [r for r in records if r.get('id') != record_id]
-    if len(new_records) == len(records):
-        logger.warning(f"[记录] 删除失败，未找到记录 json={json_path}, record={record_id}")
-        return False
-    _save_records(json_path, new_records)
+    with record_file_lock(json_path):
+        records = _load_records(json_path)
+        new_records = [r for r in records if r.get('id') != record_id]
+        if len(new_records) == len(records):
+            logger.warning(f"[记录] 删除失败，未找到记录 json={json_path}, record={record_id}")
+            return False
+        _save_records(json_path, new_records)
     logger.info(f"[记录] 已删除记录 json={json_path}, record={record_id}")
     return True
 
 def _delete_result_image(json_path, record_id, result_index):
     """删除记录中指定索引的效果图"""
-    records = _load_records(json_path)
-    for r in records:
-        if r.get('id') == record_id:
-            results = r.get('results', [])
-            if 0 <= result_index < len(results):
-                results.pop(result_index)
-                _save_records(json_path, records)
-                logger.info(f"[记录] 已删除效果图 json={json_path}, record={record_id}, index={result_index}")
-                return True
+    with record_file_lock(json_path):
+        records = _load_records(json_path)
+        for r in records:
+            if r.get('id') == record_id:
+                results = r.get('results', [])
+                if 0 <= result_index < len(results):
+                    results.pop(result_index)
+                    _save_records(json_path, records)
+                    logger.info(f"[记录] 已删除效果图 json={json_path}, record={record_id}, index={result_index}")
+                    return True
     logger.warning(f"[记录] 删除效果图失败 json={json_path}, record={record_id}, index={result_index}")
     return False
 
@@ -132,25 +171,26 @@ def append_result_to_log(img1_path, img2_path, json_path, record_id, comment1=""
     if not img1_path and not img2_path: return "⚠️ 请至少上传一张效果图"
     if not json_path or not record_id: return "⚠️ 请先加载一条记录"
     try:
-        records = _load_records(json_path)
-        for r in records:
-            if r.get('id') == record_id:
-                written = []; ts = time.strftime("%Y-%m-%d %H:%M:%S")
-                for img_path, comment, label in [(img1_path, comment1, "Banana2"), (img2_path, comment2, "Pro")]:
-                    if img_path:
-                        r.setdefault('results', []).append({
-                            'result_timestamp': ts,
-                            'result_image_b64': _img_to_b64(img_path, max_width=1000),
-                            'comment': str(comment).strip() if comment else '',
-                            'model_label': label
-                        })
-                        written.append(label)
-                _save_records(json_path, records)
-                logger.info(
-                    f"[记录] 手动追加效果图 json={json_path}, record={record_id}, written={written}, "
-                    f"img1={img1_path}, img2={img2_path}"
-                )
-                return f"✅ 已写入：{' + '.join(written)}"
+        with record_file_lock(json_path):
+            records = _load_records(json_path)
+            for r in records:
+                if r.get('id') == record_id:
+                    written = []; ts = time.strftime("%Y-%m-%d %H:%M:%S")
+                    for img_path, comment, label in [(img1_path, comment1, "Banana2"), (img2_path, comment2, "Pro")]:
+                        if img_path:
+                            r.setdefault('results', []).append({
+                                'result_timestamp': ts,
+                                'result_image_b64': _img_to_b64(img_path, max_width=1000),
+                                'comment': str(comment).strip() if comment else '',
+                                'model_label': label
+                            })
+                            written.append(label)
+                    _save_records(json_path, records)
+                    logger.info(
+                        f"[记录] 手动追加效果图 json={json_path}, record={record_id}, written={written}, "
+                        f"img1={img1_path}, img2={img2_path}"
+                    )
+                    return f"✅ 已写入：{' + '.join(written)}"
         logger.error(f"[记录] 手动追加失败，未找到记录 json={json_path}, record={record_id}")
         return "❌ 未找到对应记录"
     except Exception as e:
@@ -200,22 +240,25 @@ def _api_write_to_record(pil_img, model_key: str, json_path_val: str, record_id_
         logger.warning(f"_api_write_to_record 参数不全: img={pil_img is not None}, jpath={bool(json_path_val)}, rid={bool(record_id_val)}")
         return
     try:
-        records = _load_records(json_path_val)
+        # base64 编码在锁外做（耗时且不碰文件），锁内只做读-改-写
+        result_b64 = _img_to_b64(pil_img, max_width=None)  # 存原始分辨率（用户要求存 4K，按需）
         matched = False
-        for r in records:
-            if r.get('id') == record_id_val:
-                r.setdefault('results', []).append({
-                    'result_timestamp': time.strftime("%Y-%m-%d %H:%M:%S"),
-                    # 存原始分辨率 base64（用户要求存 4K，按需）
-                    'result_image_b64': _img_to_b64(pil_img, max_width=None),
-                    'comment': f'API 自动生成 ({pil_img.width}×{pil_img.height})',
-                    'model_label': model_key
-                })
-                _save_records(json_path_val, records)
-                logger.info(f"✅ 已写入记录 {record_id_val} / {model_key}")
-                matched = True
-                break
-        if not matched:
+        with record_file_lock(json_path_val):
+            records = _load_records(json_path_val)
+            for r in records:
+                if r.get('id') == record_id_val:
+                    r.setdefault('results', []).append({
+                        'result_timestamp': time.strftime("%Y-%m-%d %H:%M:%S"),
+                        'result_image_b64': result_b64,
+                        'comment': f'API 自动生成 ({pil_img.width}×{pil_img.height})',
+                        'model_label': model_key
+                    })
+                    _save_records(json_path_val, records)
+                    matched = True
+                    break
+        if matched:
+            logger.info(f"✅ 已写入记录 {record_id_val} / {model_key}")
+        else:
             logger.warning(f"未找到记录 ID {record_id_val}，文件: {json_path_val}")
     except Exception as e:
         logger.error(f"❌ 写入记录失败 ({model_key}): {e}")
@@ -242,28 +285,30 @@ def append_edited_result_to_record(json_path, record_id, source_index, pil_img, 
     if not json_path or not record_id:
         return "⚠️ 请先加载一条记录"
     try:
-        records = _load_records(json_path)
-        for r in records:
-            if r.get('id') == record_id:
-                ts = time.strftime("%Y-%m-%d %H:%M:%S")
-                comment = (
-                    f"二次修改自第 {int(source_index) + 1} 张图 | {model_label}\n"
-                    f"修改建议：{str(edit_prompt).strip()}"
-                )
-                r.setdefault('results', []).append({
-                    'result_timestamp': ts,
-                    'result_image_b64': _img_to_b64(pil_img, max_width=None),
-                    'comment': comment,
-                    'model_label': f"{model_label} Edit",
-                    'source_result_index': int(source_index),
-                    'edit_prompt': str(edit_prompt).strip(),
-                })
-                _save_records(json_path, records)
-                logger.info(
-                    f"[二改记录] 已追加 record={record_id}, source_index={source_index}, "
-                    f"model={model_label}, image={pil_img.width}x{pil_img.height}, prompt={_short_text(edit_prompt, 300)}"
-                )
-                return "✅ 二次修改结果已追加到当前记录"
+        result_b64 = _img_to_b64(pil_img, max_width=None)
+        with record_file_lock(json_path):
+            records = _load_records(json_path)
+            for r in records:
+                if r.get('id') == record_id:
+                    ts = time.strftime("%Y-%m-%d %H:%M:%S")
+                    comment = (
+                        f"二次修改自第 {int(source_index) + 1} 张图 | {model_label}\n"
+                        f"修改建议：{str(edit_prompt).strip()}"
+                    )
+                    r.setdefault('results', []).append({
+                        'result_timestamp': ts,
+                        'result_image_b64': result_b64,
+                        'comment': comment,
+                        'model_label': f"{model_label} Edit",
+                        'source_result_index': int(source_index),
+                        'edit_prompt': str(edit_prompt).strip(),
+                    })
+                    _save_records(json_path, records)
+                    logger.info(
+                        f"[二改记录] 已追加 record={record_id}, source_index={source_index}, "
+                        f"model={model_label}, image={pil_img.width}x{pil_img.height}, prompt={_short_text(edit_prompt, 300)}"
+                    )
+                    return "✅ 二次修改结果已追加到当前记录"
         logger.error(f"[二改记录] 未找到对应记录 json={json_path}, record={record_id}")
         return "❌ 未找到对应记录"
     except Exception as e:
@@ -271,4 +316,11 @@ def append_edited_result_to_record(json_path, record_id, source_index, pil_img, 
         return f"❌ 写入失败: {e}"
 
 
-__all__ = [n for n in dir() if not n.startswith('__')]
+__all__ = [
+    'record_file_lock', '_get_json_path', '_load_records', '_save_records',
+    '_delete_record', '_delete_result_image', '_img_to_b64', '_b64_to_pil',
+    'scan_json_files', 'get_record_labels', 'export_html_from_json',
+    'append_result_to_log', 'append_edited_result_to_record',
+    '_obfuscate', '_deobfuscate', 'reveal_prompt_fn',
+    '_api_write_to_record', '_save_api_result_jpg',
+]

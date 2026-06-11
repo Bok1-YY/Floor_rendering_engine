@@ -10,6 +10,13 @@ from typing import Optional, Tuple
 
 from PIL import Image
 
+import requests as _req
+import urllib3
+from urllib3.exceptions import ProtocolError as _ProtocolError
+
+# 本地代理场景下所有请求走 verify=False，对应的告警一次性关闭（全模块生效）
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 from .config import (
     BASE_DIR, MAIN_OUTPUT_DIR, CONFIG_FILE,
     GEMINI_MODEL_MAP, FAL_MODEL_MAP, DEFAULT_IMAGE_PROVIDER,
@@ -18,6 +25,18 @@ from .config import (
 from .records import (
     _img_to_b64, _b64_to_pil, _save_api_result_jpg, _api_write_to_record,
 )
+
+_IMAGE_MIME = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
+
+def _read_image_b64(path: Optional[str]) -> Tuple[Optional[str], str]:
+    """读本地图片为 (base64, mime)；路径为空或文件不存在返回 (None, "image/jpeg")。"""
+    if not path or not os.path.exists(path):
+        return None, "image/jpeg"
+    ext = os.path.splitext(path)[1].lower().lstrip('.')
+    mime = _IMAGE_MIME.get(ext, "image/jpeg")
+    with open(path, 'rb') as f:
+        b64 = base64.b64encode(f.read()).decode('utf-8')
+    return b64, mime
 
 def _redact_api_key(text):
     return re.sub(r'([?&]key=)[^&\s)]+', r'\1***', str(text or ""))
@@ -52,7 +71,8 @@ def call_gemini_generate(api_key: str, model_id: str, prompt_text: str, image_pa
                          image_size: str = "4K", aspect_ratio: str = "4:3",
                          room_image_path: Optional[str] = None,
                          style_ref_image_path: Optional[str] = None,
-                         on_stage=None, should_cancel=None) -> Tuple[Optional[object], Optional[str]]:
+                         on_stage=None, should_cancel=None,
+                         bevel_ref_image_path: Optional[str] = None) -> Tuple[Optional[object], Optional[str]]:
     """流式文生图/图生图。
 
     - Pro 模型(model_id 含 'pro')额外请求 includeThoughts，实时回传思考标题。
@@ -62,9 +82,6 @@ def call_gemini_generate(api_key: str, model_id: str, prompt_text: str, image_pa
     - should_cancel(): 可选回调，返回 True 表示任务已取消 → 立即停止后续重试，不再发起新请求。
     - 返回 (PIL.Image, None) 或 (None, 错误字符串)，契约与旧版一致。
     """
-    import requests as _req
-    from urllib3.exceptions import ProtocolError as _ProtocolError
-
     def _stage(txt):
         if on_stage:
             try: on_stage(txt)
@@ -78,26 +95,20 @@ def call_gemini_generate(api_key: str, model_id: str, prompt_text: str, image_pa
     if not os.path.exists(image_path):
         logger.error(f"[API生成] 素材图不存在: {image_path}")
         return None, f"素材图不存在: {image_path}"
-    with open(image_path, 'rb') as f: floor_b64 = base64.b64encode(f.read()).decode('utf-8')
-    room_b64 = None; room_mime = "image/jpeg"
-    if room_image_path and os.path.exists(room_image_path):
-        ext = os.path.splitext(room_image_path)[1].lower()
-        room_mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}.get(ext.lstrip('.'), "image/jpeg")
-        with open(room_image_path, 'rb') as f: room_b64 = base64.b64encode(f.read()).decode('utf-8')
-    sref_b64 = None; sref_mime = "image/jpeg"
-    if style_ref_image_path and os.path.exists(style_ref_image_path):
-        ext = os.path.splitext(style_ref_image_path)[1].lower()
-        sref_mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}.get(ext.lstrip('.'), "image/jpeg")
-        with open(style_ref_image_path, 'rb') as f: sref_b64 = base64.b64encode(f.read()).decode('utf-8')
+    floor_b64, _ = _read_image_b64(image_path)
+    room_b64, room_mime = _read_image_b64(room_image_path)
+    sref_b64, sref_mime = _read_image_b64(style_ref_image_path)
+    # 圆弧倒角参考图：只供模型参考板边倒角形状(颜色/木纹仍取地板小样)。放在地板小样之前。
+    bevel_b64, bevel_mime = _read_image_b64(bevel_ref_image_path)
 
     parts = [{"text": prompt_text}]
     if sref_b64: parts.append({"inlineData": {"mimeType": sref_mime, "data": sref_b64}})
     if room_b64: parts.append({"inlineData": {"mimeType": room_mime, "data": room_b64}})
+    if bevel_b64: parts.append({"inlineData": {"mimeType": bevel_mime, "data": bevel_b64}})
     parts.append({"inlineData": {"mimeType": "image/png", "data": floor_b64}})
 
     cfg = _load_config(); proxy = cfg.get("proxy", "").strip()
     proxies = {"http": proxy, "https": proxy} if proxy else None
-    import urllib3; urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     # 默认走【非流式】generateContent —— 实测在软路由/透明代理下又快又稳(单图 ~48s)。
     # 流式 streamGenerateContent 能拿实时思考，但该网络下慢 ~9 倍且长连接易被重置，
@@ -316,12 +327,9 @@ _FAL_ASPECT_RATIOS = {"auto", "21:9", "16:9", "3:2", "4:3", "5:4", "1:1", "4:5",
 
 def _file_to_data_uri(path: str) -> Optional[str]:
     """把本地图片读成 data URI(base64),用作 Fal 的 image_urls 输入。"""
-    if not path or not os.path.exists(path):
+    b64, mime = _read_image_b64(path)
+    if b64 is None:
         return None
-    ext = os.path.splitext(path)[1].lower().lstrip('.')
-    mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}.get(ext, "image/jpeg")
-    with open(path, 'rb') as f:
-        b64 = base64.b64encode(f.read()).decode('utf-8')
     return f"data:{mime};base64,{b64}"
 
 
@@ -329,7 +337,8 @@ def call_fal_generate(api_key: str, model_id: str, prompt_text: str, image_path:
                       image_size: str = "4K", aspect_ratio: str = "4:3",
                       room_image_path: Optional[str] = None,
                       style_ref_image_path: Optional[str] = None,
-                      on_stage=None, should_cancel=None) -> Tuple[Optional[object], Optional[str]]:
+                      on_stage=None, should_cancel=None,
+                      bevel_ref_image_path: Optional[str] = None) -> Tuple[Optional[object], Optional[str]]:
     """经 Fal 路由调用 Nano Banana 系列(图生图 /edit 端点)。
 
     与 call_gemini_generate 同契约:返回 (PIL.Image, None) 或 (None, 错误字符串),并支持 on_stage 回调。
@@ -339,9 +348,6 @@ def call_fal_generate(api_key: str, model_id: str, prompt_text: str, image_path:
     - should_cancel(): 可选回调,返回 True 表示任务已被用户取消 → 立刻停止后续重试,
       不再发起新的(会计费的)Fal 请求。已在途的那一次无法召回,但本次若已拿到图仍会正常返回。
     """
-    import requests as _req
-    from urllib3.exceptions import ProtocolError as _ProtocolError
-
     def _stage(txt):
         if on_stage:
             try: on_stage(txt)
@@ -363,9 +369,9 @@ def call_fal_generate(api_key: str, model_id: str, prompt_text: str, image_path:
         logger.error(f"[Fal生成] 素材图不存在: {image_path}")
         return None, f"素材图不存在: {image_path}"
 
-    # image_urls 顺序与 Gemini 直连保持一致:风格参考 → 房间参考 → 地板小样(地板最后/最关键)
+    # image_urls 顺序与 Gemini 直连保持一致:风格参考 → 房间参考 → 倒角参考 → 地板小样(地板最后/最关键)
     image_urls = []
-    for p in (style_ref_image_path, room_image_path, image_path):
+    for p in (style_ref_image_path, room_image_path, bevel_ref_image_path, image_path):
         uri = _file_to_data_uri(p)
         if uri:
             image_urls.append(uri)
@@ -388,7 +394,6 @@ def call_fal_generate(api_key: str, model_id: str, prompt_text: str, image_path:
 
     proxy = cfg.get("proxy", "").strip()
     proxies = {"http": proxy, "https": proxy} if proxy else None
-    import urllib3; urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     try: total_deadline = float(cfg.get("gen_total_deadline", 600))
     except Exception: total_deadline = 600.0
@@ -490,7 +495,8 @@ def call_image_generate(api_key: str, model_id: str, prompt_text: str, image_pat
                         image_size: str = "4K", aspect_ratio: str = "4:3",
                         room_image_path: Optional[str] = None,
                         style_ref_image_path: Optional[str] = None,
-                        on_stage=None, should_cancel=None) -> Tuple[Optional[object], Optional[str]]:
+                        on_stage=None, should_cancel=None,
+                        bevel_ref_image_path: Optional[str] = None) -> Tuple[Optional[object], Optional[str]]:
     """生图调度器:按 engine_config.json 的 image_provider 选线路,两条线路同契约。
 
     - 'google'(默认):直连 Google AI Studio,沿用传入的 Gemini api_key。
@@ -505,15 +511,16 @@ def call_image_generate(api_key: str, model_id: str, prompt_text: str, image_pat
             logger.error("[生图调度] 线路=fal 但未配置 Fal API Key")
             return None, "未配置 Fal API Key(请在 API 设置里填写 Fal Key)"
         return call_fal_generate(fal_key, model_id, prompt_text, image_path, image_size,
-                                 aspect_ratio, room_image_path, style_ref_image_path, on_stage, should_cancel)
+                                 aspect_ratio, room_image_path, style_ref_image_path, on_stage, should_cancel,
+                                 bevel_ref_image_path=bevel_ref_image_path)
     return call_gemini_generate(api_key, model_id, prompt_text, image_path, image_size,
-                                aspect_ratio, room_image_path, style_ref_image_path, on_stage, should_cancel)
+                                aspect_ratio, room_image_path, style_ref_image_path, on_stage, should_cancel,
+                                bevel_ref_image_path=bevel_ref_image_path)
 
 
 def call_gemini_edit(api_key: str, model_id: str, edit_instruction: str, source_image_b64: str,
                      image_size: str = "4K", aspect_ratio: str = "4:3", preserve_floor_geometry: bool = True):
     """Use Gemini image generation as an image-to-image editor for one existing result."""
-    import requests as _req
     logger.info(
         f"[API二改] start model={model_id}, size={image_size}, ar={aspect_ratio}, "
         f"source_b64_len={len(source_image_b64 or '')}, instruction={_short_text(edit_instruction, 300)}"
@@ -557,23 +564,37 @@ EDITING RULES:
     }
     cfg = _load_config(); proxy = cfg.get("proxy", "").strip()
     proxies = {"http": proxy, "https": proxy} if proxy else None
-    import urllib3; urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    # 重试策略与主生成对齐：用配置的次数/退避表；429/5xx 与超时也重试，400/403 等立即失败
+    max_attempts, backoffs = _retry_plan()
+    RETRYABLE = (_req.exceptions.SSLError, _req.exceptions.ConnectionError,
+                 _req.exceptions.ChunkedEncodingError, _ProtocolError)
+    def _sleep_backoff(attempt):
+        time.sleep(backoffs[min(attempt, len(backoffs) - 1)] + random.uniform(0, 1.5))
     last_err = None
-    for attempt in range(3):
+    resp = None
+    for attempt in range(max_attempts):
         try:
             resp = _req.post(url, json=payload, timeout=300, proxies=proxies, verify=False)
-            last_err = None; break
-        except (_req.exceptions.SSLError, _req.exceptions.ConnectionError, _req.exceptions.ChunkedEncodingError) as e:
-            last_err = e
-            logger.warning(f"[API二改] 网络异常 attempt={attempt+1}/3 model={model_id}: {_redact_api_key(e)}")
-            if attempt < 2: time.sleep(2 ** attempt)
         except _req.exceptions.Timeout:
-            logger.error(f"[API二改] 请求超时 model={model_id}")
-            return None, "请求超时"
+            resp = None; last_err = "请求超时"
+            logger.warning(f"[API二改] 请求超时 attempt={attempt+1}/{max_attempts} model={model_id}")
+            if attempt < max_attempts - 1: _sleep_backoff(attempt)
+            continue
+        except RETRYABLE as e:
+            resp = None; last_err = e
+            logger.warning(f"[API二改] 网络异常 attempt={attempt+1}/{max_attempts} model={model_id}: {_redact_api_key(e)}")
+            if attempt < max_attempts - 1: _sleep_backoff(attempt)
+            continue
         except Exception as e:
             logger.exception(f"[API二改] 未预期网络错误 model={model_id}")
-            return None, f"网络错误: {e}"
-    if last_err is not None:
+            return None, f"网络错误: {_redact_api_key(e)}"
+        if resp.status_code in (429, 500, 502, 503, 504) and attempt < max_attempts - 1:
+            last_err = f"HTTP {resp.status_code}"
+            logger.warning(f"[API二改] HTTP可重试 attempt={attempt+1}/{max_attempts} model={model_id}, status={resp.status_code}")
+            _sleep_backoff(attempt)
+            continue
+        break
+    if resp is None:
         logger.error(f"[API二改] 网络重试失败 model={model_id}: {_redact_api_key(last_err)}")
         return None, f"网络错误: {_redact_api_key(last_err)}"
     if resp.status_code != 200:
@@ -621,15 +642,17 @@ FLOOR_DESEAM_INSTRUCTION = (
     "This is a minimal floor-only retouch — only the floor seams are smoothed away; everything else stays the same."
 )
 
-def analyze_style_image(api_key: str, image_path: str) -> str:
-    """Step-1 of 参照模式: call Gemini text API to extract a precise style blueprint from a reference room photo."""
-    import requests as _req
+_STYLE_ANALYZE_TIMEOUT = 60  # 单个文字模型的请求超时（秒）
+
+def analyze_style_image(api_key: str, image_path: str) -> Tuple[str, Optional[str]]:
+    """Step-1 of 参照模式: call Gemini text API to extract a precise style blueprint from a reference room photo.
+
+    返回 (风格描述文本, None) 或 ("", 错误信息)。调用方必须检查错误并中止生图——
+    错误文本绝不能混进生图提示词（曾因此把 "(Style analysis failed...)" 拼进计费请求）。
+    """
     if not image_path or not os.path.exists(image_path):
-        return ""
-    with open(image_path, 'rb') as f:
-        img_b64 = base64.b64encode(f.read()).decode('utf-8')
-    ext = os.path.splitext(image_path)[1].lower()
-    mime = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}.get(ext.lstrip('.'), "image/jpeg")
+        return "", "参照图不存在"
+    img_b64, mime = _read_image_b64(image_path)
     analysis_prompt = (
         "You are a precision interior design analyst. Your output is used DIRECTLY as a brief for an AI image generator — vagueness causes generation failure.\n\n"
         "PRECISION RULE — name EXACT objects, never categories:\n"
@@ -664,7 +687,6 @@ def analyze_style_image(api_key: str, image_path: str) -> str:
     }
     cfg = _load_config(); proxy = cfg.get("proxy", "").strip()
     proxies = {"http": proxy, "https": proxy} if proxy else None
-    import urllib3; urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     # 按优先级依次尝试可用的文字视觉模型
     _text_models = [
         "gemini-3.1-flash-image-preview",   # 该 API Key 确认可用，优先尝试
@@ -675,25 +697,31 @@ def analyze_style_image(api_key: str, image_path: str) -> str:
         "gemini-1.5-flash-latest",
         "gemini-1.5-flash-001",
     ]
+    last_err = None
     for model_name in _text_models:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
         try:
-            resp = _req.post(url, json=payload, timeout=60, proxies=proxies, verify=False)
+            resp = _req.post(url, json=payload, timeout=_STYLE_ANALYZE_TIMEOUT, proxies=proxies, verify=False)
             if resp.status_code == 200:
                 for candidate in resp.json().get('candidates', []):
                     for part in candidate.get('content', {}).get('parts', []):
                         if 'text' in part:
                             logger.info(f"[参照模式] 风格分析使用模型: {model_name}")
-                            return part['text'].strip()
-            elif resp.status_code == 404:
-                logger.warning(f"[参照模式] 模型 {model_name} 不可用(404)，尝试下一个...")
+                            return part['text'].strip(), None
+            elif resp.status_code in (404, 429, 500, 502, 503, 504):
+                # 模型不可用或暂时性错误 → 尝试下一个备选模型
+                last_err = f"HTTP {resp.status_code} on {model_name}"
+                logger.warning(f"[参照模式] 模型 {model_name} 暂不可用({resp.status_code})，尝试下一个...")
                 continue
             else:
-                return f"(Style analysis failed: HTTP {resp.status_code} on {model_name})"
+                # 400/401/403 等密钥/请求级错误：换模型也没用，直接失败
+                logger.error(f"[参照模式] 风格分析失败 HTTP {resp.status_code} on {model_name}")
+                return "", f"HTTP {resp.status_code} on {model_name}"
         except Exception as e:
-            logger.warning(f"[参照模式] 模型 {model_name} 请求异常: {_redact_api_key(e)}")
+            last_err = _redact_api_key(e)
+            logger.warning(f"[参照模式] 模型 {model_name} 请求异常: {last_err}")
             continue
-    return "(Style analysis failed: 所有备选模型均不可用，请检查 API Key 和网络)"
+    return "", f"所有备选模型均不可用，请检查 API Key 和网络（最后错误: {last_err}）"
 
 def _match_color_to_reference(src_img, ref_img, strength=1.0):
     """把 src 的整体色彩统计对齐到 ref（LAB 空间均值/方差迁移，Reinhard 色彩迁移）。
@@ -728,26 +756,6 @@ def _match_color_to_reference(src_img, ref_img, strength=1.0):
     return transferred
 
 
-def create_blurred_reference(swatch_path):
-    """生成用于颜色迁移的模糊参考图。
-
-    对地板小样图施加大半径高斯模糊以消除木纹/矿物线等纹理噪声，
-    保留纯粹的"感知颜色"统计量用于 Reinhard 色彩迁移。
-
-    Args:
-        swatch_path: 地板小样图路径
-
-    Returns:
-        PIL.Image 或 None（失败时）
-    """
-    try:
-        from PIL import ImageFilter
-        img = Image.open(swatch_path).convert('RGB')
-        return img.filter(ImageFilter.GaussianBlur(radius=30))
-    except Exception:
-        return None
-
-
 def _infer_aspect_ratio_from_b64(b64_str: str) -> str:
     img = _b64_to_pil(b64_str)
     if img is None or not img.width or not img.height:
@@ -758,4 +766,9 @@ def _infer_aspect_ratio_from_b64(b64_str: str) -> str:
 
 
 
-__all__ = [n for n in dir() if not n.startswith('__')]
+__all__ = [
+    'call_gemini_generate', 'call_fal_generate', 'call_image_generate',
+    'call_gemini_edit', 'analyze_style_image',
+    'FLOOR_DESEAM_INSTRUCTION',
+    '_match_color_to_reference', '_infer_aspect_ratio_from_b64',
+]

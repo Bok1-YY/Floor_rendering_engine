@@ -89,7 +89,6 @@ floor_engine/
   - `call_gemini_edit()` — 图生图编辑（二次修改 / 磨缝）
   - `analyze_style_image()` — 参照模式 Step-1：用文字模型提取风格描述
   - `_match_color_to_reference()` — Reinhard 色彩迁移（LAB 空间，消除 img2img 偏色）
-  - `create_blurred_reference()` — 高斯模糊参考图生成
   - `FLOOR_DESEAM_INSTRUCTION` — 磨缝编辑指令
 - **依赖**：`config.py`、`records.py`
 - **⚠️ 仅本地运行**：`verify=False` 仅适用于本地代理场景
@@ -120,7 +119,7 @@ floor_engine/
 | **修改地板颜色锁定的强度** | `prompts.py` | `FLOOR_COLOR_MATCH_INSTRUCTION` 常量 |
 | **无缝/磨缝策略调整** | `prompts.py` | `save_task_files_html()` 里 `is_seamless_clean` 分支（~200 行） |
 | **换 AI 模型**（比如换成 GPT-4o 生图） | `api.py` | `call_gemini_generate()` + `GEMINI_MODEL_MAP` in `config.py` |
-| **改 API 重试策略** | `api.py` | `for attempt in range(3)` + `time.sleep(2 ** attempt)` |
+| **改 API 重试策略** | `api.py` + `engine_config.json` | `_retry_plan()` 读 `retry_attempts` / `retry_backoffs`；Fal 另有 `fal_retry_attempts` |
 | **改图片存储质量** | `records.py` | `_img_to_b64()` 的 `quality=85`、`_save_api_result_jpg()` 的 `quality=95` |
 | **改 UI 主题/配色** | `themes.py` | `THEMES` 字典 |
 | **加新的 UI 控件/按钮** | `webui.py` | NiceGUI 组件树 |

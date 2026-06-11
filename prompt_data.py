@@ -155,17 +155,29 @@ TECH_DICT = {
     ),
 }
 
+# 在线翻译结果缓存：同一中文词每个任务都会重查，未命中词典时一次在线请求 1~2 秒，
+# 缓存后整个进程生命周期内只查一次。只缓存成功结果——失败兜底不缓存，下次还有机会成功。
+_translation_cache: dict = {}
+_translator = None
+
 def translate_zh_to_en(text):
     if not text or str(text).strip() in ["", "通用", "无", "无特定国家"]: return ""
     text = str(text).strip()
     if all(ord(c) < 128 for c in text): return text
     if text in TECH_DICT: return TECH_DICT[text]
     if text in FALLBACK_DICT: return FALLBACK_DICT[text]
+    cached = _translation_cache.get(text)
+    if cached is not None: return cached
     if TRANSLATOR_AVAILABLE:
+        global _translator
         for attempt in range(2):
             try:
-                translated = MyMemoryTranslator(source='zh-CN', target='en-US').translate(text)
-                if translated and all(ord(c) < 128 for c in translated): return translated
+                if _translator is None:
+                    _translator = MyMemoryTranslator(source='zh-CN', target='en-US')
+                translated = _translator.translate(text)
+                if translated and all(ord(c) < 128 for c in translated):
+                    _translation_cache[text] = translated
+                    return translated
             except Exception as e:
                 logger.warning(f"翻译第{attempt+1}次失败: {e}"); time.sleep(1)
     logger.error(f"翻译彻底失败: '{text}'")
@@ -1385,6 +1397,18 @@ def _get_srgb_save_kwargs():
     try:
         from PIL import ImageCms; return {"format": "PNG", "icc_profile": ImageCms.createProfile('sRGB').tobytes()}
     except Exception: return {"format": "PNG"}
+
+
+# ── 数据一致性自检（模块加载时执行一次）──────────────────────────────
+# STYLES 标签与 STYLE_ATMOSPHERE_MAP 是两份手工维护的数据，靠「map 的 key 是标签
+# 子串」隐式对应（见 prompts.py 的匹配逻辑）。新增风格漏配 map 时只会静默退化成
+# 通用氛围，这里在启动时点名报出来；只记日志，不抛异常、不影响运行。
+def _validate_style_data():
+    for label in STYLES:
+        if not any(key in label for key in STYLE_ATMOSPHERE_MAP):
+            logger.error(f"[数据自检] STYLES 条目在 STYLE_ATMOSPHERE_MAP 中无匹配 key，将退化为通用氛围: {label}")
+
+_validate_style_data()
 
 
 __all__ = [n for n in dir() if not n.startswith('__')]
