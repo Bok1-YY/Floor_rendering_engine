@@ -88,6 +88,20 @@ def _load_config() -> Dict[str, str]:
     return {"gemini_api_key": ""}
 
 
+# ── 圆弧倒角内置参考图 ──────────────────────────────────────────
+# 选「圆弧倒角」时自动把这张压圆弧倒角实拍当作"板边形状参考"喂给生图模型(B2/Pro 都加)。
+# 模型只参考它的【倒角凹槽形状】,颜色/木纹/光线仍取地板小样。可在 engine_config.json 的
+# "bevel_ref_image" 里换成自定义路径(如 088 pressed bevel 文件夹里的其它图)。
+_PKG_DIR = os.path.dirname(os.path.abspath(__file__))
+BEVEL_REF_IMAGE_DEFAULT = os.path.join(_PKG_DIR, "assets", "bevel_ref.jpg")
+
+def get_bevel_ref_image() -> str:
+    """返回当前圆弧倒角参考图路径(配置可覆盖);文件不存在则返回空串(自动降级为纯文字)。"""
+    cfg = _load_config()
+    p = (cfg.get("bevel_ref_image") or "").strip() or BEVEL_REF_IMAGE_DEFAULT
+    return p if os.path.exists(p) else ""
+
+
 def _save_config(config: Dict[str, str]) -> bool:
     """持久化配置到 engine_config.json。"""
     try:
