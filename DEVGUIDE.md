@@ -34,10 +34,10 @@ floor_engine/
 - **被引用**：所有其他模块都依赖它
 
 #### `themes.py` — UI 主题系统
-- **职责**：5 套主题的色板定义 (`THEMES` 字典)、`build_theme_css()` 生成完整 `<style>` 块
+- **职责**：单一主题「Anthropic 暖陶米色」的色板定义 (`THEMES` 字典)、`build_theme_css()` 生成完整 `<style>` 块；字体走系统微软雅黑、完全离线（见 `_FONT_STACK`）。设计规范见项目根 `DESIGN.md`
 - **依赖**：无内部依赖
-- **修改主题**：改 `THEMES` 字典即可
-- **添加新主题**：在 `THEMES` 中新增一个键，格式参照现有的 5 个
+- **修改主题**：改 `THEMES["Anthropic 暖陶米色"]` 的令牌即可
+- **添加新主题**：在 `THEMES` 中新增一个键，格式参照现有主题；webui.py 的固定调用也需同步改名
 
 #### `logging_setup.py` — 日志
 - **职责**：初始化 logger，输出到 `app_local_save.log` + 控制台

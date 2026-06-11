@@ -109,9 +109,9 @@ async def main_page():
     global _gen_semaphore
     if _gen_semaphore is None: _gen_semaphore = asyncio.Semaphore(5)
 
-    # ── 主题：固定暗黑工业风（浅色主题有对比度问题，已禁用切换）──
-    ui.add_head_html(f'<style id="theme-style">{_build_theme_css("暗黑工业风")}</style>')
-    ui.dark_mode().enable()
+    # ── 主题：固定「Anthropic 暖陶米色」（唯一主题，浅色；字体走系统微软雅黑、完全离线）──
+    ui.add_head_html(f'<style id="theme-style">{_build_theme_css("Anthropic 暖陶米色")}</style>')
+    ui.dark_mode().disable()
 
     floor_path = {'v': ''}; room_path = {'v': ''}; ref_path = {'v': ''}; last_img = {'v': ''}
     _cancel_generation = [0]; _cancel_jobs = set()
