@@ -26,14 +26,14 @@ THEMES: Dict[str, Dict[str, str]] = {
         "bg_page": "#f5f1e8", "bg_header": "#faf7f0", "bg_panel_left": "#f5f1e8",
         "bg_panel_right": "#efe9dc", "bg_card": "#ffffff", "bg_card_border": "#e3ddd0",
         "border_panel": "#e3ddd0", "text_primary": "#1a1815", "text_secondary": "#6b6862",
-        "text_accent": "#c96442", "text_label": "#3d3a35",
+        "text_accent": "#a8472a", "text_label": "#3d3a35",
         "border_success": "#5a8f5a", "border_failed": "#c0392b",
         "border_running": "#cc785c", "border_partial": "#d4915a",
         "dl_btn_bg": "rgba(26,24,21,0.72)", "dl_btn_text": "#ffffff",
         "dl_btn_hover": "rgba(201,100,66,0.92)", "dl_btn_border": "rgba(255,255,255,0.18)",
         "scrollbar_thumb": "#d8cfbd", "is_dark": False,
         # ── 扩展令牌（Anthropic 设计语言）──
-        "accent_strong": "#cc785c", "accent_text": "#ffffff", "bg_input": "#ffffff",
+        "accent_strong": "#c15f3c", "accent_text": "#ffffff", "bg_input": "#ffffff",
         "shadow_card": "0 1px 2px rgba(26,24,21,0.04), 0 4px 16px rgba(26,24,21,0.06)",
         "shadow_card_hover": "0 2px 4px rgba(26,24,21,0.06), 0 8px 28px rgba(26,24,21,0.10)",
         "radius_card": "14px", "radius_btn": "10px",
@@ -106,11 +106,16 @@ body, .q-page {{
 .q-field__control {{ min-width: 0 !important; }}
 .q-field__input,
 .q-select__input {{ min-width: 0 !important; width: 0 !important; }}
+/* 折叠态取值单行 + 省略号（避免长选项折成 2-3 行；展开浮层仍可看全文）*/
 .q-field__native {{
-    min-width: 0 !important; white-space: normal !important;
-    word-break: break-word !important; padding-left: 8% !important; padding-right: 8% !important;
+    min-width: 0 !important; white-space: nowrap !important;
+    overflow: hidden !important; text-overflow: ellipsis !important;
+    word-break: normal !important; padding-left: 6px !important; padding-right: 6px !important;
 }}
-.q-field__native > span {{ white-space: normal !important; word-break: break-word !important; }}
+.q-field__native > span {{
+    white-space: nowrap !important; overflow: hidden !important;
+    text-overflow: ellipsis !important; word-break: normal !important; max-width: 100%;
+}}
 .q-menu .q-item__label {{ white-space: normal !important; word-break: break-word !important; }}
 /* ── 输入/下拉：干净描边卡片 + 标签外置（标签放到框外上方，不压在边框里）── */
 /* 控件本体：白底 + hairline 全边框 + 圆角；抹掉 Material 下划线/灰填充 */

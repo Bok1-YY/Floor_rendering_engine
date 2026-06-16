@@ -19,4 +19,4 @@ if __name__ in {'__main__', '__mp_main__'}:
     # 开发想要自动重载，请改用 D:\test\dev_floor.py（python dev_floor.py）。
     _reload = os.environ.get('FLOOR_AI_RELOAD', '0') != '0'
     threading.Thread(target=lambda: _open_browser(run_port), daemon=True).start()
-    ui.run(port=run_port, title='地板 AI 提示词引擎 v5.3.6', dark=True, reload=_reload, show=False)
+    ui.run(port=run_port, title='地板 AI 提示词引擎 v6.0.1', dark=True, reload=_reload, show=False)
