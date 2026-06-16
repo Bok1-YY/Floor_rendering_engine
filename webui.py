@@ -808,6 +808,7 @@ async def main_page():
                                 pro_polish_btn=pro_polish_btn, pro_polish_img=pro_polish_img, pro_polish_dl=pro_polish_dl,
                                 single_model=single_model
                             )
+                            card.move(target_index=0)   # 新卡插到队列顶部（newest-first，与 _job_history 一致）
 
                     # ── 耗时文案：完成后按模型分别显示；运行中显示已用秒数 ──────
                     def _job_time_text(job: JobRecord) -> str:
@@ -998,7 +999,7 @@ async def main_page():
                     # _job_history 跨 session 保留（模块级），但 DOM 元素绑定旧
                     # session。新 session 打开时重建所有卡片，覆盖 _job_ui_refs，
                     # 后续的 _refresh_job_card 调用自动打到新页面的元素上。
-                    for _existing_job in list(_job_history):
+                    for _existing_job in reversed(list(_job_history)):
                         _add_job_card(_existing_job)
                         _refresh_job_card(_existing_job)
 
