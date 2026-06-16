@@ -6,6 +6,7 @@ import base64
 import base64 as b64mod
 import hashlib
 import html
+import shutil
 import tempfile
 import threading
 from typing import List, Tuple, Optional
@@ -118,6 +119,18 @@ def _b64_to_pil(b64_str):
         logger.error(f"base64 转图片失败: {e}")
         return None
 
+def _rel_result_path(abs_path):
+    """效果图绝对路径 → 相对 MAIN_OUTPUT_DIR 的路径(存进 result_image_file)。
+    文件不存在或不在 output_files 下返回空串(空串时调用方回退 base64)。"""
+    if not abs_path or not os.path.exists(abs_path):
+        return ''
+    try:
+        rel = os.path.relpath(abs_path, MAIN_OUTPUT_DIR)
+    except Exception:
+        return ''
+    return '' if rel.startswith('..') else rel
+
+
 def scan_json_files():
     results = []
     if not os.path.exists(MAIN_OUTPUT_DIR): return results
@@ -136,23 +149,37 @@ def get_record_labels(json_path):
         choices.append((label, r.get('id', '')))
     return choices
 
+def _html_b64(obj, file_key, b64_key):
+    """HTML 导出取图：优先从文件读回 base64(保持 HTML 自包含)，回退内联 base64。"""
+    rel = obj.get(file_key, '')
+    if rel:
+        try:
+            with open(os.path.join(MAIN_OUTPUT_DIR, rel), 'rb') as f:
+                return b64mod.b64encode(f.read()).decode()
+        except Exception as e:
+            logger.warning(f"[导出] 读取图片失败 {rel}: {e}")
+    return obj.get(b64_key, '')
+
+
 def export_html_from_json(json_path):
     records = _load_records(json_path)
     if not records: return "❌ 没有找到记录"
     html_path = json_path.replace('_记录.json', '_导出.html')
     entries = []
     for r in records:
-        sample_tag = (f'<img src="data:image/jpeg;base64,{r["sample_image_b64"]}" '
+        _sb = _html_b64(r, 'sample_image_file', 'sample_image_b64')
+        sample_tag = (f'<img src="data:image/jpeg;base64,{_sb}" '
                       f'style="width:180px;border-radius:6px;margin-bottom:10px;display:block;" />'
-                      ) if r.get('sample_image_b64') else ''
+                      ) if _sb else ''
         results_html = ''
         for i, res in enumerate(r.get('results', [])):
             cmt = (f'<div style="margin-top:8px;padding:8px 12px;background:#fff8f0;border-left:3px solid #e8874a;border-radius:4px;">'
                    f'<p style="margin:0;font-size:0.82em;color:#7a4010;">💬 备注：{html.escape(res.get("comment",""))}</p></div>'
                    ) if res.get('comment') else ''
+            _rb = _html_b64(res, 'result_image_file', 'result_image_b64')
             results_html += (f'<div style="margin-top:12px;padding:12px;background:#fdf8f4;border-radius:8px;">'
                              f'<p style="margin:0 0 8px 0;font-size:0.8em;color:#b07040;">📸 效果图 {i+1} — {res.get("result_timestamp","")}</p>'
-                             f'<img src="data:image/jpeg;base64,{res.get("result_image_b64","")}" style="max-width:100%;border-radius:6px;" />'
+                             f'<img src="data:image/jpeg;base64,{_rb}" style="max-width:100%;border-radius:6px;" />'
                              f'{cmt}</div>')
         entries.append(f'<div style="padding:20px;border-bottom:3px solid #e8874a;margin-bottom:10px;">'
                        f'<p style="margin:0 0 8px 0;font-size:0.85em;color:#555;"><strong>🕒 {r.get("timestamp","")}</strong>'
@@ -178,12 +205,21 @@ def append_result_to_log(img1_path, img2_path, json_path, record_id, comment1=""
                     written = []; ts = time.strftime("%Y-%m-%d %H:%M:%S")
                     for img_path, comment, label in [(img1_path, comment1, "Banana2"), (img2_path, comment2, "Pro")]:
                         if img_path:
-                            r.setdefault('results', []).append({
+                            rel = ''
+                            try:
+                                rel = _rel_result_path(_save_api_result_jpg(Image.open(img_path), label, json_path.replace('_记录.json', '_优化图.png')))
+                            except Exception as ex:
+                                logger.warning(f"[追加] 落盘失败(回退 base64): {ex}")
+                            entry = {
                                 'result_timestamp': ts,
-                                'result_image_b64': _img_to_b64(img_path, max_width=1000),
                                 'comment': str(comment).strip() if comment else '',
-                                'model_label': label
-                            })
+                                'model_label': label,
+                            }
+                            if rel:
+                                entry['result_image_file'] = rel
+                            else:
+                                entry['result_image_b64'] = _img_to_b64(img_path, max_width=1000)
+                            r.setdefault('results', []).append(entry)
                             written.append(label)
                     _save_records(json_path, records)
                     logger.info(
@@ -234,30 +270,37 @@ def reveal_prompt_fn(json_path, record_id, input_password):
     return "❌ 未找到记录"
 
 # ── API 生成结果落地 & 记录写入（原在 api.py，归入记录层）──────────────
-def _api_write_to_record(pil_img, model_key: str, json_path_val: str, record_id_val: str):
+def _api_write_to_record(pil_img, model_key: str, json_path_val: str, record_id_val: str, image_file: Optional[str] = None):
     # 用 is not None 而不是 bool(pil_img)——PIL Image 在某些版本布尔求值会异常
     if pil_img is None or not json_path_val or not record_id_val:
         logger.warning(f"_api_write_to_record 参数不全: img={pil_img is not None}, jpath={bool(json_path_val)}, rid={bool(record_id_val)}")
         return
     try:
-        # base64 编码在锁外做（耗时且不碰文件），锁内只做读-改-写
-        result_b64 = _img_to_b64(pil_img, max_width=None)  # 存原始分辨率（用户要求存 4K，按需）
+        # 效果图文件化：优先存已落盘 jpg 的相对路径(记录页走 HTTP，不卡)；没传则自落盘兜底；
+        # 实在不行才回退内联 base64(保证不丢图)。编码/落盘在锁外做，锁内只做读-改-写。
+        rel = _rel_result_path(image_file)
+        if not rel:
+            rel = _rel_result_path(_save_api_result_jpg(pil_img, model_key, json_path_val.replace('_记录.json', '_优化图.png')))
+        entry = {
+            'result_timestamp': time.strftime("%Y-%m-%d %H:%M:%S"),
+            'comment': f'API 自动生成 ({pil_img.width}×{pil_img.height})',
+            'model_label': model_key,
+        }
+        if rel:
+            entry['result_image_file'] = rel
+        else:
+            entry['result_image_b64'] = _img_to_b64(pil_img, max_width=None)
         matched = False
         with record_file_lock(json_path_val):
             records = _load_records(json_path_val)
             for r in records:
                 if r.get('id') == record_id_val:
-                    r.setdefault('results', []).append({
-                        'result_timestamp': time.strftime("%Y-%m-%d %H:%M:%S"),
-                        'result_image_b64': result_b64,
-                        'comment': f'API 自动生成 ({pil_img.width}×{pil_img.height})',
-                        'model_label': model_key
-                    })
+                    r.setdefault('results', []).append(entry)
                     _save_records(json_path_val, records)
                     matched = True
                     break
         if matched:
-            logger.info(f"✅ 已写入记录 {record_id_val} / {model_key}")
+            logger.info(f"✅ 已写入记录 {record_id_val} / {model_key} ({'file' if rel else 'b64'})")
         else:
             logger.warning(f"未找到记录 ID {record_id_val}，文件: {json_path_val}")
     except Exception as e:
@@ -279,13 +322,15 @@ def _save_api_result_jpg(pil_img, model_key: str, png_path_val: str) -> str:
         logger.error(f"API 结果图片保存失败 ({model_key}): {e}")
         return None
 
-def append_edited_result_to_record(json_path, record_id, source_index, pil_img, edit_prompt, model_label):
+def append_edited_result_to_record(json_path, record_id, source_index, pil_img, edit_prompt, model_label, image_file=None):
     if pil_img is None:
         return "❌ 没有可写入的二次修改图片"
     if not json_path or not record_id:
         return "⚠️ 请先加载一条记录"
     try:
-        result_b64 = _img_to_b64(pil_img, max_width=None)
+        rel = _rel_result_path(image_file)
+        if not rel:
+            rel = _rel_result_path(_save_api_result_jpg(pil_img, f'{model_label}_Edit', json_path.replace('_记录.json', '_优化图.png')))
         with record_file_lock(json_path):
             records = _load_records(json_path)
             for r in records:
@@ -295,14 +340,18 @@ def append_edited_result_to_record(json_path, record_id, source_index, pil_img, 
                         f"二次修改自第 {int(source_index) + 1} 张图 | {model_label}\n"
                         f"修改建议：{str(edit_prompt).strip()}"
                     )
-                    r.setdefault('results', []).append({
+                    entry = {
                         'result_timestamp': ts,
-                        'result_image_b64': result_b64,
                         'comment': comment,
                         'model_label': f"{model_label} Edit",
                         'source_result_index': int(source_index),
                         'edit_prompt': str(edit_prompt).strip(),
-                    })
+                    }
+                    if rel:
+                        entry['result_image_file'] = rel
+                    else:
+                        entry['result_image_b64'] = _img_to_b64(pil_img, max_width=None)
+                    r.setdefault('results', []).append(entry)
                     _save_records(json_path, records)
                     logger.info(
                         f"[二改记录] 已追加 record={record_id}, source_index={source_index}, "
@@ -316,11 +365,227 @@ def append_edited_result_to_record(json_path, record_id, source_index, pil_img, 
         return f"❌ 写入失败: {e}"
 
 
+# ── 收藏（给满意的效果图打星）────────────────────────────────────
+def toggle_result_favorite(json_path, record_id, result_index):
+    """翻转某条结果的收藏标记，返回新状态(True/False)；未找到返回 None。"""
+    with record_file_lock(json_path):
+        records = _load_records(json_path)
+        for r in records:
+            if r.get('id') == record_id:
+                results = r.get('results', [])
+                if 0 <= result_index < len(results):
+                    new_state = not bool(results[result_index].get('favorite'))
+                    results[result_index]['favorite'] = new_state
+                    _save_records(json_path, records)
+                    logger.info(f"[记录] 收藏切换 json={json_path}, record={record_id}, idx={result_index}, fav={new_state}")
+                    return new_state
+    logger.warning(f"[记录] 收藏切换失败，未找到 json={json_path}, record={record_id}, idx={result_index}")
+    return None
+
+
+def collect_favorites():
+    """扫描所有记录文件，汇总被收藏(favorite=True)的结果，按出图时间倒序。
+    返回 [{json_path, material, record_id, record, result_index, res}, ...]。"""
+    out = []
+    for jp in scan_json_files():
+        material = os.path.basename(jp).replace('_记录.json', '').replace('.json', '')
+        try:
+            recs = _load_records(jp)
+        except Exception:
+            continue
+        for r in recs:
+            for idx, res in enumerate(r.get('results', [])):
+                if res.get('favorite'):
+                    out.append({
+                        'json_path': jp, 'material': material,
+                        'record_id': r.get('id', ''), 'record': r,
+                        'result_index': idx, 'res': res,
+                    })
+    out.sort(key=lambda x: x['res'].get('result_timestamp', ''), reverse=True)
+    return out
+
+
+# ── PPTX 导出（客户提案 deck）──────────────────────────────────────
+def _result_image_source(res):
+    """结果图供 PPTX 用的来源：优先成图文件绝对路径，回退 base64 解成 BytesIO；无图返回 None。"""
+    rel = res.get('result_image_file', '')
+    if rel:
+        p = os.path.join(MAIN_OUTPUT_DIR, rel)
+        if os.path.exists(p):
+            return p
+    b64 = res.get('result_image_b64', '')
+    if b64:
+        try:
+            return io.BytesIO(b64mod.b64decode(b64))
+        except Exception as e:
+            logger.warning(f"[PPTX] base64 解码失败: {e}")
+    return None
+
+
+def _build_pptx(items, out_path, title):
+    """items: [{'source': 路径或BytesIO, 'caption': 文本}]。16:9 PPTX：标题页 + 每项一页(图+说明)。
+    python-pptx 只存字体名(微软雅黑)，PowerPoint 用系统字体渲染中文，无需嵌字体。"""
+    try:
+        from pptx import Presentation
+        from pptx.util import Inches, Pt, Emu
+        from pptx.enum.text import PP_ALIGN
+        from pptx.dml.color import RGBColor
+    except Exception:
+        return "❌ 未安装 python-pptx，请先运行: pip install python-pptx"
+    from PIL import Image as _PILImage
+
+    prs = Presentation()
+    prs.slide_width = Inches(13.333); prs.slide_height = Inches(7.5)  # 16:9
+    SW, SH = int(prs.slide_width), int(prs.slide_height)
+    blank = prs.slide_layouts[6]
+
+    def _set_text(text_frame, text, size, bold, color, align=None):
+        p = text_frame.paragraphs[0]
+        if align is not None: p.alignment = align
+        run = p.add_run(); run.text = text
+        run.font.size = Pt(size); run.font.bold = bold
+        run.font.name = '微软雅黑'; run.font.color.rgb = color
+
+    # 标题页
+    s0 = prs.slides.add_slide(blank)
+    tb = s0.shapes.add_textbox(Inches(0.8), Inches(2.8), SW - Inches(1.6), Inches(1.8))
+    tb.text_frame.word_wrap = True
+    _set_text(tb.text_frame, title, 40, True, RGBColor(0x2b, 0x24, 0x1a), PP_ALIGN.CENTER)
+
+    area_w = SW - int(Inches(1.0)); area_h = SH - int(Inches(2.0))
+    top0 = int(Inches(0.4))
+    for it in items:
+        src = it.get('source')
+        if src is None:
+            continue
+        slide = prs.slides.add_slide(blank)
+        try:
+            if hasattr(src, 'seek'): src.seek(0)
+            with _PILImage.open(src) as im: iw, ih = im.size
+            if hasattr(src, 'seek'): src.seek(0)
+        except Exception:
+            iw, ih = 4, 3
+        scale = min(area_w / iw, area_h / ih)
+        pw = int(iw * scale); ph = int(ih * scale)
+        left = int((SW - pw) / 2)
+        try:
+            slide.shapes.add_picture(src, left, top0, width=Emu(pw), height=Emu(ph))
+        except Exception as e:
+            logger.warning(f"[PPTX] 插图失败(跳过一页): {e}")
+            continue
+        cap = slide.shapes.add_textbox(Inches(0.5), SH - Inches(1.4), SW - Inches(1.0), Inches(1.2))
+        cap.text_frame.word_wrap = True
+        _set_text(cap.text_frame, it.get('caption', ''), 12, False, RGBColor(0x55, 0x55, 0x55))
+
+    try:
+        prs.save(out_path)
+    except Exception as e:
+        logger.exception(f"[PPTX] 保存失败 {out_path}")
+        return f"❌ 保存失败: {e}"
+    logger.info(f"[PPTX] 已导出 {out_path}（{len(items)} 张）")
+    return f"✅ 已导出：{os.path.basename(out_path)}"
+
+
+def _result_caption(material, res, record):
+    caption = " · ".join(p for p in [
+        material, res.get('model_label', ''), res.get('result_timestamp', ''),
+        (record.get('params_summary', '') or ''),
+    ] if p)
+    cmt = res.get('comment', '')
+    return caption + (f"\n备注：{cmt}" if cmt else "")
+
+
+def export_pptx_from_json(json_path):
+    """把当前材料的所有效果图导出成一份 PPTX。"""
+    records = _load_records(json_path)
+    if not records:
+        return "❌ 没有找到记录"
+    material = os.path.basename(json_path).replace('_记录.json', '').replace('.json', '')
+    items = []
+    for r in records:
+        for res in r.get('results', []):
+            src = _result_image_source(res)
+            if src is not None:
+                items.append({'source': src, 'caption': _result_caption(material, res, r)})
+    if not items:
+        return "❌ 该文件没有可导出的效果图"
+    out_path = json_path.replace('_记录.json', '_导出.pptx')
+    return _build_pptx(items, out_path, f"{material} · 地板效果图")
+
+
+def export_favorites_pptx():
+    """把所有收藏(跨材料)的效果图合成一份客户提案 PPTX。"""
+    favs = collect_favorites()
+    if not favs:
+        return "❌ 还没有收藏任何效果图（先在记录里点 ⭐）"
+    items = []
+    for f in favs:
+        src = _result_image_source(f['res'])
+        if src is not None:
+            items.append({'source': src, 'caption': _result_caption(f['material'], f['res'], f['record'])})
+    if not items:
+        return "❌ 收藏的效果图都没有可用图片数据"
+    out_path = os.path.join(MAIN_OUTPUT_DIR, f"收藏夹提案_{time.strftime('%Y%m%d_%H%M%S')}.pptx")
+    return _build_pptx(items, out_path, "地板效果图 · 收藏提案")
+
+
+def migrate_record_file(json_path) -> bool:
+    """把记录里的 base64 图片导出成文件、改存 *_image_file、删 base64，给 JSON 瘦身、记录页提速。
+    迁移前备份 .bak；幂等(已迁移则返回 False)；单张失败则保留其 base64 容错。"""
+    def _need(recs):
+        for r in recs:
+            if r.get('sample_image_b64') and not r.get('sample_image_file'):
+                return True
+            for res in r.get('results', []):
+                if res.get('result_image_b64') and not res.get('result_image_file'):
+                    return True
+        return False
+    try:
+        if not _need(_load_records(json_path)):
+            return False
+    except Exception:
+        return False
+    with record_file_lock(json_path):
+        records = _load_records(json_path)
+        if not _need(records):
+            return False
+        bak = json_path + '.bak'
+        if not os.path.exists(bak):
+            try: shutil.copy2(json_path, bak)
+            except Exception as e: logger.warning(f"[迁移] 备份失败(继续): {e}")
+        pseudo_png = os.path.basename(json_path).replace('_记录.json', '_优化图.png')
+        changed = 0
+        for r in records:
+            sb = r.get('sample_image_b64')
+            if sb and not r.get('sample_image_file'):
+                pil = _b64_to_pil(sb)
+                if pil is not None:
+                    rel = _rel_result_path(_save_api_result_jpg(pil, 'sample', pseudo_png))
+                    if rel:
+                        r['sample_image_file'] = rel
+                        r.pop('sample_image_b64', None); changed += 1
+            for res in r.get('results', []):
+                b = res.get('result_image_b64')
+                if b and not res.get('result_image_file'):
+                    pil = _b64_to_pil(b)
+                    if pil is not None:
+                        rel = _rel_result_path(_save_api_result_jpg(pil, res.get('model_label') or 'result', pseudo_png))
+                        if rel:
+                            res['result_image_file'] = rel
+                            res.pop('result_image_b64', None); changed += 1
+        if changed:
+            _save_records(json_path, records)
+        logger.info(f"[迁移] {os.path.basename(json_path)} 完成，迁移 {changed} 张图，备份={os.path.basename(bak)}")
+        return changed > 0
+
+
 __all__ = [
     'record_file_lock', '_get_json_path', '_load_records', '_save_records',
     '_delete_record', '_delete_result_image', '_img_to_b64', '_b64_to_pil',
     'scan_json_files', 'get_record_labels', 'export_html_from_json',
     'append_result_to_log', 'append_edited_result_to_record',
     '_obfuscate', '_deobfuscate', 'reveal_prompt_fn',
-    '_api_write_to_record', '_save_api_result_jpg',
+    '_api_write_to_record', '_save_api_result_jpg', 'migrate_record_file',
+    'toggle_result_favorite', 'collect_favorites',
+    'export_pptx_from_json', 'export_favorites_pptx',
 ]

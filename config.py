@@ -1,6 +1,6 @@
 # ==========================================
 # 地板 AI 智能提示词引擎 — 核心配置
-# 版本: v5.3.6
+# 版本: v6.0.1
 # ==========================================
 """Core configuration: paths, API key persistence, utility functions.
 
@@ -17,7 +17,13 @@ import logging
 from typing import Dict, Optional, Tuple, Union
 
 # ── 路径常量 ────────────────────────────────────────────────────
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# 打包(PyInstaller)后 __file__ 位于临时解压目录(_MEIxxx)，必须改用 exe 所在目录，
+# 否则 output_files/engine_config.json 会写进临时目录、程序一关就丢。
+# 开发(源码)运行时仍用包的上级目录。webui.py 的 UPLOAD_DIR 用的是同款写法。
+if getattr(sys, 'frozen', False):
+    BASE_DIR = os.path.dirname(sys.executable)
+else:
+    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MAIN_OUTPUT_DIR = os.path.join(BASE_DIR, "output_files")
 os.makedirs(MAIN_OUTPUT_DIR, exist_ok=True)
 
@@ -90,10 +96,12 @@ def _load_config() -> Dict[str, str]:
 
 # ── 圆弧倒角内置参考图 ──────────────────────────────────────────
 # 选「圆弧倒角」时自动把这张压圆弧倒角实拍当作"板边形状参考"喂给生图模型(B2/Pro 都加)。
-# 模型只参考它的【倒角凹槽形状】,颜色/木纹/光线仍取地板小样。可在 engine_config.json 的
-# "bevel_ref_image" 里换成自定义路径(如 088 pressed bevel 文件夹里的其它图)。
+# 模型只参考它的【倒角凹槽形状】,颜色/木纹/光线仍取地板小样。
+# 默认用 clean_a:软凹槽可辨但不发黑,贴合"无缝底+圆边过渡、近无缝以高光为主"的现行方向
+# (旧 bevel_ref.jpg 凹槽偏深、易被渲成黑线,已退役但保留)。备选 clean_b / clean_c 也在
+# assets/ 里——可在 engine_config.json 的 "bevel_ref_image" 字段换成任意自定义路径。
 _PKG_DIR = os.path.dirname(os.path.abspath(__file__))
-BEVEL_REF_IMAGE_DEFAULT = os.path.join(_PKG_DIR, "assets", "bevel_ref.jpg")
+BEVEL_REF_IMAGE_DEFAULT = os.path.join(_PKG_DIR, "assets", "bevel_ref_clean_a.jpg")
 
 def get_bevel_ref_image() -> str:
     """返回当前圆弧倒角参考图路径(配置可覆盖);文件不存在则返回空串(自动降级为纯文字)。"""
@@ -139,6 +147,109 @@ def get_image_provider() -> str:
     """读取当前生图线路；非法值回落到 google。"""
     prov = (_load_config().get("image_provider") or DEFAULT_IMAGE_PROVIDER).strip().lower()
     return prov if prov in ("google", "fal") else "google"
+
+
+# ── 出图重试策略（极速 / 韧性）一键切换 ─────────────────────────
+# 传输内核(非流式 generateContent)两种 profile 完全一样，网络好时出图一样快；
+# profile 只决定【失败时】的反应：
+#   fast(极速,默认)   —— 少重试 + 短退避 + 短总时限：要么快出图、要么几十秒内麻利报错，
+#                        复刻最早单体版本(app_28)的灵敏体感；坏网络下需手动多重提几次。
+#   resilient(韧性)   —— 多重试 + 长退避 + 长总时限：坏节点上自动死磕(最长~10min)、尽量自愈。
+# 关键约束：两个 profile 的 gen_idle_deadline 都保持 240s 不缩短——合法 4K 渲染静默期实测
+# 最长 ~190s，砍 idle 会误杀"慢但正在正常出图"的请求。fast 的"快"只来自少重试/短退避/短总时限。
+DEFAULT_SPEED_PROFILE = "fast"
+SPEED_PROFILES = {
+    "fast":      {"retry_attempts": 3, "retry_backoffs": [1, 2, 4],
+                  "gen_idle_deadline": 240, "gen_total_deadline": 300},
+    "resilient": {"retry_attempts": 8, "retry_backoffs": [2, 4, 7, 10, 15],
+                  "gen_idle_deadline": 240, "gen_total_deadline": 600},
+}
+
+
+def get_speed_profile() -> str:
+    """读取当前重试策略名；非法值回落到默认(fast)。"""
+    p = (_load_config().get("speed_profile") or DEFAULT_SPEED_PROFILE).strip().lower()
+    return p if p in SPEED_PROFILES else DEFAULT_SPEED_PROFILE
+
+
+def get_speed_profile_params(cfg: Optional[Dict] = None) -> Dict:
+    """返回当前 profile 的一组基础参数(retry_attempts/retry_backoffs/idle/total)。
+    传入 cfg 可复用同一次 _load_config，避免重复读盘。"""
+    cfg = cfg if cfg is not None else _load_config()
+    name = (cfg.get("speed_profile") or DEFAULT_SPEED_PROFILE).strip().lower()
+    return dict(SPEED_PROFILES.get(name, SPEED_PROFILES[DEFAULT_SPEED_PROFILE]))
+
+
+def save_speed_profile(profile_val: str) -> None:
+    """保存重试策略(fast / resilient)；非法值回落到默认。"""
+    cfg = _load_config()
+    p = (profile_val or "").strip().lower()
+    cfg["speed_profile"] = p if p in SPEED_PROFILES else DEFAULT_SPEED_PROFILE
+    _save_config(cfg)
+
+
+# ── 直连失败自动转 Fal 备用线路（开关，默认关）─────────────────
+# Google 直连(公司 key)被软路由/透明代理重置等【网络类失败】重试耗尽后，
+# 若本开关开启且配了 Fal Key，则自动改走 Fal(用户自己的 key)再跑一次。
+# 内容/请求级错误(安全拦截、HTTP 400/403)不转线——换线也会失败，白烧 Fal 钱。
+def get_auto_failover() -> bool:
+    """读取『直连失败自动转 Fal』开关；缺省关闭。"""
+    return bool(_load_config().get("auto_failover", False))
+
+
+def save_auto_failover(enabled) -> None:
+    """保存『直连失败自动转 Fal』开关。"""
+    cfg = _load_config()
+    cfg["auto_failover"] = bool(enabled)
+    _save_config(cfg)
+
+
+# ── 图像生成采样旋钮（opt-in，缺省不传 → 行为与现状逐字节一致）─────────
+# engine_config.json 里显式写 "gen_temperature"/"gen_seed" 才生效，注入 Gemini
+# generationConfig。用途：A/B 测「降低 temperature / 固定 seed 能否提高单张命中率」。
+# 风险：Gemini 图像 endpoint 可能不认这俩字段(静默忽略或 HTTP 400)，故做成 opt-in，
+# 先验证不报错再看是否影响输出。Fal 路径不接（保持 Fal 现状）。
+def get_gen_sampling() -> dict:
+    """返回要并入 generationConfig 的采样字段；键缺省 → 返回 {} (不改任何行为)。"""
+    cfg = _load_config()
+    out: dict = {}
+    t = cfg.get("gen_temperature", None)
+    if t is not None:
+        try: out["temperature"] = max(0.0, min(2.0, float(t)))
+        except (TypeError, ValueError): pass
+    s = cfg.get("gen_seed", None)
+    if s is not None:
+        try: out["seed"] = int(s)
+        except (TypeError, ValueError): pass
+    return out
+
+
+# ── 文字/视觉模型列表（参照模式风格分析、连通性自检用）配置化 ─────────
+# 硬编码改为可在 engine_config.json 覆盖：换模型不必改源码。
+#   text_models : 参照模式风格分析按优先级依次尝试的视觉文字模型列表
+#   ping_model  : 连通性自检(test_connection)用的便宜纯文字模型
+DEFAULT_TEXT_MODELS = [
+    "gemini-3.1-flash-image-preview",   # 该 API Key 确认可用，优先尝试
+    "gemini-3-pro-image-preview",        # 该 API Key 确认可用
+    "gemini-2.0-flash",                  # 标准 key 可用
+    "gemini-2.0-flash-001",
+    "gemini-1.5-flash",
+    "gemini-1.5-flash-latest",
+    "gemini-1.5-flash-001",
+]
+
+
+def get_text_models() -> list:
+    """风格分析备选模型列表；engine_config.json 的 text_models 可覆盖，非法/缺省回落默认。"""
+    v = _load_config().get("text_models")
+    if isinstance(v, list) and v:
+        return [str(x) for x in v if str(x).strip()]
+    return list(DEFAULT_TEXT_MODELS)
+
+
+def get_ping_model() -> str:
+    """连通性自检用的便宜文字模型；engine_config.json 的 ping_model 可覆盖。"""
+    return (_load_config().get("ping_model") or "gemini-2.0-flash").strip() or "gemini-2.0-flash"
 
 
 def extract_clean_prompt(prompt_combined: str) -> str:

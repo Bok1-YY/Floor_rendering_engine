@@ -1,7 +1,7 @@
 # floor_engine — 地板 AI 智能提示词引擎
 # 安装: pip install -r requirements.txt
 #
-# 说明: 下面 6 个是代码直接用到的第三方库, 其余 os/json/re/asyncio/threading
+# 说明: 下面 7 个是代码直接用到的第三方库, 其余 os/json/re/asyncio/threading
 #       等都是 Python 标准库, 无需安装。nicegui 会自动带来 fastapi/uvicorn 等
 #       间接依赖, pip 会自动处理, 不用手动列出。
 
@@ -11,6 +11,7 @@ requests==2.34.2
 numpy==2.4.6
 deep-translator==1.11.4
 urllib3==2.7.0
+python-pptx>=0.6.23   # PPTX 导出(客户提案 deck)；纯 python，仅依赖已装的 Pillow + lxml
 
 # ── 可选: 开发/测试 (需要跑 pytest 时再装) ──
 # pytest>=7.0.0

@@ -4,6 +4,7 @@ import json
 import random
 import threading
 import base64
+import hashlib
 import io as _io_mod
 import re
 from typing import Optional, Tuple
@@ -21,6 +22,8 @@ from .config import (
     BASE_DIR, MAIN_OUTPUT_DIR, CONFIG_FILE,
     GEMINI_MODEL_MAP, FAL_MODEL_MAP, DEFAULT_IMAGE_PROVIDER,
     logger, _short_text, _load_config, _save_config,
+    get_speed_profile_params,
+    get_text_models, get_gen_sampling,
 )
 from .records import (
     _img_to_b64, _b64_to_pil, _save_api_result_jpg, _api_write_to_record,
@@ -53,17 +56,20 @@ def _extract_thought_title(text: str) -> str:
 
 
 def _retry_plan() -> Tuple[int, list]:
-    """从 engine_config.json 读取重试参数；缺省 6 次尝试、退避 2/5/12/25/45s(+抖动)。"""
+    """重试参数：基础值取自当前 speed_profile(fast=3次/[1,2,4]，resilient=8次/[2,4,7,10,15])。
+    engine_config.json 里若显式写了 retry_backoffs / retry_attempts 则覆盖 profile(高级微调)。
+    (本函数同时被 Gemini 与 Fal 路径复用；Fal 另有自己的 fal_attempts 上限。)"""
     cfg = _load_config()
-    backoffs = cfg.get("retry_backoffs") or [2, 5, 12, 25, 45]
+    base = get_speed_profile_params(cfg)
+    backoffs = cfg.get("retry_backoffs") or base["retry_backoffs"]
     try:
         backoffs = [float(x) for x in backoffs]
     except Exception:
-        backoffs = [2, 5, 12, 25, 45]
+        backoffs = [float(x) for x in base["retry_backoffs"]]
     try:
-        attempts = int(cfg.get("retry_attempts", len(backoffs) + 1))
+        attempts = int(cfg.get("retry_attempts", base["retry_attempts"]))
     except Exception:
-        attempts = len(backoffs) + 1
+        attempts = base["retry_attempts"]
     return max(1, attempts), backoffs
 
 
@@ -129,6 +135,12 @@ def call_gemini_generate(api_key: str, model_id: str, prompt_text: str, image_pa
                    "imageConfig": {"imageSize": image_size, "aspectRatio": aspect_ratio}}
         url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
                f"{model_id}:generateContent?key={api_key}")
+    # 采样旋钮(opt-in)：engine_config.json 显式配了 gen_temperature/gen_seed 才注入；
+    # 缺省返回 {} → gen_cfg 一字不变。流式/非流式共用，重试原样重发自动带上。
+    _samp = get_gen_sampling()
+    if _samp:
+        gen_cfg.update(_samp)
+        logger.info(f"[API生成] 采样旋钮生效 generationConfig+={_samp}")
     payload = {"contents": [{"parts": parts}], "generationConfig": gen_cfg}
 
     max_attempts, backoffs = _retry_plan()
@@ -144,14 +156,16 @@ def call_gemini_generate(api_key: str, model_id: str, prompt_text: str, image_pa
                 return
             time.sleep(0.5)
 
-    # 硬性时限：防"半死连接"无限挂起。
+    # 硬性时限：防"半死连接"无限挂起。基础值取自当前 speed_profile(可被同名显式键覆盖)。
     #   idle_deadline: 连接 N 秒收不到任何新数据(行)即判假死、强制关闭。
-    #     合法渲染的静默期实测最长 ~190s，故默认 240s，留足余量不误杀。
+    #     合法渲染的静默期实测最长 ~190s，故 fast/resilient 都保持 240s，留足余量不误杀。
     #   total_deadline: 整次调用(含所有重试)的墙钟上限，到点放弃、释放队列槽位。
-    try: idle_deadline = float(cfg.get("gen_idle_deadline", 240))
-    except Exception: idle_deadline = 240.0
-    try: total_deadline = float(cfg.get("gen_total_deadline", 600))
-    except Exception: total_deadline = 600.0
+    #     fast=300s(只够 1 次完整 4K 渲染 + 几次快速失败，让坏网络快点报错)；resilient=600s(死磕自愈)。
+    _base = get_speed_profile_params(cfg)
+    try: idle_deadline = float(cfg.get("gen_idle_deadline", _base["gen_idle_deadline"]))
+    except Exception: idle_deadline = float(_base["gen_idle_deadline"])
+    try: total_deadline = float(cfg.get("gen_total_deadline", _base["gen_total_deadline"]))
+    except Exception: total_deadline = float(_base["gen_total_deadline"])
     call_t0 = time.time()
 
     last_err = None
@@ -491,6 +505,19 @@ def call_fal_generate(api_key: str, model_id: str, prompt_text: str, image_path:
     return None, f"网络错误: {_redact_api_key(last_err)}"
 
 
+def _is_network_class_error(err) -> bool:
+    """判断错误是否属于『网络/传输类失败』——只有这类才值得换线重试。
+
+    网络类(代理重置/超时/连接假死/可重试的 5xx/429)在另一条线路上可能成功；
+    内容/请求级错误(安全拦截、HTTP 400/403、API 未返回图片、解码失败、素材图不存在)
+    换线一样会失败，转线只会白烧 Fal 的钱，故一律不转。
+    """
+    e = str(err or "")
+    if any(m in e for m in ("网络错误", "请求超时", "超过总时限", "连接假死", "看门狗")):
+        return True
+    return bool(re.search(r'HTTP (429|500|502|503|504)', e))
+
+
 def call_image_generate(api_key: str, model_id: str, prompt_text: str, image_path: str,
                         image_size: str = "4K", aspect_ratio: str = "4:3",
                         room_image_path: Optional[str] = None,
@@ -501,6 +528,8 @@ def call_image_generate(api_key: str, model_id: str, prompt_text: str, image_pat
 
     - 'google'(默认):直连 Google AI Studio,沿用传入的 Gemini api_key。
     - 'fal':走 Fal 路由,改用 config 里的 fal_api_key(忽略传入的 Gemini key)。
+    - 自动转线(auto_failover):线路=google 时,若直连因【网络类失败】重试耗尽且本开关开启、
+      已配 Fal Key、任务未取消,则自动改走 Fal 再跑一次(用户自己的 key)。内容/请求级错误不转。
     - should_cancel(): 透传给底层,任务取消后立即停止重试,不再产生新的计费请求。
     """
     cfg = _load_config()
@@ -513,9 +542,31 @@ def call_image_generate(api_key: str, model_id: str, prompt_text: str, image_pat
         return call_fal_generate(fal_key, model_id, prompt_text, image_path, image_size,
                                  aspect_ratio, room_image_path, style_ref_image_path, on_stage, should_cancel,
                                  bevel_ref_image_path=bevel_ref_image_path)
-    return call_gemini_generate(api_key, model_id, prompt_text, image_path, image_size,
-                                aspect_ratio, room_image_path, style_ref_image_path, on_stage, should_cancel,
-                                bevel_ref_image_path=bevel_ref_image_path)
+
+    # ── 线路=google：先走直连 ──
+    img, err = call_gemini_generate(api_key, model_id, prompt_text, image_path, image_size,
+                                    aspect_ratio, room_image_path, style_ref_image_path, on_stage, should_cancel,
+                                    bevel_ref_image_path=bevel_ref_image_path)
+    if img is not None:
+        return img, err
+
+    # ── 直连失败 → 评估是否自动转 Fal 备用线路 ──
+    auto = bool(cfg.get("auto_failover", False))
+    fal_key = (cfg.get("fal_api_key") or "").strip()
+    cancelled = bool(should_cancel and should_cancel())
+    if auto and fal_key and not cancelled and _is_network_class_error(err):
+        logger.warning(f"[生图调度] Google 直连网络类失败，自动转 Fal 备用线路 model={model_id}: {_redact_api_key(err)}")
+        if on_stage:
+            try: on_stage("🔁 直连失败，转 Fal 备用线路…")
+            except Exception: pass
+        fb_img, fb_err = call_fal_generate(fal_key, model_id, prompt_text, image_path, image_size,
+                                           aspect_ratio, room_image_path, style_ref_image_path, on_stage, should_cancel,
+                                           bevel_ref_image_path=bevel_ref_image_path)
+        if fb_img is not None:
+            logger.info(f"[生图调度] Fal 备用线路出图成功 model={model_id}")
+            return fb_img, fb_err
+        return None, f"直连失败({err})；Fal 备用也失败({fb_err})"
+    return None, err
 
 
 def call_gemini_edit(api_key: str, model_id: str, edit_instruction: str, source_image_b64: str,
@@ -644,6 +695,49 @@ FLOOR_DESEAM_INSTRUCTION = (
 
 _STYLE_ANALYZE_TIMEOUT = 60  # 单个文字模型的请求超时（秒）
 
+# ── 参照模式风格分析缓存（按图片内容 sha256）─────────────────────────
+# 同一张参照图重复分析既费钱又费时(批量参照=N 次)，缓存到磁盘，命中即免请求、免计费、秒回。
+# 版本前缀随分析 prompt 走：改了 prompt 就 bump _STYLE_CACHE_VERSION，旧缓存自动失效。
+_STYLE_CACHE_FILE = os.path.join(MAIN_OUTPUT_DIR, ".style_analysis_cache.json")
+_STYLE_CACHE_VERSION = "v1"
+_style_cache_lock = threading.Lock()
+_style_cache = None  # 懒加载
+
+
+def _load_style_cache() -> dict:
+    global _style_cache
+    if _style_cache is None:
+        try:
+            with open(_STYLE_CACHE_FILE, "r", encoding="utf-8") as f:
+                _style_cache = json.load(f)
+            if not isinstance(_style_cache, dict):
+                _style_cache = {}
+        except Exception:
+            _style_cache = {}
+    return _style_cache
+
+
+def _style_cache_key(raw_bytes: bytes) -> str:
+    return f"{_STYLE_CACHE_VERSION}:{hashlib.sha256(raw_bytes).hexdigest()}"
+
+
+def _style_cache_get(key: str) -> Optional[str]:
+    with _style_cache_lock:
+        return _load_style_cache().get(key)
+
+
+def _style_cache_put(key: str, text: str) -> None:
+    with _style_cache_lock:
+        c = _load_style_cache(); c[key] = text
+        try:
+            tmp = _STYLE_CACHE_FILE + ".tmp"
+            with open(tmp, "w", encoding="utf-8") as f:
+                json.dump(c, f, ensure_ascii=False)
+            os.replace(tmp, _STYLE_CACHE_FILE)
+        except Exception as e:
+            logger.warning(f"[参照模式] 风格分析缓存写入失败: {e}")
+
+
 def analyze_style_image(api_key: str, image_path: str) -> Tuple[str, Optional[str]]:
     """Step-1 of 参照模式: call Gemini text API to extract a precise style blueprint from a reference room photo.
 
@@ -653,6 +747,19 @@ def analyze_style_image(api_key: str, image_path: str) -> Tuple[str, Optional[st
     if not image_path or not os.path.exists(image_path):
         return "", "参照图不存在"
     img_b64, mime = _read_image_b64(image_path)
+    # 缓存：同一张参照图(内容哈希)命中即免请求、免计费、秒回
+    cache_on = bool(_load_config().get("style_analysis_cache", True))
+    cache_key = None
+    if cache_on and img_b64:
+        try:
+            with open(image_path, "rb") as _f:
+                cache_key = _style_cache_key(_f.read())
+            _hit = _style_cache_get(cache_key)
+            if _hit:
+                logger.info("[参照模式] 命中风格分析缓存，跳过请求")
+                return _hit, None
+        except Exception as _ex:
+            logger.debug(f"[参照模式] 读取风格缓存失败(忽略): {_ex}")
     analysis_prompt = (
         "You are a precision interior design analyst. Your output is used DIRECTLY as a brief for an AI image generator — vagueness causes generation failure.\n\n"
         "PRECISION RULE — name EXACT objects, never categories:\n"
@@ -687,16 +794,8 @@ def analyze_style_image(api_key: str, image_path: str) -> Tuple[str, Optional[st
     }
     cfg = _load_config(); proxy = cfg.get("proxy", "").strip()
     proxies = {"http": proxy, "https": proxy} if proxy else None
-    # 按优先级依次尝试可用的文字视觉模型
-    _text_models = [
-        "gemini-3.1-flash-image-preview",   # 该 API Key 确认可用，优先尝试
-        "gemini-3-pro-image-preview",        # 该 API Key 确认可用
-        "gemini-2.0-flash",                  # 标准 key 可用
-        "gemini-2.0-flash-001",
-        "gemini-1.5-flash",
-        "gemini-1.5-flash-latest",
-        "gemini-1.5-flash-001",
-    ]
+    # 按优先级依次尝试可用的文字视觉模型（列表来自配置，可在 engine_config.json 的 text_models 覆盖）
+    _text_models = get_text_models()
     last_err = None
     for model_name in _text_models:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
@@ -707,7 +806,10 @@ def analyze_style_image(api_key: str, image_path: str) -> Tuple[str, Optional[st
                     for part in candidate.get('content', {}).get('parts', []):
                         if 'text' in part:
                             logger.info(f"[参照模式] 风格分析使用模型: {model_name}")
-                            return part['text'].strip(), None
+                            _txt = part['text'].strip()
+                            if cache_key:
+                                _style_cache_put(cache_key, _txt)
+                            return _txt, None
             elif resp.status_code in (404, 429, 500, 502, 503, 504):
                 # 模型不可用或暂时性错误 → 尝试下一个备选模型
                 last_err = f"HTTP {resp.status_code} on {model_name}"
@@ -765,10 +867,57 @@ def _infer_aspect_ratio_from_b64(b64_str: str) -> str:
     return min(candidates, key=lambda x: abs(x[1] - ratio))[0]
 
 
+def test_connection(gemini_api_key: str, fal_api_key: str = "", proxy: str = "") -> str:
+    """提交前的轻量连通性自检（不生图、零成本），返回两行人类可读汇总。
+
+    - Google 直连(公司线，最易被代理重置)：打 ListModels 接口（不挑模型名、不生成），
+      只验「线路 + Key」。比 ping 具体模型稳——模型退役/改名都不会再误报 404。
+    - Fal 线路(用户自费，无免费生成 ping)：仅对 fal.run 做可达性探测，不触发任何计费请求。
+    """
+    proxies = {"http": proxy.strip(), "https": proxy.strip()} if (proxy and proxy.strip()) else None
+    lines = []
+
+    # ── Google 直连：ListModels 探测（不挑模型名、零成本、不生成）──
+    # 用「列模型」而非 ping 具体模型：任何模型退役/改名都不会误报 404，
+    # 只验证「线路 + Key」。200=好，401/403=Key 问题，超时/重置=线路真不通。
+    gk = (gemini_api_key or "").strip()
+    if not gk:
+        lines.append("Google 直连：⚠️ 未填 Key")
+    else:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models?key={gk}"
+        try:
+            r = _req.get(url, timeout=15, proxies=proxies, verify=False)
+            if r.status_code == 200:
+                lines.append("Google 直连：✅ 正常")
+            elif r.status_code in (400, 401, 403):
+                lines.append(f"Google 直连：❌ Key 无效/无权限 (HTTP {r.status_code})")
+            else:
+                lines.append(f"Google 直连：⚠️ HTTP {r.status_code}")
+        except _req.exceptions.Timeout:
+            lines.append("Google 直连：❌ 超时（代理/网络不通）")
+        except Exception as e:
+            lines.append(f"Google 直连：❌ 不通（{_redact_api_key(e)}）")
+
+    # ── Fal 线路：可达性探测（任何 HTTP 响应都算可达；不计费）──
+    fk = (fal_api_key or "").strip()
+    if not fk:
+        lines.append("Fal 线路：⚠️ 未配置 Key")
+    else:
+        try:
+            _req.get("https://fal.run", timeout=10, proxies=proxies, verify=False)
+            lines.append("Fal 线路：✅ 可达（未做计费校验）")
+        except _req.exceptions.Timeout:
+            lines.append("Fal 线路：❌ 超时（代理/网络不通）")
+        except Exception as e:
+            lines.append(f"Fal 线路：❌ 不可达（{_redact_api_key(e)}）")
+
+    return "\n".join(lines)
+
+
 
 __all__ = [
     'call_gemini_generate', 'call_fal_generate', 'call_image_generate',
-    'call_gemini_edit', 'analyze_style_image',
+    'call_gemini_edit', 'analyze_style_image', 'test_connection',
     'FLOOR_DESEAM_INSTRUCTION',
     '_match_color_to_reference', '_infer_aspect_ratio_from_b64',
 ]
