@@ -1,4 +1,4 @@
-# floor_engine v5.3.6 — 开发者手册
+# floor_engine v6.0.1 — 开发者手册
 
 ## 一、项目概述
 
@@ -30,6 +30,8 @@ floor_engine/
 
 #### `config.py` — 全局配置中心
 - **职责**：路径常量 (`BASE_DIR`, `MAIN_OUTPUT_DIR`, `CONFIG_FILE`)、API key 读写 (`_load_config`, `_save_config`, `save_api_key`)、Gemini 模型名映射 (`GEMINI_MODEL_MAP`)、工具函数 (`_short_text`, `is_seamless_herringbone`, `extract_clean_prompt`)
+- **多供应商**：`FAL_MODEL_MAP`（Gemini model_id → Fal endpoint）、`DEFAULT_IMAGE_PROVIDER`、`save_provider_settings()` / `get_image_provider()`（google / fal 线路选择 + Fal key）；直连失败自动转 Fal 的开关（默认关）
+- **圆弧倒角参考图**：`BEVEL_REF_IMAGE_DEFAULT`（默认 `assets/bevel_ref_clean_a.jpg`）、`get_bevel_ref_image()`（可被 `engine_config.json` 的 `bevel_ref_image` 覆盖；备选 clean_b/c 同在 assets/）
 - **依赖**：`themes.py`（导入 THEMES + build_theme_css）、`logging_setup.py`（导入 logger）
 - **被引用**：所有其他模块都依赖它
 
@@ -50,13 +52,17 @@ floor_engine/
 
 #### `records.py` — 持久化层
 - **职责**：
-  - JSON 文件 CRUD（`_load_records`, `_save_records`, `_delete_record`, `_delete_result_image`）
+  - JSON 文件 CRUD（`_load_records`, `_save_records`, `_delete_record`, `_delete_result_image`）；写盘走"临时文件 + 原子替换"防截断
   - 图片 ↔ base64 转换（`_img_to_b64`, `_b64_to_pil`）
+  - **文件化图片存储**：结果图落盘后只在记录里存相对路径 `result_image_file`（不再内联大 base64）；读取时优先文件、回退 base64
+  - **旧记录迁移**：`migrate_record_file()` — 把历史内联 base64 抽成独立文件，迁移前自动 `.bak` 备份、幂等、单张失败保留其 base64 容错
   - API 结果落盘 + 写入记录（`_save_api_result_jpg`, `_api_write_to_record`）
+  - **收藏**：`toggle_result_favorite()` / `collect_favorites()`（按 `favorite` 标记跨材料汇总）
+  - **PPTX 提案导出**：`export_pptx_from_json()`（单材料）、`export_favorites_pptx()`（全部⭐合一份）、`_build_pptx()`（16:9，标题页 + 每图一页）
   - 提示词加密/解密（`_obfuscate` / `_deobfuscate`，XOR 密码）
   - 记录浏览/导出（`scan_json_files`, `get_record_labels`, `export_html_from_json`）
   - 手动追加/二次修改写入（`append_result_to_log`, `append_edited_result_to_record`）
-- **依赖**：`config.py`（路径 + logger）
+- **依赖**：`config.py`（路径 + logger）、`python-pptx`（仅导出 PPTX 时）
 - **⚠️ 图片质量关键代码**：`_img_to_b64()` 的 `max_width` 参数和 `quality=85`；`_save_api_result_jpg()` 的 `quality=95`
 
 #### `prompt_data.py` — 提示词数据层
@@ -83,12 +89,15 @@ floor_engine/
 - **依赖**：`config.py`、`prompt_data.py`、`records.py`
 - **⚠️ 修改 prompt 逻辑时**：先跑 `_golden_test.py` 确认输出变化是否符合预期
 
-#### `api.py` — Gemini API 客户端
+#### `api.py` — 生图 API 客户端（多供应商）
 - **职责**：
-  - `call_gemini_generate()` — 文生图 / 图生图（3 次重试 + 指数退避）
+  - `call_image_generate()` — **统一生图入口**：按 `get_image_provider()` 路由到 Google 或 Fal；网络类失败（`_is_network_class_error`）且开关开启时自动转 Fal 备线
+  - `call_gemini_generate()` — Google 直连文生图 / 图生图（重试 + 指数退避，次数读 `engine_config.json`）
+  - `call_fal_generate()` — 走 Fal 路由调同款 Nano Banana（`FAL_MODEL_MAP`，保真/4K 不变，仅换线路）
   - `call_gemini_edit()` — 图生图编辑（二次修改 / 磨缝）
-  - `analyze_style_image()` — 参照模式 Step-1：用文字模型提取风格描述
+  - `analyze_style_image()` — 参照模式 Step-1：文字模型提取风格描述；带磁盘缓存（`_style_cache_*`，按图片内容 hash）
   - `_match_color_to_reference()` — Reinhard 色彩迁移（LAB 空间，消除 img2img 偏色）
+  - `test_connection()` — 同时测 Gemini + Fal 连通性
   - `FLOOR_DESEAM_INSTRUCTION` — 磨缝编辑指令
 - **依赖**：`config.py`、`records.py`
 - **⚠️ 仅本地运行**：`verify=False` 仅适用于本地代理场景
@@ -97,7 +106,12 @@ floor_engine/
 - **职责**：
   - 2-Tab 布局：工作台（生成 + 队列）+ 记录管理
   - 文件上传、参数选择、任务提交、实时队列刷新
-  - 磨缝、二次修改、HTML 导出、记录删除
+  - **双模型生成 + 批量生成（多场景）**：批量任务跑在独立 asyncio task 里，UI 更新须 `background_tasks.create` + `with client` 保住 slot 上下文
+  - **逐张多抽（重抽 regen）**：按张数一张一张追加到同一记录，可中途"停止多抽"
+  - 停止/取消（单任务 + 全部停止）、失败重试
+  - 磨缝、二次修改、记录删除
+  - **收藏⭐ + 筛选**："只看收藏"开关、收藏夹一键导出 PPTX
+  - 导出：HTML / PPTX（单材料）、记录文件迁移入口
 - **依赖**：所有其他模块 + NiceGUI
 - **UI 框架**：NiceGUI (Quasar/Vue3)，单页应用，WebSocket 实时更新
 
@@ -130,33 +144,31 @@ floor_engine/
 | **加导出格式**（PDF/PPTX） | `records.py` | 新建 `export_xxx_from_json()` |
 | **加任务队列持久化**（重启不丢队列） | `records.py` + `webui.py` | JSON 序列化 `_job_history` |
 | **改用 SQLite 替代 JSON** | `records.py` | 重写所有 `_load_records` / `_save_records` 调用 |
-| **加单元测试** | `test_floor_engine.py` | pytest |
+| **加单元测试 / 黄金对比** | `test_floor_engine.py` / `_golden_test.py`（**均待新建**） | pytest；先补 prompt 文本快照比对 |
 | **改密码** | 环境变量 `FLOOR_ENGINE_REVEAL_HASH` 或 `engine_config.json` 的 `reveal_hash` 字段 | 不再硬编码在源码里 |
 
 ### 3.2 开发工作流
 
 ```bash
-# 开发模式（热重载）
-python dev_floor.py
-
 # 生产模式
 python -m floor_engine
 
+# 开发模式（热重载）
+set FLOOR_AI_RELOAD=1 && python -m floor_engine
+
 # 指定端口
 set FLOOR_AI_PORT=7890 && python -m floor_engine
-
-# 跑测试
-python -m pytest test_floor_engine.py -v
-
-# 跑黄金对比（确认 prompt 输出未变）
-python _golden_test.py
 ```
+
+> ⚠️ **测试基建尚未建立**：`test_floor_engine.py` / `_golden_test.py` 目前**不存在**（pytest 也未列入 requirements 主依赖）。
+> 改 `prompts.py` 等核心逻辑前**暂时只能人工对照输出**。建议优先补一个黄金对比脚本（固定参数跑
+> `save_task_files_html()`、快照 prompt 文本做字符串比对，纯本地不烧 API），作为改提示词的回归安全网。
 
 ### 3.3 代码规范（新贡献者必读）
 
 1. **禁止 `import *`** — 所有模块已改为显式导入，新代码请保持一致
 2. **加类型标注** — 新函数签名必须有 type hints
-3. **改 prompts.py 前先跑 golden test** — 确认输出差异
+3. **改 prompts.py 前先比对 prompt 输出** — 黄金对比脚本尚未建立（见 3.2 注），暂时人工对照；建议尽快补上
 4. **图片质量相关改动要谨慎** — `_img_to_b64(quality=85)` 和 `_save_api_result_jpg(quality=95)` 直接影响客户交付质量
 5. **API key 不能出现在日志里** — 使用 `_redact_api_key()` 包裹
 
@@ -318,4 +330,4 @@ analyze_floor_tone() ─── prompt_data.py
 
 ---
 
-*最后更新：2026-06-04 | 版本 v5.3.6*
+*最后更新：2026-06-16 | 版本 v6.0.1（增量：Fal 多供应商路由 + 自动备线、批量生成、逐张多抽、收藏⭐、PPTX 提案导出、记录文件化存储 + 旧记录迁移、圆弧倒角参考图换 clean_a）*
