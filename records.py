@@ -39,6 +39,78 @@ def _get_json_path(image_path):
     os.makedirs(target_dir, exist_ok=True)
     return os.path.join(target_dir, f"{base_name}_记录.json"), base_name, target_dir
 
+
+# ── 用量统计 ──────────────────────────────────────────────────────
+# 累计「不同模式 × 模型(B2/Pro) × 线路(google/fal)」各出了多少张图、失败多少次。
+# 不估算金额（计价多变不好控）。落盘 usage_stats.json，原子写，全程吞异常——绝不能拖垮生图主流程。
+_USAGE_STATS_FILE = os.path.join(MAIN_OUTPUT_DIR, "usage_stats.json")
+_usage_lock = threading.Lock()
+
+def _short_mode_label(mode: str) -> str:
+    """长 workflow_mode → 短标签（与记录页 split 显示一致）。"""
+    return (mode or "").split("(")[0].split(" ")[0].strip() or "未知"
+
+def _short_model_label(model: str) -> str:
+    m = model or ""
+    if "Pro" in m: return "Pro"
+    if "B2" in m or " 2" in m or m.endswith("2"): return "B2"
+    return m.strip() or "未知"
+
+def _load_usage_raw() -> dict:
+    try:
+        if os.path.exists(_USAGE_STATS_FILE):
+            with open(_USAGE_STATS_FILE, "r", encoding="utf-8") as f:
+                d = json.load(f)
+            if isinstance(d, dict):
+                return d
+    except Exception as ex:
+        logger.warning(f"[用量] 读取失败(将重置): {ex}")
+    return {"version": 1, "counts": {}}
+
+def _save_usage_raw(data: dict) -> None:
+    tmp = _USAGE_STATS_FILE + ".tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False)
+    os.replace(tmp, _USAGE_STATS_FILE)
+
+def record_usage(mode: str, model: str, provider: str, ok: bool) -> None:
+    """累加一次出图结果。维度: 模式 × 模型(B2/Pro) × 线路(google/fal)，各计 ok/fail。
+    全程吞异常——统计绝不能影响生图。"""
+    try:
+        mkey = _short_mode_label(mode)
+        mdl = _short_model_label(model)
+        prov = (provider or "google").strip().lower()
+        if prov not in ("google", "fal"):
+            prov = "google"
+        with _usage_lock:
+            data = _load_usage_raw()
+            counts = data.setdefault("counts", {})
+            row = counts.setdefault(mkey, {}).setdefault(mdl, {}).setdefault(prov, {"ok": 0, "fail": 0})
+            row["ok" if ok else "fail"] = int(row.get("ok" if ok else "fail", 0)) + 1
+            _save_usage_raw(data)
+    except Exception as ex:
+        logger.debug(f"[用量] record_usage 忽略: {ex}")
+
+def load_usage_summary() -> dict:
+    """结构化汇总，供 UI 渲染：
+    {'rows': [{mode, model, provider, ok, fail}...(已排序)], 'totals': {'ok','fail','total'}}"""
+    data = _load_usage_raw()
+    rows = []
+    tot_ok = tot_fail = 0
+    for mode, models in sorted((data.get("counts") or {}).items()):
+        if not isinstance(models, dict):
+            continue
+        for model, provs in sorted(models.items()):
+            if not isinstance(provs, dict):
+                continue
+            for prov, c in sorted(provs.items()):
+                if not isinstance(c, dict):
+                    continue
+                ok = int(c.get("ok", 0)); fail = int(c.get("fail", 0))
+                tot_ok += ok; tot_fail += fail
+                rows.append({"mode": mode, "model": model, "provider": prov, "ok": ok, "fail": fail})
+    return {"rows": rows, "totals": {"ok": tot_ok, "fail": tot_fail, "total": tot_ok + tot_fail}}
+
 def _load_records(json_path):
     try:
         with open(json_path, 'r', encoding='utf-8') as f: return json.load(f)

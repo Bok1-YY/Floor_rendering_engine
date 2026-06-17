@@ -144,7 +144,7 @@ floor_engine/
 | **加导出格式**（PDF/PPTX） | `records.py` | 新建 `export_xxx_from_json()` |
 | **加任务队列持久化**（重启不丢队列） | `records.py` + `webui.py` | JSON 序列化 `_job_history` |
 | **改用 SQLite 替代 JSON** | `records.py` | 重写所有 `_load_records` / `_save_records` 调用 |
-| **加单元测试 / 黄金对比** | `test_floor_engine.py` / `_golden_test.py`（**均待新建**） | pytest；先补 prompt 文本快照比对 |
+| **加单元测试 / 黄金对比** | `tests/`（已建：`tests/test_prompts_golden.py` + `tests/golden/`） | pytest；prompt 文本快照比对，纯本地零 API |
 | **改密码** | 环境变量 `FLOOR_ENGINE_REVEAL_HASH` 或 `engine_config.json` 的 `reveal_hash` 字段 | 不再硬编码在源码里 |
 
 ### 3.2 开发工作流
@@ -160,15 +160,23 @@ set FLOOR_AI_RELOAD=1 && python -m floor_engine
 set FLOOR_AI_PORT=7890 && python -m floor_engine
 ```
 
-> ⚠️ **测试基建尚未建立**：`test_floor_engine.py` / `_golden_test.py` 目前**不存在**（pytest 也未列入 requirements 主依赖）。
-> 改 `prompts.py` 等核心逻辑前**暂时只能人工对照输出**。建议优先补一个黄金对比脚本（固定参数跑
-> `save_task_files_html()`、快照 prompt 文本做字符串比对，纯本地不烧 API），作为改提示词的回归安全网。
+> ✅ **测试基建已建立（prompt 黄金回归）**：`tests/test_prompts_golden.py` 固定参数跑
+> `save_task_files_html()` 的 4 套工作流，把返回的 combined/Pro 两段 prompt 与 `tests/golden/*.txt`
+> 基准做字符串比对。纯本地、不联网、不调 API、不写真实 `output_files/`（见 `tests/conftest.py`：
+> 隔离输出目录 + 强制离线翻译 `TRANSLATOR_AVAILABLE=False`）。
+>
+> ```bash
+> python -m pytest floor_engine/tests/ -q              # 改 prompts.py 后跑回归
+> UPDATE_GOLDEN=1 python -m pytest floor_engine/tests/ # 有意改了 prompt 后刷新基准（务必人工核对 diff！）
+> ```
+>
+> 加新工作流/改 prompt 措辞时：先跑回归看 diff；确认是预期改动后用 `UPDATE_GOLDEN=1` 刷新并提交新基准。
 
 ### 3.3 代码规范（新贡献者必读）
 
 1. **禁止 `import *`** — 所有模块已改为显式导入，新代码请保持一致
 2. **加类型标注** — 新函数签名必须有 type hints
-3. **改 prompts.py 前先比对 prompt 输出** — 黄金对比脚本尚未建立（见 3.2 注），暂时人工对照；建议尽快补上
+3. **改 prompts.py 前/后跑黄金回归** — `python -m pytest floor_engine/tests/ -q`；预期内的改动用 `UPDATE_GOLDEN=1` 刷新基准并人工核对 diff（见 3.2）
 4. **图片质量相关改动要谨慎** — `_img_to_b64(quality=85)` 和 `_save_api_result_jpg(quality=95)` 直接影响客户交付质量
 5. **API key 不能出现在日志里** — 使用 `_redact_api_key()` 包裹
 

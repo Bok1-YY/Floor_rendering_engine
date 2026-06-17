@@ -570,8 +570,19 @@ def call_image_generate(api_key: str, model_id: str, prompt_text: str, image_pat
 
 
 def call_gemini_edit(api_key: str, model_id: str, edit_instruction: str, source_image_b64: str,
-                     image_size: str = "4K", aspect_ratio: str = "4:3", preserve_floor_geometry: bool = True):
-    """Use Gemini image generation as an image-to-image editor for one existing result."""
+                     image_size: str = "4K", aspect_ratio: str = "4:3", preserve_floor_geometry: bool = True,
+                     on_stage=None, should_cancel=None):
+    """Use Gemini image generation as an image-to-image editor for one existing result.
+
+    on_stage(text) / should_cancel() 与 call_gemini_generate 同契约（均可选、各自吞异常）：
+    - on_stage：在【本 worker 线程】内回传实时状态（📡连接中 / 🔁网络重试 N/M），供 UI 显示，
+      让磨缝/二改在软路由重置导致的重试期间不再像卡死。回调自身须吞异常。
+    - should_cancel()：返回 True 表示任务已取消 → 立即停止后续重试，不再发起新的计费请求。
+    """
+    def _stage(txt):
+        if on_stage:
+            try: on_stage(txt)
+            except Exception: pass
     logger.info(
         f"[API二改] start model={model_id}, size={image_size}, ar={aspect_ratio}, "
         f"source_b64_len={len(source_image_b64 or '')}, instruction={_short_text(edit_instruction, 300)}"
@@ -624,6 +635,11 @@ EDITING RULES:
     last_err = None
     resp = None
     for attempt in range(max_attempts):
+        # 任务已取消 → 不再发起新请求(避免白白计费)，与主生成路径一致
+        if should_cancel and should_cancel():
+            logger.info(f"[API二改] 任务已取消，停止重试 model={model_id}")
+            return None, "已取消"
+        _stage("📡 连接中…" if attempt == 0 else f"🔁 网络重试 {attempt}/{max_attempts - 1}")
         try:
             resp = _req.post(url, json=payload, timeout=300, proxies=proxies, verify=False)
         except _req.exceptions.Timeout:

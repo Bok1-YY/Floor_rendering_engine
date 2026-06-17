@@ -17,7 +17,7 @@ from .config import (
     _build_theme_css,
     logger, _short_text, _load_config, save_api_key,
     save_provider_settings, get_speed_profile, save_speed_profile,
-    save_auto_failover,
+    save_auto_failover, get_image_provider,
     extract_clean_prompt,
     get_bevel_ref_image,
 )
@@ -54,15 +54,56 @@ from .records import (
     reveal_prompt_fn,
     toggle_result_favorite, collect_favorites,
     export_pptx_from_json, export_favorites_pptx,
+    record_usage, load_usage_summary,
 )
 from .models import JobRecord
+from .failure_kb import classify_failure, FAILURE_RULES
 
 from nicegui import ui, app, events as ng_events, background_tasks, context
+from fastapi.responses import FileResponse, Response
 
 UPLOAD_DIR = os.path.join(os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else BASE_DIR, '_ng_uploads')
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+THUMB_DIR = os.path.join(os.path.dirname(UPLOAD_DIR), '_ng_thumbs')  # 缩略图缓存，与 _ng_uploads 同级
+os.makedirs(THUMB_DIR, exist_ok=True)
 app.add_static_files('/outputs', MAIN_OUTPUT_DIR)
 app.add_static_files('/uploads', UPLOAD_DIR)
+
+
+@app.get('/thumb/uploads/{name}')
+def _serve_upload_thumb(name: str, s: int = 320):
+    """懒生成并缓存 _ng_uploads/<name> 的小缩略图(JPEG)。
+    历史小样/地板预览只显示几十~几百 px，没必要拉几十 MB 的 8K 原图。
+    同步 def → Starlette 自动丢线程池，不阻塞事件循环。缓存名带源图 mtime，源图换了自动失效。"""
+    name = os.path.basename(name)  # 挡路径穿越
+    src = os.path.join(UPLOAD_DIR, name)
+    if not os.path.isfile(src):
+        return Response(status_code=404)
+    s = max(64, min(int(s), 1600))  # 夹到合理区间
+    try:
+        mtime = int(os.path.getmtime(src))
+    except OSError:
+        return Response(status_code=404)
+    stem = os.path.splitext(name)[0]
+    cache = os.path.join(THUMB_DIR, f'{stem}__{mtime}__{s}.jpg')
+    if not os.path.exists(cache):
+        try:
+            im = Image.open(src)
+            im.draft('RGB', (s, s))  # ★ 让 JPEG 解码阶段就降采样，8K 图解码瞬间完成
+            im = im.convert('RGB')
+            im.thumbnail((s, s), Image.Resampling.LANCZOS)
+            tmp = cache + '.tmp'
+            im.save(tmp, 'JPEG', quality=82)
+            os.replace(tmp, cache)  # 原子写，防并发半成品
+        except Exception as ex:
+            logger.warning(f"[缩略图] 生成失败，回退原图 {name}: {ex}")
+            return FileResponse(src)  # 永不白屏
+    return FileResponse(cache, media_type='image/jpeg')
+
+
+def _thumb_url(p: str, s: int = 320) -> str:
+    """把一张 _ng_uploads 里的图转成缩略图 URL(只用于预览展示，原图路径另存)。"""
+    return f'/thumb/uploads/{os.path.basename(p)}?s={s}'
 
 def _to_url(p: str) -> str:
     if not p: return ''
@@ -280,7 +321,7 @@ async def main_page():
     with ui.header().classes('q-py-xs q-px-md items-center justify-between').style('height:50px; background: var(--bg-header);'):
         with ui.row().classes('items-center'):
             ui.label('🪵 地板 AI 提示词引擎 v6.0.1').classes('text-h6').style('color: var(--text-accent);')
-        with ui.tabs().classes('flex-grow') as main_tabs:
+        with ui.tabs().classes('flex-grow justify-end') as main_tabs:
             t_workspace = ui.tab('workspace', label='🎨 工作台 (生成 & 队列)')
             t_records   = ui.tab('records', label='📋 记录管理')
 
@@ -290,6 +331,47 @@ async def main_page():
         # TAB 1: 工作台 (左 35% 生成，右 65% 队列)
         # ==================================
         with ui.tab_panel('workspace').classes('q-pa-none'):
+            # ── 失败详情弹窗（建一次，点失败卡的 info 图标时 set 内容再 open）──
+            with ui.dialog() as _fail_dlg, ui.card().classes('q-pa-md').style('min-width:460px; max-width:680px;'):
+                _fail_title = ui.label('').classes('text-h6').style('color:#B5713A;')
+                _fail_expl = ui.html('').classes('text-sm').style('color: var(--text-primary); line-height:1.6;')
+                ui.separator().classes('q-my-sm')
+                ui.label('完整原始报错').classes('text-xs').style('color: var(--text-secondary);')
+                _fail_raw = ui.label('').classes('text-xs').style(
+                    'white-space:pre-wrap; word-break:break-all; user-select:text;'
+                    'max-height:38vh; overflow:auto; width:100%;'
+                    'background:#FBF7F0; border:1px solid var(--border-panel); border-radius:8px;'
+                    'padding:8px 10px; color:#6B6356; font-family:ui-monospace,Consolas,monospace;')
+                with ui.row().classes('w-full justify-end q-mt-sm'):
+                    ui.button('关闭', on_click=lambda: _fail_dlg.close()).props('flat dense')
+
+            def _open_fail_detail(err):
+                info = classify_failure(err)
+                _fail_title.text = info['title']
+                _fail_expl.content = (
+                    f'<div style="margin-bottom:6px;">📋 <b>可能原因</b>：{info["cause"]}</div>'
+                    f'<div>🛠 <b>处理建议</b>：{info["action"]}</div>'
+                )
+                _fail_raw.text = str(err or '（无原始报错文本）')
+                _fail_dlg.open()
+
+            # ── 常见失败原因「大汇总」弹窗（建一次，左下角 ℹ️ 打开）──
+            with ui.dialog() as _fail_summary_dlg, ui.card().classes('q-pa-md').style('min-width:480px; max-width:680px;'):
+                ui.label('📖 常见生成失败原因汇总').classes('text-h6').style('color: var(--text-accent);')
+                ui.label('失败时卡片上会显示对应的暖橙 ⓘ 图标，点开即是下面这套说明。')\
+                    .classes('text-xs q-mb-sm').style('color: var(--text-secondary);')
+                with ui.column().classes('w-full q-gutter-y-sm').style('max-height:62vh; overflow:auto;'):
+                    for _rule in FAILURE_RULES:
+                        with ui.element('div').classes('w-full').style(
+                                'border-left:3px solid #E0852E; padding:6px 10px;'
+                                'background:#FBF7F0; border-radius:6px;'):
+                            ui.label(_rule['title']).classes('text-sm').style('color:#B5713A; font-weight:700;')
+                            ui.html(
+                                f'<div style="font-size:12px;color:var(--text-primary);line-height:1.55;">'
+                                f'📋 {_rule["cause"]}<br>🛠 {_rule["action"]}</div>')
+                with ui.row().classes('w-full justify-end q-mt-sm'):
+                    ui.button('关闭', on_click=lambda: _fail_summary_dlg.close()).props('flat dense')
+
             # 用 inline style 保证优先级最高，彻底防止被 Quasar / 浏览器默认样式覆盖
             with ui.row().classes('w-full no-wrap').style('overflow:hidden; height:calc(100vh - 50px);'):
 
@@ -356,7 +438,7 @@ async def main_page():
                         async def _use_floor_image(p):
                             """选用一张地板图(新上传或历史小样共用)：设路径+预览，跑色调分析与风格推荐。"""
                             floor_path['v'] = p
-                            floor_prev.set_source(f'/uploads/{os.path.basename(p)}')
+                            floor_prev.set_source(_thumb_url(p, 320))  # 预览走缩略图，原图存在 floor_path['v']
                             _floor_name_lbl.text = os.path.basename(p)
                             floor_hero.visible = True
                             try:
@@ -399,10 +481,9 @@ async def main_page():
                                     ui.label('暂无历史小样（_ng_uploads 为空）').classes('text-xs q-pa-md').style('color: var(--text-secondary);')
                                 else:
                                     for p in paths:
-                                        _url = f'/uploads/{os.path.basename(p)}'
                                         _cell = ui.element('div').classes('column items-center').style('width:120px; cursor:pointer;')
                                         with _cell:
-                                            ui.image(_url).classes('rounded').style('width:120px; height:90px; object-fit:cover;')
+                                            ui.image(_thumb_url(p, 320)).props('loading=lazy').classes('rounded').style('width:120px; height:90px; object-fit:cover;')
                                             ui.label(os.path.basename(p)).classes('text-xs text-center').style('word-break:break-all; line-height:1.1; color: var(--text-secondary);')
                                         _cell.on('click', lambda _, pp=p: _pick_history_floor(pp))
                             _hist_dlg.open()
@@ -433,7 +514,7 @@ async def main_page():
                                 fn, content = await _extract_upload_data(e)
                                 fn = 'ref_' + fn.replace(' ', '_'); p = os.path.join(UPLOAD_DIR, fn)
                                 with open(p, 'wb') as f: f.write(content)
-                                ref_path['v'] = p; ref_prev.set_source(f'/uploads/{fn}'); ref_prev.visible = True; ui.notify('✅ 参照图已上传', type='positive')
+                                ref_path['v'] = p; ref_prev.set_source(_thumb_url(p, 960)); ref_prev.visible = True; ui.notify('✅ 参照图已上传', type='positive')
                             ui.upload(on_upload=on_ref_up, auto_upload=True, max_files=1).props('accept=".jpg,.jpeg,.png" flat label="⬆️ 拖拽或点击上传参照图"').classes('ctx-upload ref-upload w-full')
                             ref_correction_inp = ui.textarea(label='附加风格说明 (可选)', placeholder='例：保持参照图的暖色调，但换成更简洁的布局...').classes('w-full').props('rows=2')
 
@@ -710,7 +791,12 @@ async def main_page():
                           'background:#ffffff; box-shadow:0 -5px 16px rgba(120,90,60,0.06);'):
                         with ui.row().classes('w-full items-center justify-between'):
                             gen_status_lbl = ui.label('就绪').classes('text-caption').style('color:#8A8175;')
-                            ui.html('<span style="font-size:11px;color:#5B9B6B;">● 线路正常</span>')
+                            with ui.row().classes('items-center no-wrap').style('gap:4px'):
+                                ui.html('<span style="font-size:11px;color:#5B9B6B;">● 线路正常</span>')
+                                _net_info_icon = ui.icon('info', size='xs').classes('cursor-pointer').style('color:#E0852E;')
+                                _net_info_icon.on('click', lambda: _fail_summary_dlg.open())
+                                with _net_info_icon:
+                                    ui.tooltip('常见生成失败原因 / 网络说明').style('font-size:12px;')
                         model_toggle = ui.toggle({'b2': '⚡ B2', 'pro': '⚡ Pro', 'both': '⚡ 双模型'}, value='both').props('no-caps').classes('w-full seg-toggle')
                         _MODEL_NAMES = {'b2': 'B2', 'pro': 'Pro', 'both': '双模型'}
                         gen_btn = ui.button('⚡ 生成 · 双模型', on_click=lambda: _run_job(model_toggle.value)).classes('w-full gen-cta')
@@ -750,7 +836,7 @@ async def main_page():
                             box = ui.element('div').classes('relative rounded bg-black').style(box_style)
                             with box:
                                 ui.label(caption).classes('text-xs text-center w-full q-pa-xs').style('color: var(--text-secondary);')
-                                _im = ui.image('').classes('rounded w-full').style('max-height:260px;object-fit:contain;'); _im.visible = False
+                                _im = ui.image('').classes('rounded w-full').style('max-height:260px;object-fit:contain;cursor:zoom-in;'); _im.visible = False
                                 _dl = ui.html('')
                             return box, _im, _dl
                         with queue_container:
@@ -782,27 +868,37 @@ async def main_page():
                                         _job_batch_btns[job.job_id] = batch_stop_btn
                                     ui.label(f'🕐 {job.ts}').classes('text-xs').style('color: var(--text-secondary);')
                                 time_lbl = ui.label('').classes('text-xs').style('color: var(--text-secondary);'); time_lbl.visible = False
-                                err_lbl = ui.label('').classes('text-xs text-red-400'); err_lbl.visible = False
+                                # 失败提示：暖橙 ⓘ 图标(区别于设置里灰色 ℹ️)+短原因标题；点图标弹完整详情
+                                err_row = ui.row().classes('items-center no-wrap q-mt-xs').style('gap:5px'); err_row.visible = False
+                                with err_row:
+                                    err_info = ui.icon('info', size='sm').classes('cursor-pointer').style('color:#E0852E;')
+                                    with err_info:
+                                        ui.tooltip('点击查看失败原因与完整报错').style('font-size:12px;')
+                                    err_info.on('click', lambda _=None, j=job: _open_fail_detail(j.error))
+                                    err_lbl = ui.label('').classes('text-xs').style('color:#B5713A; font-weight:600;')
                                 img_row = ui.row().classes('w-full q-mt-xs').style('gap:6px; flex-wrap:wrap;'); img_row.visible = False
                                 pro_polish_btn = None; pro_polish_img = None; pro_polish_dl = None
                                 with img_row:
                                     if job.model_filter in ('b2', 'both'):
                                         _, b2_img, b2_dl = _img_box('B2')
+                                        b2_img.on('click', lambda _=None, j=job: _open_zoom(_to_url(j.b2_path)) if j.b2_path else None)
                                     else:
                                         b2_img = None; b2_dl = None
                                     if job.model_filter in ('pro', 'both'):
                                         pro_box = ui.element('div').classes('relative rounded bg-black').style(box_style)
                                         with pro_box:
                                             ui.label('Pro').classes('text-xs text-center w-full q-pa-xs').style('color: var(--text-secondary);')
-                                            pro_img = ui.image('').classes('rounded w-full').style('max-height:260px;object-fit:contain;'); pro_img.visible = False
+                                            pro_img = ui.image('').classes('rounded w-full').style('max-height:260px;object-fit:contain;cursor:zoom-in;'); pro_img.visible = False
+                                            pro_img.on('click', lambda _=None, j=job: _open_zoom(_to_url(j.pro_path)) if j.pro_path else None)
                                             pro_dl  = ui.html('')
                                             pro_polish_btn = ui.button('🪄 磨缝', on_click=lambda j=job: _polish_pro(j)).props('flat dense no-caps').classes('polish-btn'); pro_polish_btn.visible = False
                                         # Pro 磨缝结果槽（按需显示）
                                         _, pro_polish_img, pro_polish_dl = _img_box('Pro 磨缝')
+                                        pro_polish_img.on('click', lambda _=None, j=job: _open_zoom(_to_url(j.pro_polish_path)) if j.pro_polish_path else None)
                                     else:
                                         pro_img = None; pro_dl = None
                             _job_ui_refs[job.job_id] = dict(
-                                card=card, status_lbl=status_lbl, err_lbl=err_lbl, time_lbl=time_lbl,
+                                card=card, status_lbl=status_lbl, err_lbl=err_lbl, err_row=err_row, time_lbl=time_lbl,
                                 img_row=img_row, b2_img=b2_img, b2_dl=b2_dl,
                                 pro_img=pro_img, pro_dl=pro_dl,
                                 pro_polish_btn=pro_polish_btn, pro_polish_img=pro_polish_img, pro_polish_dl=pro_polish_dl,
@@ -898,7 +994,10 @@ async def main_page():
                             else:
                                 tl.visible = False
                         if job.error:
-                            refs['err_lbl'].text = job.error[:120]; refs['err_lbl'].visible = True
+                            refs['err_lbl'].text = classify_failure(job.error)['title']
+                            if refs.get('err_row') is not None: refs['err_row'].visible = True
+                        elif refs.get('err_row') is not None:
+                            refs['err_row'].visible = False
                         has_img = False
                         if job.b2_path and os.path.exists(str(job.b2_path)) and refs.get('b2_img') is not None:
                             url = _to_url(job.b2_path)
@@ -948,9 +1047,14 @@ async def main_page():
                             _b64 = base64.b64encode(_buf.getvalue()).decode()
                             _ar = _infer_aspect_ratio_from_b64(_b64)
                             _t0 = time.time()
+                            # on_stage 在 worker 线程只写 job.pro_stage(字符串)，由 1 秒 ui.timer 读 → 磨缝重试期间显示「网络重试 N/M」而非卡死。
+                            def _polish_on_stage(text, _j=job):
+                                try: _j.pro_stage = text
+                                except Exception as ex: logger.debug(f"写入磨缝阶段失败 job={_j.job_id}: {ex}")
                             polished, perr = await asyncio.to_thread(
                                 call_gemini_edit, api_key, GEMINI_MODEL_MAP['Nano Banana Pro'],
-                                FLOOR_DESEAM_INSTRUCTION, _b64, '4K', _ar, False
+                                FLOOR_DESEAM_INSTRUCTION, _b64, '4K', _ar, False,
+                                _polish_on_stage, (lambda: _is_cancelled(job.job_id))
                             )
                             if polished is None:
                                 ui.notify(f'❌ 磨缝失败：{perr}', type='negative'); return
@@ -972,7 +1076,7 @@ async def main_page():
                             logger.exception(f"[磨缝] 异常 job={job.job_id}")
                             ui.notify(f'❌ 磨缝异常：{e}', type='negative')
                         finally:
-                            _update_job(job, pro_polishing=False)
+                            _update_job(job, pro_polishing=False, pro_stage='')
                             try: _refresh_job_card(job)
                             except Exception as ex: logger.debug(f"刷新磨缝卡片失败 job={job.job_id}: {ex}")
 
@@ -1058,7 +1162,14 @@ async def main_page():
                     ar = _infer_aspect_ratio_from_b64(src)
                     _edit_status.text = '正在二次修改…'
                     ui.notify('已提交二次修改，请稍候', type='info')
-                    pil_img, err = await asyncio.to_thread(call_gemini_edit, api_key, model_id, txt, src, '4K', ar)
+                    # 二改也吃软路由重置 → 开 timer 把 worker 线程回传的「网络重试 N/M」显示到 _edit_status，
+                    # 不再让用户对着不动的对话框干等。on_stage 只写普通 dict，UI 由 timer 读（线程安全）。
+                    _edit_stage['t'] = ''; _edit_stage_timer.active = True
+                    try:
+                        pil_img, err = await asyncio.to_thread(
+                            call_gemini_edit, api_key, model_id, txt, src, '4K', ar, True, _edit_on_stage)
+                    finally:
+                        _edit_stage_timer.active = False; _edit_stage['t'] = ''
                     if err or pil_img is None:
                         _edit_status.text = f'❌ 失败：{err}'
                         ui.notify(f'❌ 二次修改失败：{err}', type='negative'); return
@@ -1085,6 +1196,14 @@ async def main_page():
                 with ui.row().classes('w-full justify-end').style('gap:6px;'):
                     ui.button('取消', on_click=lambda: _edit_dlg.close()).props('flat dense')
                     ui.button('🚀 生成', on_click=_do_edit).props('color=amber-8 dense')
+            # 二改实时状态：worker 线程经 _edit_on_stage 只写 _edit_stage（普通 dict），
+            # 由 0.5 秒 timer（默认停，二改进行时才开）读进 _edit_status，避免跨线程碰 UI 元素。
+            _edit_stage = {'t': ''}
+            def _edit_on_stage(text):
+                _edit_stage['t'] = text
+            def _edit_stage_tick():
+                if _edit_stage['t']: _edit_status.text = _edit_stage['t']
+            _edit_stage_timer = ui.timer(0.5, _edit_stage_tick, active=False)
             def _open_edit(jp, rid, idx, b64, file_rel=''):
                 _op_ctx.update(jp=jp, rid=rid, idx=idx, b64=b64, file_rel=file_rel)
                 _edit_src_lbl.text = f'修改对象：{rid} · 第 {idx + 1} 张'
@@ -1182,6 +1301,15 @@ async def main_page():
                         ui.notify('❌ 删除失败', type='negative')
                 _ask_confirm(f'确认删除整条记录 {rid}（含其所有效果图）？', _go)
 
+            # ── 用量统计（可折叠）：不同模式 × 模型 × 线路 各出图/失败计数 ──
+            with ui.expansion('📊 用量统计', icon='insights').classes('w-full').style(
+                    'border:1px solid var(--border-panel); border-radius:8px; margin-bottom:6px;'):
+                with ui.row().classes('w-full items-center').style('gap:8px;'):
+                    _usage_total_lbl = ui.label('').classes('text-xs font-bold').style('color: var(--text-accent);')
+                    ui.button(icon='refresh', on_click=lambda: _render_usage()).props(
+                        'flat color=grey-6 dense size=sm').tooltip('刷新用量统计')
+                _usage_container = ui.column().classes('w-full q-pa-xs').style('gap:2px;')
+
             # ── 主布局：左文件列表 / 右条目卡片 ──
             with ui.row().classes('w-full no-wrap').style('height:calc(100vh - 120px); gap:8px; overflow:hidden;'):
                 # 左栏 30%
@@ -1231,6 +1359,27 @@ async def main_page():
                 ui.notify('正在生成收藏夹 PPTX…', type='info')
                 msg = await asyncio.to_thread(export_favorites_pptx)
                 ui.notify(msg, type='positive' if msg.startswith('✅') else 'warning')
+
+            def _render_usage():
+                """渲染用量统计小表：模式 × 模型(B2/Pro) × 线路(google/fal) 的 成功/失败 计数。
+                各维度值均来自固定枚举(工作流/模型/线路)，无自由文本，故直接拼表无需转义。"""
+                summary = load_usage_summary()
+                rows = summary['rows']; tot = summary['totals']
+                _usage_total_lbl.text = f"累计 {tot['total']} 张 · 成功 {tot['ok']} · 失败 {tot['fail']}"
+                _usage_container.clear()
+                with _usage_container:
+                    if not rows:
+                        ui.label('暂无数据（生成几张图后点刷新）').classes('text-xs').style('color: var(--text-secondary);')
+                        return
+                    th = ("<tr style='text-align:left; color:var(--text-secondary); border-bottom:1px solid var(--border-panel);'>"
+                          "<th>模式</th><th>模型</th><th>线路</th><th style='text-align:right;'>成功</th><th style='text-align:right;'>失败</th></tr>")
+                    trs = "".join(
+                        f"<tr style='border-bottom:1px solid rgba(0,0,0,0.05);'>"
+                        f"<td>{r['mode']}</td><td>{r['model']}</td><td>{r['provider']}</td>"
+                        f"<td style='text-align:right; color:#3a8a4f;'>{r['ok']}</td>"
+                        f"<td style='text-align:right; color:#b5563a;'>{r['fail']}</td></tr>"
+                        for r in rows)
+                    ui.html(f"<table style='width:100%; font-size:12px; border-collapse:collapse;'>{th}{trs}</table>")
 
             def _render_file_list():
                 _files_container.clear()
@@ -1373,8 +1522,9 @@ async def main_page():
                         ui.label(comment).classes('text-xs q-pa-xs').style(
                             'color:#bbb; white-space:normal; word-break:break-all;')
 
-            # 初始渲染左栏文件列表
+            # 初始渲染左栏文件列表 + 用量统计
             _render_file_list()
+            _render_usage()
 
 
     # ==================================
@@ -1450,7 +1600,12 @@ async def main_page():
             except Exception as ex: logger.warning(f"刷新单模型卡片失败: {ex}")
             try: await asyncio.to_thread(_api_write_to_record, img, model_name, jpt, rid, path)
             except Exception as ex: logger.warning(f"写记录失败 job={job.job_id} {model_name}: {ex}")
-        return path, (err or '')
+        # 用量统计：出图=ok，没出图且非取消=fail（取消不计失败）。线路取配置值(best-effort，自动转线后真实线路或不同)。
+        _err = err or ''
+        if img is not None or '取消' not in _err:
+            try: record_usage(job.workflow_mode, model_name, get_image_provider(), img is not None)
+            except Exception as ex: logger.debug(f"记录用量失败 job={job.job_id}: {ex}")
+        return path, _err
 
     def _compute_final_status(model_filter: str, b2_path, pro_path) -> str:
         if model_filter == 'b2':  return 'done' if b2_path else 'failed'
@@ -1522,6 +1677,7 @@ async def main_page():
             ui.notify('该任务缺少再生成信息，请重新提交', type='warning'); return
         new = _new_job(src_job.display_name + ' · 再生成', time.strftime('%H:%M:%S'), ctx.get('model_filter', 'both'))
         new.retry_ctx = dict(ctx)   # 同一 prompt / 同一 record_id(jpt+rid) → 新图追加进原记录
+        new.workflow_mode = src_job.workflow_mode   # 用量统计沿用源任务的工作流模式
         _add_job_card(new)
         logger.info(f"[任务] regen new_job={new.job_id} from={src_job.job_id}, record={ctx.get('rid')}")
         await _retry_job(new, is_regen=True)
@@ -1616,6 +1772,7 @@ async def main_page():
         display_room_type = room_override or (cn_room_type_sel.value if _market_mode['v'] == 'cn' else room_type_sel.value)
         dname = f"{os.path.splitext(os.path.basename(floor_path['v']))[0]} · {display_room_type} {model_label}"
         job = _new_job(dname, time.strftime('%H:%M:%S'), model_filter)
+        job.workflow_mode = workflow_radio.value   # 用量统计按工作流模式归类
         _add_job_card(job)
         logger.info(
             f"[任务] submitted job={job.job_id}, name={dname}, model_filter={model_filter}, "

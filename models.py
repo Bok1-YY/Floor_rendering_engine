@@ -15,6 +15,7 @@ class JobRecord:
     ts: str
     status: str = 'queued'
     model_filter: str = 'both'  # "b2" | "pro" | "both"
+    workflow_mode: str = ''     # 提交时的工作流模式(纯效果图/地板替换/宠物友好/参照模式)，用量统计按它归类
     b2_path: Optional[str] = None
     pro_path: Optional[str] = None
     error: str = ''

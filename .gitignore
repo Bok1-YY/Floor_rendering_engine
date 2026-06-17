@@ -16,3 +16,9 @@ env/
 
 # 备份文件 (换素材/换图时生成的 .bak)
 *.bak
+
+# 缩略图缓存 (历史小样/预览懒生成，可随时重建)
+_ng_thumbs/
+
+# pytest 缓存 (tests/golden/ 的基准文本要入库，但缓存不入)
+.pytest_cache/
