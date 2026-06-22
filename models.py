@@ -3,6 +3,8 @@
 # ==========================================
 """Dataclasses for job records and task parameters."""
 
+import time
+import uuid
 from dataclasses import dataclass, field
 from typing import Optional, List
 
@@ -30,6 +32,105 @@ class JobRecord:
     b2_stage: str = ''                       # live status text for B2 (思考标题/渲染中/重试) — worker thread writes, UI timer reads
     pro_stage: str = ''                      # live status text for Pro
     retry_ctx: Optional[dict] = None         # 生成上下文快照，供失败后「重试」按钮重放(只重跑未成图的模型)
+    favorite: bool = False                   # 队列卡收藏标记（仅内存态，供「⭐仅看收藏」过滤；不持久化）
+    # ── 重抽候选累积（同卡内左右切换对比）──
+    # 每个图槽保存历次重抽产出的全部候选路径；*_path 始终 = *_paths[*_idx]（当前展示的那张）。
+    # 老任务/老持久化只有 *_path、无列表 → ensure_candidate_lists() 用单路径回填，向后兼容。
+    b2_paths: List[str] = field(default_factory=list)
+    pro_paths: List[str] = field(default_factory=list)
+    pro_polish_paths: List[str] = field(default_factory=list)
+    b2_idx: int = 0
+    pro_idx: int = 0
+    pro_polish_idx: int = 0
+
+
+# ── JobRecord 相关纯逻辑（从 webui 下沉，无 UI/IO 依赖）─────────────────────
+
+def new_job(display_name: str, ts: str, model_filter: str = 'both') -> JobRecord:
+    """工厂：构造一个新的排队 JobRecord。入队由调用方负责。
+    job_id 用 uuid4（不再用毫秒时间戳）——同毫秒创建的两个 job 会撞 id，
+    而 job_id 是 _job_ui 的 key，撞 id 会串掉彼此卡片的按钮。排序另用 ts 字段。"""
+    return JobRecord(job_id=f"job_{uuid.uuid4().hex}",
+                     display_name=display_name, ts=ts, model_filter=model_filter)
+
+
+def update_job(job: JobRecord, **kw) -> None:
+    """批量 setattr 更新 job 字段（原 webui._update_job）。"""
+    for k, v in kw.items():
+        setattr(job, k, v)
+
+
+def compute_final_status(model_filter: str, b2_path, pro_path) -> str:
+    """按 model_filter + 两模型成图路径算最终状态字符串。"""
+    if model_filter == 'b2':  return 'done' if b2_path else 'failed'
+    if model_filter == 'pro': return 'done' if pro_path else 'failed'
+    return 'done' if (b2_path and pro_path) else ('partial' if (b2_path or pro_path) else 'failed')
+
+
+def job_time_text(job: JobRecord) -> str:
+    """队列卡片耗时文案：运行中显示已用秒数 + 各模型实时阶段（🧠思考/🎨渲染/🔁重试）；
+    完成后按模型分别显示用时。纯函数，不碰 UI。"""
+    def _fmt(s):
+        return f'{s:.1f}s' if s is not None else '—'
+    # 运行中：已用秒数 + 各模型实时阶段
+    if job.status == 'running' and job.started_at:
+        base = f'⏱ 已用 {time.time() - job.started_at:.0f}s'
+        stages = []
+        if job.model_filter in ('b2', 'both') and job.b2_stage:
+            stages.append(job.b2_stage if job.model_filter != 'both' else f'B2 {job.b2_stage}')
+        if job.model_filter in ('pro', 'both') and job.pro_stage:
+            stages.append(job.pro_stage if job.model_filter != 'both' else f'Pro {job.pro_stage}')
+        return base + ('　·　' + '　·　'.join(stages) if stages else '')
+    has_secs = (job.b2_secs is not None) or (job.pro_secs is not None)
+    if has_secs:
+        if job.model_filter == 'both':
+            return f'⏱ B2 {_fmt(job.b2_secs)} · Pro {_fmt(job.pro_secs)}'
+        elif job.model_filter == 'b2':
+            return f'⏱ B2 {_fmt(job.b2_secs)}'
+        else:
+            return f'⏱ Pro {_fmt(job.pro_secs)}'
+    return ''
+
+
+# ── 重抽候选累积：纯逻辑（无 UI/IO）。slot ∈ CANDIDATE_SLOTS ─────────────────
+# 约定：每个 slot 同时有三个属性 f'{slot}_paths'(列表) / f'{slot}_idx'(当前下标) / f'{slot}_path'(当前路径)。
+CANDIDATE_SLOTS = ('b2', 'pro', 'pro_polish')
+
+
+def ensure_candidate_lists(job: JobRecord) -> None:
+    """向后兼容 + 一致性维护：列表空但有单路径(老任务/老持久化)→用单路径回填；
+    然后把 *_idx 钳进合法区间，并把 *_path 同步成 *_paths[*_idx]。多次调用幂等。"""
+    for slot in CANDIDATE_SLOTS:
+        lst = getattr(job, f'{slot}_paths')
+        single = getattr(job, f'{slot}_path')
+        if not lst and single:
+            lst = [single]
+            setattr(job, f'{slot}_paths', lst)
+        if lst:
+            idx = max(0, min(getattr(job, f'{slot}_idx'), len(lst) - 1))
+            setattr(job, f'{slot}_idx', idx)
+            setattr(job, f'{slot}_path', lst[idx])
+
+
+def add_candidate(job: JobRecord, slot: str, path: str) -> int:
+    """追加一张新候选到 job.{slot}_paths，并把当前下标/当前路径指向它(最新)。返回新下标。
+    生成出口(主生图/重试/重抽/磨缝)统一走这里，使每次成图自动并入候选列表。"""
+    lst = getattr(job, f'{slot}_paths')
+    lst.append(path)
+    setattr(job, f'{slot}_idx', len(lst) - 1)
+    setattr(job, f'{slot}_path', path)
+    return len(lst) - 1
+
+
+def nav_candidate(job: JobRecord, slot: str, delta: int) -> tuple:
+    """左右切换：把 {slot}_idx 移动 delta(钳到边界)，同步 *_path。返回 (新下标, 总数)。"""
+    lst = getattr(job, f'{slot}_paths')
+    if not lst:
+        return (0, 0)
+    idx = max(0, min(getattr(job, f'{slot}_idx') + delta, len(lst) - 1))
+    setattr(job, f'{slot}_idx', idx)
+    setattr(job, f'{slot}_path', lst[idx])
+    return (idx, len(lst))
 
 
 @dataclass

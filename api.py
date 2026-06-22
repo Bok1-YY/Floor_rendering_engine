@@ -15,7 +15,9 @@ import requests as _req
 import urllib3
 from urllib3.exceptions import ProtocolError as _ProtocolError
 
-# 本地代理场景下所有请求走 verify=False，对应的告警一次性关闭（全模块生效）
+# 证书校验由 _verify_arg() 按配置决定（默认 tls_verify=true → 校验；显式设 false 才关闭）。
+# 这里一次性静音 InsecureRequestWarning：该告警只在 verify=False 时才会出现，开启校验后自然不触发，
+# 故无条件 disable 与「仅未校验时静音」等效，不会掩盖开启校验后的任何告警。
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 from .config import (
@@ -43,6 +45,23 @@ def _read_image_b64(path: Optional[str]) -> Tuple[Optional[str], str]:
 
 def _redact_api_key(text):
     return re.sub(r'([?&]key=)[^&\s)]+', r'\1***', str(text or ""))
+
+
+def _verify_arg(cfg=None):
+    """返回传给 requests 的 verify 值（HTTPS 证书校验）。
+
+    - tls_verify 显式为 False → False（坏网络/会拦 HTTPS 的代理上关掉校验）
+    - 否则（默认 True）配了存在的 tls_ca_bundle → 返回该 CA 路径
+    - 否则 → True：用系统/requests 默认 CA
+    传入已加载的 cfg 可复用，避免热路径重复读盘。
+    """
+    cfg = cfg if cfg is not None else _load_config()
+    if not bool(cfg.get("tls_verify", True)):
+        return False
+    ca = (cfg.get("tls_ca_bundle") or "").strip()
+    if ca and os.path.exists(ca):
+        return ca
+    return True
 
 def _extract_thought_title(text: str) -> str:
     """从思考文本里抽取 **加粗标题** 作为简短状态；没有标题则取前 40 字。"""
@@ -187,7 +206,7 @@ def call_gemini_generate(api_key: str, model_id: str, prompt_text: str, image_pa
             if not use_streaming:
                 # ── 非流式（默认）：一次性拿全图，软路由/透明代理下又快又稳 ──
                 _stage("🎨 生成中…")  # post 会阻塞至整图返回(~60s)，先把卡片置为生成中
-                resp = _req.post(url, json=payload, timeout=(30, 300), proxies=proxies, verify=False)
+                resp = _req.post(url, json=payload, timeout=(30, 300), proxies=proxies, verify=_verify_arg(cfg))
                 if resp.status_code != 200:
                     try:
                         err_info = resp.json()
@@ -225,7 +244,7 @@ def call_gemini_generate(api_key: str, model_id: str, prompt_text: str, image_pa
 
             # ── 流式（可选）：实时思考 + 看门狗防假死 ──
             resp = _req.post(url, json=payload, stream=True, timeout=(30, 300),
-                             proxies=proxies, verify=False)
+                             proxies=proxies, verify=_verify_arg(cfg))
             if resp.status_code != 200:
                 try:
                     err_info = resp.json()
@@ -437,7 +456,7 @@ def call_fal_generate(api_key: str, model_id: str, prompt_text: str, image_path:
             b64 = url_or_uri.split(",", 1)[1] if "," in url_or_uri else ""
             raw = base64.b64decode(b64)
         else:
-            r = _req.get(url_or_uri, timeout=(30, 300), proxies=proxies, verify=False)
+            r = _req.get(url_or_uri, timeout=(30, 300), proxies=proxies, verify=_verify_arg(cfg))
             r.raise_for_status()
             raw = r.content
         img = Image.open(_io_mod.BytesIO(raw)); img.load()
@@ -458,7 +477,7 @@ def call_fal_generate(api_key: str, model_id: str, prompt_text: str, image_path:
         try:
             _stage("🎨 生成中…")
             resp = _req.post(url, json=payload, headers=headers,
-                             timeout=(30, 300), proxies=proxies, verify=False)
+                             timeout=(30, 300), proxies=proxies, verify=_verify_arg(cfg))
             if resp.status_code != 200:
                 try:
                     err_info = resp.json()
@@ -511,9 +530,14 @@ def _is_network_class_error(err) -> bool:
     网络类(代理重置/超时/连接假死/可重试的 5xx/429)在另一条线路上可能成功；
     内容/请求级错误(安全拦截、HTTP 400/403、API 未返回图片、解码失败、素材图不存在)
     换线一样会失败，转线只会白烧 Fal 的钱，故一律不转。
+
+    例外:HTTP 400 "User location is not supported"——这是出口线路落地的地区被 Gemini
+    封锁(本质是线路问题,不是内容/请求问题),Fal 不走这套地区封锁,转线往往能直接出图,故纳入可转线。
     """
     e = str(err or "")
     if any(m in e for m in ("网络错误", "请求超时", "超过总时限", "连接假死", "看门狗")):
+        return True
+    if "location is not supported" in e:
         return True
     return bool(re.search(r'HTTP (429|500|502|503|504)', e))
 
@@ -523,8 +547,11 @@ def call_image_generate(api_key: str, model_id: str, prompt_text: str, image_pat
                         room_image_path: Optional[str] = None,
                         style_ref_image_path: Optional[str] = None,
                         on_stage=None, should_cancel=None,
-                        bevel_ref_image_path: Optional[str] = None) -> Tuple[Optional[object], Optional[str]]:
+                        bevel_ref_image_path: Optional[str] = None) -> Tuple[Optional[object], Optional[str], str]:
     """生图调度器:按 engine_config.json 的 image_provider 选线路,两条线路同契约。
+
+    返回 (PIL.Image|None, 错误字符串|None, provider)——provider∈{'google','fal'} 是【实际】出图/尝试
+    的线路(自动转 Fal 后即 'fal')，供用量统计准确归账，不再靠读配置猜测。
 
     - 'google'(默认):直连 Google AI Studio,沿用传入的 Gemini api_key。
     - 'fal':走 Fal 路由,改用 config 里的 fal_api_key(忽略传入的 Gemini key)。
@@ -538,17 +565,18 @@ def call_image_generate(api_key: str, model_id: str, prompt_text: str, image_pat
         fal_key = (cfg.get("fal_api_key") or "").strip()
         if not fal_key:
             logger.error("[生图调度] 线路=fal 但未配置 Fal API Key")
-            return None, "未配置 Fal API Key(请在 API 设置里填写 Fal Key)"
-        return call_fal_generate(fal_key, model_id, prompt_text, image_path, image_size,
-                                 aspect_ratio, room_image_path, style_ref_image_path, on_stage, should_cancel,
-                                 bevel_ref_image_path=bevel_ref_image_path)
+            return None, "未配置 Fal API Key(请在 API 设置里填写 Fal Key)", "fal"
+        img, err = call_fal_generate(fal_key, model_id, prompt_text, image_path, image_size,
+                                     aspect_ratio, room_image_path, style_ref_image_path, on_stage, should_cancel,
+                                     bevel_ref_image_path=bevel_ref_image_path)
+        return img, err, "fal"
 
     # ── 线路=google：先走直连 ──
     img, err = call_gemini_generate(api_key, model_id, prompt_text, image_path, image_size,
                                     aspect_ratio, room_image_path, style_ref_image_path, on_stage, should_cancel,
                                     bevel_ref_image_path=bevel_ref_image_path)
     if img is not None:
-        return img, err
+        return img, err, "google"
 
     # ── 直连失败 → 评估是否自动转 Fal 备用线路 ──
     auto = bool(cfg.get("auto_failover", False))
@@ -564,9 +592,9 @@ def call_image_generate(api_key: str, model_id: str, prompt_text: str, image_pat
                                            bevel_ref_image_path=bevel_ref_image_path)
         if fb_img is not None:
             logger.info(f"[生图调度] Fal 备用线路出图成功 model={model_id}")
-            return fb_img, fb_err
-        return None, f"直连失败({err})；Fal 备用也失败({fb_err})"
-    return None, err
+            return fb_img, fb_err, "fal"   # 实际出图线路=Fal，用量记 Fal
+        return None, f"直连失败({err})；Fal 备用也失败({fb_err})", "google"  # 失败归主线 google
+    return None, err, "google"
 
 
 def call_gemini_edit(api_key: str, model_id: str, edit_instruction: str, source_image_b64: str,
@@ -641,7 +669,7 @@ EDITING RULES:
             return None, "已取消"
         _stage("📡 连接中…" if attempt == 0 else f"🔁 网络重试 {attempt}/{max_attempts - 1}")
         try:
-            resp = _req.post(url, json=payload, timeout=300, proxies=proxies, verify=False)
+            resp = _req.post(url, json=payload, timeout=300, proxies=proxies, verify=_verify_arg(cfg))
         except _req.exceptions.Timeout:
             resp = None; last_err = "请求超时"
             logger.warning(f"[API二改] 请求超时 attempt={attempt+1}/{max_attempts} model={model_id}")
@@ -715,7 +743,7 @@ _STYLE_ANALYZE_TIMEOUT = 60  # 单个文字模型的请求超时（秒）
 # 同一张参照图重复分析既费钱又费时(批量参照=N 次)，缓存到磁盘，命中即免请求、免计费、秒回。
 # 版本前缀随分析 prompt 走：改了 prompt 就 bump _STYLE_CACHE_VERSION，旧缓存自动失效。
 _STYLE_CACHE_FILE = os.path.join(MAIN_OUTPUT_DIR, ".style_analysis_cache.json")
-_STYLE_CACHE_VERSION = "v1"
+_STYLE_CACHE_VERSION = "v2"  # v2: 分析 prompt 改"如实描述照片本身"(去高端国际词偏置)+参照图改直接喂模型
 _style_cache_lock = threading.Lock()
 _style_cache = None  # 懒加载
 
@@ -776,33 +804,23 @@ def analyze_style_image(api_key: str, image_path: str) -> Tuple[str, Optional[st
                 return _hit, None
         except Exception as _ex:
             logger.debug(f"[参照模式] 读取风格缓存失败(忽略): {_ex}")
+    # 图本身已作为风格参照直接喂给生图模型，这段文字只是「简短强化 brief」，不是唯一描述。
+    # 故要求：如实描述照片里【真实存在】的风格(含国内普通住宅)，不拔高、不套高端设计词/品牌/流派。
     analysis_prompt = (
-        "You are a precision interior design analyst. Your output is used DIRECTLY as a brief for an AI image generator — vagueness causes generation failure.\n\n"
-        "PRECISION RULE — name EXACT objects, never categories:\n"
-        "  ✗ WRONG: 'stylish shelving unit'  ✓ RIGHT: 'floor-to-ceiling shelving with brushed aluminum uprights and birch veneer shelves'\n"
-        "  ✗ WRONG: 'nice warm lighting'     ✓ RIGHT: 'warm arc floor lamp (≈3000K), single drum pendant, no ceiling fixtures'\n"
-        "  ✗ WRONG: 'beige walls'            ✓ RIGHT: 'warm greige plaster walls, matte finish'\n\n"
-        "ANCHOR STEP (do this mentally before filling fields): identify the ONE object that would DISAPPEAR if this room became a generic hotel lobby. "
-        "That is your extraction anchor — all descriptions must be as specific as that anchor.\n\n"
-        "Return ONLY the 9 labeled fields below — no preamble, no commentary:\n\n"
-        "SIGNATURE: [1–3 elements that would DISAPPEAR if this room turned generic. Exact object type + material + finish. "
-        "Brand aesthetic if recognizable (Vitsœ, HAY, String, MUJI, etc). Separate items with semicolons.]\n\n"
-        "MATERIALS: [Every major surface → exact material + finish. "
-        "Format: object → material finish; object → material finish. "
-        "Example: sofa → dusty-rose boucle; coffee table → smoked tempered glass on matte black steel; floor → pale oak herringbone parquet matte]\n\n"
-        "PALETTE: [3 precise color names (not 'beige' — say 'warm greige'; not 'blue' — say 'dusty sky blue'). "
-        "Then one sentence: warm/cool/neutral register, high/medium/low contrast.]\n\n"
-        "LIGHTING: [Source: natural/artificial/mixed. Direction. Color temp in Kelvin (2700K / 3000K / 4000K / 6500K). "
-        "Shadow quality: hard/soft/diffuse. Mood in one adjective.]\n\n"
-        "PLANTS_DECOR: [Exact plant species + count + vessel material. Each decorative object: exact type + material. "
-        "Density: sparse/moderate/dense.]\n\n"
-        "MOOD: [Exactly 5 sensory/emotional adjectives capturing how this space FEELS. Pure sensory language — no design jargon. "
-        "Example: airy, mineral, unhurried, intentional, restrained]\n\n"
-        "REALISM_CUES: [Specific photographic cues that make this image feel real rather than CGI/showroom: partial furniture cropping, asymmetry, object density, small lived-in props, imperfect sunlight patches, shadows, casual placement, non-matching furniture. Be concrete.]\n\n"
-        "PROHIBITIONS: [4 things you would NEVER find here — design-precise. "
-        "'no upholstered sofa with valance skirt' not 'no old sofa'. "
-        "'no warm Edison filament bulbs' not 'no bad lighting'.]\n\n"
-        "STYLE_SENTENCE: [One sentence: design movement + decade reference + the single defining material or furniture piece.]"
+        "You are an interior-style analyst. The room PHOTO itself is given to the image generator as the "
+        "primary style reference; your text is only a SHORT reinforcement brief, not the sole description.\n\n"
+        "FAITHFULNESS RULE — describe the actual style, materials, palette, lighting and mood PRESENT IN THIS "
+        "PHOTO, whatever it is: modern, traditional, budget, high-end, Chinese domestic, or international. "
+        "Do NOT upgrade, glamorize, or impose a design movement, brand, or trend that is not visibly present. "
+        "If it is an ordinary lived-in home, say so plainly.\n\n"
+        "PRECISION RULE — name concrete objects and finishes, not vague categories "
+        "(e.g. 'warm oak laminate floor, matte' not 'nice flooring'; 'beige fabric sofa' not 'stylish sofa').\n\n"
+        "Return ONLY the labeled fields below — no preamble, no commentary:\n\n"
+        "SIGNATURE: [1–3 elements that most define this room's look as they ACTUALLY appear. Exact object + material + finish. Separate items with semicolons.]\n\n"
+        "MATERIALS: [Major surfaces → exact material + finish. Format: object → material finish; object → material finish.]\n\n"
+        "MOOD: [Exactly 5 plain sensory adjectives for how this space feels. No design jargon.]\n\n"
+        "REALISM_CUES: [Concrete photographic cues that make it feel real rather than CGI/showroom: partial furniture cropping, asymmetry, lived-in props, imperfect sunlight patches, casual placement.]\n\n"
+        "PROHIBITIONS: [3–4 things that clearly do NOT belong in this specific style, stated concretely.]"
     )
     payload = {
         "contents": [{"parts": [{"text": analysis_prompt}, {"inlineData": {"mimeType": mime, "data": img_b64}}]}],
@@ -816,7 +834,7 @@ def analyze_style_image(api_key: str, image_path: str) -> Tuple[str, Optional[st
     for model_name in _text_models:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
         try:
-            resp = _req.post(url, json=payload, timeout=_STYLE_ANALYZE_TIMEOUT, proxies=proxies, verify=False)
+            resp = _req.post(url, json=payload, timeout=_STYLE_ANALYZE_TIMEOUT, proxies=proxies, verify=_verify_arg(cfg))
             if resp.status_code == 200:
                 for candidate in resp.json().get('candidates', []):
                     for part in candidate.get('content', {}).get('parts', []):
@@ -891,6 +909,7 @@ def test_connection(gemini_api_key: str, fal_api_key: str = "", proxy: str = "")
     - Fal 线路(用户自费，无免费生成 ping)：仅对 fal.run 做可达性探测，不触发任何计费请求。
     """
     proxies = {"http": proxy.strip(), "https": proxy.strip()} if (proxy and proxy.strip()) else None
+    _verify = _verify_arg()
     lines = []
 
     # ── Google 直连：ListModels 探测（不挑模型名、零成本、不生成）──
@@ -902,17 +921,41 @@ def test_connection(gemini_api_key: str, fal_api_key: str = "", proxy: str = "")
     else:
         url = f"https://generativelanguage.googleapis.com/v1beta/models?key={gk}"
         try:
-            r = _req.get(url, timeout=15, proxies=proxies, verify=False)
+            r = _req.get(url, timeout=15, proxies=proxies, verify=_verify)
             if r.status_code == 200:
                 lines.append("Google 直连：✅ 正常")
-            elif r.status_code in (400, 401, 403):
-                lines.append(f"Google 直连：❌ Key 无效/无权限 (HTTP {r.status_code})")
             else:
-                lines.append(f"Google 直连：⚠️ HTTP {r.status_code}")
+                # 读真实报错体区分原因：地区封锁 vs Key 无效 vs 其它（400 不能一律算 Key 问题）
+                try:
+                    msg = ((r.json().get('error', {}) or {}).get('message', '')) or r.text[:200]
+                except Exception:
+                    msg = r.text[:200]
+                low = msg.lower()
+                if 'location is not supported' in low:
+                    lines.append("Google 直连：❌ 落地地区不支持（geo-block，非 Key 问题；需换海外节点）")
+                elif 'api key not valid' in low or 'api_key_invalid' in low or r.status_code in (401, 403):
+                    lines.append(f"Google 直连：❌ Key 无效/无权限 (HTTP {r.status_code})")
+                else:
+                    lines.append(f"Google 直连：⚠️ HTTP {r.status_code}：{_short_text(msg, 120)}")
+        except _req.exceptions.SSLError as e:
+            lines.append(f"Google 直连：❌ 证书校验失败（网络在拦 HTTPS；设 tls_verify=false 或配 CA）：{_short_text(_redact_api_key(e), 100)}")
         except _req.exceptions.Timeout:
             lines.append("Google 直连：❌ 超时（代理/网络不通）")
         except Exception as e:
             lines.append(f"Google 直连：❌ 不通（{_redact_api_key(e)}）")
+
+        # ── 证书校验状态（默认已开启；被显式关闭时探一下本网络能否安全开回）──
+        eff = _verify_arg()
+        if eff:
+            lines.append("证书校验：✅ 已开启" + ("（自定义 CA）" if isinstance(eff, str) else ""))
+        else:
+            try:
+                _req.get(url, timeout=15, proxies=proxies, verify=True)
+                lines.append("证书校验：⚠️ 当前关闭，但本网络可开启（建议设 tls_verify=true）")
+            except _req.exceptions.SSLError:
+                lines.append("证书校验：当前关闭（开启会失败：网络在拦 HTTPS，需装 CA）")
+            except Exception:
+                lines.append("证书校验：当前关闭（暂无法判定能否开启）")
 
     # ── Fal 线路：可达性探测（任何 HTTP 响应都算可达；不计费）──
     fk = (fal_api_key or "").strip()
@@ -920,7 +963,7 @@ def test_connection(gemini_api_key: str, fal_api_key: str = "", proxy: str = "")
         lines.append("Fal 线路：⚠️ 未配置 Key")
     else:
         try:
-            _req.get("https://fal.run", timeout=10, proxies=proxies, verify=False)
+            _req.get("https://fal.run", timeout=10, proxies=proxies, verify=_verify)
             lines.append("Fal 线路：✅ 可达（未做计费校验）")
         except _req.exceptions.Timeout:
             lines.append("Fal 线路：❌ 超时（代理/网络不通）")

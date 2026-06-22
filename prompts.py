@@ -694,63 +694,56 @@ Professional photorealistic pet-friendly interior photography. {en_property}, {e
             _mood_line     = _pf("MOOD")
             _realism_line  = _pf("REALISM_CUES")
 
-            _mandatory_ref = (
-                f"**[MANDATORY — SIGNATURE ELEMENTS from reference]** "
-                f"The following MUST appear in the generated image — they define this style's identity:\n"
-                f"• {_sig_line}" if _sig_line else ""
-            )
-            _materials_ref = (
-                f"**[MATERIAL SPECIFICATION from reference]** Reproduce these exact material-finish combinations:\n"
-                f"• {_materials_line}" if _materials_line else ""
-            )
-            _prohibitions_ref = (
-                f"**[STYLE PROHIBITIONS from reference]** Never include any of the following:\n• {_prohib_line}"
-                if _prohib_line else ""
-            )
-            _mood_ref = (
-                f"**Atmosphere**: The space must feel: {_mood_line}."
-                if _mood_line else ""
-            )
+            # 图已直接喂模型(sref)，文字降级为「辅助强调」——只补图里不易一眼读出的要点，不再整段转述。
             _realism_ref = (
                 f"**[REAL PHOTOGRAPHY CUES from reference]** Preserve this kind of real-room imperfection and photographic believability:\n• {_realism_line}"
                 if _realism_line else ""
             )
             _style_block = (
-                f"**[STYLE BLUEPRINT — extracted from reference photo]**\n"
-                f"{style_analysis_text}{_ref_extra}"
+                "**[STYLE SUMMARY — supports the reference image, does not replace it]** "
+                "Use the attached reference image as the primary guide for style; the notes below only reinforce it."
             )
+            if any([_sig_line, _materials_line, _mood_line, _prohib_line]):
+                _style_block += (
+                    (f"\nSignature elements to echo: {_sig_line}." if _sig_line else "")
+                    + (f"\nMaterial/finish language: {_materials_line}." if _materials_line else "")
+                    + (f"\nMood to reproduce: {_mood_line}." if _mood_line else "")
+                    + (f"\nAvoid: {_prohib_line}." if _prohib_line else "")
+                )
+            else:
+                # 分析文字没有标准字段(少见)：附上精简原文，避免丢失唯一的风格信息
+                _style_block += f"\n{style_analysis_text.strip()}"
+            _style_block += _ref_extra
         else:
-            _mandatory_ref = ""; _materials_ref = ""; _prohibitions_ref = ""; _mood_ref = ""; _realism_ref = ""
-            _style_block = f"Modern interior style with neutral tones.{_ref_extra}"
+            _realism_ref = ""
+            _style_block = (
+                "**[STYLE SUMMARY]** Use the attached reference image as the primary guide for the "
+                "overall decoration style, materials, palette, lighting and mood." + _ref_extra
+            )
 
-        en_floor_visibility_ref = (
-            "**Floor Visibility**: The floor must remain clearly readable as a material product, but realistic partial occlusion is allowed. "
-            "Furniture legs, small side tables, ottomans, plants, casual props, and limited textile overlap may cover parts of the floor if they make the image feel photographed rather than staged. "
-            "Do not clear the room into an empty showroom; preserve natural lived-in object density while keeping meaningful foreground or midground floor visible."
-        )
+        # 语境锚定：海外用海外实拍层(强抗样板间/CGI)，国内用国内市场语境；
+        # 海外层已覆盖写实，参照图的 REALISM_CUES 只在国内语境下补进来避免重复。
+        _context_block = en_overseas_realism if not cn_mode else en_cn_context
+        _realism_block = "" if not cn_mode else _realism_ref
 
         final_prompt_en = f"""Help me make a photo:
 
-Professional photorealistic interior architectural photography. {en_room}. Aspect ratio {ar_value}, {resolution} resolution. Create a BRAND NEW scene — original composition and layout, NOT a copy of any reference.
+Professional photorealistic interior architectural photography. {en_room}. Aspect ratio {ar_value}, {resolution} resolution.
+
+**[REFERENCE IMAGE — STYLE / MATERIAL / PALETTE / MOOD]** One of the attached images is a REFERENCE PHOTO of an existing room. Study it and EMULATE its overall decoration style: its material language, color palette, lighting character, furniture taste-level, and emotional mood. This reference is for STYLE ONLY — do NOT copy its geometry, camera angle, wall layout, window positions, or furniture arrangement. INVENT A BRAND NEW room: an original composition and layout that merely FEELS like it belongs to the same home and designer as the reference. Keep believable, natural residential proportions — realistic ceiling height, true-to-life furniture scale, and a coherent single-room floor plan. Do NOT reproduce the reference's exact scene.
 
 {_style_block}
 
-{_mandatory_ref}
+{_context_block}
 
-{_materials_ref}
-
-{_prohibitions_ref}
-
-{_mood_ref}
-
-{_realism_ref}
+{_realism_block}
 
 **[Camera & Composition]** {en_angle}.
 {en_composition}
 
 {en_light_inst}
 
-{_floor_spec_block(CORE_MATERIAL_INSTRUCTION, en_floor_spec_line, en_floor_visibility_ref, en_quality, avoid_en, extra_cmd_en, furniture_contrast=en_furniture_contrast)}"""
+{_floor_spec_block(CORE_MATERIAL_INSTRUCTION, en_floor_spec_line, en_floor_visibility, en_quality, avoid_en, extra_cmd_en, furniture_contrast=en_furniture_contrast)}"""
 
     else:  # 纯效果图 — SCHEMA order: Style → Composition → Lighting → Floor → Output
         final_prompt_en = f"""Help me make a photo:

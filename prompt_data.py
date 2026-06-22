@@ -9,14 +9,14 @@ from PIL import Image
 
 from .config import (
     BASE_DIR, MAIN_OUTPUT_DIR,
-    logger, _short_text, TRANSLATOR_AVAILABLE,
+    logger, _short_text, TRANSLATOR_AVAILABLE, get_proxy,
     is_seamless_herringbone,
 )
 
 try:
-    from deep_translator import MyMemoryTranslator
+    from deep_translator import GoogleTranslator
 except ImportError:
-    MyMemoryTranslator = None
+    GoogleTranslator = None
 
 FALLBACK_DICT = {
     "通用现代都市": "modern urban area", "通用自然郊区": "natural suburban area", "通用海滨小镇": "coastal town",
@@ -157,8 +157,9 @@ TECH_DICT = {
 
 # 在线翻译结果缓存：同一中文词每个任务都会重查，未命中词典时一次在线请求 1~2 秒，
 # 缓存后整个进程生命周期内只查一次。只缓存成功结果——失败兜底不缓存，下次还有机会成功。
+# 后端为 GoogleTranslator：构造极廉（仅存参数、无网络），故每次按当前代理新建，
+# 让 engine_config.json 改代理后即时生效；真正的省钱在结果缓存上，不缓存翻译器本身。
 _translation_cache: dict = {}
-_translator = None
 
 def translate_zh_to_en(text):
     if not text or str(text).strip() in ["", "通用", "无", "无特定国家"]: return ""
@@ -168,13 +169,16 @@ def translate_zh_to_en(text):
     if text in FALLBACK_DICT: return FALLBACK_DICT[text]
     cached = _translation_cache.get(text)
     if cached is not None: return cached
-    if TRANSLATOR_AVAILABLE:
-        global _translator
+    if TRANSLATOR_AVAILABLE and GoogleTranslator is not None:
+        # 配了本地代理 → 强制翻译走它；没配 → proxies=None，默认走软路由(透明代理)。
+        # 与生图侧 api.py 同一套：proxies = {"http": p, "https": p} if p else None。
+        proxy = get_proxy()
+        proxies = {"http": proxy, "https": proxy} if proxy else None
         for attempt in range(2):
             try:
-                if _translator is None:
-                    _translator = MyMemoryTranslator(source='zh-CN', target='en-US')
-                translated = _translator.translate(text)
+                translated = GoogleTranslator(
+                    source='zh-CN', target='en', proxies=proxies,
+                ).translate(text)
                 if translated and all(ord(c) < 128 for c in translated):
                     _translation_cache[text] = translated
                     return translated
@@ -262,7 +266,7 @@ STYLES = [
     "🏡 现代美式 (Modern American) - 温暖耐住，石材原木，自在不做作。",
     "🇮🇹 意式极简 (Italian Minimalist) - 建筑感留白，隐形饰面，材质至上。",
     "🌿 现代简约 (Modern Minimalist) - 干净中性，百搭基本款，大面留白。",
-    "💎 轻奢风 (Light Luxury) - 香槟金+大理石，样板间精致感。",
+    "💎 轻奢风 (Light Luxury) - 香槟金+大理石，酒店套房精致感。",
     "🎞️ 港式复古 (Hong Kong Retro) - 墨绿藤编，黄铜玻璃，港片故事感。",
     "🪨 侘寂风 (Wabi-Sabi Raw) - 原始素材，岁月痕迹，禅意极致。",
     "🟤 美拉德风 (Maillard) - 焦糖可可暖褐，威士忌般包裹感。",
@@ -443,11 +447,11 @@ STYLE_ATMOSPHERE_MAP = {
 
     # ── 扩充风格 22 款 atm/must/ban（国内外市场通用，key 与 STYLES 括号内英文名一致）──
     "Raw Wood": {
-        "atm": "Unforced naturalness, quiet warmth — the floor IS the design statement, all other elements subordinate to it. China's #1 trending style 2025.",
+        "atm": "Unforced naturalness, quiet warmth — the floor IS the design statement, all other elements subordinate to it.",
         "must": [
             "pale-to-medium warm-toned wood floor occupying 50–60% of image area, grain clearly visible",
             "low-profile furniture in light natural oak or ash: sofa ≤70cm tall, coffee table near floor level",
-            "track lighting rail on ceiling (磁吸轨道灯)",
+            "recessed or minimal ceiling track lighting",
             "clean white or warm beige walls, zero decorative mouldings, TV flush-mounted on plain wall",
             "cotton and linen soft furnishings in undyed cream and off-white, concealed storage throughout",
         ],
@@ -455,7 +459,7 @@ STYLE_ATMOSPHERE_MAP = {
             "one indoor plant in a natural clay pot (monstera, fiddle-leaf fig, or olive tree) as a quiet side accent",
         ],
         "ban": [
-            "chandelier, decorative ceiling light, or 吊顶 cove lighting",
+            "chandelier, decorative ceiling light, or dropped-ceiling cove lighting",
             "marble TV wall or ornate wall panelling",
             "dark walnut or espresso-tone furniture",
             "any visible clutter or open storage",
@@ -467,7 +471,7 @@ STYLE_ATMOSPHERE_MAP = {
             "dark walnut or teak-tone furniture with tapered solid wood legs: sofa, sideboard, coffee table",
             "rattan or cane accent element: woven cabinet door, rattan pendant light, or cane-back chair",
             "vintage color accent: olive green velvet cushion, mustard throw, rust-orange ceramic vase, or aged brass side table",
-            "wall color: warm cream, apricot-grey (杏灰色), or oat — NOT bright white",
+            "wall color: warm cream, apricot-grey, or oat — NOT bright white",
             "one statement vintage object: geometric brass floor lamp, rounded arch mirror, or abstract ceramic sculpture",
         ],
         "ban": [
@@ -593,7 +597,7 @@ STYLE_ATMOSPHERE_MAP = {
         ],
     },
     "Light Luxury": {
-        "atm": "Polished, aspirational — hotel suite quality rather than someone's actual home. NOTE: Associated with 2019–2022 developer show flats; use only when client specifically requests.",
+        "atm": "Polished, aspirational — boutique-hotel-suite glamour rather than an everyday home. Use when the client wants an upscale, glossy, magazine-cover look.",
         "must": [
             "champagne gold or brushed brass metal accents on handles and light fixtures",
             "grey, warm white, or greige walls with light fluted or ribbed wall panels",
@@ -691,7 +695,7 @@ STYLE_ATMOSPHERE_MAP = {
     "Mediterranean": {
         "atm": "A whitewashed seaside villa where sunlight bounces off lime-plaster walls — breezy, relaxed, perpetually on holiday.",
         "must": [
-            "hand-troweled lime-plaster (微水泥/灰泥) walls in warm white or sand, with soft rounded arched doorways or niches",
+            "hand-troweled lime-plaster walls in warm white or sand, with soft rounded arched doorways or niches",
             "palette of whitewashed white, terracotta, olive green and sea/sky blue accents",
             "natural textures: rattan, jute rug, rough linen, unglazed terracotta pots",
             "rustic warm-toned wood or terracotta-tile flooring and ceiling beams",
@@ -1234,10 +1238,20 @@ def build_overseas_realism_layer(country: str, city: str, property_type: str, ro
         "Furniture should have practical residential spacing, with some legs or small objects naturally overlapping the floor while leaving meaningful floor areas visible."
     ]
 
+    # 国际中性锚点：不给地点/文化线索时，模型会回落到训练里最常见的"国内样板间"先验，
+    # 导致很多国际风格出图都"像国内"。显式锚定为国际/西式真实住宅；东亚风格则自动让路。
+    _asian_style = any(k in (style_raw or "") for k in
+                       ("Neo-Chinese", "Hong Kong Retro", "Shanghai Deco", "Zen Tea Room",
+                        "Japandi", "Minimal Japanese", "Wabi-Sabi"))
+    if _asian_style:
+        cues.insert(0, "Stay true to the chosen East-Asian interior style and render an authentic, well-resolved version of it — not a generic developer show-flat.")
+    else:
+        cues.insert(0, "Render this as an authentic, internationally-styled lived-in home in a contemporary Western / European / international residential context. Unless the interior style is explicitly East-Asian, avoid Chinese or East-Asian developer-apartment, sample-flat (样板间) or show-home styling, signage, furniture conventions, or built-ins.")
+
     if any(k in property_type for k in ["普通公寓", "豪华大平层"]):
         cues.append("Apartment realism: use balcony/window cues, built-in storage, compact-to-generous but believable room depth, and avoid detached-villa scale.")
     elif any(k in property_type for k in ["现代别墅", "普通独立住宅"]):
-        cues.append("House/villa realism: allow stronger garden or yard relationship, larger windows, deeper room proportions, and more layered furniture groupings.")
+        cues.append("House realism: a believable single-family home with honest, not exaggerated, room proportions and natural indoor light; avoid sales-villa showpiece scale.")
     elif "联排" in property_type:
         cues.append("Townhouse realism: use narrower-but-deeper room proportions, stair or entry cues where appropriate, and family-scale storage.")
 

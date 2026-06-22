@@ -9,14 +9,16 @@ import html
 import shutil
 import tempfile
 import threading
+import dataclasses
 from typing import List, Tuple, Optional
 
 from PIL import Image
 
 from .config import (
-    BASE_DIR, MAIN_OUTPUT_DIR, CONFIG_FILE,
+    BASE_DIR, MAIN_OUTPUT_DIR, CONFIG_FILE, UPLOAD_DIR,
     logger, _short_text, _load_config, _save_config,
 )
+from .models import JobRecord, ensure_candidate_lists
 
 # ── 记录文件并发保护 ──────────────────────────────────────────────
 # 同一记录 JSON 的「读-改-写」必须串行：双模型生成时 B2/Pro 在两个 worker 线程里
@@ -38,6 +40,88 @@ def _get_json_path(image_path):
     target_dir = os.path.join(MAIN_OUTPUT_DIR, base_name)
     os.makedirs(target_dir, exist_ok=True)
     return os.path.join(target_dir, f"{base_name}_记录.json"), base_name, target_dir
+
+
+# ── 渲染队列持久化：重启后恢复已完成的卡片（图片本就在盘上）──────────────
+# 从 webui 下沉到此（纯文件 IO）。webui 保留薄包装 _persist_jobs() 负责加锁取 _job_history 快照后调本函数。
+QUEUE_STATE_FILE = os.path.join(MAIN_OUTPUT_DIR, '.queue_state.json')
+QUEUE_PERSIST_MAX = 60  # 最多持久化最近 N 条
+_JOB_FIELDS = {f.name for f in dataclasses.fields(JobRecord)}
+
+def persist_jobs(jobs) -> None:
+    """把 jobs(最近 N 条)落盘供重启恢复；剥掉 retry_ctx 里的 api_key(不存明文)；全程吞异常。
+    jobs: 调用方传入的 JobRecord 列表快照（调用方负责加锁）。"""
+    try:
+        jobs = list(jobs)[:QUEUE_PERSIST_MAX]
+        out = []
+        for j in jobs:
+            d = dataclasses.asdict(j)
+            ctx = d.get('retry_ctx')
+            if isinstance(ctx, dict) and 'api_key' in ctx:
+                ctx = dict(ctx); ctx.pop('api_key', None); d['retry_ctx'] = ctx
+            out.append(d)
+        tmp = QUEUE_STATE_FILE + '.tmp'
+        with open(tmp, 'w', encoding='utf-8') as f:
+            json.dump(out, f, ensure_ascii=False)
+        os.replace(tmp, QUEUE_STATE_FILE)
+    except Exception as ex:
+        logger.warning(f"[队列] 持久化失败(忽略): {ex}")
+
+def load_persisted_jobs() -> List[JobRecord]:
+    """启动时读回队列；把中断态(queued/running)修正为 partial/failed。返回 JobRecord 列表。"""
+    try:
+        if not os.path.exists(QUEUE_STATE_FILE):
+            return []
+        with open(QUEUE_STATE_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        if not isinstance(data, list):
+            return []
+    except Exception as ex:
+        logger.warning(f"[队列] 读取持久化失败(忽略): {ex}")
+        return []
+    jobs = []
+    for d in data:
+        if not isinstance(d, dict):
+            continue
+        try:
+            job = JobRecord(**{k: v for k, v in d.items() if k in _JOB_FIELDS})
+        except Exception:
+            continue
+        # 中断态修正：程序重启时仍标 queued/running 的任务不可能还在跑
+        if job.status in ('queued', 'running'):
+            job.status = 'partial' if (job.b2_path or job.pro_path) else 'failed'
+            job.error = '程序重启，任务已中断'
+        job.b2_stage = ''; job.pro_stage = ''; job.pro_polishing = False
+        ensure_candidate_lists(job)  # 老持久化只有 *_path → 回填成单元素候选列表(单张无 nav)，之后重抽即累积
+        jobs.append(job)
+    if jobs:
+        logger.info(f"[队列] 恢复 {len(jobs)} 个历史任务")
+    return jobs
+
+
+# ── 历史地板小样扫描（_ng_uploads 里的原始上传，供 webui 历史小样 picker）─────
+_FLOOR_SWATCH_EXTS = ('.jpg', '.jpeg', '.png', '.webp')
+# 历史小样里要排除的非地板上传：房间图/参照图/记录管理上传/测试临时图/匿名兜底名
+_FLOOR_SWATCH_SKIP_PREFIX = ('room_', 'ref_', 'mgr_a_', 'mgr_b_', 'ZZ', 'upload_')
+
+def _list_recent_floor_swatches(limit: int = 24):
+    """扫 _ng_uploads 里的历史地板小样(原始上传)，按最近修改时间倒序返回绝对路径列表。
+    文件名 stem 与 output_files/{材料}/ 文件夹同名 → 选用后自动复用同一材料文件夹、记录归并。"""
+    items = []
+    try:
+        for f in os.listdir(UPLOAD_DIR):
+            if not f.lower().endswith(_FLOOR_SWATCH_EXTS):
+                continue
+            if f.startswith(_FLOOR_SWATCH_SKIP_PREFIX):
+                continue
+            p = os.path.join(UPLOAD_DIR, f)
+            if os.path.isfile(p):
+                items.append((p, os.path.getmtime(p)))
+    except Exception as ex:
+        logger.warning(f"扫描历史小样失败: {ex}")
+        return []
+    items.sort(key=lambda x: x[1], reverse=True)
+    return [p for p, _ in items[:limit]]
 
 
 # ── 用量统计 ──────────────────────────────────────────────────────
@@ -127,6 +211,18 @@ def _load_records(json_path):
         if json_path and os.path.exists(json_path):
             logger.error(f"记录读取失败: {json_path} / {e}")
         return []
+
+def room_type_counts(records) -> dict:
+    """纯函数：把一组记录按非空 room_type 累计计数 → {房间类型: 张数}。空/缺失的 room_type 忽略。"""
+    counts = {}
+    for r in records or []:
+        if not isinstance(r, dict):
+            continue
+        rt = (r.get('room_type', '') or '').strip()
+        if rt:
+            counts[rt] = counts.get(rt, 0) + 1
+    return counts
+
 
 def _save_records(json_path, records):
     # 先写同目录临时文件再原子替换：写一半崩溃/断电不会截断原文件

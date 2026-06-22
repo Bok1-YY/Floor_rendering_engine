@@ -29,12 +29,22 @@ os.makedirs(MAIN_OUTPUT_DIR, exist_ok=True)
 
 CONFIG_FILE = os.path.join(BASE_DIR, "engine_config.json")
 
+# 上传原图 + 缩略图缓存目录（webui 上传/历史小样扫描、records 小样扫描共用，故放配置层）。
+# BASE_DIR 已是 frozen-aware（打包时 = exe 所在目录），与旧 webui 里的 sys.frozen 写法等价。
+UPLOAD_DIR = os.path.join(BASE_DIR, "_ng_uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+THUMB_DIR = os.path.join(os.path.dirname(UPLOAD_DIR), "_ng_thumbs")  # 缩略图缓存，与 _ng_uploads 同级
+os.makedirs(THUMB_DIR, exist_ok=True)
+
 # ── 日志（委托给 logging_setup，这里保持向后兼容的 logger 导出）──
 from .logging_setup import logger  # noqa: E402
 
 # ── 翻译模块 ────────────────────────────────────────────────────
+# 在线翻译后端 = deep-translator 的 GoogleTranslator（原 MyMemory 国外端点常被软路由
+# reset，且不吃下面的代理配置，已弃用）。GoogleTranslator 支持传 proxies，复用生图侧
+# 同一套代理逻辑（见 prompt_data.translate_zh_to_en）。
 try:
-    from deep_translator import MyMemoryTranslator  # noqa: F401
+    from deep_translator import GoogleTranslator  # noqa: F401
     TRANSLATOR_AVAILABLE = True
 except ImportError:
     print("⚠️ 未检测到 deep-translator 库！请运行: pip install deep-translator")
@@ -103,6 +113,9 @@ def _load_config() -> Dict[str, str]:
 _PKG_DIR = os.path.dirname(os.path.abspath(__file__))
 BEVEL_REF_IMAGE_DEFAULT = os.path.join(_PKG_DIR, "assets", "bevel_ref_clean_a.jpg")
 
+# 浏览器标签页图标（favicon）。SVG 现代浏览器原生支持；ASCII 文件名避免非 ASCII 路径坑。
+FAVICON_PATH = os.path.join(_PKG_DIR, "assets", "logo.svg")
+
 def get_bevel_ref_image() -> str:
     """返回当前圆弧倒角参考图路径(配置可覆盖);文件不存在则返回空串(自动降级为纯文字)。"""
     cfg = _load_config()
@@ -131,6 +144,12 @@ def save_api_key(api_key_val: str, proxy_val: str = "") -> None:
     _save_config(cfg)
 
 
+def get_proxy() -> str:
+    """读取本地代理地址（engine_config.json 的 proxy 字段）；为空 → 默认走软路由(透明代理)。
+    生图侧到处用 cfg.get("proxy","").strip() 这同一个值；翻译也复用它。"""
+    return (_load_config().get("proxy") or "").strip()
+
+
 def save_provider_settings(fal_api_key_val: Optional[str] = None,
                            image_provider_val: Optional[str] = None) -> None:
     """保存 Fal API key 和生图线路选择(google / fal)。传 None 的字段不改动。"""
@@ -147,6 +166,54 @@ def get_image_provider() -> str:
     """读取当前生图线路；非法值回落到 google。"""
     prov = (_load_config().get("image_provider") or DEFAULT_IMAGE_PROVIDER).strip().lower()
     return prov if prov in ("google", "fal") else "google"
+
+
+# ── HTTPS 证书校验（可配置；2026-06-18 连通性自检证实本网络 verify=True 能通过，默认改为开启）──
+# 历史上走 verify=False 是怕软路由(透明代理)做 TLS 解密导致证书错；实测本机软路由不拦 TLS、校验能过，
+# 故默认开启更安全（尤其保护用户自费的 Fal key）。若换到会拦 HTTPS 的网络报证书错（见 failure_kb 的 tls_cert）：
+# 在 engine_config.json 设 tls_verify=false 关闭，或把代理根证书路径填到 tls_ca_bundle。
+def get_tls_verify() -> bool:
+    """是否启用 HTTPS 证书校验。默认 True（已实测本网络可过）；坏网络可设 false 关闭。"""
+    return bool(_load_config().get("tls_verify", True))
+
+
+def get_tls_ca_bundle() -> str:
+    """自定义 CA 证书路径（如软路由/代理的根证书）；为空 → 用系统/requests 默认 CA。"""
+    return (_load_config().get("tls_ca_bundle") or "").strip()
+
+
+# ── 上传文件名安全化 ────────────────────────────────────────────────────
+# 用户上传的原始文件名不可信：可能带路径(../、C:\)、危险字符、或与已有文件同名导致静默覆盖。
+_UPLOAD_ALLOWED_EXT = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+
+
+def safe_upload_path(orig_name: str, prefix: str = "") -> Optional[str]:
+    """把上传文件名安全化成 UPLOAD_DIR 内的唯一绝对路径。
+
+    - 去目录(防 ../ 与 C:\\ 逃逸：先把反斜杠归一再取 basename)
+    - 扩展名白名单(仅图片)，不在白名单 → 返回 None(调用方提示拒绝)
+    - 清洗文件名危险字符，空格转下划线
+    - 同名自动加序号，绝不覆盖已有文件
+    - 兜底校验最终路径仍落在 UPLOAD_DIR 内，越界 → None
+    """
+    base = os.path.basename((orig_name or "").replace("\\", "/"))
+    stem, ext = os.path.splitext(base)
+    ext = ext.lower()
+    if ext not in _UPLOAD_ALLOWED_EXT:
+        return None
+    stem = re.sub("[^A-Za-z0-9._一-鿿-]", "_", stem.replace(" ", "_")).strip("._") or "img"
+    final = os.path.join(UPLOAD_DIR, f"{prefix}{stem}{ext}")
+    i = 1
+    while os.path.exists(final):
+        final = os.path.join(UPLOAD_DIR, f"{prefix}{stem}_{i}{ext}")
+        i += 1
+    try:
+        real_base = os.path.realpath(UPLOAD_DIR)
+        if os.path.commonpath([os.path.realpath(final), real_base]) != real_base:
+            return None
+    except Exception:
+        return None
+    return final
 
 
 # ── 出图重试策略（极速 / 韧性）一键切换 ─────────────────────────

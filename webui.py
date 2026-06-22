@@ -1,25 +1,22 @@
 import os
-import sys
 import time
-import json as _json_mod
 import base64
 import io as _io_mod
 import threading as _threading
 import asyncio
-import dataclasses
 from typing import Optional, List
 
 from PIL import Image
 
 from .config import (
-    BASE_DIR, MAIN_OUTPUT_DIR,
+    MAIN_OUTPUT_DIR, UPLOAD_DIR, THUMB_DIR,
     GEMINI_MODEL_MAP,
     _build_theme_css,
     logger, _short_text, _load_config, save_api_key,
     save_provider_settings, get_speed_profile, save_speed_profile,
     save_auto_failover, get_image_provider,
     extract_clean_prompt,
-    get_bevel_ref_image,
+    get_bevel_ref_image, safe_upload_path,
 )
 from .api import (
     call_gemini_edit, call_image_generate,
@@ -55,17 +52,18 @@ from .records import (
     toggle_result_favorite, collect_favorites,
     export_pptx_from_json, export_favorites_pptx,
     record_usage, load_usage_summary,
+    persist_jobs, load_persisted_jobs, _list_recent_floor_swatches,
+    room_type_counts,
 )
-from .models import JobRecord
+from .models import (JobRecord, new_job, update_job, compute_final_status, job_time_text,
+                     CANDIDATE_SLOTS, add_candidate, nav_candidate, ensure_candidate_lists)
 from .failure_kb import classify_failure, FAILURE_RULES
+from .recipes import FLOOR_RECIPES, recommend_recipes, pick_option_key
 
 from nicegui import ui, app, events as ng_events, background_tasks, context
 from fastapi.responses import FileResponse, Response
 
-UPLOAD_DIR = os.path.join(os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else BASE_DIR, '_ng_uploads')
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-THUMB_DIR = os.path.join(os.path.dirname(UPLOAD_DIR), '_ng_thumbs')  # 缩略图缓存，与 _ng_uploads 同级
-os.makedirs(THUMB_DIR, exist_ok=True)
+# UPLOAD_DIR / THUMB_DIR 已下沉到 config.py（webui/records 共用），此处直接 import 使用。
 app.add_static_files('/outputs', MAIN_OUTPUT_DIR)
 app.add_static_files('/uploads', UPLOAD_DIR)
 
@@ -106,113 +104,52 @@ def _thumb_url(p: str, s: int = 320) -> str:
     return f'/thumb/uploads/{os.path.basename(p)}?s={s}'
 
 def _to_url(p: str) -> str:
+    # 用 realpath+commonpath 判断路径归属（替代脆弱的子串匹配）：路径必须真正落在
+    # output_files / _ng_uploads 目录内才生成 URL，拒绝 ../ 逃逸到目录外的路径。
     if not p: return ''
-    p = str(p)
-    if MAIN_OUTPUT_DIR in p: return '/outputs/' + p.replace(MAIN_OUTPUT_DIR,'').replace('\\','/').lstrip('/')
-    if UPLOAD_DIR in p: return '/uploads/' + p.replace(UPLOAD_DIR,'').replace('\\','/').lstrip('/')
+    try:
+        rp = os.path.realpath(str(p))
+    except Exception:
+        return ''
+    for base, prefix in ((MAIN_OUTPUT_DIR, '/outputs/'), (UPLOAD_DIR, '/uploads/')):
+        try:
+            rbase = os.path.realpath(base)
+            if os.path.commonpath([rp, rbase]) == rbase:
+                return prefix + os.path.relpath(rp, rbase).replace('\\', '/')
+        except Exception:
+            continue
     return ''
 
 
-_FLOOR_SWATCH_EXTS = ('.jpg', '.jpeg', '.png', '.webp')
-# 历史小样里要排除的非地板上传：房间图/参照图/记录管理上传/测试临时图/匿名兜底名
-_FLOOR_SWATCH_SKIP_PREFIX = ('room_', 'ref_', 'mgr_a_', 'mgr_b_', 'ZZ', 'upload_')
-
-def _list_recent_floor_swatches(limit: int = 24):
-    """扫 _ng_uploads 里的历史地板小样(原始上传)，按最近修改时间倒序返回绝对路径列表。
-    文件名 stem 与 output_files/{材料}/ 文件夹同名 → 选用后自动复用同一材料文件夹、记录归并。"""
-    items = []
-    try:
-        for f in os.listdir(UPLOAD_DIR):
-            if not f.lower().endswith(_FLOOR_SWATCH_EXTS):
-                continue
-            if f.startswith(_FLOOR_SWATCH_SKIP_PREFIX):
-                continue
-            p = os.path.join(UPLOAD_DIR, f)
-            if os.path.isfile(p):
-                items.append((p, os.path.getmtime(p)))
-    except Exception as ex:
-        logger.warning(f"扫描历史小样失败: {ex}")
-        return []
-    items.sort(key=lambda x: x[1], reverse=True)
-    return [p for p, _ in items[:limit]]
+# _list_recent_floor_swatches 已下沉到 records.py（纯目录扫描），此处直接 import 使用。
 
 _job_history: List[JobRecord] = []
 _job_lock = _threading.Lock()
 _gen_semaphore: Optional[asyncio.Semaphore] = None
-_job_ui_refs: dict = {}   # job_id → {card, status_lbl, err_lbl, img_row, b2_img, b2_dl, pro_img, pro_dl}
-_job_stop_btns: dict = {}  # job_id → stop button element
-_job_retry_btns: dict = {} # job_id → retry button element (失败/部分完成时显示)
-_job_regen_btns: dict = {} # job_id → regen button element (完成/部分完成时显示，再来一张)
-_job_regenN_sels: dict = {} # job_id → 多抽张数下拉 (再来一张旁，默认 ×6)
-_regen_batches: dict = {}   # src_job_id → {'cancel':bool,'i':int,'n':int,'running':bool,'gen0':int} 逐张多抽批次的易失运行态
-_job_batch_btns: dict = {}  # src_job_id → 「停止多抽」按钮元素 (建卡时建，常态隐藏)
-_job_regen_pods: dict = {}  # src_job_id → 重抽胶囊容器元素 (🔄重抽│×N，显隐按整块控制)
+# 每个 job 的所有 UI 元素引用合并到一个 dict（原先散在 7 个并行 dict，加键时要同步 7 处、易错位）。
+# job_id → {card, status_lbl, err_lbl, err_row, time_lbl, img_row, b2_img, b2_dl, pro_img, pro_dl,
+#           pro_polish_btn, pro_polish_img, pro_polish_dl, single_model,
+#           stop_btn, retry_btn, regen_btn, regenN_sel, regen_pod, batch_btn}
+_job_ui: dict = {}
+_regen_batches: dict = {}   # src_job_id → {'cancel':bool,'i':int,'n':int,'running':bool,'gen0':int} 逐张多抽批次的易失运行态（运行态，非 UI 引用，单独保留）
 
-# ── 队列持久化：重启后恢复已完成的卡片（图片本就在盘上）──────────────
-_QUEUE_STATE_FILE = os.path.join(MAIN_OUTPUT_DIR, '.queue_state.json')
-_QUEUE_PERSIST_MAX = 60  # 最多持久化最近 N 条
-_JOB_FIELDS = {f.name for f in dataclasses.fields(JobRecord)}
-
+# ── 队列持久化：序列化/恢复逻辑已下沉到 records.py（纯文件 IO）──────────────
+# 这里只保留薄包装：加锁取 _job_history 快照后交给 records.persist_jobs。
 def _persist_jobs():
-    """把 _job_history(最近 N 条)落盘供重启恢复；剥掉 retry_ctx 里的 api_key(不存明文)；全程吞异常。"""
-    try:
-        with _job_lock:
-            jobs = list(_job_history)[:_QUEUE_PERSIST_MAX]
-        out = []
-        for j in jobs:
-            d = dataclasses.asdict(j)
-            ctx = d.get('retry_ctx')
-            if isinstance(ctx, dict) and 'api_key' in ctx:
-                ctx = dict(ctx); ctx.pop('api_key', None); d['retry_ctx'] = ctx
-            out.append(d)
-        tmp = _QUEUE_STATE_FILE + '.tmp'
-        with open(tmp, 'w', encoding='utf-8') as f:
-            _json_mod.dump(out, f, ensure_ascii=False)
-        os.replace(tmp, _QUEUE_STATE_FILE)
-    except Exception as ex:
-        logger.warning(f"[队列] 持久化失败(忽略): {ex}")
+    with _job_lock:
+        jobs = list(_job_history)
+    persist_jobs(jobs)
 
-def _load_persisted_jobs():
-    """启动时读回队列；把中断态(queued/running)修正为 partial/failed。返回 JobRecord 列表。"""
-    try:
-        if not os.path.exists(_QUEUE_STATE_FILE):
-            return []
-        with open(_QUEUE_STATE_FILE, 'r', encoding='utf-8') as f:
-            data = _json_mod.load(f)
-        if not isinstance(data, list):
-            return []
-    except Exception as ex:
-        logger.warning(f"[队列] 读取持久化失败(忽略): {ex}")
-        return []
-    jobs = []
-    for d in data:
-        if not isinstance(d, dict):
-            continue
-        try:
-            job = JobRecord(**{k: v for k, v in d.items() if k in _JOB_FIELDS})
-        except Exception:
-            continue
-        # 中断态修正：程序重启时仍标 queued/running 的任务不可能还在跑
-        if job.status in ('queued', 'running'):
-            job.status = 'partial' if (job.b2_path or job.pro_path) else 'failed'
-            job.error = '程序重启，任务已中断'
-        job.b2_stage = ''; job.pro_stage = ''; job.pro_polishing = False
-        jobs.append(job)
-    if jobs:
-        logger.info(f"[队列] 恢复 {len(jobs)} 个历史任务")
-    return jobs
-
-_job_history.extend(_load_persisted_jobs())
+_job_history.extend(load_persisted_jobs())
 
 def _new_job(display_name, ts, model_filter='both') -> JobRecord:
-    job = JobRecord(job_id=f"job_{int(time.time()*1000)}", display_name=display_name, ts=ts, model_filter=model_filter)
-    with _job_lock: _job_history.insert(0, job)
+    job = new_job(display_name, ts, model_filter)   # JobRecord 构造 + job_id 生成已下沉到 models.new_job
+    with _job_lock: _job_history.insert(0, job)     # 入队仍由 webui 持有（_job_history 所有权不动）
     # UI card is created by _add_job_card() called from the event loop in _run_job
     return job
 
-def _update_job(job: JobRecord, **kw):
-    for k, v in kw.items(): setattr(job, k, v)
-    # _refresh_job_card() is called explicitly from _run_job after this
+# _update_job 下沉到 models.update_job；保留同名别名，调用点(18 处)不变。
+_update_job = update_job
 
 # 🔍 安全解包新旧 NiceGUI 版本里的上传数据
 async def _extract_upload_data(e: ng_events.UploadEventArguments):
@@ -302,6 +239,10 @@ async def main_page():
 .ctx-room { background:#EEF3F6; border:1px solid #D6E2EA; border-radius:11px; padding:11px; }
 .ctx-ref  { background:#EDF4EE; border:1px solid #D2E4D6; border-radius:11px; padding:11px; }
 .ctx-pet  { background:#F6F0EE; border:1px solid #E7D8D2; border-radius:11px; padding:11px; }
+/* 顺手重排：板材规格暖卡（贴地板小样下方）+ 客户与地区蓝卡（primary 字段蓝描边强调）*/
+.spec-card   { background:#FBF6EF; border:1px solid #EAD9C4; border-radius:11px; padding:10px; display:flex; flex-direction:column; gap:6px; }
+.region-card { background:#EEF2F5; border:1px solid #D8E2EA; border-radius:11px; padding:11px; display:flex; flex-direction:column; gap:8px; }
+.region-primary .q-field__control:before { border-color:#BBD2E0 !important; }
 /* 重抽控件：🔄重抽 │ ×N 连体胶囊（teal 描边）；批次运行时换成红橙「停止多抽」药丸 */
 .regen-pod { display:flex; align-items:center; height:28px; border:1px solid var(--border-panel); border-radius:var(--radius-btn); background:#fff; overflow:hidden; }
 .regen-pod .q-btn { min-height:28px !important; height:28px !important; color:#2e8c7e !important; font-weight:600; font-size:12px; border-radius:0 !important; padding:0 8px !important; box-shadow:none !important; }
@@ -311,6 +252,44 @@ async def main_page():
 .regen-pod .regen-n .q-field__control { border:0 !important; height:28px !important; min-height:28px !important; background:transparent !important; }
 .regen-pod .regen-n .q-field__native { color:#2e8c7e !important; font-weight:600; padding-top:0 !important; padding-bottom:0 !important; }
 .regen-batch-stop.q-btn { height:28px !important; min-height:28px !important; border:1px solid var(--accent-strong) !important; border-radius:var(--radius-btn) !important; color:#fff !important; background:var(--accent-strong) !important; font-size:12px; font-weight:700; padding:0 10px !important; box-shadow:0 1px 3px rgba(193,95,60,0.25) !important; text-transform:none; }
+/* 图槽候选导航条：‹ n/N ›（同槽历次重抽左右切换）。半透明黑底覆于图片底部，不挤占图高 */
+.cand-nav { position:absolute; left:0; right:0; bottom:4px; padding:2px 6px; z-index:8; pointer-events:none; }
+.cand-nav .cand-arrow.q-btn { pointer-events:auto; min-height:24px !important; height:24px !important; width:24px !important; color:#fff !important; background:rgba(26,24,21,0.62) !important; box-shadow:none !important; font-size:15px; font-weight:700; }
+.cand-nav .cand-arrow.q-btn:disabled, .cand-nav .cand-arrow.q-btn[disabled] { opacity:0.32 !important; }
+.cand-nav .cand-cnt { pointer-events:auto; color:#fff; background:rgba(26,24,21,0.62); border-radius:8px; padding:1px 8px; font-weight:600; min-width:40px; text-align:center; }
+/* ── v7 体验优化：步骤条 / 智能配方 / 校验清单 / 引导卡 / 队列汇总 ── */
+.step-bar { display:flex; align-items:center; padding:11px 16px 9px; border-bottom:1px solid #ECE6DA; background:#F4F1E9; }
+.step-dot { width:20px; height:20px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; flex:0 0 auto; }
+.step-dot--done { background:#5B9B6B; color:#fff; }
+.step-dot--active { background:#C15F3C; color:#fff; box-shadow:0 1px 3px rgba(193,95,60,0.3); }
+.step-dot--idle { background:#E3DED1; color:#9C9486; }
+.step-txt { font-size:11.5px; font-weight:600; margin-left:6px; white-space:nowrap; }
+.step-line { flex:1 1 auto; height:2px; margin:0 8px; border-radius:2px; background:#E3DED1; min-width:14px; }
+.step-line--done { background:#5B9B6B; }
+/* 智能配方卡 */
+.recipe-card { display:flex; flex-direction:column; gap:3px; padding:9px 10px; border:1px solid #E3DED1; border-radius:10px; background:#ffffff; cursor:pointer; transition:all .15s ease; }
+.recipe-card:hover { border-color:#C9A88F; box-shadow:0 1px 4px rgba(120,90,60,0.1); }
+.recipe-card--on { border-color:#C15F3C; background:#FBF1EB; box-shadow:0 1px 3px rgba(193,95,60,0.22); }
+.recipe-card .rc-label { font-size:12px; font-weight:700; color:#1F1B16; }
+.recipe-card .rc-sub { font-size:9.5px; line-height:1.4; color:#9C8A66; }
+.recipe-card--on .rc-sub { color:#B5713A; }
+/* 校验清单 chip */
+.chk-chip { display:inline-flex; align-items:center; gap:4px; font-size:10.5px; font-weight:600; padding:2px 9px; border-radius:20px; }
+.chk-chip--ok { background:#EAF3EC; color:#4E9163; }
+.chk-chip--idle { background:#EFEBE1; color:#9C9486; }
+.chk-chip--miss { background:#FBEEE9; color:#B5503A; }
+/* 引导卡（空状态：地板图优先）*/
+.guide-zone { display:flex; flex-direction:column; align-items:center; gap:10px; padding:30px 18px; border:2px dashed #C9A88F; border-radius:14px; background:#FBF6EF; text-align:center; }
+.guide-zone.q-uploader { box-shadow:none !important; width:100%; max-height:none; cursor:pointer; }
+.guide-zone .q-uploader__list { display:none !important; }
+.guide-zone .q-uploader__header { background:transparent !important; border:none; min-height:120px; display:flex; align-items:center; justify-content:center; }
+.guide-zone .q-uploader__header .q-btn, .guide-zone .q-uploader__title { color:#A8472A !important; font-weight:700; font-size:14px; }
+.guide-zone .q-uploader__subtitle, .guide-zone .q-uploader__spinner { display:none !important; }
+/* 队列汇总条 */
+.qsum-track { flex:1 1 auto; height:6px; border-radius:6px; background:#EDE6DA; overflow:hidden; }
+.qsum-fill { height:100%; border-radius:6px; background:linear-gradient(90deg,#D9A05B,#C15F3C); transition:width .5s ease; }
+.qchip { display:inline-flex; align-items:center; gap:4px; font-size:12px; cursor:pointer; border:1px solid #E3DED1; border-radius:8px; padding:5px 11px; background:#fff; color:#8A8175; }
+.qchip--on { background:#FBF1EB; border-color:#C15F3C; color:#A8472A; font-weight:600; }
 </style>''')
 
     floor_path = {'v': ''}; room_path = {'v': ''}; ref_path = {'v': ''}; last_img = {'v': ''}
@@ -320,7 +299,7 @@ async def main_page():
 
     with ui.header().classes('q-py-xs q-px-md items-center justify-between').style('height:50px; background: var(--bg-header);'):
         with ui.row().classes('items-center'):
-            ui.label('🪵 地板 AI 提示词引擎 v6.0.1').classes('text-h6').style('color: var(--text-accent);')
+            ui.label('🪵 地板 AI 提示词引擎 v7').classes('text-h6').style('color: var(--text-accent);')
         with ui.tabs().classes('flex-grow justify-end') as main_tabs:
             t_workspace = ui.tab('workspace', label='🎨 工作台 (生成 & 队列)')
             t_records   = ui.tab('records', label='📋 记录管理')
@@ -381,6 +360,9 @@ async def main_page():
                         'display:flex; flex-direction:column;'
                         'border-color: var(--border-panel); background: var(--bg-panel-left);'):
 
+                  # 顶部步骤进度条（① 地板图 → ② 配方·参数 → ③ 生成）；_render_steps() 按状态重绘
+                  step_bar = ui.row().classes('step-bar w-full no-wrap items-center').style('flex:0 0 auto;')
+
                   # ① 可滚动参数区（flex:1 + min-height:0 否则吸底栏会塌）
                   with ui.scroll_area().classes('q-pa-md').style('flex:1 1 auto; min-height:0;'):
                     with ui.column().classes('w-full q-gutter-y-sm'):
@@ -419,6 +401,7 @@ async def main_page():
                                 else:
                                     _b.classes(remove='wf-pill--on')
                             _on_mode()
+                            _render_steps(); _render_checklist()
                         with ui.grid(columns=2).classes('w-full').style('gap:7px'):
                             for _wl, _wv in _WF_PILLS:
                                 _pb = ui.button(_wl, on_click=lambda v=_wv: _set_wf(v)).props('flat no-caps').classes('wf-pill w-full')
@@ -427,7 +410,7 @@ async def main_page():
                                 _wf_pill_btns.append(_pb)
 
                         # ── 地板素材图：hero 卡片 + 驯化上传 + 历史小样 ──────────
-                        ui.label('📎 地板素材图').classes('sec-head')
+                        _floor_lbl = ui.label('📎 地板素材图').classes('sec-head'); _floor_lbl.visible = False
                         floor_hero = ui.element('div').classes('hero-card w-full'); floor_hero.visible = False
                         with floor_hero:
                             floor_prev = ui.image('').props('fit=cover').style('flex:0 0 88px; width:88px; height:66px; border-radius:8px;')
@@ -453,11 +436,16 @@ async def main_page():
                                 _rebuild_style_sel(_styles)
                             except Exception as ex:
                                 tone_analysis_lbl.content = f'<span style="color:#e74c3c;font-size:0.8em;">分析失败: {ex}</span>'
+                            # 地板就位 → 展开下游参数、按识别色调出配方、刷新步骤条/校验清单
+                            _set_left_gate(True)
+                            _render_recipes(floor_tone_sel.value or '')
+                            _render_steps(); _render_checklist()
 
                         async def on_floor_up(e: ng_events.UploadEventArguments):
                             fn, content = await _extract_upload_data(e)
                             if not content: ui.notify('读取失败', type='negative'); return
-                            fn = fn.replace(' ', '_'); p = os.path.join(UPLOAD_DIR, fn)
+                            p = safe_upload_path(fn)
+                            if not p: ui.notify('不支持的文件类型（仅 png/jpg/jpeg/webp/bmp）', type='negative'); return
                             with open(p, 'wb') as f: f.write(content)
                             await _use_floor_image(p)
 
@@ -488,9 +476,49 @@ async def main_page():
                                         _cell.on('click', lambda _, pp=p: _pick_history_floor(pp))
                             _hist_dlg.open()
 
-                        with ui.row().classes('w-full no-wrap items-stretch').style('gap:7px'):
+                        _floor_change_row = ui.row().classes('w-full no-wrap items-stretch').style('gap:7px'); _floor_change_row.visible = False
+                        with _floor_change_row:
                             ui.upload(on_upload=on_floor_up, auto_upload=True, max_files=1).props('accept=".jpg,.jpeg,.png" flat label="⬆️ 更换 / 拖拽上传"').classes('floor-upload').style('flex:1 1 0; min-width:0;')
                             ui.button('📁 历史小样', on_click=_open_history_dialog).props('flat no-caps').style('flex:0 0 auto; border:1px solid #E3DED1; background:#fff; color:#6B6356; border-radius:9px; white-space:nowrap;')
+
+                        # ── 空状态引导卡（地板图优先：未上传时显示，上传后由 _set_left_gate 收起）──
+                        floor_empty_guide = ui.column().classes('w-full q-gutter-y-sm')
+                        with floor_empty_guide:
+                            ui.label('① 从地板素材图开始').classes('sec-head')
+                            ui.upload(on_upload=on_floor_up, auto_upload=True, max_files=1).props(
+                                'accept=".jpg,.jpeg,.png" flat label="🪵 拖拽或点击上传地板小样"').classes('guide-zone')
+                            ui.html('<div style="font-size:11.5px;color:#9C8A66;line-height:1.6;">'
+                                    '上传后将<b>自动识别木种与色调</b>，并为你推荐成套的风格 / 光线配方——不用一个个手填。'
+                                    '&nbsp;支持 jpg / png / webp。</div>')
+                            with ui.row().classes('w-full'):
+                                ui.button('📁 从历史小样选', on_click=_open_history_dialog).props('flat no-caps').style(
+                                    'border:1px solid #E3DED1; background:#fff; color:#A8472A; border-radius:9px; white-space:nowrap;')
+                            with ui.element('div').style(
+                                    'display:flex;flex-direction:column;gap:10px;padding:16px;border-radius:12px;'
+                                    'background:#EFEBE1;border:1px dashed #DDD6C8;opacity:0.85;'):
+                                ui.html('<div style="font-size:11.5px;font-weight:600;color:#9C9486;">上传地板图后，这里会出现 ——</div>')
+                                ui.html('<div style="display:flex;flex-wrap:wrap;gap:7px;">'
+                                        '<span style="font-size:11px;color:#9C9486;background:#F4F1E9;padding:4px 10px;border-radius:7px;">✨ 智能配方推荐</span>'
+                                        '<span style="font-size:11px;color:#9C9486;background:#F4F1E9;padding:4px 10px;border-radius:7px;">🎨 色调识别结果</span>'
+                                        '<span style="font-size:11px;color:#9C9486;background:#F4F1E9;padding:4px 10px;border-radius:7px;">🚪 场景核心参数</span>'
+                                        '</div>')
+
+                        # ── 🪚 板材规格（跟着地板小样一起定，置顶；地板上传后才显）──
+                        spec_card = ui.column().classes('w-full spec-card'); spec_card.visible = False
+                        with spec_card:
+                            ui.html('<div class="sec-head" style="color:#9A6A2E">🪵 板材规格 '
+                                    '<span style="font-weight:600;color:#B9A488;">· 跟着地板小样一起定</span></div>')
+                            with ui.grid(columns=3).classes('w-full').style('gap:6px'):
+                                floor_size_sel = ui.select(FLOOR_SIZES, value=FLOOR_SIZES[0], label='📏 板材尺寸').classes('w-full').props(_editable)
+                                seam_sel = ui.select(['无缝拼接 (SPC/LVT专用)','常规倒角缝 (如强化/木地板)','圆弧倒角 (Pressed Bevel)'], value='无缝拼接 (SPC/LVT专用)', label='🔩 拼缝').classes('w-full').props(_editable)
+                                gloss_sel = ui.select(['超哑光 (0-3°)','哑光 (3-5°)','高光 (High Gloss)'], value='哑光 (3-5°)', label='✨ 光泽度').classes('w-full').props(_editable)
+
+                        # ── ② ✨ 智能配方（地板上传后按识别色调排序展示；点卡一键填好场景参数）──
+                        recipe_wrap = ui.column().classes('w-full q-gutter-y-xs'); recipe_wrap.visible = False
+                        with recipe_wrap:
+                            ui.html('<div class="sec-head">✨ 智能配方 '
+                                    '<span style="font-weight:600;color:#B5AC9C;">· 一键套用，再微调</span></div>')
+                            recipe_box = ui.grid(columns=3).classes('w-full').style('gap:7px')
 
                         # ── 上下文区（跟随工作流，统一固定槽位；三色卡）──────────
                         room_sec = ui.column().classes('w-full q-gutter-y-xs ctx-room')
@@ -499,9 +527,12 @@ async def main_page():
                             ui.label('🏠 待替换房间原图').classes('text-caption').style('color:#3F6E8C; font-weight:700;')
                             async def on_room_up(e: ng_events.UploadEventArguments):
                                 fn, content = await _extract_upload_data(e)
-                                fn = 'room_' + fn.replace(' ', '_'); p = os.path.join(UPLOAD_DIR, fn)
+                                if not content: ui.notify('读取失败', type='negative'); return
+                                p = safe_upload_path(fn, prefix='room_')
+                                if not p: ui.notify('不支持的文件类型（仅 png/jpg/jpeg/webp/bmp）', type='negative'); return
                                 with open(p, 'wb') as f: f.write(content)
                                 room_path['v'] = p; ui.notify('✅ 已上传', type='positive')
+                                _render_steps(); _render_checklist()
                             ui.upload(on_upload=on_room_up, auto_upload=True, max_files=1).props('accept=".jpg,.jpeg,.png" flat label="⬆️ 拖拽或点击上传房间照片"').classes('ctx-upload room-upload w-full')
 
                         ref_sec = ui.column().classes('w-full q-gutter-y-xs ctx-ref')
@@ -512,9 +543,12 @@ async def main_page():
                             ref_prev = ui.image('').classes('w-full rounded'); ref_prev.visible = False
                             async def on_ref_up(e: ng_events.UploadEventArguments):
                                 fn, content = await _extract_upload_data(e)
-                                fn = 'ref_' + fn.replace(' ', '_'); p = os.path.join(UPLOAD_DIR, fn)
+                                if not content: ui.notify('读取失败', type='negative'); return
+                                p = safe_upload_path(fn, prefix='ref_')
+                                if not p: ui.notify('不支持的文件类型（仅 png/jpg/jpeg/webp/bmp）', type='negative'); return
                                 with open(p, 'wb') as f: f.write(content)
                                 ref_path['v'] = p; ref_prev.set_source(_thumb_url(p, 960)); ref_prev.visible = True; ui.notify('✅ 参照图已上传', type='positive')
+                                _render_steps(); _render_checklist()
                             ui.upload(on_upload=on_ref_up, auto_upload=True, max_files=1).props('accept=".jpg,.jpeg,.png" flat label="⬆️ 拖拽或点击上传参照图"').classes('ctx-upload ref-upload w-full')
                             ref_correction_inp = ui.textarea(label='附加风格说明 (可选)', placeholder='例：保持参照图的暖色调，但换成更简洁的布局...').classes('w-full').props('rows=2')
 
@@ -526,9 +560,94 @@ async def main_page():
                                 pet_action_sel = ui.select(_opts(PET_ACTIONS), value=PET_ACTIONS[0], label='动作').classes('w-full').props(_editable)
                                 pet_focus_sel = ui.select(_opts(PET_FOCUS_OPTIONS), value=PET_FOCUS_OPTIONS[0], label='焦点').classes('w-full').props(_editable)
 
-                        # ── 核心参数（常驻、不再折叠；2 列网格）──────────────
-                        ui.label('核心参数').classes('sec-head q-mt-sm')
-                        with ui.grid(columns=2).classes('w-full').style('gap:8px'):
+                        # ── 🌍 客户与地区（决定建筑/家具风格；上移到风格之前，独立蓝卡）──
+                        region_card = ui.column().classes('w-full region-card'); region_card.visible = False
+                        with region_card:
+                            ui.html('<div class="sec-head" style="color:#3F6E8C">🌍 客户与地区 '
+                                    '<span style="font-weight:600;color:#9FB3C0;">· 决定建筑/家具风格</span></div>')
+                            _market_tabs = ui.tabs().props('dense').classes('w-full market-seg')
+                            with _market_tabs:
+                                _tab_intl = ui.tab('intl', label='🌍 海外市场')
+                                _tab_cn   = ui.tab('cn',   label='🇨🇳 国内专属')
+                            _market_mode = {'v': 'intl'}  # 追踪当前 tab
+
+                            _market_panels = ui.tab_panels(_market_tabs, value='intl').classes('w-full market-panels').style('padding:0')
+                            with _market_panels:
+
+                                # ══ Tab 海外 ══════════════════════════════
+                                with ui.tab_panel('intl').classes('q-pa-none'):
+                                    with ui.column().classes('w-full q-gutter-y-sm q-pt-xs'):
+                                        # ── primary：大洲 - 国家 - 城市（提到最前，蓝描边强调）──
+                                        _init_cont = CONTINENTS[-1]
+                                        with ui.grid(columns=3).classes('w-full region-primary').style('gap:7px'):
+                                            continent_sel = ui.select(CONTINENTS, value=_init_cont, label='🌍 大洲').classes('w-full').props(_editable)
+                                            _country_box = ui.element('div').classes('w-full')
+                                            _city_box    = ui.element('div').classes('w-full')
+                                        _country_ref = {'w': None}
+                                        _city_ref    = {'w': None}
+
+                                        def _rebuild_city_sel(countries_map, country):
+                                            cities = countries_map.get(country, [])
+                                            _city_box.clear()
+                                            with _city_box:
+                                                _city_ref['w'] = ui.select(cities, value=cities[0] if cities else None, label='🏙️ 城市').classes('w-full').props(_editable)
+
+                                        def _rebuild_country_sel(continent):
+                                            countries_map = LOCATION_MAP.get(continent, {"通用": ["通用现代都市"]})
+                                            countries = list(countries_map.keys())
+                                            _country_box.clear()
+                                            with _country_box:
+                                                def _on_country_pick(e):
+                                                    _rebuild_city_sel(countries_map, e.value or countries[0])
+                                                _country_ref['w'] = ui.select(countries, value=countries[0], label='🗺️ 国家', on_change=_on_country_pick).classes('w-full').props(_editable)
+                                            _rebuild_city_sel(countries_map, countries[0])
+
+                                        continent_sel.on_value_change(lambda e: _rebuild_country_sel(e.value or CONTINENTS[-1]))
+                                        _rebuild_country_sel(_init_cont)
+
+                                        # ── secondary：房间/物业/视野/家具 + 小区 ──
+                                        with ui.grid(columns=2).classes('w-full').style('gap:8px'):
+                                            room_type_sel = ui.select(ROOM_TYPES, value=ROOM_TYPES[0], label='🚪 房间类型').classes('w-full').props(_editable)
+                                            prop_sel = ui.select(PROPERTY_TYPES, value=PROPERTY_TYPES[0], label='🏠 物业类型').classes('w-full').props(_editable)
+                                            view_sel = ui.select(VIEWS, value=VIEWS[0], label='🪟 视野').classes('w-full').props(_editable)
+                                            market_sel = ui.select(_opts(MARKET_FURNITURE_CHOICES), value=MARKET_FURNITURE_CHOICES[0], label='🛋️ 家具地区风格').classes('w-full').props(_editable)
+                                        hood_inp = ui.input(label='小区/地段 (可选)', placeholder='自由填写...').classes('w-full')
+
+                                # ══ Tab 国内 ══════════════════════════════
+                                with ui.tab_panel('cn').classes('q-pa-none'):
+                                    with ui.column().classes('w-full q-gutter-y-sm q-pt-xs'):
+                                        with ui.grid(columns=2).classes('w-full').style('gap:8px'):
+                                            cn_delivery_sel   = ui.select(CN_DELIVERY_CHOICES, value=CN_DELIVERY_CHOICES[0], label='🏆 交付/装修状态').classes('w-full').props(_editable)
+                                            cn_developer_sel  = ui.select(CN_DEVELOPERS, value=CN_DEVELOPERS[0], label='🏢 开发商').classes('w-full').props(_editable)
+                                            cn_city_sel       = ui.select(CN_CITIES, value=CN_CITIES[0] if CN_CITIES else '上海', label='🏙️ 城市').classes('w-full').props(_editable)
+                                            cn_tier_sel       = ui.select(CN_TIERS, value=CN_TIERS[0], label='📊 楼盘定位').classes('w-full').props(_editable)
+                                            cn_unit_sel       = ui.select(CN_UNIT_TYPES, value=CN_UNIT_TYPES[0], label='🏠 户型').classes('w-full').props(_editable)
+                                            cn_room_type_sel  = ui.select(CN_ROOM_TYPES, value=CN_ROOM_TYPES[0], label='🚪 国内空间类型').classes('w-full').props(_editable)
+                                            cn_view_sel       = ui.select(VIEWS, value=VIEWS[0], label='🪟 视野').classes('w-full').props(_editable)
+
+                                        ui.label('🏗️ 空间特征 (可多选)').classes('text-caption q-mt-xs').style('color: var(--text-label);')
+                                        cn_space_checks = {}
+                                        with ui.column().classes('w-full q-gutter-y-xs q-pl-sm'):
+                                            for _sf in CN_SPACE_FEATURES.keys():
+                                                cn_space_checks[_sf] = ui.checkbox(_sf, value=False).classes('w-full text-sm')
+
+                                        ui.label('🔌 标配设施 (可多选)').classes('text-caption q-mt-xs').style('color: var(--text-label);')
+                                        cn_fac_checks = {}
+                                        with ui.column().classes('w-full q-gutter-y-xs q-pl-sm'):
+                                            for _fac in CN_FACILITIES.keys():
+                                                cn_fac_checks[_fac] = ui.checkbox(_fac, value=False).classes('w-full text-sm')
+
+                            _market_tabs.on_value_change(lambda e: _market_mode.__setitem__('v', e.value))
+
+                        # ── 🎨 风格与画面（配方已填好，可微调；2 列网格）──────────────
+                        _core_lbl = ui.row().classes('w-full items-center justify-between q-mt-sm')
+                        with _core_lbl:
+                            ui.html('<div class="sec-head">🎨 风格与画面 '
+                                    '<span style="font-weight:600;color:#B5AC9C;">· 配方已填好</span></div>')
+                            recipe_badge = ui.label('未套用配方').style(
+                                'font-size:10px;color:#9C9486;background:#EFEBE1;padding:2px 8px;border-radius:20px;white-space:nowrap;')
+                        core_grid = ui.grid(columns=2).classes('w-full').style('gap:8px')
+                        with core_grid:
                             floor_tone_sel = ui.select(_opts(FLOOR_TONES), value=FLOOR_TONES[0], label='🎨 色调').classes('w-full').props(_editable)
 
                             # 风格选择器容器（支持重建）
@@ -553,88 +672,11 @@ async def main_page():
                             aspect_sel = ui.select(['4:3 (横向)','16:9 (超宽)','3:4 (竖向)','9:16 (手机)'], value='4:3 (横向)', label='📐 比例').classes('w-full').props(_editable)
                             res_sel = ui.select(['4K','2K'], value='4K', label='🔍 画质').classes('w-full').props(_editable)
 
-                        # ── 🌍 海外 / 🇨🇳 国内 市场分段（常驻，填充胶囊）──────────
-                        _market_tabs = ui.tabs().props('dense').classes('w-full market-seg')
-                        with _market_tabs:
-                            _tab_intl = ui.tab('intl', label='🌍 海外市场')
-                            _tab_cn   = ui.tab('cn',   label='🇨🇳 国内专属')
-                        _market_mode = {'v': 'intl'}  # 追踪当前 tab
-
-                        with ui.tab_panels(_market_tabs, value='intl').classes('w-full market-panels').style('padding:0'):
-
-                            # ══ Tab 海外 ══════════════════════════════
-                            with ui.tab_panel('intl').classes('q-pa-none'):
-                                with ui.column().classes('w-full q-gutter-y-sm q-pt-xs'):
-                                    # ── 场景/物业/视野/家具（2 列）──
-                                    with ui.grid(columns=2).classes('w-full').style('gap:8px'):
-                                        room_type_sel = ui.select(ROOM_TYPES, value=ROOM_TYPES[0], label='🚪 房间类型').classes('w-full').props(_editable)
-                                        prop_sel = ui.select(PROPERTY_TYPES, value=PROPERTY_TYPES[0], label='🏠 物业类型').classes('w-full').props(_editable)
-                                        view_sel = ui.select(VIEWS, value=VIEWS[0], label='🪟 视野').classes('w-full').props(_editable)
-                                        market_sel = ui.select(_opts(MARKET_FURNITURE_CHOICES), value=MARKET_FURNITURE_CHOICES[0], label='🛋️ 家具地区风格').classes('w-full').props(_editable)
-                                    hood_inp = ui.input(label='小区/地段 (可选)', placeholder='自由填写...').classes('w-full')
-
-                                    # ── 大洲 - 国家 - 城市（3 列并列，仿宠物设置）──
-                                    _init_cont = CONTINENTS[-1]
-                                    with ui.grid(columns=3).classes('w-full').style('gap:7px'):
-                                        continent_sel = ui.select(CONTINENTS, value=_init_cont, label='🌍 大洲').classes('w-full').props(_editable)
-                                        _country_box = ui.element('div').classes('w-full')
-                                        _city_box    = ui.element('div').classes('w-full')
-                                    _country_ref = {'w': None}
-                                    _city_ref    = {'w': None}
-
-                                    def _rebuild_city_sel(countries_map, country):
-                                        cities = countries_map.get(country, [])
-                                        _city_box.clear()
-                                        with _city_box:
-                                            _city_ref['w'] = ui.select(cities, value=cities[0] if cities else None, label='🏙️ 城市').classes('w-full').props(_editable)
-
-                                    def _rebuild_country_sel(continent):
-                                        countries_map = LOCATION_MAP.get(continent, {"通用": ["通用现代都市"]})
-                                        countries = list(countries_map.keys())
-                                        _country_box.clear()
-                                        with _country_box:
-                                            def _on_country_pick(e):
-                                                _rebuild_city_sel(countries_map, e.value or countries[0])
-                                            _country_ref['w'] = ui.select(countries, value=countries[0], label='🗺️ 国家', on_change=_on_country_pick).classes('w-full').props(_editable)
-                                        _rebuild_city_sel(countries_map, countries[0])
-
-                                    continent_sel.on_value_change(lambda e: _rebuild_country_sel(e.value or CONTINENTS[-1]))
-                                    _rebuild_country_sel(_init_cont)
-
-                            # ══ Tab 国内 ══════════════════════════════
-                            with ui.tab_panel('cn').classes('q-pa-none'):
-                                with ui.column().classes('w-full q-gutter-y-sm q-pt-xs'):
-                                    with ui.grid(columns=2).classes('w-full').style('gap:8px'):
-                                        cn_delivery_sel   = ui.select(CN_DELIVERY_CHOICES, value=CN_DELIVERY_CHOICES[0], label='🏆 交付/装修状态').classes('w-full').props(_editable)
-                                        cn_developer_sel  = ui.select(CN_DEVELOPERS, value=CN_DEVELOPERS[0], label='🏢 开发商').classes('w-full').props(_editable)
-                                        cn_city_sel       = ui.select(CN_CITIES, value=CN_CITIES[0] if CN_CITIES else '上海', label='🏙️ 城市').classes('w-full').props(_editable)
-                                        cn_tier_sel       = ui.select(CN_TIERS, value=CN_TIERS[0], label='📊 楼盘定位').classes('w-full').props(_editable)
-                                        cn_unit_sel       = ui.select(CN_UNIT_TYPES, value=CN_UNIT_TYPES[0], label='🏠 户型').classes('w-full').props(_editable)
-                                        cn_room_type_sel  = ui.select(CN_ROOM_TYPES, value=CN_ROOM_TYPES[0], label='🚪 国内空间类型').classes('w-full').props(_editable)
-                                        cn_view_sel       = ui.select(VIEWS, value=VIEWS[0], label='🪟 视野').classes('w-full').props(_editable)
-
-                                    ui.label('🏗️ 空间特征 (可多选)').classes('text-caption q-mt-xs').style('color: var(--text-label);')
-                                    cn_space_checks = {}
-                                    with ui.column().classes('w-full q-gutter-y-xs q-pl-sm'):
-                                        for _sf in CN_SPACE_FEATURES.keys():
-                                            cn_space_checks[_sf] = ui.checkbox(_sf, value=False).classes('w-full text-sm')
-
-                                    ui.label('🔌 标配设施 (可多选)').classes('text-caption q-mt-xs').style('color: var(--text-label);')
-                                    cn_fac_checks = {}
-                                    with ui.column().classes('w-full q-gutter-y-xs q-pl-sm'):
-                                        for _fac in CN_FACILITIES.keys():
-                                            cn_fac_checks[_fac] = ui.checkbox(_fac, value=False).classes('w-full text-sm')
-
-                        _market_tabs.on_value_change(lambda e: _market_mode.__setitem__('v', e.value))
-
                         # ── ⚙️ 更多参数（低频，默认折叠）─────────────────────
-                        with ui.expansion('⚙️ 更多参数').classes('w-full').props('dense'):
+                        more_exp = ui.expansion('⚙️ 更多 · 避免清单 / 自定义补充').classes('w-full').props('dense')
+                        with more_exp:
                             with ui.column().classes('w-full q-gutter-y-sm'):
-                                floor_size_sel = ui.select(FLOOR_SIZES, value=FLOOR_SIZES[0], label='📏 板材尺寸').classes('w-full').props(_editable)
-                                seam_sel = ui.select(['无缝拼接 (SPC/LVT专用)','常规倒角缝 (如强化/木地板)','圆弧倒角 (Pressed Bevel)'], value='无缝拼接 (SPC/LVT专用)', label='🔩 拼缝').classes('w-full').props(_editable)
-                                gloss_sel = ui.select(['超哑光 (0-3°)','哑光 (3-5°)','高光 (High Gloss)'], value='哑光 (3-5°)', label='✨ 光泽度').classes('w-full').props(_editable)
-
-                                ui.label('🚫 避免出现').classes('text-caption q-mt-sm').style('color: var(--text-label);')
+                                ui.label('🚫 避免出现').classes('text-caption').style('color: var(--text-label);')
                                 avoid_checks = {}
                                 with ui.column().classes('w-full q-gutter-y-xs q-pl-sm'):
                                     for _item in AVOID_LIST:
@@ -705,6 +747,21 @@ async def main_page():
                                     _mode = '⚡ 极速' if profile_sel.value == 'fast' else '🛡 韧性'
                                     _fo = '开' if failover_chk.value else '关'
                                     ui.notify(f'保存成功 · 线路: {_route} · 策略: {_mode} · 自动转线: {_fo}', type='positive')
+
+                                # 下拉/开关即选即存：避免"选了线路却没点💾保存就去提交、仍按旧线路跑"的坑。
+                                # (Key/代理 仍只在点💾保存时写盘，不宜每敲一键就存。)
+                                provider_sel.on_value_change(lambda e: (
+                                    save_provider_settings(None, e.value),  # fal_key 传 None：只改线路，不动半填的 Fal Key
+                                    ui.notify(f"✅ 生图线路已切到 {'Fal 路由' if e.value == 'fal' else 'Google 直连'}（已保存）", type='positive'),
+                                ))
+                                profile_sel.on_value_change(lambda e: (
+                                    save_speed_profile(e.value),
+                                    ui.notify(f"✅ 重试策略已切到 {'⚡ 极速' if e.value == 'fast' else '🛡 韧性'}（已保存）", type='positive'),
+                                ))
+                                failover_chk.on_value_change(lambda e: (
+                                    save_auto_failover(bool(e.value)),
+                                    ui.notify(f"✅ 自动转 Fal 已{'开启' if e.value else '关闭'}（已保存）", type='positive'),
+                                ))
 
                                 _conn_test_lbl = ui.label('').classes('text-xs w-full').style(
                                     'color: var(--text-secondary); white-space:pre-line;')
@@ -789,6 +846,8 @@ async def main_page():
                   with ui.column().classes('w-full q-pa-md').style(
                           'flex:0 0 auto; gap:9px; border-top:1px solid var(--border-panel);'
                           'background:#ffffff; box-shadow:0 -5px 16px rgba(120,90,60,0.06);'):
+                        # 校验清单 chips（地板图 / 上下文图 / 参数就绪）；_render_checklist() 按状态重绘
+                        checklist_row = ui.row().classes('w-full items-center').style('gap:6px; flex-wrap:wrap;')
                         with ui.row().classes('w-full items-center justify-between'):
                             gen_status_lbl = ui.label('就绪').classes('text-caption').style('color:#8A8175;')
                             with ui.row().classes('items-center no-wrap').style('gap:4px'):
@@ -805,17 +864,150 @@ async def main_page():
                             batch_btn = ui.button('🗂 批量生成', icon='grid_view', on_click=_open_batch_dialog).props('outline no-caps color=secondary').style('flex:1 1 0;')
                             stop_all_btn = ui.button('⏹ 全部停止', icon='stop', on_click=lambda: _request_stop_all()).props('flat no-caps color=negative').style('flex:0 0 auto;')
 
+                  # ── v7 体验优化：步骤条 / 渐进展开 / 智能配方 / 校验清单 渲染逻辑 ──
+                  # 全在左栏构建完成后定义；仅在运行时(上传/切流/点配方)被调用，故可引用上方已建控件。
+                  def _opt_keys(sel):
+                      o = getattr(sel, 'options', None)
+                      if isinstance(o, dict):
+                          return list(o.keys())
+                      if isinstance(o, (list, tuple)):
+                          return list(o)
+                      return []
+
+                  def _ctx_need():
+                      """当前工作流需要哪张上下文图 + 是否已就绪。返回 (标签|None, ok)。"""
+                      m = workflow_radio.value or ''
+                      if '地板替换' in m:
+                          return '房间原图', bool(room_path['v'])
+                      if '参照模式' in m:
+                          return '参照图', bool(ref_path['v'])
+                      return None, True
+
+                  def _set_left_gate(on):
+                      """地板图就位后展开下游参数；未上传只露引导卡（地板图优先）。"""
+                      _floor_lbl.visible = on
+                      _floor_change_row.visible = on
+                      spec_card.visible = on
+                      recipe_wrap.visible = on
+                      region_card.visible = on
+                      _core_lbl.visible = on
+                      core_grid.visible = on
+                      more_exp.visible = on
+                      floor_empty_guide.visible = not on
+                      if on:
+                          _on_mode()   # 恢复上下文卡按工作流显隐
+                      else:
+                          room_sec.visible = ref_sec.visible = pet_sec.visible = False
+
+                  def _render_steps():
+                      step_bar.clear()
+                      floor_ok = bool(floor_path['v'])
+                      _need, ctx_ok = _ctx_need()
+                      ready = floor_ok and ctx_ok
+                      s1 = 'done' if floor_ok else 'active'
+                      s2 = 'done' if ready else ('active' if floor_ok else 'idle')
+                      s3 = 'active' if ready else 'idle'
+                      steps = [('1', '地板图', s1), ('2', '配方·参数', s2), ('3', '生成', s3)]
+                      with step_bar:
+                          for i, (num, label, st) in enumerate(steps):
+                              dot = {'done': 'step-dot--done', 'active': 'step-dot--active', 'idle': 'step-dot--idle'}[st]
+                              ui.html(f'<div class="step-dot {dot}">{"✓" if st == "done" else num}</div>')
+                              _tc = '#1F1B16' if st != 'idle' else '#B5AC9C'
+                              ui.html(f'<span class="step-txt" style="color:{_tc};">{label}</span>')
+                              if i < len(steps) - 1:
+                                  _ln = 'step-line--done' if steps[i + 1][2] != 'idle' else ''
+                                  ui.html(f'<div class="step-line {_ln}"></div>')
+
+                  def _render_checklist():
+                      checklist_row.clear()
+                      floor_ok = bool(floor_path['v'])
+                      _need, ctx_ok = _ctx_need()
+                      chips = [('地板图', 'ok' if floor_ok else 'idle', '✓' if floor_ok else '○')]
+                      if _need is not None:
+                          chips.append((_need, 'ok' if ctx_ok else 'miss', '✓' if ctx_ok else '!'))
+                      chips.append(('参数就绪', 'ok' if floor_ok else 'idle', '✓' if floor_ok else '○'))
+                      with checklist_row:
+                          for label, kind, icon in chips:
+                              ui.html(f'<span class="chk-chip chk-chip--{kind}">{icon} {label}</span>')
+
+                  _recipe_cards = {}
+                  _recipe_state = {'key': None}
+
+                  def _apply_recipe(r):
+                      def _set(sel, kws):
+                          if sel is None:
+                              return
+                          k = pick_option_key(_opt_keys(sel), kws)
+                          if k is not None:
+                              sel.value = k
+                      _set(light_sel, r['light_kw'])
+                      _set(angle_sel, r['angle_kw'])
+                      _set(aspect_sel, r['aspect_kw'])
+                      _set(res_sel, r['res_kw'])
+                      _set(floor_size_sel, r['size_kw'])
+                      _set(seam_sel, r['seam_kw'])
+                      _set(gloss_sel, r['gloss_kw'])
+                      _set(style_sel_ref['w'], r['style_kw'])
+                      _recipe_state['key'] = r['key']
+                      for _k, _c in _recipe_cards.items():
+                          (_c.classes(add='recipe-card--on') if _k == r['key']
+                           else _c.classes(remove='recipe-card--on'))
+                      recipe_badge.text = f"✨ {r['label']}"
+                      recipe_badge.style('font-size:10px;color:#5B9B6B;background:#EAF3EC;'
+                                         'padding:2px 8px;border-radius:20px;white-space:nowrap;')
+                      ui.notify(f"已套用配方：{r['label']}（可继续微调）", type='positive')
+                      _render_steps(); _render_checklist()
+
+                  def _render_recipes(tone):
+                      recipe_box.clear()
+                      _recipe_cards.clear()
+                      with recipe_box:
+                          for r in recommend_recipes(tone):
+                              card = ui.element('div').classes('recipe-card')
+                              with card:
+                                  ui.html(f'<div class="rc-label">{r["label"]}</div>')
+                                  ui.html(f'<div class="rc-sub">{r["sub"]}</div>')
+                              card.on('click', lambda _=None, rr=r: _apply_recipe(rr))
+                              _recipe_cards[r['key']] = card
+                      if _recipe_state['key'] in _recipe_cards:
+                          _recipe_cards[_recipe_state['key']].classes(add='recipe-card--on')
+
+                  # 初始：空状态（地板图优先），画步骤条与校验清单
+                  _set_left_gate(False)
+                  _render_steps(); _render_checklist()
+
                 # 【右侧 50%】：实时队列栏，带下载按钮
                 # 【右侧 65%】：实时队列栏（inline 限宽 + min-width:0 双保险）
                 with ui.scroll_area().classes('q-pa-md').style(
                         'flex:0 0 64%; min-width:0; width:64%; height:100%; overflow:hidden;'
                         'background: var(--bg-panel-right);'):
-                    with ui.row().classes('w-full items-center q-mb-md justify-between'):
-                        ui.label('⚡ 实时渲染队列').classes('text-h6').style('color: var(--text-accent);')
-                        ui.button('清除已完成', icon='clear_all', on_click=lambda: (_clear_done(), ui.notify('已清理'))).props('flat color=grey-6 dense')
-                    
+                    with ui.row().classes('w-full items-center q-mb-sm justify-between'):
+                        with ui.row().classes('items-baseline').style('gap:10px;'):
+                            ui.label('⚡ 实时渲染队列').classes('text-h6').style('color: var(--text-accent);')
+                            _queue_sum_lbl = ui.label('').classes('text-xs').style('color:#8A8175;')
+                        with ui.row().classes('items-center').style('gap:7px;'):
+                            _fav_filter = {'on': False}
+                            _fav_chip = ui.element('div').classes('qchip')
+                            with _fav_chip:
+                                ui.html('⭐ 仅看收藏')
+                            _fav_chip.on('click', lambda: _toggle_fav_filter())
+                            ui.button('🧹 清除已完成', on_click=lambda: (_clear_done(), ui.notify('已清理'))).props('flat color=grey-6 dense no-caps')
+                    # 整体进度 + ETA（有活跃任务才显示）
+                    _qsum_row = ui.row().classes('w-full items-center q-mb-md').style('gap:10px;'); _qsum_row.visible = False
+                    with _qsum_row:
+                        _qsum_track = ui.element('div').classes('qsum-track')
+                        with _qsum_track:
+                            _qsum_fill = ui.element('div').classes('qsum-fill').style('width:0%;')
+                        _qsum_eta = ui.label('').classes('text-xs').style('color:#8A8175;white-space:nowrap;')
+
                     queue_container = ui.column().classes('w-full')
-                    _empty_lbl = ui.label('暂无渲染任务，请在左侧调整参数后点击生成').classes('q-pa-xl w-full text-center').style('color: var(--text-secondary);')
+                    _empty_lbl = ui.column().classes('w-full items-center q-pa-xl').style('gap:12px;')
+                    with _empty_lbl:
+                        ui.html('<div style="font-size:46px;opacity:0.5;">🖼️</div>')
+                        ui.label('还没有渲染任务').classes('text-subtitle1').style('color:#9C9486; font-weight:700;')
+                        ui.html('<div style="font-size:12.5px;color:#B5AC9C;line-height:1.7;max-width:300px;text-align:center;">'
+                                '在左侧上传地板图、套用一个配方，点击 <b style="color:#C15F3C;">⚡ 生成</b>，'
+                                '结果会实时出现在这里，B2 / Pro 并排对比。</div>')
 
                     # ── 单卡创建（只调用一次，之后原地更新） ──────────────────
                     def _add_job_card(job: JobRecord):
@@ -832,13 +1024,23 @@ async def main_page():
                         single_model = job.model_filter in ('b2', 'pro')
                         # 弹性宽度 + 自动换行：槽位可按需显示/隐藏而不破坏布局
                         box_style = 'flex:1 1 240px; min-width:200px;'
-                        def _img_box(caption):
+                        def _nav_bar(slot):
+                            """图槽底部候选导航条：‹ n/N ›（左右切换该槽历次重抽候选）。默认隐藏，>1 张才显示。
+                            _nav_slot 为前向引用(同 main_page 闭包，点击时才解析)；lambda 捕获 job/slot 避免闭包陷阱。"""
+                            nav = ui.row().classes('items-center justify-center w-full no-wrap cand-nav').style('gap:4px;'); nav.visible = False
+                            with nav:
+                                _pv = ui.button('‹', on_click=lambda j=job, s=slot: _nav_slot(j, s, -1)).props('flat dense round size=sm').classes('cand-arrow').tooltip('上一张候选')
+                                _ct = ui.label('1/1').classes('text-xs cand-cnt')
+                                _nx = ui.button('›', on_click=lambda j=job, s=slot: _nav_slot(j, s, 1)).props('flat dense round size=sm').classes('cand-arrow').tooltip('下一张候选')
+                            return nav, _pv, _ct, _nx
+                        def _img_box(caption, slot):
                             box = ui.element('div').classes('relative rounded bg-black').style(box_style)
                             with box:
                                 ui.label(caption).classes('text-xs text-center w-full q-pa-xs').style('color: var(--text-secondary);')
                                 _im = ui.image('').classes('rounded w-full').style('max-height:260px;object-fit:contain;cursor:zoom-in;'); _im.visible = False
+                                _nav, _pv, _ct, _nx = _nav_bar(slot)
                                 _dl = ui.html('')
-                            return box, _im, _dl
+                            return box, _im, _dl, _nav, _pv, _ct, _nx
                         with queue_container:
                             card = ui.element('div').classes('job-card w-full q-pa-sm q-mb-sm')
                             with card:
@@ -846,26 +1048,21 @@ async def main_page():
                                     ui.label(job.display_name).classes('text-sm font-bold').style('color: var(--text-primary);')
                                     with ui.row().classes('items-center').style('gap:6px'):
                                         status_lbl = ui.label(f'{icon} {txt}').classes('text-xs')
+                                        fav_btn = ui.button('⭐' if job.favorite else '☆', on_click=lambda j=job: _toggle_job_fav(j)).props('flat dense round size=sm').style('color:#C9A06A;').tooltip('收藏（用右上「⭐ 仅看收藏」筛选）')
                                         stop_single_btn = ui.button('⏹', on_click=lambda j=job: _request_stop_job(j)).props('flat color=red-8 dense round size=sm').tooltip('停止此任务')
                                         stop_single_btn.visible = False  # 排队中或运行中才显示
-                                        _job_stop_btns[job.job_id] = stop_single_btn
                                         retry_btn = ui.button('🔁', on_click=lambda j=job: _retry_job(j)).props('flat color=primary dense round size=sm').tooltip('重新生成失败的部分')
                                         retry_btn.visible = False  # 失败/部分完成才显示
-                                        _job_retry_btns[job.job_id] = retry_btn
                                         # 重抽胶囊：🔄重抽 │ ×N（连体；逐张串行多抽）
                                         regen_pod = ui.element('div').classes('regen-pod')
                                         with regen_pod:
-                                            regen_btn = ui.button('🔄 重抽', on_click=lambda j=job: _regen_job_n(j, (_job_regenN_sels[j.job_id].value if _job_regenN_sels.get(j.job_id) else 6))).props('flat dense no-caps').tooltip('逐张多抽：按右侧张数一张一张重出，全部追加到同一记录；满意了点「停止多抽」停掉剩余')
+                                            regen_btn = ui.button('🔄 重抽', on_click=lambda j=job: _regen_job_n(j, (_job_ui[j.job_id]['regenN_sel'].value if _job_ui.get(j.job_id, {}).get('regenN_sel') else 6))).props('flat dense no-caps').tooltip('逐张多抽：按右侧张数一张一张重出，全部追加到同一记录；满意了点「停止多抽」停掉剩余')
                                             ui.element('div').classes('sepv')
                                             regenN_sel = ui.select({1:'×1', 2:'×2', 4:'×4', 6:'×6'}, value=6).props('dense options-dense borderless').classes('regen-n').style('min-width:44px').tooltip('多抽张数：一张一张串行重出 N 张候选挑一张（圆弧倒角建议 ×4/×6）')
                                         regen_pod.visible = False  # 完成/部分完成才显示
-                                        _job_regen_pods[job.job_id] = regen_pod
-                                        _job_regen_btns[job.job_id] = regen_btn
-                                        _job_regenN_sels[job.job_id] = regenN_sel
                                         # 批次运行时显示「停止多抽 (i/n)」红橙药丸（与胶囊互斥）
                                         batch_stop_btn = ui.button('⏹ 停止多抽', on_click=lambda j=job: _request_stop_batch(j)).props('flat dense no-caps').classes('regen-batch-stop').tooltip('停掉尚未开始的剩余候选（正在跑的那张会跑完）')
                                         batch_stop_btn.visible = False
-                                        _job_batch_btns[job.job_id] = batch_stop_btn
                                     ui.label(f'🕐 {job.ts}').classes('text-xs').style('color: var(--text-secondary);')
                                 time_lbl = ui.label('').classes('text-xs').style('color: var(--text-secondary);'); time_lbl.visible = False
                                 # 失败提示：暖橙 ⓘ 图标(区别于设置里灰色 ℹ️)+短原因标题；点图标弹完整详情
@@ -878,10 +1075,13 @@ async def main_page():
                                     err_lbl = ui.label('').classes('text-xs').style('color:#B5713A; font-weight:600;')
                                 img_row = ui.row().classes('w-full q-mt-xs').style('gap:6px; flex-wrap:wrap;'); img_row.visible = False
                                 pro_polish_btn = None; pro_polish_img = None; pro_polish_dl = None
+                                b2_nav = b2_prev = b2_cnt = b2_next = None
+                                pro_nav = pro_prev = pro_cnt = pro_next = None
+                                pro_polish_nav = pro_polish_prev = pro_polish_cnt = pro_polish_next = None
                                 with img_row:
                                     if job.model_filter in ('b2', 'both'):
-                                        _, b2_img, b2_dl = _img_box('B2')
-                                        b2_img.on('click', lambda _=None, j=job: _open_zoom(_to_url(j.b2_path)) if j.b2_path else None)
+                                        _, b2_img, b2_dl, b2_nav, b2_prev, b2_cnt, b2_next = _img_box('B2', 'b2')
+                                        b2_img.on('click', lambda _=None, j=job: _open_zoom_list([_to_url(p) for p in j.b2_paths], j.b2_idx) if j.b2_paths else None)
                                     else:
                                         b2_img = None; b2_dl = None
                                     if job.model_filter in ('pro', 'both'):
@@ -889,92 +1089,134 @@ async def main_page():
                                         with pro_box:
                                             ui.label('Pro').classes('text-xs text-center w-full q-pa-xs').style('color: var(--text-secondary);')
                                             pro_img = ui.image('').classes('rounded w-full').style('max-height:260px;object-fit:contain;cursor:zoom-in;'); pro_img.visible = False
-                                            pro_img.on('click', lambda _=None, j=job: _open_zoom(_to_url(j.pro_path)) if j.pro_path else None)
+                                            pro_img.on('click', lambda _=None, j=job: _open_zoom_list([_to_url(p) for p in j.pro_paths], j.pro_idx) if j.pro_paths else None)
+                                            pro_nav, pro_prev, pro_cnt, pro_next = _nav_bar('pro')
                                             pro_dl  = ui.html('')
                                             pro_polish_btn = ui.button('🪄 磨缝', on_click=lambda j=job: _polish_pro(j)).props('flat dense no-caps').classes('polish-btn'); pro_polish_btn.visible = False
                                         # Pro 磨缝结果槽（按需显示）
-                                        _, pro_polish_img, pro_polish_dl = _img_box('Pro 磨缝')
-                                        pro_polish_img.on('click', lambda _=None, j=job: _open_zoom(_to_url(j.pro_polish_path)) if j.pro_polish_path else None)
+                                        _, pro_polish_img, pro_polish_dl, pro_polish_nav, pro_polish_prev, pro_polish_cnt, pro_polish_next = _img_box('Pro 磨缝', 'pro_polish')
+                                        pro_polish_img.on('click', lambda _=None, j=job: _open_zoom_list([_to_url(p) for p in j.pro_polish_paths], j.pro_polish_idx) if j.pro_polish_paths else None)
                                     else:
                                         pro_img = None; pro_dl = None
-                            _job_ui_refs[job.job_id] = dict(
-                                card=card, status_lbl=status_lbl, err_lbl=err_lbl, err_row=err_row, time_lbl=time_lbl,
+                            _job_ui[job.job_id] = dict(
+                                card=card, status_lbl=status_lbl, fav_btn=fav_btn, err_lbl=err_lbl, err_row=err_row, time_lbl=time_lbl,
                                 img_row=img_row, b2_img=b2_img, b2_dl=b2_dl,
                                 pro_img=pro_img, pro_dl=pro_dl,
                                 pro_polish_btn=pro_polish_btn, pro_polish_img=pro_polish_img, pro_polish_dl=pro_polish_dl,
-                                single_model=single_model
+                                single_model=single_model,
+                                stop_btn=stop_single_btn, retry_btn=retry_btn, regen_btn=regen_btn,
+                                regenN_sel=regenN_sel, regen_pod=regen_pod, batch_btn=batch_stop_btn,
+                                # 候选导航条（每槽各自翻）：键名 = f'{slot}_nav/_prev/_cnt/_next'，供 _apply_slot_nav 复用
+                                b2_nav=b2_nav, b2_prev=b2_prev, b2_cnt=b2_cnt, b2_next=b2_next,
+                                pro_nav=pro_nav, pro_prev=pro_prev, pro_cnt=pro_cnt, pro_next=pro_next,
+                                pro_polish_nav=pro_polish_nav, pro_polish_prev=pro_polish_prev,
+                                pro_polish_cnt=pro_polish_cnt, pro_polish_next=pro_polish_next,
                             )
                             card.move(target_index=0)   # 新卡插到队列顶部（newest-first，与 _job_history 一致）
 
-                    # ── 耗时文案：完成后按模型分别显示；运行中显示已用秒数 ──────
-                    def _job_time_text(job: JobRecord) -> str:
-                        def _fmt(s):
-                            return f'{s:.1f}s' if s is not None else '—'
-                        # 运行中：已用秒数 + 各模型实时阶段（🧠思考标题 / 🎨渲染中 / 🔁重试）
-                        if job.status == 'running' and job.started_at:
-                            base = f'⏱ 已用 {time.time() - job.started_at:.0f}s'
-                            stages = []
-                            if job.model_filter in ('b2', 'both') and job.b2_stage:
-                                stages.append(job.b2_stage if job.model_filter != 'both' else f'B2 {job.b2_stage}')
-                            if job.model_filter in ('pro', 'both') and job.pro_stage:
-                                stages.append(job.pro_stage if job.model_filter != 'both' else f'Pro {job.pro_stage}')
-                            return base + ('　·　' + '　·　'.join(stages) if stages else '')
-                        has_secs = (job.b2_secs is not None) or (job.pro_secs is not None)
-                        if has_secs:
-                            if job.model_filter == 'both':
-                                return f'⏱ B2 {_fmt(job.b2_secs)} · Pro {_fmt(job.pro_secs)}'
-                            elif job.model_filter == 'b2':
-                                return f'⏱ B2 {_fmt(job.b2_secs)}'
-                            else:
-                                return f'⏱ Pro {_fmt(job.pro_secs)}'
-                        return ''
+                    # 耗时文案 _job_time_text 已下沉到 models.job_time_text（纯函数）；调用点直接用 job_time_text。
+
+                    # ── v7：队列收藏过滤 + 整体进度/ETA 汇总 ──
+                    def _apply_fav_filter():
+                        on = _fav_filter['on']
+                        for j in list(_job_history):
+                            refs = _job_ui.get(j.job_id)
+                            card = refs.get('card') if refs else None
+                            if card is not None:
+                                card.visible = (j.favorite or not on)
+
+                    def _toggle_fav_filter():
+                        _fav_filter['on'] = not _fav_filter['on']
+                        (_fav_chip.classes(add='qchip--on') if _fav_filter['on']
+                         else _fav_chip.classes(remove='qchip--on'))
+                        _apply_fav_filter()
+
+                    def _toggle_job_fav(j):
+                        j.favorite = not j.favorite
+                        refs = _job_ui.get(j.job_id)
+                        if refs and refs.get('fav_btn'):
+                            refs['fav_btn'].set_text('⭐' if j.favorite else '☆')
+                        _apply_fav_filter()
+
+                    def _render_queue_summary():
+                        active = [j for j in _job_history if j.status in ('queued', 'running')]
+                        if not active:
+                            _qsum_row.visible = False
+                            _queue_sum_lbl.text = ''
+                            return
+                        total = done = remaining = 0
+                        for j in _job_history:
+                            slots = 2 if j.model_filter == 'both' else 1
+                            d = ((1 if (j.model_filter in ('b2', 'both') and j.b2_path) else 0)
+                                 + (1 if (j.model_filter in ('pro', 'both') and j.pro_path) else 0))
+                            total += slots; done += min(d, slots)
+                        for j in active:
+                            slots = 2 if j.model_filter == 'both' else 1
+                            d = (1 if j.b2_path else 0) + (1 if j.pro_path else 0)
+                            remaining += max(0, slots - d)
+                        pct = int(done * 100 / total) if total else 0
+                        # ETA：最近若干张实测出图秒数均值 × 剩余槽（_job_history 为 newest-first）
+                        secs = []
+                        for j in _job_history:
+                            if j.b2_secs: secs.append(j.b2_secs)
+                            if j.pro_secs: secs.append(j.pro_secs)
+                            if len(secs) >= 12: break
+                        avg = (sum(secs) / len(secs)) if secs else None
+                        _qsum_row.visible = True
+                        _qsum_fill.style(f'width:{pct}%;')
+                        _qsum_eta.text = (f'整体 {pct}% · 预计还 ~{int(avg * remaining)}s'
+                                          if (avg and remaining) else f'整体 {pct}%')
+                        _queue_sum_lbl.text = f'{len(active)} 个进行中'
 
                     # 每秒刷新"运行中"任务的已用时间
                     def _tick_job_times():
                         for j in list(_job_history):
                             if j.status == 'running':
-                                refs = _job_ui_refs.get(j.job_id)
+                                refs = _job_ui.get(j.job_id)
                                 tl = refs.get('time_lbl') if refs else None
                                 if tl is not None:
                                     try:
-                                        tl.text = _job_time_text(j); tl.visible = True
+                                        tl.text = job_time_text(j); tl.visible = True
                                     except Exception as ex: logger.debug(f"刷新耗时标签失败 job={j.job_id}: {ex}")
+                        try:
+                            _render_queue_summary()
+                        except Exception as ex:
+                            logger.debug(f"刷新队列汇总失败: {ex}")
 
-                    # ── 原地更新（改属性，不销毁 DOM，不闪烁） ───────────────
-                    def _refresh_job_card(job: JobRecord):
-                        # 终态时落盘一次（低频），重启后可恢复卡片
-                        if job.status in ('done', 'partial', 'failed'):
-                            _persist_jobs()
-                        refs = _job_ui_refs.get(job.job_id)
-                        if not refs: return
-                        _STATUS = {
-                            'queued':  ('⏳', '排队中'),
-                            'running': ('⚡', '生成中…'),
-                            'done':    ('✅', '完成'),
-                            'partial': ('⚠️', '部分完成'),
-                            'failed':  ('❌', '失败'),
-                        }
-                        icon, txt = _STATUS.get(job.status, ('?', job.status))
+                    # ── 原地更新（改属性，不销毁 DOM，不闪烁）→ 拆成若干 _apply_* 小步，逐块独立 ──
+                    # 各 _apply_* 只读模块级全局 + 入参 (refs, job)，不捕获 main_page 局部，便于阅读/将来外迁。
+                    _STATUS_REFRESH = {
+                        'queued':  ('⏳', '排队中'),
+                        'running': ('⚡', '生成中…'),
+                        'done':    ('✅', '完成'),
+                        'partial': ('⚠️', '部分完成'),
+                        'failed':  ('❌', '失败'),
+                    }
+
+                    def _apply_status_badge(refs, job):
+                        icon, txt = _STATUS_REFRESH.get(job.status, ('?', job.status))
                         refs['status_lbl'].text = f'{icon} {txt}'
+
+                    def _apply_action_buttons(refs, job):
                         # 停止按钮：排队中或运行中显示
-                        stop_btn = _job_stop_btns.get(job.job_id)
+                        stop_btn = refs.get('stop_btn')
                         if stop_btn:
                             try: stop_btn.visible = (job.status in ('queued', 'running'))
                             except Exception as ex: logger.warning(f"更新停止按钮状态失败: {ex}")
                         # 重试按钮：失败/部分完成 且 存在重试上下文 才显示
-                        retry_btn = _job_retry_btns.get(job.job_id)
+                        retry_btn = refs.get('retry_btn')
                         if retry_btn:
                             try: retry_btn.visible = (job.status in ('failed', 'partial')) and bool(job.retry_ctx)
                             except Exception as ex: logger.warning(f"更新重试按钮状态失败: {ex}")
-                        # 再生成按钮：完成/部分完成 且 存在生成上下文 才显示（再来一张）
+                        # 再生成胶囊：完成/部分完成 且 有上下文 才显示；批次运行时让位给「停止多抽」药丸（互斥）
                         _regen_vis = (job.status in ('done', 'partial')) and bool(job.retry_ctx)
                         _batch = _regen_batches.get(job.job_id)
                         _batch_running = bool(_batch and _batch.get('running'))
-                        regen_pod = _job_regen_pods.get(job.job_id)
+                        regen_pod = refs.get('regen_pod')
                         if regen_pod:
-                            try: regen_pod.visible = _regen_vis and not _batch_running   # 重抽胶囊；批次运行时让位给「停止多抽」
+                            try: regen_pod.visible = _regen_vis and not _batch_running
                             except Exception as ex: logger.warning(f"更新重抽胶囊状态失败: {ex}")
-                        batch_stop_btn = _job_batch_btns.get(job.job_id)
+                        batch_stop_btn = refs.get('batch_btn')
                         if batch_stop_btn:
                             try:
                                 if _batch:
@@ -983,21 +1225,45 @@ async def main_page():
                                                            f'⏹ 停止多抽 ({_batch.get("i",0)}/{_batch.get("n",0)})')
                                 batch_stop_btn.visible = _batch_running
                             except Exception as ex: logger.warning(f"更新停止多抽按钮状态失败: {ex}")
+
+                    def _apply_border_and_time(refs, job):
                         border_var = {'done':'var(--border-success)','partial':'var(--border-partial)','failed':'var(--border-failed)','running':'var(--border-running)'}.get(job.status,'')
                         if border_var: refs['card'].style(f'border-left:4px solid {border_var};')
-                        # 耗时显示
                         tl = refs.get('time_lbl')
                         if tl is not None:
-                            txt2 = _job_time_text(job)
+                            txt2 = job_time_text(job)
                             if txt2:
                                 tl.text = txt2; tl.visible = True
                             else:
                                 tl.visible = False
+
+                    def _apply_error(refs, job):
                         if job.error:
                             refs['err_lbl'].text = classify_failure(job.error)['title']
                             if refs.get('err_row') is not None: refs['err_row'].visible = True
                         elif refs.get('err_row') is not None:
                             refs['err_row'].visible = False
+
+                    def _apply_slot_nav(refs, job, slot):
+                        """更新某槽候选导航条 ‹n/N›：>1 张才显示；到两端禁用对应箭头。"""
+                        nav = refs.get(f'{slot}_nav')
+                        if nav is None: return
+                        paths = getattr(job, f'{slot}_paths', None) or []
+                        n = len(paths)
+                        try:
+                            if n > 1:
+                                idx = max(0, min(getattr(job, f'{slot}_idx', 0), n - 1))
+                                refs[f'{slot}_cnt'].text = f'{idx + 1}/{n}'
+                                nav.visible = True
+                                pv = refs.get(f'{slot}_prev'); nx = refs.get(f'{slot}_next')
+                                if pv is not None: pv.set_enabled(idx > 0)
+                                if nx is not None: nx.set_enabled(idx < n - 1)
+                            else:
+                                nav.visible = False
+                        except Exception as ex:
+                            logger.debug(f"更新候选导航失败 job={job.job_id} slot={slot}: {ex}")
+
+                    def _apply_images(refs, job):
                         has_img = False
                         if job.b2_path and os.path.exists(str(job.b2_path)) and refs.get('b2_img') is not None:
                             url = _to_url(job.b2_path)
@@ -1027,6 +1293,27 @@ async def main_page():
                             refs['pro_polish_dl'].content = f'<a href="{url}" download="{os.path.basename(str(job.pro_polish_path))}" class="dl-btn">⬇️ Pro磨缝</a>'
                             has_img = True
                         if has_img: refs['img_row'].visible = True
+                        # 候选导航条（每槽各自翻；>1 张才显示）
+                        for _slot in CANDIDATE_SLOTS:
+                            _apply_slot_nav(refs, job, _slot)
+
+                    def _refresh_job_card(job: JobRecord):
+                        # 终态时落盘一次（低频），重启后可恢复卡片
+                        if job.status in ('done', 'partial', 'failed'):
+                            _persist_jobs()
+                        refs = _job_ui.get(job.job_id)
+                        if not refs: return
+                        _apply_status_badge(refs, job)
+                        _apply_action_buttons(refs, job)
+                        _apply_border_and_time(refs, job)
+                        _apply_error(refs, job)
+                        _apply_images(refs, job)
+
+                    def _nav_slot(job: JobRecord, slot: str, delta: int):
+                        """左右切换某槽当前候选：移动下标 → 同步 *_path → 重渲染该卡。"""
+                        nav_candidate(job, slot, delta)
+                        try: _refresh_job_card(job)
+                        except Exception as ex: logger.debug(f"切换候选刷新失败 job={job.job_id} slot={slot}: {ex}")
 
                     # 按需磨缝：对某个任务的 Pro 成图做一次图生图去缝 + 色彩对齐
                     async def _polish_pro(job: JobRecord):
@@ -1064,7 +1351,7 @@ async def main_page():
                             except Exception as ex:
                                 logger.warning(f"[磨缝] 色彩对齐失败(用未对齐图) job={job.job_id}: {ex}")
                             ppath = _save_api_result_jpg(polished, 'Nano Banana Pro_磨缝', job.png_path or job.pro_path)
-                            _update_job(job, pro_polish_path=ppath)
+                            add_candidate(job, 'pro_polish', ppath)   # 磨缝结果并入候选(通常 1 张，nav 自动隐藏)
                             if job.json_path and job.record_id:
                                 try:
                                     await asyncio.to_thread(_api_write_to_record, polished, 'Nano Banana Pro 磨缝', job.json_path, job.record_id, ppath)
@@ -1088,10 +1375,7 @@ async def main_page():
                             _b = _regen_batches.get(jid)
                             if _b: _b['cancel'] = True
                             _regen_batches.pop(jid, None)
-                            for _d in (_job_stop_btns, _job_retry_btns, _job_regen_btns,
-                                       _job_regenN_sels, _job_regen_pods, _job_batch_btns):
-                                _d.pop(jid, None)
-                            refs = _job_ui_refs.pop(jid, None)
+                            refs = _job_ui.pop(jid, None)   # 所有 UI 引用已并入 _job_ui，一次性清掉
                             if refs:
                                 try: refs['card'].delete()
                                 except Exception as ex: logger.warning(f"删除任务卡片失败: {ex}")
@@ -1101,7 +1385,7 @@ async def main_page():
 
                     # ── 页面加载/刷新时恢复已有任务 ──────────────────────────
                     # _job_history 跨 session 保留（模块级），但 DOM 元素绑定旧
-                    # session。新 session 打开时重建所有卡片，覆盖 _job_ui_refs，
+                    # session。新 session 打开时重建所有卡片，覆盖 _job_ui，
                     # 后续的 _refresh_job_card 调用自动打到新页面的元素上。
                     for _existing_job in reversed(list(_job_history)):
                         _add_job_card(_existing_job)
@@ -1112,16 +1396,133 @@ async def main_page():
         # TAB 2: 记录管理
         # ==================================
         with ui.tab_panel('records').classes('q-pa-sm'):
-            _rec_state = {'json_path': '', 'query': '', 'fav_only': False}
+            _rec_state = {'json_path': '', 'query': '', 'fav_only': False, 'room_filter': ''}
             _op_ctx = {}  # 共享 dialog 的操作上下文 {jp, rid, idx, b64}
 
-            # ── 全屏放大 dialog（构建一次，点任意处关闭）──
+            # ── 全屏放大 dialog（滚轮缩放 + 拖动平移；构建一次，点背景关闭）──
+            # 用原生 <img> 而非 ui.image(q-img)：q-img 的 ratio 盒会把图按默认比例(常见 16:9)撑开，
+            # 4:3/竖图就会被显示成错误比例；原生 img + max-w/max-h 永远按图片自身比例显示。
+            # 缩放/平移全在前端 JS：滚轮以光标为中心缩放(1~8x)、放大后可拖动、双击复位。
             with ui.dialog().props('maximized') as _zoom_dlg:
-                with ui.column().classes('w-full h-full items-center justify-center').style(
-                        'background:rgba(0,0,0,0.92); cursor:zoom-out;').on('click', lambda _=None: _zoom_dlg.close()):
-                    _zoom_img = ui.image('').style('max-width:96vw; max-height:96vh; object-fit:contain;')
+                _zoom_stage = ui.element('div').style(
+                    'position:fixed; inset:0; background:rgba(0,0,0,0.92); overflow:hidden; '
+                    'display:flex; align-items:center; justify-content:center; cursor:zoom-out;')
+                with _zoom_stage:
+                    ui.html(
+                        '<img id="floorZoomImg" draggable="false" onclick="event.stopPropagation()" '
+                        'style="max-width:96vw; max-height:96vh; object-fit:contain; '
+                        'transform-origin:center center; cursor:zoom-out; '
+                        'user-select:none; -webkit-user-drag:none;">'
+                        # 左右翻候选箭头 + 计数浮层（单张时隐藏；onclick stopPropagation 防误触背景关闭）
+                        '<button id="floorZoomPrev" onclick="event.stopPropagation();window.floorZoomNav&&floorZoomNav(-1)" '
+                        'style="display:none; position:fixed; left:18px; top:50%; transform:translateY(-50%); z-index:10; '
+                        'width:52px; height:52px; border:none; border-radius:50%; background:rgba(26,24,21,0.55); color:#fff; '
+                        'font-size:30px; line-height:52px; cursor:pointer;">‹</button>'
+                        '<button id="floorZoomNext" onclick="event.stopPropagation();window.floorZoomNav&&floorZoomNav(1)" '
+                        'style="display:none; position:fixed; right:18px; top:50%; transform:translateY(-50%); z-index:10; '
+                        'width:52px; height:52px; border:none; border-radius:50%; background:rgba(26,24,21,0.55); color:#fff; '
+                        'font-size:30px; line-height:52px; cursor:pointer;">›</button>'
+                        '<div id="floorZoomCnt" onclick="event.stopPropagation()" '
+                        'style="display:none; position:fixed; top:18px; left:50%; transform:translateX(-50%); z-index:10; '
+                        'background:rgba(26,24,21,0.6); color:#fff; padding:4px 14px; border-radius:12px; '
+                        'font-size:14px; font-weight:600;"></div>')
+                _zoom_stage.on('click', lambda _=None: _zoom_dlg.close())
+            # 缩放/平移交互一次性注入（lazy 绑定：首次 show 时挂监听，避免依赖 DOM-ready 时序）
+            ui.add_body_html('''
+<script>
+// 复位缩放/平移到 1x（切换候选或首次显示时调用）
+window._floorZoomReset = function(im) {
+  im._scale = 1; im._tx = 0; im._ty = 0;
+  im.style.transform = 'translate(0px,0px) scale(1)';
+  im.style.cursor = 'zoom-out';
+};
+// 跳到第 i 张候选：换 src、复位缩放、刷新计数与箭头显隐
+window._floorZoomAt = function(i) {
+  const im = document.getElementById('floorZoomImg');
+  if (!im || !im._urls || !im._urls.length) return;
+  const n = im._urls.length;
+  im._idx = Math.max(0, Math.min(i, n - 1));
+  im.src = im._urls[im._idx];
+  window._floorZoomReset(im);
+  const cnt = document.getElementById('floorZoomCnt');
+  const pv = document.getElementById('floorZoomPrev');
+  const nx = document.getElementById('floorZoomNext');
+  const multi = n > 1;
+  if (cnt) { cnt.style.display = multi ? 'block' : 'none'; cnt.textContent = (im._idx + 1) + ' / ' + n; }
+  if (pv) { pv.style.display = multi ? 'block' : 'none'; pv.style.opacity = im._idx > 0 ? '1' : '0.35'; }
+  if (nx) { nx.style.display = multi ? 'block' : 'none'; nx.style.opacity = im._idx < n - 1 ? '1' : '0.35'; }
+};
+window.floorZoomNav = function(d) {
+  const im = document.getElementById('floorZoomImg');
+  if (!im || !im._urls) return;
+  window._floorZoomAt((im._idx || 0) + d);
+};
+// urls 可为字符串(单张)或数组(候选列表)；startIdx 起始下标
+window.floorZoomShow = function(urls, startIdx) {
+  const im = document.getElementById('floorZoomImg');
+  if (!im) return;
+  im._urls = Array.isArray(urls) ? urls : [urls];
+  window._floorZoomAt(startIdx || 0);
+  // 键盘 ←/→ 翻候选（仅弹窗可见时）；一次性绑定
+  if (!window._floorZoomKeyWired) {
+    window._floorZoomKeyWired = true;
+    window.addEventListener('keydown', function(e) {
+      const el = document.getElementById('floorZoomImg');
+      if (!el || !el._urls || el.offsetParent === null) return;  // 弹窗未显示时不拦截
+      if (e.key === 'ArrowLeft') { e.preventDefault(); window.floorZoomNav(-1); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); window.floorZoomNav(1); }
+    });
+  }
+  if (im._wired) return;
+  im._wired = true;
+  const apply = function() {
+    im.style.transform = 'translate(' + im._tx + 'px,' + im._ty + 'px) scale(' + im._scale + ')';
+    im.style.cursor = im._scale > 1 ? 'grab' : 'zoom-out';
+  };
+  im.addEventListener('wheel', function(e) {
+    e.preventDefault();
+    const r = im.getBoundingClientRect();
+    const offX = e.clientX - (r.left + r.width / 2);
+    const offY = e.clientY - (r.top + r.height / 2);
+    const prev = im._scale || 1;
+    const next = Math.min(8, Math.max(1, prev * (e.deltaY < 0 ? 1.15 : 1 / 1.15)));
+    const k = next / prev;
+    if (next === 1) { im._tx = 0; im._ty = 0; }
+    else { im._tx += offX * (1 - k); im._ty += offY * (1 - k); }
+    im._scale = next;
+    apply();
+  }, { passive: false });
+  let drag = false, sx = 0, sy = 0, bx = 0, by = 0;
+  im.addEventListener('mousedown', function(e) {
+    if ((im._scale || 1) <= 1) return;
+    e.preventDefault();
+    drag = true; sx = e.clientX; sy = e.clientY; bx = im._tx; by = im._ty;
+    im.style.cursor = 'grabbing';
+  });
+  window.addEventListener('mousemove', function(e) {
+    if (!drag) return;
+    im._tx = bx + (e.clientX - sx); im._ty = by + (e.clientY - sy); apply();
+  });
+  window.addEventListener('mouseup', function() { if (drag) { drag = false; apply(); } });
+  im.addEventListener('dblclick', function(e) {
+    e.preventDefault(); im._scale = 1; im._tx = 0; im._ty = 0; apply();
+  });
+};
+</script>''')
+
+            def _open_zoom_list(urls, start=0):
+                """全屏放大一组候选(可左右切换/方向键翻)。urls: URL 列表；start: 起始下标。"""
+                import json as _json
+                urls = [u for u in (urls or []) if u]
+                if not urls: return
+                start = max(0, min(int(start or 0), len(urls) - 1))
+                _zoom_dlg.open()
+                ui.run_javascript(f'window.floorZoomShow && window.floorZoomShow({_json.dumps(urls)}, {start})')
+
             def _open_zoom(data_url):
-                _zoom_img.set_source(data_url); _zoom_dlg.open()
+                """单图放大（记录管理 tab 等调用方）：等价于只有一张候选的列表。"""
+                if not data_url: return
+                _open_zoom_list([data_url], 0)
 
             # ── 二改 dialog（构建一次，复用）──
             with ui.dialog() as _edit_dlg, ui.card().classes('q-pa-md').style('min-width:440px; max-width:600px;'):
@@ -1296,6 +1697,7 @@ async def main_page():
                 def _go():
                     if _delete_record(jp, rid):
                         ui.notify('✅ 记录已删除', type='positive')
+                        _refresh_room_options()   # 可能删掉了某房间类型的最后一条 → 选项同步
                         _render_entries(jp)
                     else:
                         ui.notify('❌ 删除失败', type='negative')
@@ -1316,7 +1718,7 @@ async def main_page():
                 with ui.column().style('width:30%; flex-shrink:0; height:100%; gap:6px;'):
                     with ui.row().classes('w-full items-center justify-between'):
                         ui.label('📂 记录文件').classes('text-sm font-bold').style('color: var(--text-accent);')
-                        ui.button(icon='refresh', on_click=lambda: _render_file_list()).props('flat color=grey-6 dense').tooltip('刷新文件列表')
+                        ui.button(icon='refresh', on_click=lambda: (_render_file_list(), _refresh_room_options())).props('flat color=grey-6 dense').tooltip('刷新文件列表 / 房间筛选选项')
                     _rec_search = ui.input(placeholder='🔍 搜索材料名…').props('dense clearable outlined').classes('w-full')
                     _rec_search.on_value_change(lambda e: (_rec_state.update(query=(e.value or '')), _render_file_list()))
                     with ui.row().classes('w-full items-center justify-between'):
@@ -1332,6 +1734,11 @@ async def main_page():
                 with ui.column().style('width:70%; flex-shrink:0; height:100%; gap:6px;'):
                     with ui.row().classes('w-full items-center').style('gap:8px;'):
                         _cur_file_lbl = ui.label('← 请选择左侧记录文件').classes('text-sm font-bold').style('color: var(--text-accent);')
+                        # 房间类型筛选：下拉选项=全库出现过的房间类型(全局)，筛选只作用于当前选中文件
+                        _room_filter_sel = ui.select({'': '🏠 全部房间'}, value='').props('outlined dense options-dense').style('min-width:160px')
+                        _room_filter_sel.on_value_change(lambda e: (_rec_state.update(room_filter=(e.value or '')),
+                                                                    _render_entries(_rec_state['json_path'])))
+                        _room_filter_sel.set_visibility(False)  # 有房间类型选项时才显示(由 _refresh_room_options 控制)
                         with ui.row().style('gap:4px; margin-left:auto;'):
                             ui.button('📥 追加', on_click=lambda: _open_append(_rec_state['json_path'])).props('flat color=amber-8 dense size=sm').style('white-space:nowrap').tooltip('追加效果图到本文件某条记录')
                             ui.button('🌐 HTML', on_click=lambda: _do_export()).props('flat color=blue-7 dense size=sm').style('white-space:nowrap').tooltip('导出当前文件为 HTML')
@@ -1419,6 +1826,28 @@ async def main_page():
                         _tip = '没有匹配的记录文件' if (q or fav_only) else '暂无记录文件'
                         ui.label(_tip).classes('text-xs q-pa-md').style('color: var(--text-secondary);')
 
+            def _refresh_room_options(recs=None):
+                """刷新「房间类型」下拉：选项与计数都只来自【当前选中文件】(不是全库)。
+                recs 给定时直接用(避免重复读盘)，否则按当前 json_path 现读。
+                当前选中的类型若已不在该文件里(被删空/换文件)则复位为「全部」。"""
+                jp = _rec_state.get('json_path') or ''
+                if recs is None:
+                    try: recs = _load_records(jp) if jp else []
+                    except Exception as ex:
+                        logger.debug(f"读取当前文件房间类型失败: {ex}"); recs = []
+                pairs = sorted(room_type_counts(recs).items(), key=lambda kv: (-kv[1], kv[0]))
+                opts = {'': '🏠 全部房间'}
+                for rt, n in pairs:
+                    opts[rt] = f'{rt} ({n})'
+                cur = _rec_state.get('room_filter') or ''
+                if cur not in opts:
+                    cur = ''; _rec_state['room_filter'] = ''
+                try:
+                    _room_filter_sel.set_options(opts, value=cur)
+                    _room_filter_sel.set_visibility(len(pairs) > 0)
+                except Exception as ex:
+                    logger.debug(f"更新房间筛选下拉失败: {ex}")
+
             async def _select_file(jp):
                 _rec_state['json_path'] = jp
                 _render_file_list()  # 刷新高亮
@@ -1430,15 +1859,26 @@ async def main_page():
                     logger.warning(f"记录迁移失败(用原数据): {ex}")
                 recs = await asyncio.to_thread(_load_records, jp)
                 _cur_file_lbl.text = f"{os.path.basename(jp).replace('_记录.json', '')} · {len(recs)} 条记录"
+                _refresh_room_options(recs)
                 _render_entries(jp, recs)
 
             def _render_entries(jp, records=None):
                 _entries_container.clear()
                 if records is None:
                     records = _load_records(jp) if jp else []
+                # 房间类型筛选(只作用于当前文件)：与 ⭐只看收藏 AND 组合(fav 仍在 _render_entry_card 按结果级筛)
+                rf = _rec_state.get('room_filter') or ''
+                if rf:
+                    records = [r for r in records if (r.get('room_type', '') or '') == rf]
                 if not records:
+                    if not jp:
+                        _msg = '← 请选择左侧记录文件'
+                    elif rf:
+                        _msg = f'该文件没有「{rf}」的记录（换个房间类型或选「全部房间」）'
+                    else:
+                        _msg = '该文件暂无记录'
                     with _entries_container:
-                        ui.label('该文件暂无记录').classes('q-pa-xl w-full text-center').style('color: var(--text-secondary);')
+                        ui.label(_msg).classes('q-pa-xl w-full text-center').style('color: var(--text-secondary);')
                     return
                 for rec in records:
                     _render_entry_card(jp, rec)
@@ -1522,8 +1962,9 @@ async def main_page():
                         ui.label(comment).classes('text-xs q-pa-xs').style(
                             'color:#bbb; white-space:normal; word-break:break-all;')
 
-            # 初始渲染左栏文件列表 + 用量统计
+            # 初始渲染左栏文件列表 + 用量统计 + 房间筛选选项
             _render_file_list()
+            _refresh_room_options()
             _render_usage()
 
 
@@ -1583,11 +2024,11 @@ async def main_page():
             try: setattr(job, f'{stage_key}_stage', text)
             except Exception as ex: logger.debug(f"写入阶段状态失败 job={job.job_id}: {ex}")
         try:
-            img, err = await asyncio.to_thread(
+            img, err, provider = await asyncio.to_thread(
                 call_image_generate, api_key, model_id, prompt_text,
                 pnp, ims, ar, rp, sref, _on_stage, should_cancel, bevel_ref)
         except Exception as e:
-            img, err = None, str(e)
+            img, err, provider = None, str(e), get_image_provider()
         finally:
             try: setattr(job, f'{stage_key}_stage', '')
             except Exception as ex: logger.debug(f"清空阶段状态失败 job={job.job_id}: {ex}")
@@ -1595,30 +2036,28 @@ async def main_page():
         path = None
         if img is not None:
             path = _save_api_result_jpg(img, model_name, pnp)
-            setattr(job, f'{stage_key}_path', path)
+            add_candidate(job, stage_key, path)   # 追加进候选列表 + 当前下标指向最新 + 同步 *_path
             try: _refresh_job_card(job)   # ← 这张图立刻单独显示，不等另一个模型
             except Exception as ex: logger.warning(f"刷新单模型卡片失败: {ex}")
             try: await asyncio.to_thread(_api_write_to_record, img, model_name, jpt, rid, path)
             except Exception as ex: logger.warning(f"写记录失败 job={job.job_id} {model_name}: {ex}")
-        # 用量统计：出图=ok，没出图且非取消=fail（取消不计失败）。线路取配置值(best-effort，自动转线后真实线路或不同)。
+        # 用量统计：出图=ok，没出图且非取消=fail（取消不计失败）。
+        # 线路用 call_image_generate 返回的【实际】provider，自动转 Fal 后能正确记到 Fal 名下。
         _err = err or ''
         if img is not None or '取消' not in _err:
-            try: record_usage(job.workflow_mode, model_name, get_image_provider(), img is not None)
+            try: record_usage(job.workflow_mode, model_name, provider, img is not None)
             except Exception as ex: logger.debug(f"记录用量失败 job={job.job_id}: {ex}")
         return path, _err
 
-    def _compute_final_status(model_filter: str, b2_path, pro_path) -> str:
-        if model_filter == 'b2':  return 'done' if b2_path else 'failed'
-        if model_filter == 'pro': return 'done' if pro_path else 'failed'
-        return 'done' if (b2_path and pro_path) else ('partial' if (b2_path or pro_path) else 'failed')
+    # _compute_final_status 已下沉到 models.compute_final_status；调用点直接用 compute_final_status。
 
-    async def _retry_job(job: JobRecord, *, is_regen=False):
-        """重试失败/部分完成的任务：用提交时存下的生成上下文，只重跑还没出图的模型。
-        is_regen=True 时由「再来一张」复用：跳过状态守卫，对全新空 job 重跑全部模型。"""
+    async def _retry_job(job: JobRecord):
+        """重试失败/部分完成的任务：用提交时存下的生成上下文，只重跑还没出图的模型(补缺)。
+        主动「重抽」走 _regen_job(同卡追加全部模型)，不再复用这里。"""
         ctx = job.retry_ctx
         if not ctx:
             ui.notify('该任务缺少重试信息，请重新提交', type='warning'); return
-        if not is_regen and job.status not in ('failed', 'partial'):
+        if job.status not in ('failed', 'partial'):
             return
         # 恢复的任务 ctx 里没有 api_key(持久化时已剥除)，回退当前输入/配置里的 key
         api_key = ctx.get('api_key', '') or api_key_inp.value.strip() or _load_config().get('gemini_api_key', '').strip()
@@ -1663,7 +2102,7 @@ async def main_page():
 
             b2j = job.b2_path; proj = job.pro_path   # _generate_one_model 里已写入成图路径；失败的保留原值
             err_msg = ('B2: ' + b2_err if b2_err else '') + (' Pro: ' + pro_err if pro_err else '')
-            final = _compute_final_status(mf, b2j, proj)
+            final = compute_final_status(mf, b2j, proj)
             _update_job(job, status=final, b2_path=b2j, pro_path=proj, error=err_msg.strip())
             logger.info(f"[任务] retry_finished job={job.job_id}, status={final}, b2={bool(b2j)}, pro={bool(proj)}")
             try: _refresh_job_card(job)
@@ -1671,35 +2110,58 @@ async def main_page():
             _notify_job_end(job)
 
     async def _regen_job(src_job: JobRecord):
-        """再来一张：复用任务已存的生成上下文，新开一张队列卡重出一套图，追加到同一条记录(可与旧图对比)。"""
+        """重抽一张：复用任务已存的生成上下文，在【同一张卡】内重跑全部模型并把新图追加进候选列表
+        （不再新建卡）。每个图槽各自累积候选，卡片下方 ‹n/N› 可左右切换对比；同图也追加进同一条记录。"""
         ctx = src_job.retry_ctx
         if not ctx:
             ui.notify('该任务缺少再生成信息，请重新提交', type='warning'); return
-        new = _new_job(src_job.display_name + ' · 再生成', time.strftime('%H:%M:%S'), ctx.get('model_filter', 'both'))
-        new.retry_ctx = dict(ctx)   # 同一 prompt / 同一 record_id(jpt+rid) → 新图追加进原记录
-        new.workflow_mode = src_job.workflow_mode   # 用量统计沿用源任务的工作流模式
-        _add_job_card(new)
-        logger.info(f"[任务] regen new_job={new.job_id} from={src_job.job_id}, record={ctx.get('rid')}")
-        await _retry_job(new, is_regen=True)
+        api_key = ctx.get('api_key', '') or api_key_inp.value.strip() or _load_config().get('gemini_api_key', '').strip()
+        if not api_key:
+            ui.notify('⚠️ 缺少 API Key', type='warning'); return
+        mf = ctx.get('model_filter', 'both')
+        # 主动重抽：清掉可能残留的取消标记（否则 should_cancel 恒 True，一进 call_image_generate 就被静默取消）
+        _cancel_jobs.discard(src_job.job_id)
+        _update_job(src_job, status='running', started_at=time.time(), error='', b2_stage='', pro_stage='')
+        try: _refresh_job_card(src_job)   # 旧候选仍可见(_apply_images 不隐藏已显示的图)，状态转「生成中」
+        except Exception as ex: logger.debug(f"刷新重抽卡片失败 job={src_job.job_id}: {ex}")
+        logger.info(f"[任务] regen(同卡追加) job={src_job.job_id}, mf={mf}, record={ctx.get('rid')}")
+        async with _gen_semaphore:
+            pnp = ctx['pnp']; ims = ctx['ims']; ar = ctx['ar']; rp = ctx['rp']; sref = ctx['sref']
+            jpt = ctx['jpt']; rid = ctx['rid']; cpt = ctx['cpt']; cpt_pro = ctx['cpt_pro']
+            bevel_ref = ctx.get('bevel_ref')
+            _should_cancel = lambda: _is_cancelled(src_job.job_id)
+            def _regen_one(model_id, prompt_text, stage_key, model_name):
+                # 重抽 = 故意再出一张，每个模型都跑(不像重试只补缺)；_generate_one_model 内 add_candidate 自动追加+跳最新
+                return _generate_one_model(src_job, model_id, prompt_text, stage_key, model_name,
+                                           api_key=api_key, pnp=pnp, ims=ims, ar=ar, rp=rp, sref=sref,
+                                           bevel_ref=bevel_ref, jpt=jpt, rid=rid, should_cancel=_should_cancel)
+            _tasks = []
+            if mf in ('b2', 'both'):  _tasks.append(('b2',  _regen_one(GEMINI_MODEL_MAP['Nano Banana 2'],  cpt,     'b2',  'Nano Banana 2')))
+            if mf in ('pro', 'both'): _tasks.append(('pro', _regen_one(GEMINI_MODEL_MAP['Nano Banana Pro'], cpt_pro, 'pro', 'Nano Banana Pro')))
+            _results = await asyncio.gather(*[c for _, c in _tasks], return_exceptions=True)
+            errs = []
+            for (_k, _), _res in zip(_tasks, _results):
+                _e = str(_res) if isinstance(_res, Exception) else _res[1]
+                if _e and '取消' not in _e: errs.append(f'{_k.upper()}: {_e}')
+            # 状态：只要任一槽有候选(本次或历史)就 done/partial；全失败且无任何候选才 failed
+            final = compute_final_status(mf, src_job.b2_path, src_job.pro_path)
+            _update_job(src_job, status=final, error=('；'.join(errs) if (final == 'failed' and errs) else ''))
+            logger.info(f"[任务] regen_finished job={src_job.job_id}, status={final}, errs={len(errs)}")
+            try: _refresh_job_card(src_job)
+            except Exception as ex: logger.warning(f"刷新重抽卡片失败: {ex}")
+            if final == 'failed':
+                _notify_job_end(src_job)
+            elif errs:   # 部分失败但仍有候选：提示一下、不给已成功的卡硬挂错误图标
+                ui.notify('本次重抽部分失败（已保留之前的候选）：' + '；'.join(errs)[:80], type='warning')
 
     def _refresh_batch_ui(src_job: JobRecord):
-        """刷新源卡上「重抽胶囊 / 停止多抽」的显隐与进度（批次运行时胶囊让位给红橙药丸）。"""
-        sid = src_job.job_id
-        b = _regen_batches.get(sid)
-        running = bool(b and b.get('running'))
-        regen_vis = (src_job.status in ('done', 'partial')) and bool(src_job.retry_ctx)
-        pod = _job_regen_pods.get(sid); bstop = _job_batch_btns.get(sid)
+        """刷新源卡上「重抽胶囊 / 停止多抽」的显隐与进度（复用 _apply_action_buttons，逻辑与主刷新一致）。"""
+        refs = _job_ui.get(src_job.job_id)
+        if not refs: return
         try:
-            if bstop:
-                if b:
-                    bstop.text = (f'⏳ 停止中·当前跑完即止 ({b.get("i",0)}/{b.get("n",0)})'
-                                  if b.get('cancel') else
-                                  f'⏹ 停止多抽 ({b.get("i",0)}/{b.get("n",0)})')
-                bstop.visible = running
-            if pod:
-                pod.visible = regen_vis and not running
+            _apply_action_buttons(refs, src_job)   # 批次运行中 status 恒为 done/partial → stop/retry 同值再设、无副作用
         except Exception as ex:
-            logger.debug(f"刷新批次UI失败 {sid}: {ex}")
+            logger.debug(f"刷新批次UI失败 {src_job.job_id}: {ex}")
 
     def _request_stop_batch(src_job: JobRecord):
         """停止多抽：置批次取消标志，driver 跑完当前这张后不再起下一张（已出的都保留）。"""
@@ -1756,18 +2218,19 @@ async def main_page():
         logger.info(f"[任务] 多抽 ×{n}(逐张串行) from={sid}, record={src_job.retry_ctx.get('rid')}")
         ui.notify(f'开始逐张多抽 ×{n}（满意了点"停止多抽"停掉剩余）', type='positive')
 
-    async def _run_job(model_filter='both', *, room_override=None):
+    # ── _run_job 的前两段抽成小步（其余生成核心因局部状态耦合强、且无 API Key 无法离线验证，暂不再拆）──
+    def _validate_and_submit(model_filter, room_override):
+        """校验输入 + 建 job + 建卡 + 日志/通知。返回 (job, api_key)；校验未过返回 (None, '')。"""
         api_key = api_key_inp.value.strip()
         if not api_key:
             logger.warning("[任务] 提交失败：缺少 API Key")
-            ui.notify('⚠️ 缺少 API Key', type='warning'); return
+            ui.notify('⚠️ 缺少 API Key', type='warning'); return None, ''
         if not floor_path['v']:
             logger.warning("[任务] 提交失败：未上传地板图")
-            ui.notify('⚠️ 请上传地板图', type='warning'); return
+            ui.notify('⚠️ 请上传地板图', type='warning'); return None, ''
         if not os.path.exists(str(floor_path['v'])):
             logger.error(f"[任务] 提交失败：地板图文件不存在 path={floor_path['v']}")
-            ui.notify('⚠️ 地板图文件不存在，请重新上传', type='warning'); return
-
+            ui.notify('⚠️ 地板图文件不存在，请重新上传', type='warning'); return None, ''
         model_label = {'b2': '[B2]', 'pro': '[Pro]', 'both': '[双模型]'}.get(model_filter, '')
         display_room_type = room_override or (cn_room_type_sel.value if _market_mode['v'] == 'cn' else room_type_sel.value)
         dname = f"{os.path.splitext(os.path.basename(floor_path['v']))[0]} · {display_room_type} {model_label}"
@@ -1780,6 +2243,32 @@ async def main_page():
             f"room_type={display_room_type}, ref_mode={'参照模式' in workflow_radio.value}, ref_path={ref_path['v'] or ''}"
         )
         ui.notify('任务已提交到队列', type='positive')
+        return job, api_key
+
+    async def _maybe_analyze_style(job, api_key, is_ref_mode):
+        """参照模式 Step-1：用文字模型提取风格描述。返回 (style_text, ok)。
+        分析失败已就地标错+通知，ok=False；调用方据此 return——错误文本若混进提示词会照常计费生成、产出废图，必须中止。"""
+        if not (is_ref_mode and ref_path['v']):
+            return "", True
+        _update_job(job, status='running')
+        try: _refresh_job_card(job)
+        except Exception as ex: logger.debug(f"刷新任务卡片失败: {ex}")
+        style_text, sa_err = await asyncio.to_thread(analyze_style_image, api_key, ref_path['v'])
+        if sa_err or not style_text:
+            _update_job(job, status='failed',
+                        error=f'风格分析失败，已中止（未发起生图）: {sa_err or "返回为空"}')
+            try: _refresh_job_card(job)
+            except Exception as ex: logger.warning(f"刷新任务卡片失败: {ex}")
+            logger.error(f"[参照模式] 风格分析失败，任务中止 job={job.job_id}: {sa_err}")
+            _notify_job_end(job)
+            return "", False
+        logger.info(f"[参照模式] 风格提取完成: {style_text[:120]}...")
+        return style_text, True
+
+    async def _run_job(model_filter='both', *, room_override=None):
+        job, api_key = _validate_and_submit(model_filter, room_override)
+        if job is None:
+            return
 
         jid = job.job_id
         cancel_generation = _cancel_generation[0]
@@ -1815,23 +2304,10 @@ async def main_page():
                 _is_ref_mode = '参照模式' in workflow_radio.value
                 _sref_text = ref_correction_inp.value.strip() if _is_ref_mode else ""
 
-                # 参照模式 Step-1: 用文字模型提取风格描述
-                _style_analysis = ""
-                if _is_ref_mode and ref_path['v']:
-                    _update_job(job, status='running')
-                    try: _refresh_job_card(job)
-                    except Exception as ex: logger.debug(f"刷新任务卡片失败: {ex}")
-                    _style_analysis, _sa_err = await asyncio.to_thread(analyze_style_image, api_key, ref_path['v'])
-                    if _sa_err or not _style_analysis:
-                        # 分析失败必须中止：错误文本一旦混进提示词，会照常发起计费生成、产出废图
-                        _update_job(job, status='failed',
-                                    error=f'风格分析失败，已中止（未发起生图）: {_sa_err or "返回为空"}')
-                        try: _refresh_job_card(job)
-                        except Exception as ex: logger.warning(f"刷新任务卡片失败: {ex}")
-                        logger.error(f"[参照模式] 风格分析失败，任务中止 job={job.job_id}: {_sa_err}")
-                        _notify_job_end(job)
-                        return
-                    logger.info(f"[参照模式] 风格提取完成: {_style_analysis[:120]}...")
+                # 参照模式 Step-1: 提取风格描述（失败即中止，不发起计费生图）
+                _style_analysis, _ok = await _maybe_analyze_style(job, api_key, _is_ref_mode)
+                if not _ok:
+                    return
 
                 _, sms, prt, saved_image_path, jpt, rid, pnp, prt_pro = await asyncio.to_thread(
                     save_task_files_html, workflow_radio.value, 'Pro', floor_path['v'],
@@ -1872,9 +2348,10 @@ async def main_page():
                 if not _is_straight_bevel:
                     cpt = cpt_pro
                 ims = res_sel.value.split(' ')[0]
-                # 参照模式：生图 API 只收地板图，不传风格参照图
+                # 参照模式：参照图直接当风格参照图(sref)喂给生图模型(图+文混合)，不发房间替换图(rp)。
+                # sref 通道 api.py 已端到端打通且 google/fal 对称(地板小样仍排最后/最关键)。
                 rp = None if _is_ref_mode else (room_path['v'] or None)
-                _sref_api = None  # 参照模式风格已转成文字，无需图片注入
+                _sref_api = (ref_path['v'] or None) if _is_ref_mode else None
                 # 圆弧倒角(任意拼法)：自动附内置倒角参考图(只供模型抄板边圆弧形状)；B2/Pro 同带。
                 _is_pressed_bevel = ('圆弧倒角' in _seam_v and '无缝' not in _seam_v)
                 _bevel_ref = get_bevel_ref_image() if _is_pressed_bevel else None
@@ -1935,7 +2412,7 @@ async def main_page():
                 if pro_err:
                     logger.error(f"[任务] Pro失败 job={job.job_id}, record={rid}, err={_short_text(pro_err, 1000)}")
 
-                final_status = _compute_final_status(model_filter, b2j, proj)
+                final_status = compute_final_status(model_filter, b2j, proj)
 
                 _update_job(job, status=final_status, b2_path=b2j, pro_path=proj, error=err_msg.strip(),
                             json_path=jpt, record_id=rid, png_path=pnp)
@@ -1949,6 +2426,7 @@ async def main_page():
 
                 try:
                     _render_file_list()
+                    _refresh_room_options()   # 新出图可能带来新房间类型 → 同步筛选选项
                 except Exception as ex: logger.warning(f"刷新记录文件列表失败: {ex}")
 
             except Exception as e:

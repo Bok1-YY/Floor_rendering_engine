@@ -29,6 +29,11 @@
   输入图问题（不可重试）：
     · HTTP 400: Unable to process input image...
 
+  线路落地地区（HTTP 400，非网络重置）：
+    · HTTP 400: User location is not supported for the API use.
+      根因：出口 IP 落在 Gemini 不支持的地区（大陆被排除）→ Google 直接回绝。
+      请求已到达 Google，故不是透明代理重置；换海外节点或转 Fal 可解。
+
   配置/输入：
     · 未配置 Fal API Key(请在 API 设置里填写 Fal Key)
     · 素材图不存在: <path>
@@ -88,6 +93,27 @@ FAILURE_RULES = [
         'cause': '上传的地板/房间/参照图 Google 无法处理——通常是图片过大、损坏，或格式异常。',
         'action': '换一张正常的图重试；确认图片能正常打开、不是超大异形图（可先压一下尺寸）。',
         'subs': ['Unable to process input image'],
+    },
+    {
+        'key': 'geo_block',
+        'title': '🌍 线路落地地区不支持',
+        'cause': '出口 IP 落在了 Gemini API 不支持的地区（大陆即在被排除之列），被 Google 直接回绝'
+                 '（HTTP 400: User location is not supported）。请求其实已到达 Google，不是网络重置、'
+                 '也不是 Key 问题——是这条线路的境外落地节点掉了/换了。',
+        'action': '恢复软路由上把 Google 流量落地到支持地区的海外出口后点「🔁 重试」即可；'
+                  '应急可把生图线路切「Fal 路由」或开「直连失败自动转 Fal」绕过地区封锁（走你自己的 Fal 额度）。',
+        'subs': ['User location is not supported', 'location is not supported',
+                 'not supported for the API use'],
+    },
+    {
+        'key': 'tls_cert',
+        'title': '🔐 证书校验失败',
+        'cause': '开了 HTTPS 证书校验（tls_verify=true），但当前网络（软路由/代理）在拦截 HTTPS、'
+                 '证书链验证不过——常见于换了网络环境，或代理改了 TLS 解密策略。重试无用。',
+        'action': '在 engine_config.json 设 tls_verify=false 关掉校验即可恢复；'
+                  '或把代理根证书路径填到 tls_ca_bundle。改完点「🔑 连通性自检」看「证书校验」那行确认。',
+        'subs': ['CERTIFICATE_VERIFY_FAILED', 'certificate verify failed', 'SSLCertVerificationError',
+                 'unable to get local issuer', 'self signed certificate', 'self-signed certificate'],
     },
     {
         'key': 'safety_block',
