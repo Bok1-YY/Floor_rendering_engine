@@ -7,13 +7,14 @@ Professional photorealistic pet-friendly interior photography. modern detached v
 
 
 **[Overseas Real-Home Layer]**
+• Render this as an authentic, internationally-styled lived-in home in a contemporary Western / European / international residential context. Unless the interior style is explicitly East-Asian, avoid Chinese or East-Asian developer-apartment, sample-flat (样板间) or show-home styling, signage, furniture conventions, or built-ins.
 • The room should feel like a photographed lived-in modern detached villa in the selected overseas location, not a sales-gallery render.
 • Composition may include slight asymmetry, partial furniture cropping, natural object offsets, and non-matching furniture pieces that still belong to the same taste level.
 • Include 2-4 believable small domestic objects appropriate to the style: books, ceramic vase, folded throw, tray, lamp, plant, framed print, side table objects, or casual textiles.
 • Keep object density moderate: enough detail to feel real, but not cluttered or messy.
 • Natural light should create imperfect shadows or soft tonal falloff; avoid perfectly even CGI illumination.
 • Furniture should have practical residential spacing, with some legs or small objects naturally overlapping the floor while leaving meaningful floor areas visible.
-• House/villa realism: allow stronger garden or yard relationship, larger windows, deeper room proportions, and more layered furniture groupings.
+• House realism: a believable single-family home with honest, not exaggerated, room proportions and natural indoor light; avoid sales-villa showpiece scale.
 • Living/dining realism: show a readable furniture grouping, side objects, books or art, and casual but intentional surface styling.
 
 
