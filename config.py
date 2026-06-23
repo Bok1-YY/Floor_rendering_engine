@@ -1,6 +1,6 @@
 # ==========================================
 # 地板 AI 智能提示词引擎 — 核心配置
-# 版本: v6.0.1
+# 版本: v7
 # ==========================================
 """Core configuration: paths, API key persistence, utility functions.
 

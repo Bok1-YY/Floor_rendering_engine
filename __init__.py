@@ -1,4 +1,4 @@
-# floor_engine — 地板 AI 智能提示词引擎 v6.0.1
+# floor_engine — 地板 AI 智能提示词引擎 v7
 #
 # Public API (prefer these over internal imports):
 #   from floor_engine.config import ...

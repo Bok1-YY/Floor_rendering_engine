@@ -1,4 +1,4 @@
-# floor_engine v6.0.1 — 开发者手册
+# floor_engine v7 — 开发者手册
 
 ## 一、项目概述
 
@@ -17,9 +17,9 @@ floor_engine/
 ├── config.py            # 核心配置：路径、API key 持久化、工具函数
 ├── themes.py            # 5 套 UI 主题定义 + CSS 构建器
 ├── logging_setup.py     # 日志初始化（文件 + 控制台）
-├── models.py            # 纯数据类：JobRecord, TaskParams
-├── records.py           # JSON 文件 CRUD、图片 base64 转换、数据加密
-├── prompt_data.py       # 提示词数据字典（~1300 行）：翻译表、风格/色调/CN市场参数
+├── models.py            # 纯数据类 + 任务生命周期/候选累积纯逻辑：JobRecord, TaskParams
+├── records.py           # JSON 文件 CRUD、文件化图片存储、队列持久化、并发锁、用量统计、加密
+├── prompt_data.py       # 提示词数据字典（~1465 行）：翻译表、风格/色调/CN市场参数、宠物
 ├── prompts.py           # 提示词组装引擎：4 套工作流的 prompt 拼接逻辑
 ├── api.py               # Gemini API 客户端：生图、编辑、风格分析、色彩迁移
 ├── webui.py             # NiceGUI Web 界面：工作台 + 队列 + 记录管理
@@ -45,8 +45,11 @@ floor_engine/
 - **职责**：初始化 logger，输出到 `app_local_save.log` + 控制台
 - **依赖**：无内部依赖（独立计算 BASE_DIR）
 
-#### `models.py` — 数据模型
-- **职责**：`JobRecord`（队列任务状态）、`TaskParams`（save_task_files_html 的 35 个参数的结构化文档）、`task_params_to_kwargs()`（转换回旧式 kwargs）
+#### `models.py` — 数据模型 + 纯逻辑
+- **职责**：
+  - `JobRecord`（队列任务状态）、`TaskParams`（save_task_files_html 的 35 个参数的结构化文档）、`task_params_to_kwargs()`（转换回旧式 kwargs）
+  - **任务生命周期纯函数**（从 webui 下沉）：`new_job` / `update_job` / `compute_final_status` / `job_time_text`
+  - **候选累积纯逻辑**：`CANDIDATE_SLOTS`（b2/pro/pro_polish）、`add_candidate`（成图并入候选，超 `MAX_CANDIDATES_PER_SLOT=12` 丢最旧）、`nav_candidate`（‹n/N› 左右切换）、`ensure_candidate_lists`（向后兼容回填）
 - **依赖**：仅 Python 标准库 `dataclasses`
 - **添加新参数**：在 `TaskParams` 中加字段，同步更新 `task_params_to_kwargs()`
 
@@ -54,9 +57,13 @@ floor_engine/
 - **职责**：
   - JSON 文件 CRUD（`_load_records`, `_save_records`, `_delete_record`, `_delete_result_image`）；写盘走"临时文件 + 原子替换"防截断
   - 图片 ↔ base64 转换（`_img_to_b64`, `_b64_to_pil`）
-  - **文件化图片存储**：结果图落盘后只在记录里存相对路径 `result_image_file`（不再内联大 base64）；读取时优先文件、回退 base64
+  - **文件化图片存储**：结果图落盘后只在记录里存相对路径 `result_image_file`（不再内联大 base64）；读取时优先文件、回退 base64。`_rel_result_path()` 生成相对路径（挡 `..`），`_safe_output_path()` 在读取侧再做 realpath+commonpath 越界二次校验
   - **旧记录迁移**：`migrate_record_file()` — 把历史内联 base64 抽成独立文件，迁移前自动 `.bak` 备份、幂等、单张失败保留其 base64 容错
   - API 结果落盘 + 写入记录（`_save_api_result_jpg`, `_api_write_to_record`）
+  - **队列持久化**：`persist_jobs()` / `load_persisted_jobs()` — 把 `_job_history` 序列化到 `.queue_state.json`（最多 60 条），重启后恢复任务卡片
+  - **并发锁**：`record_file_lock()` — 按文件路径取锁，双模型 B2/Pro 在两个 worker 线程并发 append 同一记录 JSON 时防丢
+  - **用量统计**：`record_usage()` / `load_usage_summary()` — 按模型/工作流累计调用量
+  - **辅助扫描**：`_list_recent_floor_swatches()`（最近素材）、`room_type_counts()`（记录管理按房型筛选计数，纯函数）
   - **收藏**：`toggle_result_favorite()` / `collect_favorites()`（按 `favorite` 标记跨材料汇总）
   - **PPTX 提案导出**：`export_pptx_from_json()`（单材料）、`export_favorites_pptx()`（全部⭐合一份）、`_build_pptx()`（16:9，标题页 + 每图一页）
   - 提示词加密/解密（`_obfuscate` / `_deobfuscate`，XOR 密码）
@@ -67,16 +74,19 @@ floor_engine/
 
 #### `prompt_data.py` — 提示词数据层
 - **职责**：所有静态数据字典和翻译/分析逻辑
-  - `FALLBACK_DICT` / `TECH_DICT` / `LOCATION_MAP` — 中英翻译表
-  - `STYLES` / `STYLE_ATMOSPHERE_MAP` — 30 种风格的 must/ban/prohibition 定义
-  - `FLOOR_TONES` / `FLOOR_TONE_CONTRAST_MAP` — 12 种地板色调 + 家具对比色指令
+  - `FALLBACK_DICT` / `TECH_DICT` / `LOCATION_MAP` — 中英翻译表（已覆盖全部城市/国家/房型/景观/规格/宠物品种等预设选项）
+  - `translate_zh_to_en()` — **先查 `TECH_DICT`/`FALLBACK_DICT` 命中即返回，未命中才走在线翻译**（GoogleTranslator 走代理）；彻底失败回退裸原文（不再包 `[ ]` 方括号）。预设选项全在表里 → 在线翻译只兜"自定义补充"等手动输入
+  - `STYLES` / `STYLE_ATMOSPHERE_MAP` — 32 种风格（10 海外 + 22 扩充）的 must/ban/atm 定义
+  - `FLOOR_TONES` / `FLOOR_TONE_CONTRAST_MAP` / `FLOOR_TONE_STYLE_RECOMMEND_MAP` — 12 种地板色调 + 家具对比色指令 + 色调×风格推荐度
   - `LIGHTINGS` / `LIGHTING_INSTRUCTION_MAP` — 6 种光线模式
+  - `PET_TYPES` / `PET_ACTIONS` / `PET_FOCUS_OPTIONS` — 宠物模式选项（品种英文已进 `FALLBACK_DICT`）
+  - `MARKET_FURNITURE_CHOICES` / `MARKET_FURNITURE_MAP` — 家具市场风格（按品牌画像锁定家具）
   - `CN_*` — 中国市场完整参数系统（开发商/户型/空间/交付/标配设施）
   - `analyze_floor_tone()` — HSV 色调自动分析 + 方向性检测
   - `get_style_choices()` — 按色调推荐排序风格列表
   - `build_overseas_realism_layer()` — 海外市场真实感增强层
   - `build_cn_layout_guidance()` — 国内户型规模感知建模指导
-- **依赖**：`config.py`（logger + TRANSLATOR_AVAILABLE）、`deep-translator`（可选）
+- **依赖**：`config.py`（logger + TRANSLATOR_AVAILABLE）、`deep-translator`（GoogleTranslator，可选）、`numpy`（`analyze_floor_tone`）
 - **添加新风格**：在 `STYLES` 列表中加条目 + 在 `STYLE_ATMOSPHERE_MAP` 中加对应的 must/ban/atm 定义
 
 #### `prompts.py` — 提示词组装引擎（核心业务逻辑）
@@ -84,10 +94,10 @@ floor_engine/
   1. **纯效果图** — 生成全新空间
   2. **地板替换** — Inpainting，只换地板不动其他
   3. **宠物友好** — 带宠物的室内场景
-  4. **参照模式** — 从参照图提取风格，生成新空间
+  4. **参照模式** — **图+文混合**：参照图直接当 `style_ref_image_path` 喂模型（`webui.py` `_sref_api = ref_path['v']`），`analyze_style_image()` 提取的文字风格降级为辅助强调；语境按全局市场开关走海外/国内分支
 - **关键常量**：`FLOOR_COLOR_MATCH_INSTRUCTION` — 地板颜色锁定指令（强制模型不偏色）
 - **依赖**：`config.py`、`prompt_data.py`、`records.py`
-- **⚠️ 修改 prompt 逻辑时**：先跑 `_golden_test.py` 确认输出变化是否符合预期
+- **⚠️ 修改 prompt 逻辑时**：先跑 `tests/test_prompts_golden.py` 确认输出变化是否符合预期
 
 #### `api.py` — 生图 API 客户端（多供应商）
 - **职责**：
@@ -107,11 +117,13 @@ floor_engine/
   - 2-Tab 布局：工作台（生成 + 队列）+ 记录管理
   - 文件上传、参数选择、任务提交、实时队列刷新
   - **双模型生成 + 批量生成（多场景）**：批量任务跑在独立 asyncio task 里，UI 更新须 `background_tasks.create` + `with client` 保住 slot 上下文
-  - **逐张多抽（重抽 regen）**：按张数一张一张追加到同一记录，可中途"停止多抽"
+  - **逐张多抽（重抽 regen）**：按张数一张一张追加到**同一张卡**累积候选，‹n/N› 左右切换（`models.add_candidate`/`nav_candidate`），可中途"停止多抽"
   - 停止/取消（单任务 + 全部停止）、失败重试
   - 磨缝、二次修改、记录删除
   - **收藏⭐ + 筛选**："只看收藏"开关、收藏夹一键导出 PPTX
   - 导出：HTML / PPTX（单材料）、记录文件迁移入口
+  - **结果图缩略图**：卡片/记录列表显示走 `/thumb/outputs` 端点（`_result_thumb_url`，懒生成+磁盘缓存），点击放大/下载才用原图——避免浏览器为列表解整张 4K
+  - **内存自动收口**：常驻卡片超 `_MAX_RESIDENT_CARDS`(30) 时 `_auto_trim_cards()` 删最旧的已完成卡（running/pending 永不删，磁盘记录仍可查）；候选每槽上限 12
 - **依赖**：所有其他模块 + NiceGUI
 - **UI 框架**：NiceGUI (Quasar/Vue3)，单页应用，WebSocket 实时更新
 
@@ -150,14 +162,16 @@ floor_engine/
 ### 3.2 开发工作流
 
 ```bash
-# 生产模式
+# 生产模式（默认端口 7869，仅监听本机 127.0.0.1）
 python -m floor_engine
 
-# 开发模式（热重载）
-set FLOOR_AI_RELOAD=1 && python -m floor_engine
+# 开发模式（热重载）——首选
+python dev_floor.py
+#（或 set FLOOR_AI_RELOAD=1 && python -m floor_engine，仍可用但非首选）
 
-# 指定端口
+# 指定端口 / 局域网共用（后者需自配登录/访问控制）
 set FLOOR_AI_PORT=7890 && python -m floor_engine
+set FLOOR_AI_HOST=0.0.0.0 && python -m floor_engine
 ```
 
 > ✅ **测试基建已建立（prompt 黄金回归）**：`tests/test_prompts_golden.py` 固定参数跑
@@ -246,7 +260,7 @@ set FLOOR_AI_PORT=7890 && python -m floor_engine
         ├─ 4. 获取信号量 (asyncio.Semaphore(5))
         │
         ├─ 5. [参照模式] analyze_style_image() ─── Gemini 文字 API
-        │      └─ 返回风格描述文本
+        │      └─ 返回风格描述文本（辅助）；同时参照图本身会作为 style_ref 直接喂给第 8 步生图
         │
         ├─ 6. save_task_files_html() ─── prompts.py
         │      │
@@ -274,9 +288,9 @@ set FLOOR_AI_PORT=7890 && python -m floor_engine
         │
         ├─ 9. _save_api_result_jpg() ─── 落盘到 output_files/ (JPEG quality=95)
         │
-        ├─ 10. _api_write_to_record() ─── 写入 JSON 记录 (base64, 原始分辨率, quality=85)
+        ├─ 10. _api_write_to_record() ─── 写入 JSON 记录 (存相对路径 result_image_file，非内联 base64)
         │
-        └─ 11. _refresh_job_card() ─── 更新 UI 卡片 (缩略图 + 下载链接 + 耗时)
+        └─ 11. _refresh_job_card() ─── 更新 UI 卡片 (走 /thumb/outputs 缩略图 + 下载链接[原图] + 耗时)
 ```
 
 ### 4.3 关键数据结构
@@ -292,8 +306,8 @@ output_files/               # 所有生成结果
 
 JSON 记录结构:
 {
-  "id": "20240604_143022",
-  "timestamp": "2024-06-04 14:30:22",
+  "id": "20260604_143022",
+  "timestamp": "2026-06-04 14:30:22",
   "workflow_mode": "纯效果图 (生成全新空间)",
   "room_type": "客餐厅一体",
   "params_summary": "纯效果图 · 客餐厅一体 · 原木风 ...",
@@ -303,8 +317,9 @@ JSON 记录结构:
   "sample_image_b64": "base64缩略图(max_width=400)",
   "results": [
     {
-      "result_timestamp": "2024-06-04 14:31:45",
-      "result_image_b64": "base64原图(4K, max_width=None, quality=85)",
+      "result_timestamp": "2026-06-04 14:31:45",
+      "result_image_file": "客餐厅一体/客餐厅一体_优化图_xxx.jpg",  # 相对 output_files 的路径(quality=95)
+      # 注：旧记录未迁移时这里可能仍是 result_image_b64(内联 base64 回退)，migrate_record_file() 可批量抽成文件
       "comment": "API 自动生成 (3840×2160)",
       "model_label": "Nano Banana 2"
     },
@@ -338,4 +353,5 @@ analyze_floor_tone() ─── prompt_data.py
 
 ---
 
-*最后更新：2026-06-16 | 版本 v6.0.1（增量：Fal 多供应商路由 + 自动备线、批量生成、逐张多抽、收藏⭐、PPTX 提案导出、记录文件化存储 + 旧记录迁移、圆弧倒角参考图换 clean_a）*
+*最后更新：2026-06-23 | 版本 v7（增量：参照模式图+文混合重做、在线翻译换 GoogleTranslator 走代理 + 预设选项全量进词典[含宠物品种]、翻译失败回退裸原文、候选 ‹n/N› 同卡累积、工作台左栏重排、结果图缩略图 /thumb/outputs + 磨缝校色内存减半 + 卡片/候选自动收口、路径越界二次校验、prompt 黄金回归测试）*
+*更早（v6.0.1 起）：Fal 多供应商路由 + 自动备线、批量生成、逐张多抽、收藏⭐、PPTX 提案导出、记录文件化存储 + 旧记录迁移、圆弧倒角参考图换 clean_a*

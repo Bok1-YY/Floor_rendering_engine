@@ -23,5 +23,5 @@ if __name__ in {'__main__', '__mp_main__'}:
     # 将来给同事局域网共用才显式设 FLOOR_AI_HOST=0.0.0.0——且必须自行配登录/内网访问控制。
     _host = os.environ.get('FLOOR_AI_HOST', '127.0.0.1').strip() or '127.0.0.1'
     threading.Thread(target=lambda: _open_browser(run_port), daemon=True).start()
-    ui.run(host=_host, port=run_port, title='地板 AI 提示词引擎 v6.0.1', dark=True, reload=_reload, show=False,
+    ui.run(host=_host, port=run_port, title='地板 AI 提示词引擎 v7', dark=True, reload=_reload, show=False,
            favicon=FAVICON_PATH if os.path.exists(FAVICON_PATH) else None)
