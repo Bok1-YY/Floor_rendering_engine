@@ -50,8 +50,6 @@ except ImportError:
     print("⚠️ 未检测到 deep-translator 库！请运行: pip install deep-translator")
     TRANSLATOR_AVAILABLE = False
 
-print("--- 系统启动 ---")
-
 # ── 主题系统（向后兼容：从 themes.py 重导出）──────────────────
 from .themes import THEMES, build_theme_css  # noqa: E402
 

@@ -1,6 +1,7 @@
 import os
 import time
 import base64
+import hashlib
 import io as _io_mod
 import threading as _threading
 import asyncio
@@ -53,7 +54,7 @@ from .records import (
     export_pptx_from_json, export_favorites_pptx,
     record_usage, load_usage_summary,
     persist_jobs, load_persisted_jobs, _list_recent_floor_swatches,
-    room_type_counts,
+    room_type_counts, _safe_output_path,
 )
 from .models import (JobRecord, new_job, update_job, compute_final_status, job_time_text,
                      CANDIDATE_SLOTS, add_candidate, nav_candidate, ensure_candidate_lists)
@@ -103,6 +104,45 @@ def _thumb_url(p: str, s: int = 320) -> str:
     """把一张 _ng_uploads 里的图转成缩略图 URL(只用于预览展示，原图路径另存)。"""
     return f'/thumb/uploads/{os.path.basename(p)}?s={s}'
 
+
+@app.get('/thumb/outputs/{relpath:path}')
+def _serve_output_thumb(relpath: str, s: int = 480):
+    """懒生成并缓存结果图(output_files 下)的缩略图(JPEG)。
+    卡片/记录列表只显示 ≤260px，没必要让浏览器把整张 4K 解成 ~67MB 位图——一屏多张就吃爆内存。
+    原图仍走 /outputs/ 供放大/下载。_safe_output_path 复用 records 的越界校验，挡路径穿越。"""
+    src = _safe_output_path(relpath)   # 越界/不存在 → None
+    if not src:
+        return Response(status_code=404)
+    s = max(64, min(int(s), 1600))
+    try:
+        mtime = int(os.path.getmtime(src))
+    except OSError:
+        return Response(status_code=404)
+    # 缓存名用 realpath+mtime+s 的 md5：结果图在子目录里、名字可能含中文/重名，扁平 THUMB_DIR 下须避免碰撞。
+    key = hashlib.md5(f'{os.path.realpath(src)}__{mtime}__{s}'.encode('utf-8')).hexdigest()
+    cache = os.path.join(THUMB_DIR, f'out_{key}.jpg')
+    if not os.path.exists(cache):
+        try:
+            im = Image.open(src)
+            im.draft('RGB', (s, s))  # JPEG 解码阶段就降采样，4K 图解码瞬间完成、不进内存
+            im = im.convert('RGB')
+            im.thumbnail((s, s), Image.Resampling.LANCZOS)
+            tmp = cache + '.tmp'
+            im.save(tmp, 'JPEG', quality=82)
+            os.replace(tmp, cache)
+        except Exception as ex:
+            logger.warning(f"[结果缩略图] 生成失败，回退原图 {relpath}: {ex}")
+            return FileResponse(src)  # 永不白屏
+    return FileResponse(cache, media_type='image/jpeg')
+
+
+def _result_thumb_url(p: str, s: int = 480) -> str:
+    """结果图(output_files 下)绝对路径 → 缩略图 URL；非 output 路径/空值回退原图 URL。"""
+    full = _to_url(p)   # '/outputs/<relpath>' 或 ''（已做越界校验）
+    if not full.startswith('/outputs/'):
+        return full
+    return f'/thumb/outputs/{full[len("/outputs/"):]}?s={s}'
+
 def _to_url(p: str) -> str:
     # 用 realpath+commonpath 判断路径归属（替代脆弱的子串匹配）：路径必须真正落在
     # output_files / _ng_uploads 目录内才生成 URL，拒绝 ../ 逃逸到目录外的路径。
@@ -125,6 +165,9 @@ def _to_url(p: str) -> str:
 
 _job_history: List[JobRecord] = []
 _job_lock = _threading.Lock()
+# 常驻卡片上限：会话里跑得越多，_job_ui(NiceGUI 元素引用)+ 浏览器 DOM/解码的大图越积越多。
+# 超出时自动删最旧的「已完成」卡(running/pending 永不删)，被删任务仍在磁盘记录里可查。
+_MAX_RESIDENT_CARDS = 30
 _gen_semaphore: Optional[asyncio.Semaphore] = None
 # 每个 job 的所有 UI 元素引用合并到一个 dict（原先散在 7 个并行 dict，加键时要同步 7 处、易错位）。
 # job_id → {card, status_lbl, err_lbl, err_row, time_lbl, img_row, b2_img, b2_dl, pro_img, pro_dl,
@@ -147,6 +190,34 @@ def _new_job(display_name, ts, model_filter='both') -> JobRecord:
     with _job_lock: _job_history.insert(0, job)     # 入队仍由 webui 持有（_job_history 所有权不动）
     # UI card is created by _add_job_card() called from the event loop in _run_job
     return job
+
+
+def _auto_trim_cards():
+    """会话内自动收口：常驻卡片超 _MAX_RESIDENT_CARDS 时，删最旧的「已完成」卡。
+    复用 _clear_done 的删卡步骤(取消多抽批次 → pop _regen_batches → pop _job_ui + card.delete())。
+    只删 done/partial/failed，running/pending 永不删；被删任务仍在磁盘记录里(记录管理可查)。
+    须在有 client 上下文时调用(card.delete() 是 UI 操作)——调用点在 _validate_and_submit(新卡创建后)。"""
+    try:
+        if len(_job_history) <= _MAX_RESIDENT_CARDS:
+            return
+        surplus = _job_history[_MAX_RESIDENT_CARDS:]        # 最旧的越界部分(newest-first，尾部最旧)
+        evict_ids = {j.job_id for j in surplus if j.status in ('done', 'partial', 'failed')}
+        if not evict_ids:
+            return
+        for jid in evict_ids:
+            _b = _regen_batches.get(jid)
+            if _b: _b['cancel'] = True
+            _regen_batches.pop(jid, None)
+            refs = _job_ui.pop(jid, None)
+            if refs:
+                try: refs['card'].delete()
+                except Exception as ex: logger.warning(f"自动收口删除卡片失败 job={jid}: {ex}")
+        with _job_lock:
+            _job_history[:] = [j for j in _job_history if j.job_id not in evict_ids]
+        _persist_jobs()
+        logger.info(f"[自动收口] 清理 {len(evict_ids)} 张最旧已完成卡，常驻保留 ≤{_MAX_RESIDENT_CARDS}")
+    except Exception as ex:
+        logger.warning(f"[自动收口] 异常(忽略): {ex}")
 
 # _update_job 下沉到 models.update_job；保留同名别名，调用点(18 处)不变。
 _update_job = update_job
@@ -1267,12 +1338,12 @@ async def main_page():
                         has_img = False
                         if job.b2_path and os.path.exists(str(job.b2_path)) and refs.get('b2_img') is not None:
                             url = _to_url(job.b2_path)
-                            refs['b2_img'].set_source(url); refs['b2_img'].visible = True
+                            refs['b2_img'].set_source(_result_thumb_url(job.b2_path)); refs['b2_img'].visible = True
                             refs['b2_dl'].content = f'<a href="{url}" download="{os.path.basename(str(job.b2_path))}" class="dl-btn">⬇️ B2</a>'
                             has_img = True
                         if job.pro_path and os.path.exists(str(job.pro_path)) and refs.get('pro_img') is not None:
                             url = _to_url(job.pro_path)
-                            refs['pro_img'].set_source(url); refs['pro_img'].visible = True
+                            refs['pro_img'].set_source(_result_thumb_url(job.pro_path)); refs['pro_img'].visible = True
                             refs['pro_dl'].content = f'<a href="{url}" download="{os.path.basename(str(job.pro_path))}" class="dl-btn">⬇️ Pro</a>'
                             has_img = True
                             # 磨缝按钮：Pro 出图后显示；磨缝中禁用；已磨缝则隐藏
@@ -1289,7 +1360,7 @@ async def main_page():
                         # Pro 磨缝结果（按需）
                         if job.pro_polish_path and os.path.exists(str(job.pro_polish_path)) and refs.get('pro_polish_img') is not None:
                             url = _to_url(job.pro_polish_path)
-                            refs['pro_polish_img'].set_source(url); refs['pro_polish_img'].visible = True
+                            refs['pro_polish_img'].set_source(_result_thumb_url(job.pro_polish_path)); refs['pro_polish_img'].visible = True
                             refs['pro_polish_dl'].content = f'<a href="{url}" download="{os.path.basename(str(job.pro_polish_path))}" class="dl-btn">⬇️ Pro磨缝</a>'
                             has_img = True
                         if has_img: refs['img_row'].visible = True
@@ -1387,7 +1458,9 @@ async def main_page():
                     # _job_history 跨 session 保留（模块级），但 DOM 元素绑定旧
                     # session。新 session 打开时重建所有卡片，覆盖 _job_ui，
                     # 后续的 _refresh_job_card 调用自动打到新页面的元素上。
-                    for _existing_job in reversed(list(_job_history)):
+                    # 只恢复最新 _MAX_RESIDENT_CARDS 张卡：更旧的任务仍在记录管理里可查，
+                    # 不必一启动就把几十张全建出来(DOM + 解码大图)。_job_history[:N] 是最新的(newest-first)。
+                    for _existing_job in reversed(list(_job_history)[:_MAX_RESIDENT_CARDS]):
                         _add_job_card(_existing_job)
                         _refresh_job_card(_existing_job)
 
@@ -1940,7 +2013,9 @@ window.floorZoomShow = function(urls, startIdx) {
                 with box:
                     ui.label(f'{idx + 1} · {model_label}').classes('text-xs text-center w-full q-pa-xs').style('color: var(--text-secondary);')
                     if src:
-                        img = ui.image(src).classes('rounded w-full').style('max-height:260px; object-fit:contain; cursor:zoom-in;')
+                        # 列表里显示缩略图(省浏览器解 4K)；放大/下载仍用原图 src。base64 回退无缩略，直接用 src。
+                        thumb = _result_thumb_url(os.path.join(MAIN_OUTPUT_DIR, file_rel)) if file_rel else src
+                        img = ui.image(thumb).classes('rounded w-full').style('max-height:260px; object-fit:contain; cursor:zoom-in;')
                         img.props('loading=lazy')  # HTTP URL 才有效：滚动到才加载
                         img.on('click', lambda _, u=src: _open_zoom(u))
                         ui.html(f'<a href="{src}" download="result_{rid}_{idx + 1}.jpg" class="dl-btn">⬇️</a>')
@@ -2237,6 +2312,7 @@ window.floorZoomShow = function(urls, startIdx) {
         job = _new_job(dname, time.strftime('%H:%M:%S'), model_filter)
         job.workflow_mode = workflow_radio.value   # 用量统计按工作流模式归类
         _add_job_card(job)
+        _auto_trim_cards()   # 新卡入队后顺手收口：超上限则删最旧的已完成卡(此处有 client 上下文)
         logger.info(
             f"[任务] submitted job={job.job_id}, name={dname}, model_filter={model_filter}, "
             f"workflow={workflow_radio.value}, market={_market_mode['v']}, floor={floor_path['v']}, "

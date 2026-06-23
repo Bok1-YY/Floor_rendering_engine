@@ -871,18 +871,23 @@ def _match_color_to_reference(src_img, ref_img, strength=1.0):
     """
     import numpy as np
     src = src_img.convert('LAB'); ref = ref_img.convert('LAB')
-    if ref.size != src.size:
-        ref = ref.resize(src.size)
-    s = np.asarray(src, dtype=np.float32); r = np.asarray(ref, dtype=np.float32)
-    out = np.empty_like(s)
+    # ref 只用于取每通道全局均值/方差(Reinhard 统计量)，不参与逐像素运算。
+    # 保持 uint8(4K≈50MB，而非 float32 的 ~192MB)，mean()/std() 以 float64 归约——
+    # 统计量精确、与原算法数值等价，却省下一份大数组。
+    r = np.asarray(ref, dtype=np.uint8)
+    # s 用可写 float32 副本，逐通道原地变换 + 原地 clip，避免再开一份 out(~192MB)。
+    # 峰值由 ~576MB(s+r+out 三份 float32) 降到 ~292MB(s float32 + r/out uint8)。
+    s = np.array(src, dtype=np.float32)
     for c in range(3):
         s_mean, s_std = s[..., c].mean(), s[..., c].std()
-        r_mean, r_std = r[..., c].mean(), r[..., c].std()
+        r_mean, r_std = float(r[..., c].mean()), float(r[..., c].std())
         if s_std < 1e-5:
-            out[..., c] = s[..., c] - s_mean + r_mean
+            s[..., c] += (r_mean - s_mean)
         else:
-            out[..., c] = (s[..., c] - s_mean) * (r_std / s_std) + r_mean
-    out = np.clip(out, 0, 255).astype(np.uint8)
+            s[..., c] = (s[..., c] - s_mean) * (r_std / s_std) + r_mean
+    np.clip(s, 0, 255, out=s)
+    out = s.astype(np.uint8)
+    del s, r
     transferred = Image.fromarray(out, mode='LAB').convert('RGB')
 
     # 按强度与原图混合（strength=1.0 时等价于原行为）

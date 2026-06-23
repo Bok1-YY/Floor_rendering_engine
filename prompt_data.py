@@ -83,6 +83,18 @@ FALLBACK_DICT = {
     "澳大利亚": "Australia", "新西兰": "New Zealand",
     "中国": "China", "日本": "Japan", "韩国": "South Korea",
     "新加坡": "Singapore", "泰国": "Thailand", "越南": "Vietnam", "印度": "India",
+    # —— 宠物品种(key 为 extract_zh 去 emoji/英文括号后的形式；猫类带 "cat" 利于生图区分)——
+    # 让所有预设品种走查表，在线翻译只兜真正的手动输入(自定义补充等)。
+    "金毛犬": "Golden Retriever", "柯基犬": "Welsh Corgi", "柴犬": "Shiba Inu",
+    "腊肠犬": "Dachshund", "边境牧羊犬": "Border Collie", "哈士奇": "Siberian Husky",
+    "拉布拉多": "Labrador Retriever", "法国斗牛犬": "French Bulldog",
+    "贵宾犬/泰迪": "Poodle (Teddy cut)", "萨摩耶": "Samoyed", "比格犬": "Beagle",
+    "杜宾犬": "Doberman Pinscher", "马尔济斯犬": "Maltese",
+    "布偶猫": "Ragdoll cat", "橘猫": "orange tabby cat", "英国短毛猫": "British Shorthair cat",
+    "缅因猫": "Maine Coon cat", "暹罗猫": "Siamese cat", "孟加拉豹猫": "Bengal cat",
+    "斯芬克斯无毛猫": "Sphynx hairless cat", "波斯猫": "Persian cat",
+    "俄罗斯蓝猫": "Russian Blue cat", "加菲猫": "Exotic Shorthair cat",
+    "宠物兔": "pet rabbit", "鹦鹉": "parrot",
     "无特定国家": "", "通用": "",
 }
 
@@ -185,7 +197,9 @@ def translate_zh_to_en(text):
             except Exception as e:
                 logger.warning(f"翻译第{attempt+1}次失败: {e}"); time.sleep(1)
     logger.error(f"翻译彻底失败: '{text}'")
-    return f"[{text}]"
+    # 兜底回退裸原文：翻译走软路由/代理，代理重置时会失败。带方括号的 [原文] 会被
+    # Gemini 当成格式/指令噪音，比裸 CJK 更糟；裸中文模型尚可识别，至少不污染语义。
+    return text
 
 LOCATION_MAP = {
     "欧洲 - 西欧 & 北欧": {

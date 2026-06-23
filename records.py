@@ -2,7 +2,6 @@ import os
 import json
 import time
 import io
-import base64
 import base64 as b64mod
 import hashlib
 import html
@@ -299,6 +298,22 @@ def _rel_result_path(abs_path):
     return '' if rel.startswith('..') else rel
 
 
+def _safe_output_path(rel):
+    """把 result_image_file 相对路径解析为 MAIN_OUTPUT_DIR 内的绝对路径；越界/不存在/异常返回 None。
+    正常路径由 _rel_result_path 生成(已挡 '..'),此处是对手改或历史污染 JSON 的二次兜底。"""
+    if not rel:
+        return None
+    try:
+        base = os.path.realpath(MAIN_OUTPUT_DIR)
+        p = os.path.realpath(os.path.join(base, rel))
+        # commonpath 在跨盘符(Windows 多盘)时抛 ValueError → 视为越界
+        if os.path.commonpath([base, p]) != base:
+            return None
+    except (ValueError, OSError):
+        return None
+    return p if os.path.exists(p) else None
+
+
 def scan_json_files():
     results = []
     if not os.path.exists(MAIN_OUTPUT_DIR): return results
@@ -320,9 +335,10 @@ def get_record_labels(json_path):
 def _html_b64(obj, file_key, b64_key):
     """HTML 导出取图：优先从文件读回 base64(保持 HTML 自包含)，回退内联 base64。"""
     rel = obj.get(file_key, '')
-    if rel:
+    p = _safe_output_path(rel)
+    if p:
         try:
-            with open(os.path.join(MAIN_OUTPUT_DIR, rel), 'rb') as f:
+            with open(p, 'rb') as f:
                 return b64mod.b64encode(f.read()).decode()
         except Exception as e:
             logger.warning(f"[导出] 读取图片失败 {rel}: {e}")
@@ -421,11 +437,11 @@ def _load_reveal_hash() -> str:
 
 def _obfuscate(text: str) -> str:
     if not text: return ""
-    return base64.b64encode(bytes([b ^ _PROMPT_KEY[i % len(_PROMPT_KEY)] for i, b in enumerate(text.encode("utf-8"))])).decode()
+    return b64mod.b64encode(bytes([b ^ _PROMPT_KEY[i % len(_PROMPT_KEY)] for i, b in enumerate(text.encode("utf-8"))])).decode()
 
 def _deobfuscate(encoded: str) -> str:
     if not encoded: return ""
-    try: return bytes([b ^ _PROMPT_KEY[i % len(_PROMPT_KEY)] for i, b in enumerate(base64.b64decode(encoded))]).decode("utf-8")
+    try: return bytes([b ^ _PROMPT_KEY[i % len(_PROMPT_KEY)] for i, b in enumerate(b64mod.b64decode(encoded))]).decode("utf-8")
     except Exception: return ""
 
 def reveal_prompt_fn(json_path, record_id, input_password):
@@ -576,11 +592,9 @@ def collect_favorites():
 # ── PPTX 导出（客户提案 deck）──────────────────────────────────────
 def _result_image_source(res):
     """结果图供 PPTX 用的来源：优先成图文件绝对路径，回退 base64 解成 BytesIO；无图返回 None。"""
-    rel = res.get('result_image_file', '')
-    if rel:
-        p = os.path.join(MAIN_OUTPUT_DIR, rel)
-        if os.path.exists(p):
-            return p
+    p = _safe_output_path(res.get('result_image_file', ''))
+    if p:
+        return p
     b64 = res.get('result_image_b64', '')
     if b64:
         try:

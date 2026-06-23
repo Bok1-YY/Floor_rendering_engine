@@ -96,6 +96,10 @@ def job_time_text(job: JobRecord) -> str:
 # 约定：每个 slot 同时有三个属性 f'{slot}_paths'(列表) / f'{slot}_idx'(当前下标) / f'{slot}_path'(当前路径)。
 CANDIDATE_SLOTS = ('b2', 'pro', 'pro_polish')
 
+# 每个 slot 的候选上限：长时间反复重抽会把候选列表无限撑大(浏览器要 hold 的图也随之变多)。
+# 超出时丢最旧——磁盘文件不动(记录管理仍可查)，只收窄 ‹n/N› 可翻范围。
+MAX_CANDIDATES_PER_SLOT = 12
+
 
 def ensure_candidate_lists(job: JobRecord) -> None:
     """向后兼容 + 一致性维护：列表空但有单路径(老任务/老持久化)→用单路径回填；
@@ -117,6 +121,8 @@ def add_candidate(job: JobRecord, slot: str, path: str) -> int:
     生成出口(主生图/重试/重抽/磨缝)统一走这里，使每次成图自动并入候选列表。"""
     lst = getattr(job, f'{slot}_paths')
     lst.append(path)
+    if len(lst) > MAX_CANDIDATES_PER_SLOT:        # 超上限丢最旧，列表稳定在 MAX 长度
+        del lst[:len(lst) - MAX_CANDIDATES_PER_SLOT]
     setattr(job, f'{slot}_idx', len(lst) - 1)
     setattr(job, f'{slot}_path', path)
     return len(lst) - 1
