@@ -1,0 +1,44 @@
+Help me make a photo:
+
+Professional photorealistic interior architectural photography. living-dining combo. Aspect ratio 4:3, 4K resolution.
+
+**[REFERENCE IMAGE — STYLE / MATERIAL / PALETTE / MOOD]** One of the attached images is a REFERENCE PHOTO of an existing room. Study it and EMULATE its overall decoration style: its material language, color palette, lighting character, furniture taste-level, and emotional mood. This reference is for STYLE ONLY — do NOT copy its geometry, camera angle, wall layout, window positions, or furniture arrangement. INVENT A BRAND NEW room: an original composition and layout that merely FEELS like it belongs to the same home and designer as the reference. Keep believable, natural residential proportions — realistic ceiling height, true-to-life furniture scale, and a coherent single-room floor plan. Do NOT reproduce the reference's exact scene.
+
+**[STYLE SUMMARY — supports the reference image, does not replace it]** Use the attached reference image as the primary guide for style; the notes below only reinforce it.
+A bright Scandinavian living room with warm light oak flooring, large windows, white walls, and minimal natural-wood furniture.
+
+
+
+**[Overseas Real-Home Layer]**
+• Render this as an authentic, internationally-styled lived-in home in a contemporary Western / European / international residential context. Unless the interior style is explicitly East-Asian, avoid Chinese or East-Asian developer-apartment, sample-flat (样板间) or show-home styling, signage, furniture conventions, or built-ins.
+• The room should feel like a photographed lived-in modern detached villa in the selected overseas location, not a sales-gallery render.
+• Composition may include slight asymmetry, partial furniture cropping, natural object offsets, and non-matching furniture pieces that still belong to the same taste level.
+• Include 2-4 believable small domestic objects appropriate to the style: books, ceramic vase, folded throw, tray, lamp, plant, framed print, side table objects, or casual textiles.
+• Keep object density moderate: enough detail to feel real, but not cluttered or messy.
+• Natural light should create imperfect shadows or soft tonal falloff; avoid perfectly even CGI illumination.
+• Furniture should have practical residential spacing, with some legs or small objects naturally overlapping the floor while leaving meaningful floor areas visible.
+• House realism: a believable single-family home with honest, not exaggerated, room proportions and natural indoor light; avoid sales-villa showpiece scale.
+• Living/dining realism: show a readable furniture grouping, side objects, books or art, and casual but intentional surface styling.
+
+
+
+**[Camera & Composition]** 28mm lens.
+**Composition**: Wide-angle perspective, emphasizing spaciousness and room scale. Strong floor perspective lines converging into the distance. Floor texture must be the absolute visual anchor of the image.
+
+**Lighting — **: Natural balanced indoor lighting.
+
+**[Floor Specification]**
+⛔ NON-NEGOTIABLE PHYSICAL FACTS ABOUT THIS FLOOR — render them as reality, not as a goal: ⛔ (1) This floor is ONE single solid poured sheet of material spanning the entire room — a single continuous slab, exactly like a polished concrete floor or one giant printed ceramic slab: it is physically one piece, so there is simply nothing on it that could be split, divided or assembled. (2) On top of that one solid sheet there is ONLY a printed wood-grain motif: long, continuous, parallel grain lines all flowing in the SAME single direction across the entire floor (the straight-plank look). There are NO plank divisions, NO rows, NO end-joints, NO edges of any kind — just one uninterrupted field of parallel wood grain. (3) This straight grain is pure printed surface decoration baked into the slab, exactly like a pattern printed on one sheet of vinyl or woven into one bolt of fabric. The grain merely gives direction; nothing else about the surface changes. Reproduce the EXACT wood grain, color tone, color variation and matte micro-texture of the uploaded swatch (gloss level: matte); treat the swatch as a grain-and-color sample only and let the finished floor flow as one solid piece.
+
+**[FLOOR COLOR — MANDATORY EXACT MATCH]** The overall color of the wooden floor in the final image MUST be IDENTICAL to the uploaded floor swatch — the same hue, the same warm/cool register, the same lightness/darkness, and the same saturation. The uploaded swatch is the SINGLE source of truth for the floor color: read the floor's base color directly from it and reproduce that exact color consistently across the entire floor. Do NOT shift the floor warmer, cooler, lighter, darker, more golden, more orange, more grey, or more/less saturated to suit the room's style, furniture or ambient lighting. Only natural light falloff may change brightness (slightly brighter near windows, gradually softer away from them) — the underlying material color stays exactly the swatch's color everywhere. The finished floor must be instantly recognizable as the very same product as the uploaded swatch.
+Format: . The pattern is a printed straight wood-grain motif: long parallel grain lines all running in one single direction across the entire floor, with NO plank boundaries of any kind. The ONLY visual feature is the printed grain; the surface, its color and its finish stay one uninterrupted solid sheet from wall to wall.. Grain orientation: printed straight wood-grain motif, long parallel grain lines all flowing in one single direction, no plank divisions of any kind, sitting on one solid continuous surface. A high-end continuous floor surface engineered with optical continuity. The organic wood grain pattern spans seamlessly across the entire room with zero structural interruption. Visual rhythm is achieved purely through natural wood tone variations and grain flow, completely replacing the need for geometric division lines. Individual planks are visually perceptible, but their boundaries reveal themselves ONLY through the most subtle organic cues: a slight grain direction shift where one plank meets the next, a micro-tonal variation at the transition, or the natural material discontinuity of wood grain patterns at the seam. These boundaries read as material transitions — not as drawn lines, not as shadow grooves, not as filled gaps, not as chamfer bevels. Absolute requirement: plank boundaries are organic material transitions only — no joint lines, no edge shadows, no grooves, no hairline gaps, no chamfer marks anywhere on the surface.
+
+**Floor Coverage**: The floor must occupy a minimum of 40-50% of the total image area. Furniture placement should deliberately reveal large unobstructed floor zones. Camera angle must maximize visible floor surface.
+
+
+
+**[Quality Requirements]** Ultra-sharp texture details at pixel level. Physically accurate, true-to-swatch colors with clean, faithful white balance and natural, consistent tone across the entire floor.
+
+**[Negative Prompt]** Strictly avoid: none.
+
+**[FLOOR — READ THIS LAST, IT OVERRIDES ANY DEFAULT BEHAVIOUR]** Do NOT render this floor the way wood floors are normally built. This floor is NOT laid, NOT installed, NOT assembled from pieces — it is one solid printed sheet, like a single ceramic slab. Render the entire floor as ONE flawless continuous surface carrying only a printed straight wood-grain motif on top (long parallel grain all flowing in one single direction, no plank divisions); its colour, tone and finish stay perfectly uniform and uninterrupted from wall to wall.

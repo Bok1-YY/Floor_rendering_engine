@@ -1,0 +1,54 @@
+====== 🇬🇧 英文专业版 (发给AI模型的最终提示词) ======
+
+Help me make a photo:
+
+Professional photorealistic pet-friendly interior photography. modern detached villa, living-dining combo. Location: unspecified location. Neighborhood: modern neighborhood. Aspect ratio 4:3, 4K resolution.
+
+**[Style & Atmosphere]** 原木风 aesthetic. Authentic and inviting atmosphere.
+
+
+
+**[Overseas Real-Home Layer]**
+• Render this as an authentic, internationally-styled lived-in home in a contemporary Western / European / international residential context. Unless the interior style is explicitly East-Asian, avoid Chinese or East-Asian developer-apartment, sample-flat (样板间) or show-home styling, signage, furniture conventions, or built-ins.
+• The room should feel like a photographed lived-in modern detached villa in the selected overseas location, not a sales-gallery render.
+• Composition may include slight asymmetry, partial furniture cropping, natural object offsets, and non-matching furniture pieces that still belong to the same taste level.
+• Include 2-4 believable small domestic objects appropriate to the style: books, ceramic vase, folded throw, tray, lamp, plant, framed print, side table objects, or casual textiles.
+• Keep object density moderate: enough detail to feel real, but not cluttered or messy.
+• Natural light should create imperfect shadows or soft tonal falloff; avoid perfectly even CGI illumination.
+• Furniture should have practical residential spacing, with some legs or small objects naturally overlapping the floor while leaving meaningful floor areas visible.
+• House realism: a believable single-family home with honest, not exaggerated, room proportions and natural indoor light; avoid sales-villa showpiece scale.
+• Living/dining realism: show a readable furniture grouping, side objects, books or art, and casual but intentional surface styling.
+
+
+
+
+
+
+
+**[Camera & Composition]** 28mm lens. Standard eye-level interior photography perspective.
+**Composition**: Wide-angle perspective, emphasizing spaciousness and room scale. Strong floor perspective lines converging into the distance. Floor texture must be the absolute visual anchor of the image.
+
+**[Subject]** 🐾 A cute Golden Retriever relaxing naturally and comfortably in the space.
+
+**Lighting — **: Natural balanced indoor lighting.
+
+**[Floor Specification]**
+🔥 CRITICAL MATERIAL INSTRUCTION 🔥 The uploaded reference image IS the floor material sample/swatch. Your task is to reproduce its EXACT physical characteristics: (1) Grain direction and flow pattern, (2) Knot positions, mineral streaks, and surface variation map, (3) Color tone and color variation that naturally varies from plank to plank, (4) Micro-surface texture, (5) Gloss level: matte. Plank boundaries in the final render must be perceptible ONLY as organic material transitions (grain direction shift, micro-tonal step) — strictly NO joint lines, NO edge shadows, NO grooves, NO gaps, NO chamfer marks.
+
+**[FLOOR COLOR — MANDATORY EXACT MATCH]** The overall color of the wooden floor in the final image MUST be IDENTICAL to the uploaded floor swatch — the same hue, the same warm/cool register, the same lightness/darkness, and the same saturation. The uploaded swatch is the SINGLE source of truth for the floor color: read the floor's base color directly from it and reproduce that exact color consistently across the entire floor. Do NOT shift the floor warmer, cooler, lighter, darker, more golden, more orange, more grey, or more/less saturated to suit the room's style, furniture or ambient lighting. Only natural light falloff may change brightness (slightly brighter near windows, gradually softer away from them) — the underlying material color stays exactly the swatch's color everywhere. The finished floor must be instantly recognizable as the very same product as the uploaded swatch.
+Format: . IMPORTANT: planks are laid edge-to-edge in a precision click-lock installation. Plank boundaries are strictly organic material transitions — grain shift, tonal micro-step — never drawn lines, never shadow grooves, never filled gaps, never chamfer bevels.. Grain orientation: wood grain flowing parallel to the longest wall to maximize perceived room depth. A high-end continuous floor surface engineered with optical continuity. The organic wood grain pattern spans seamlessly across the entire room with zero structural interruption. Visual rhythm is achieved purely through natural wood tone variations and grain flow, completely replacing the need for geometric division lines. Individual planks are visually perceptible, but their boundaries reveal themselves ONLY through the most subtle organic cues: a slight grain direction shift where one plank meets the next, a micro-tonal variation at the transition, or the natural material discontinuity of wood grain patterns at the seam. These boundaries read as material transitions — not as drawn lines, not as shadow grooves, not as filled gaps, not as chamfer bevels. Absolute requirement: plank boundaries are organic material transitions only — no joint lines, no edge shadows, no grooves, no hairline gaps, no chamfer marks anywhere on the surface. Natural cast shadows from pet and furniture create realistic interaction with floor surface.
+
+**Floor Coverage**: The floor must occupy a minimum of 40-50% of the total image area. Furniture placement should deliberately reveal large unobstructed floor zones. Camera angle must maximize visible floor surface.
+
+
+
+**[Quality Requirements]** Ultra-sharp texture details at pixel level. Physically accurate, true-to-swatch colors with clean, faithful white balance and natural, consistent tone across the entire floor.
+
+**[Negative Prompt]** Strictly avoid: none.
+
+**[FLOOR — READ THIS LAST, IT OVERRIDES ANY DEFAULT BEHAVIOUR]** Do NOT render this floor the way wood floors are normally built. This floor is NOT laid, NOT installed, NOT assembled from pieces — it is one solid printed sheet, like a single ceramic slab. Render the entire floor as ONE flawless continuous surface carrying only a printed chevron grain motif on top; its colour, tone and finish stay perfectly uniform and uninterrupted from wall to wall.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️  重要提示：每次生成请开启全新对话窗口后再粘贴此提示词。
+    在同一对话内连续生成会导致模型受上次结果影响，质量下滑。
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

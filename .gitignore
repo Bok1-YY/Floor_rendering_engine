@@ -1,0 +1,31 @@
+# Python 缓存
+__pycache__/
+*.py[cod]
+*.pyo
+
+# 临时/锁文件 (Word、编辑器等生成)
+~$*
+
+# 虚拟环境
+.venv/
+venv/
+env/
+
+# 日志
+*.log
+
+# 备份文件 (换素材/换图时生成的 .bak)
+*.bak
+
+# 缩略图缓存 (历史小样/预览懒生成，可随时重建)
+_ng_thumbs/
+
+# pytest 缓存 (tests/golden/ 的基准文本要入库，但缓存不入)
+.pytest_cache/
+
+# ── 商业版(server)运行期产物：当本仓库被独立迁出 test/ 后会落在本目录旁，提前忽略 ──
+output_files/
+_ng_uploads/
+engine_config.json
+.queue_state.json
+.style_analysis_cache.json
