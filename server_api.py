@@ -654,6 +654,36 @@ def cancel_all():
     return {'stopped': n}
 
 
+@app.post('/api/jobs/clear-completed')
+def clear_completed():
+    """清掉「完成」状态的任务卡（保留 部分/失败 供逐卡删/重试）。改 _job_history 后落盘，
+    否则前端 2.5s 轮询或重启会把它们读回来。只清队列列表，不动出图文件与「记录」。"""
+    removed = 0
+    with _job_lock:
+        keep = []
+        for job in _job_history:
+            if job.status == 'done':
+                _cancel_jobs.discard(job.job_id)
+                removed += 1
+            else:
+                keep.append(job)
+        _job_history[:] = keep
+    _persist_jobs()  # 必须在锁外：_persist_jobs 内部会再取 _job_lock（不可重入）
+    return {'cleared': removed}
+
+
+@app.post('/api/jobs/{jid}/delete')
+def delete_job(jid: str):
+    """从队列移除单条任务卡（任意状态；运行中的建议先停止）。仅移除列表项，不动出图/记录。"""
+    with _job_lock:
+        before = len(_job_history)
+        _job_history[:] = [j for j in _job_history if j.job_id != jid]
+        removed = before - len(_job_history)
+    _cancel_jobs.discard(jid)
+    _persist_jobs()  # 锁外
+    return {'deleted': removed}
+
+
 @app.post('/api/jobs/{jid}/retry')
 async def retry_job(jid: str):
     job = _get_job(jid)

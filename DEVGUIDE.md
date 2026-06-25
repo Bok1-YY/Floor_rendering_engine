@@ -1,422 +1,261 @@
-# Floor Engine Server（地板AI生图引擎 · 商业版）— 开发者手册
+# Floor AI 生图引擎 · 开发手册（DEVGUIDE）
 
-> 本仓库是从老 `floor_engine`(NiceGUI 单体) **fork 出的商业版**，架构已拆成
-> **FastAPI 无头后端 (`server_api.py`) + Next.js 前端 (`web/`)**，引擎模块(api/prompts/records/...)原样复用、零改动。
-> 老 `webui.py` 暂留作过渡基线，待功能验收无误后(STEP 3)删除。
+> 地板行业**效果图生成**引擎的商业版。上传地板小样 → 自动识色/智能配方 → 配参数 → 调 Gemini/Fal 出图（B2 快出 + Pro 精修，支持 4K）。
+> 本仓库 `Floor_engine_server/` 是从原型 `test/floor_engine/` fork 出来的**商业主线**：把界面从 NiceGUI 迁到「FastAPI 无头后端 + Next.js 真前端」，引擎逻辑原样复用。
+> 本手册按当前真实代码（2026-06）重写，**开头就是启动**。读完「零」即可跑起来；要改代码再往下看。
 
 ---
 
-## 零、快速启动（先看这里）⭐
+## 零、快速启动 ⭐（先看这里）
 
-### TL;DR — 一键启动
-双击 **`test\一键启动.bat`**（在本仓库的**上一级** `test\` 目录里）。它会:
-1. 开「后端」窗口 → FastAPI 跑在 **http://127.0.0.1:7870**
-2. 开「前端」窗口 → Next.js dev 跑在 **http://localhost:3000**
-3. 等 ~8 秒前端编译完，自动打开浏览器到 `localhost:3000`
+### 0.1 一键启动（推荐）
+双击 **`test/一键启动.bat`**（注意：bat 在仓库的**上一级** `test/` 目录，不在本仓库内）。它会：
+1. 起**后端** FastAPI（端口 **7870**）—— 独立 cmd 窗口；
+2. 起**前端** Next.js dev（端口 **3000**）—— 独立 cmd 窗口；
+3. 等 8 秒让前端编译完，自动打开浏览器 `http://localhost:3000`。
 
-**停止**：关掉对应的「后端/前端」窗口即可。
-**注意**：`一键启动.bat` 必须是 **纯 ASCII + 无 BOM + CRLF** 换行，否则中文版 Windows 的 cmd 会乱码崩(踩过坑)。
+关掉某个 cmd 窗口 = 停掉对应服务。
 
-### 手动启动（调试时分开跑）
+### 0.2 手动启动（开发时常用）
 ```bash
-# 后端（在 test/ 目录下，把本仓库当包导入）——必须单 worker
-python -m Floor_engine_server.server_api
-# 等价：uvicorn Floor_engine_server.server_api:app --host 127.0.0.1 --port 7870 --workers 1
+# 后端（务必在 test/ 目录下运行，单 worker）
+cd  C:\Users\1_1\Desktop\新系统\test
+python -m Floor_engine_server.server_api          # → http://127.0.0.1:7870
 
-# 前端（在 Floor_engine_server/web/ 目录下）
-npm run dev        # → http://localhost:3000
+# 前端（另开一个终端）
+cd  C:\Users\1_1\Desktop\新系统\test\Floor_engine_server\web
+npm run dev                                        # → http://localhost:3000
 ```
-环境变量（可选）：后端 `FLOOR_API_HOST` / `FLOOR_API_PORT`(默认 127.0.0.1:7870) / `FLOOR_API_CORS`(放行的前端源，默认含 localhost:3000)；前端 `web/.env.local` 的 `NEXT_PUBLIC_API_BASE`(默认 `http://127.0.0.1:7870`)。
+浏览器开 **http://localhost:3000**。后端健康检查：`GET http://127.0.0.1:7870/api/healthz` → `{"ok":true}`。
 
-### 首次准备（装依赖，只做一次）
+### 0.3 首次准备（只做一次）
 ```bash
-pip install -r Floor_engine_server/requirements.txt     # 后端(含 fastapi/uvicorn/python-multipart)
-cd Floor_engine_server/web && npm install               # 前端
+# 引擎/后端 Python 依赖
+pip install -r Floor_engine_server\requirements.txt
+# 前端 Node 依赖（需 Node 18+，本机 v24）
+cd Floor_engine_server\web && npm install
 ```
+然后在前端「**设置**」页填 Gemini API Key（或直接写 `test/engine_config.json`）。没有 key 也能开界面，但出图会失败。
 
-### 启动逻辑（发生了什么）
-- **后端 `server_api.py`**：FastAPI app。**lifespan 启动钩子**里——按 `engine_config.json` 的 `max_concurrent_per_model`(默认1) 在**本进程事件循环**上创建 B2/Pro 并发信号量 + prep 锁，并 `load_persisted_jobs()` 从 `.queue_state.json` 恢复历史任务卡。**必须单 worker**：`_job_history`、信号量都是进程内状态，多 worker 不共享。
-- **生图不阻塞 HTTP**：`POST /api/jobs` 秒回 `job_id`，真正生成在后台 task 跑；前端用 **SSE**(`GET /api/jobs/{id}/stream`，`EventSource`) 看实时进度。这绕开了"长 4K 请求把连接撑爆被软路由 reset"的老毛病。
-- **前端 `web/`**：Next.js 16(App Router, Turbopack)。页面全是 `'use client'` + `useEffect` 取数，通过 `lib/api.ts`(读 `NEXT_PUBLIC_API_BASE`) 调后端;图片用普通 `<img>`(避开 Next16 对本地 IP 的 `next/image` 拦截)。
-- **数据位置**：`config.BASE_DIR = dirname(dirname(__file__))`——本仓库在 `test/` 下时解析到 **`test/`**，故与老 app **共享** `output_files/` / `engine_config.json`(含 API key) / `_ng_uploads/` / `.queue_state.json`。把本仓库迁出 `test/` 即自动获得独立数据目录，无需改码。
+### 0.4 端口与进程
 
-### 端口 / 进程
-| 进程 | 端口 | 命令 | 说明 |
+| 进程 | 端口 | 启动命令 | 说明 |
 |---|---|---|---|
-| 后端 FastAPI | 7870 | `python -m Floor_engine_server.server_api` | 无头 API + SSE，单 worker |
-| 前端 Next.js | 3000 | `cd web && npm run dev` | 商业版界面 |
-| (旧)NiceGUI | 7869 | `python -m Floor_engine_server`（即 webui） | 过渡基线，STEP3 删 |
+| **前端** Next.js dev | **3000** | `npm run dev`（在 `web/`） | 浏览器入口，开发用 |
+| **后端** FastAPI（无头） | **7870** | `python -m Floor_engine_server.server_api`（在 `test/`） | 主线 API + SSE + 静态图 |
+| 旧版 NiceGUI（过渡 fallback） | 7869 | 见 §八 | 老界面，**不加新功能**，留作兜底 |
 
-### 前端页面
-`/` 生成（上传+参数+队列+SSE）· `/records` 记录管理（搜索/筛选/二改/删除/收藏/解密/导出）· `/usage` 用量 · `/settings` 设置（key/线路/网络/TLS/并发/连通自检）。
-
----
-
-## 一、项目概述
-
-**地板 AI 智能提示词引擎** — 上传地板小样图 → 组装专业英文 prompt → 调 Gemini API 生成 photorealistic 室内效果图。
-
-- **目标客户**：地板品牌的社媒/网站部门
-- **卖点**：视觉真实度（不是预览精度），核心壁垒在提示词工程 + 中国市场参数系统
-- **技术栈（商业版）**：后端 Python 3.10+ / **FastAPI + uvicorn**（无头 API + SSE）；前端 **Next.js 16 (App Router) + React 19 + Tailwind v4 + shadcn/ui**；生图 Google Gemini API（备线 Fal）/ PIL / numpy。
-  - 旧版 UI 为 NiceGUI(Quasar/Vue3)，即 `webui.py`，过渡期保留。
-
-## 二、模块地图
-
-```
-Floor_engine_server/          # 商业版独立仓库（本仓库）
-├── server_api.py         # ★ FastAPI 无头服务层：把引擎暴露为 REST+SSE，前端对接。引擎零改
-├── __init__.py           # 包标记，公共 API 文档
-├── __main__.py           # 旧 NiceGUI 入口：python -m Floor_engine_server（即跑 webui，7869）
-├── config.py             # 核心配置：路径、API key 持久化、工具函数
-├── themes.py             # （旧 NiceGUI 主题；新前端主题在 web/src/app/globals.css）
-├── logging_setup.py      # 日志初始化（文件 + 控制台）
-├── models.py             # 纯数据类 + 任务生命周期/候选累积纯逻辑：JobRecord, TaskParams
-├── records.py            # JSON CRUD、文件化图片存储、队列持久化、并发锁、用量统计、加密、导出(HTML/PPTX)
-├── prompt_data.py        # 提示词数据字典：翻译表、风格/色调/CN市场参数、宠物、地区级联、识色
-├── prompts.py            # 提示词组装引擎：4 套工作流的 prompt 拼接逻辑
-├── api.py                # Gemini/Fal 客户端：生图、编辑、风格分析、色彩迁移、连通自检
-├── webui.py              # ⚠️旧 NiceGUI 界面（过渡基线，STEP3 删；新功能不要往这里加）
-├── recipes.py / failure_kb.py
-├── requirements.txt      # Python 依赖（已含 fastapi/uvicorn/python-multipart）
-└── web/                  # ★ Next.js 16 前端
-    ├── src/app/          # 页面：page(生成)/records/usage/settings + layout + globals.css(品牌主题)
-    ├── src/components/   # FloorUploader / ParamsForm / JobCard / ImageZoom / Nav / ui(shadcn)
-    ├── src/lib/          # api.ts(端点封装)/types.ts/notify.ts
-    └── src/hooks/        # useJobStream.ts(SSE)
-```
-> **改后端能力** → `server_api.py` 加端点(引擎模块尽量不改)。**改界面** → `web/`。**勿动 `webui.py`**。
-
-### 2.1 各模块职责
-
-#### `config.py` — 全局配置中心
-- **职责**：路径常量 (`BASE_DIR`, `MAIN_OUTPUT_DIR`, `CONFIG_FILE`)、API key 读写 (`_load_config`, `_save_config`, `save_api_key`)、Gemini 模型名映射 (`GEMINI_MODEL_MAP`)、工具函数 (`_short_text`, `is_seamless_herringbone`, `extract_clean_prompt`)
-- **多供应商**：`FAL_MODEL_MAP`（Gemini model_id → Fal endpoint）、`DEFAULT_IMAGE_PROVIDER`、`save_provider_settings()` / `get_image_provider()`（google / fal 线路选择 + Fal key）；直连失败自动转 Fal 的开关（默认关）
-- **圆弧倒角参考图**：`BEVEL_REF_IMAGE_DEFAULT`（默认 `assets/bevel_ref_clean_a.jpg`）、`get_bevel_ref_image()`（可被 `engine_config.json` 的 `bevel_ref_image` 覆盖；备选 clean_b/c 同在 assets/）
-- **依赖**：`themes.py`（导入 THEMES + build_theme_css）、`logging_setup.py`（导入 logger）
-- **被引用**：所有其他模块都依赖它
-
-#### `themes.py` — UI 主题系统
-- **职责**：单一主题「Anthropic 暖陶米色」的色板定义 (`THEMES` 字典)、`build_theme_css()` 生成完整 `<style>` 块；字体走系统微软雅黑、完全离线（见 `_FONT_STACK`）。设计规范见项目根 `DESIGN.md`
-- **依赖**：无内部依赖
-- **修改主题**：改 `THEMES["Anthropic 暖陶米色"]` 的令牌即可
-- **添加新主题**：在 `THEMES` 中新增一个键，格式参照现有主题；webui.py 的固定调用也需同步改名
-
-#### `logging_setup.py` — 日志
-- **职责**：初始化 logger，输出到 `app_local_save.log` + 控制台
-- **依赖**：无内部依赖（独立计算 BASE_DIR）
-
-#### `models.py` — 数据模型 + 纯逻辑
-- **职责**：
-  - `JobRecord`（队列任务状态）、`TaskParams`（save_task_files_html 的 35 个参数的结构化文档）、`task_params_to_kwargs()`（转换回旧式 kwargs）
-  - **任务生命周期纯函数**（从 webui 下沉）：`new_job` / `update_job` / `compute_final_status` / `job_time_text`
-  - **候选累积纯逻辑**：`CANDIDATE_SLOTS`（b2/pro/pro_polish）、`add_candidate`（成图并入候选，超 `MAX_CANDIDATES_PER_SLOT=12` 丢最旧）、`nav_candidate`（‹n/N› 左右切换）、`ensure_candidate_lists`（向后兼容回填）
-- **依赖**：仅 Python 标准库 `dataclasses`
-- **添加新参数**：在 `TaskParams` 中加字段，同步更新 `task_params_to_kwargs()`
-
-#### `records.py` — 持久化层
-- **职责**：
-  - JSON 文件 CRUD（`_load_records`, `_save_records`, `_delete_record`, `_delete_result_image`）；写盘走"临时文件 + 原子替换"防截断
-  - 图片 ↔ base64 转换（`_img_to_b64`, `_b64_to_pil`）
-  - **文件化图片存储**：结果图落盘后只在记录里存相对路径 `result_image_file`（不再内联大 base64）；读取时优先文件、回退 base64。`_rel_result_path()` 生成相对路径（挡 `..`），`_safe_output_path()` 在读取侧再做 realpath+commonpath 越界二次校验
-  - **旧记录迁移**：`migrate_record_file()` — 把历史内联 base64 抽成独立文件，迁移前自动 `.bak` 备份、幂等、单张失败保留其 base64 容错
-  - API 结果落盘 + 写入记录（`_save_api_result_jpg`, `_api_write_to_record`）
-  - **队列持久化**：`persist_jobs()` / `load_persisted_jobs()` — 把 `_job_history` 序列化到 `.queue_state.json`（最多 60 条），重启后恢复任务卡片
-  - **并发锁**：`record_file_lock()` — 按文件路径取锁，双模型 B2/Pro 在两个 worker 线程并发 append 同一记录 JSON 时防丢
-  - **用量统计**：`record_usage()` / `load_usage_summary()` — 按模型/工作流累计调用量
-  - **辅助扫描**：`_list_recent_floor_swatches()`（最近素材）、`room_type_counts()`（记录管理按房型筛选计数，纯函数）
-  - **收藏**：`toggle_result_favorite()` / `collect_favorites()`（按 `favorite` 标记跨材料汇总）
-  - **PPTX 提案导出**：`export_pptx_from_json()`（单材料）、`export_favorites_pptx()`（全部⭐合一份）、`_build_pptx()`（16:9，标题页 + 每图一页）
-  - 提示词加密/解密（`_obfuscate` / `_deobfuscate`，XOR 密码）
-  - 记录浏览/导出（`scan_json_files`, `get_record_labels`, `export_html_from_json`）
-  - 手动追加/二次修改写入（`append_result_to_log`, `append_edited_result_to_record`）
-- **依赖**：`config.py`（路径 + logger）、`python-pptx`（仅导出 PPTX 时）
-- **⚠️ 图片质量关键代码**：`_img_to_b64()` 的 `max_width` 参数和 `quality=85`；`_save_api_result_jpg()` 的 `quality=95`
-
-#### `prompt_data.py` — 提示词数据层
-- **职责**：所有静态数据字典和翻译/分析逻辑
-  - `FALLBACK_DICT` / `TECH_DICT` / `LOCATION_MAP` — 中英翻译表（已覆盖全部城市/国家/房型/景观/规格/宠物品种等预设选项）
-  - `translate_zh_to_en()` — **先查 `TECH_DICT`/`FALLBACK_DICT` 命中即返回，未命中才走在线翻译**（GoogleTranslator 走代理）；彻底失败回退裸原文（不再包 `[ ]` 方括号）。预设选项全在表里 → 在线翻译只兜"自定义补充"等手动输入
-  - `STYLES` / `STYLE_ATMOSPHERE_MAP` — 32 种风格（10 海外 + 22 扩充）的 must/ban/atm 定义
-  - `FLOOR_TONES` / `FLOOR_TONE_CONTRAST_MAP` / `FLOOR_TONE_STYLE_RECOMMEND_MAP` — 12 种地板色调 + 家具对比色指令 + 色调×风格推荐度
-  - `LIGHTINGS` / `LIGHTING_INSTRUCTION_MAP` — 6 种光线模式
-  - `PET_TYPES` / `PET_ACTIONS` / `PET_FOCUS_OPTIONS` — 宠物模式选项（品种英文已进 `FALLBACK_DICT`）
-  - `MARKET_FURNITURE_CHOICES` / `MARKET_FURNITURE_MAP` — 家具市场风格（按品牌画像锁定家具）
-  - `CN_*` — 中国市场完整参数系统（开发商/户型/空间/交付/标配设施）
-  - `analyze_floor_tone()` — HSV 色调自动分析 + 方向性检测
-  - `get_style_choices()` — 按色调推荐排序风格列表
-  - `build_overseas_realism_layer()` — 海外市场真实感增强层
-  - `build_cn_layout_guidance()` — 国内户型规模感知建模指导
-- **依赖**：`config.py`（logger + TRANSLATOR_AVAILABLE）、`deep-translator`（GoogleTranslator，可选）、`numpy`（`analyze_floor_tone`）
-- **添加新风格**：在 `STYLES` 列表中加条目 + 在 `STYLE_ATMOSPHERE_MAP` 中加对应的 must/ban/atm 定义
-
-#### `prompts.py` — 提示词组装引擎（核心业务逻辑）
-- **职责**：`save_task_files_html()` — 接收所有参数，组装最终的英文 prompt。4 套工作流：
-  1. **纯效果图** — 生成全新空间
-  2. **地板替换** — Inpainting，只换地板不动其他
-  3. **宠物友好** — 带宠物的室内场景
-  4. **参照模式** — **图+文混合**：参照图直接当 `style_ref_image_path` 喂模型（`webui.py` `_sref_api = ref_path['v']`），`analyze_style_image()` 提取的文字风格降级为辅助强调；语境按全局市场开关走海外/国内分支
-- **关键常量**：`FLOOR_COLOR_MATCH_INSTRUCTION` — 地板颜色锁定指令（强制模型不偏色）
-- **依赖**：`config.py`、`prompt_data.py`、`records.py`
-- **⚠️ 修改 prompt 逻辑时**：先跑 `tests/test_prompts_golden.py` 确认输出变化是否符合预期
-
-#### `api.py` — 生图 API 客户端（多供应商）
-- **职责**：
-  - `call_image_generate()` — **统一生图入口**：按 `get_image_provider()` 路由到 Google 或 Fal；网络类失败（`_is_network_class_error`）且开关开启时自动转 Fal 备线
-  - `call_gemini_generate()` — Google 直连文生图 / 图生图（重试 + 指数退避，次数读 `engine_config.json`）
-  - `call_fal_generate()` — 走 Fal 路由调同款 Nano Banana（`FAL_MODEL_MAP`，保真/4K 不变，仅换线路）
-  - `call_gemini_edit()` — 图生图编辑（二次修改 / 磨缝）
-  - `analyze_style_image()` — 参照模式 Step-1：文字模型提取风格描述；带磁盘缓存（`_style_cache_*`，按图片内容 hash）
-  - `_match_color_to_reference()` — Reinhard 色彩迁移（LAB 空间，消除 img2img 偏色）
-  - `test_connection()` — 同时测 Gemini + Fal 连通性
-  - `FLOOR_DESEAM_INSTRUCTION` — 磨缝编辑指令
-- **依赖**：`config.py`、`records.py`
-- **⚠️ 仅本地运行**：`verify=False` 仅适用于本地代理场景
-
-#### `webui.py` — Web 界面
-- **职责**：
-  - 2-Tab 布局：工作台（生成 + 队列）+ 记录管理
-  - 文件上传、参数选择、任务提交、实时队列刷新
-  - **双模型生成 + 批量生成（多场景）**：批量任务跑在独立 asyncio task 里，UI 更新须 `background_tasks.create` + `with client` 保住 slot 上下文
-  - **逐张多抽（重抽 regen）**：按张数一张一张追加到**同一张卡**累积候选，‹n/N› 左右切换（`models.add_candidate`/`nav_candidate`），可中途"停止多抽"
-  - 停止/取消（单任务 + 全部停止）、失败重试
-  - 磨缝、二次修改、记录删除
-  - **收藏⭐ + 筛选**："只看收藏"开关、收藏夹一键导出 PPTX
-  - 导出：HTML / PPTX（单材料）、记录文件迁移入口
-  - **结果图缩略图**：卡片/记录列表显示走 `/thumb/outputs` 端点（`_result_thumb_url`，懒生成+磁盘缓存），点击放大/下载才用原图——避免浏览器为列表解整张 4K
-  - **内存自动收口**：常驻卡片超 `_MAX_RESIDENT_CARDS`(30) 时 `_auto_trim_cards()` 删最旧的已完成卡（running/pending 永不删，磁盘记录仍可查）；候选每槽上限 12
-- **依赖**：所有其他模块 + NiceGUI
-- **UI 框架**：NiceGUI (Quasar/Vue3)，单页应用，WebSocket 实时更新
-
-#### `__main__.py` — 启动器
-- **职责**：`python -m floor_engine` → 启动 NiceGUI 服务 + 自动打开浏览器
-- **环境变量**：`FLOOR_AI_PORT`（端口，默认 7869）、`FLOOR_AI_RELOAD`（热重载，默认关闭）
-
-## 三、未来功能开发指南
-
-### 3.1 按需求找文件
-
-| 想做什么 | 去哪个文件 | 为什么 |
-|----------|-----------|--------|
-| **加新的地板风格** | `prompt_data.py` | `STYLES` 列表 + `STYLE_ATMOSPHERE_MAP` |
-| **加新的地板色调** | `prompt_data.py` | `FLOOR_TONES` + `FLOOR_TONE_CONTRAST_MAP` + `FLOOR_TONE_STYLE_RECOMMEND_MAP` |
-| **加新的光线模式** | `prompt_data.py` | `LIGHTINGS` + `LIGHTING_INSTRUCTION_MAP` |
-| **加新的中国市场参数**（开发商/户型/空间特征） | `prompt_data.py` | `CN_*` 系列字典 |
-| **修改 prompt 措辞/结构** | `prompts.py` | `save_task_files_html()` 里的 4 个 f-string 模板 |
-| **修改地板颜色锁定的强度** | `prompts.py` | `FLOOR_COLOR_MATCH_INSTRUCTION` 常量 |
-| **无缝/磨缝策略调整** | `prompts.py` | `save_task_files_html()` 里 `is_seamless_clean` 分支（~200 行） |
-| **换 AI 模型**（比如换成 GPT-4o 生图） | `api.py` | `call_gemini_generate()` + `GEMINI_MODEL_MAP` in `config.py` |
-| **改 API 重试策略** | `api.py` + `engine_config.json` | `_retry_plan()` 读 `retry_attempts` / `retry_backoffs`；Fal 另有 `fal_retry_attempts` |
-| **改图片存储质量** | `records.py` | `_img_to_b64()` 的 `quality=85`、`_save_api_result_jpg()` 的 `quality=95` |
-| **改 UI 主题/配色** | `themes.py` | `THEMES` 字典 |
-| **加新的 UI 控件/按钮** | `webui.py` | NiceGUI 组件树 |
-| **加新的工作流模式**（比如"商业空间"） | `prompts.py` + `webui.py` | prompt 模板 + UI 参数面板 |
-| **加用户认证系统** | `webui.py` + `config.py` | NiceGUI 登录页 + 配置文件 |
-| **改数据加密方式** | `records.py` | `_obfuscate` / `_deobfuscate` + `_load_reveal_hash` |
-| **加批量生成** | `webui.py` | `_run_job()` 的循环调用 |
-| **加导出格式**（PDF/PPTX） | `records.py` | 新建 `export_xxx_from_json()` |
-| **加任务队列持久化**（重启不丢队列） | `records.py` + `webui.py` | JSON 序列化 `_job_history` |
-| **改用 SQLite 替代 JSON** | `records.py` | 重写所有 `_load_records` / `_save_records` 调用 |
-| **加单元测试 / 黄金对比** | `tests/`（已建：`tests/test_prompts_golden.py` + `tests/golden/`） | pytest；prompt 文本快照比对，纯本地零 API |
-| **改密码** | 环境变量 `FLOOR_ENGINE_REVEAL_HASH` 或 `engine_config.json` 的 `reveal_hash` 字段 | 不再硬编码在源码里 |
-
-### 3.2 开发工作流
-
-**商业版（首选）——见「零、快速启动」**：双击 `test\一键启动.bat`，或手动两个进程：
-```bash
-python -m Floor_engine_server.server_api      # 后端 7870（在 test/ 下）
-cd Floor_engine_server/web && npm run dev      # 前端 3000
-# 改后端：server_api.py(加端点) / 引擎模块。uvicorn 不自动重载 → 重启后端生效。
-# 改前端：web/ 下文件，npm run dev 自动热重载，刷新浏览器即可。
-# 前端验类型/构建：cd web && npx tsc --noEmit && npm run build
-```
-
-<details><summary>旧 NiceGUI 单体启动方式（过渡期保留，STEP3 后废弃）</summary>
-
-```bash
-python -m Floor_engine_server          # 旧 webui，端口 7869
-set FLOOR_AI_PORT=7890 && python -m Floor_engine_server
-```
-</details>
-
-> ✅ **测试基建已建立（prompt 黄金回归）**：`tests/test_prompts_golden.py` 固定参数跑
-> `save_task_files_html()` 的 4 套工作流，把返回的 combined/Pro 两段 prompt 与 `tests/golden/*.txt`
-> 基准做字符串比对。纯本地、不联网、不调 API、不写真实 `output_files/`（见 `tests/conftest.py`：
-> 隔离输出目录 + 强制离线翻译 `TRANSLATOR_AVAILABLE=False`）。
->
-> ```bash
-> python -m pytest floor_engine/tests/ -q              # 改 prompts.py 后跑回归
-> UPDATE_GOLDEN=1 python -m pytest floor_engine/tests/ # 有意改了 prompt 后刷新基准（务必人工核对 diff！）
-> ```
->
-> 加新工作流/改 prompt 措辞时：先跑回归看 diff；确认是预期改动后用 `UPDATE_GOLDEN=1` 刷新并提交新基准。
-
-### 3.3 代码规范（新贡献者必读）
-
-1. **禁止 `import *`** — 所有模块已改为显式导入，新代码请保持一致
-2. **加类型标注** — 新函数签名必须有 type hints
-3. **改 prompts.py 前/后跑黄金回归** — `python -m pytest floor_engine/tests/ -q`；预期内的改动用 `UPDATE_GOLDEN=1` 刷新基准并人工核对 diff（见 3.2）
-4. **图片质量相关改动要谨慎** — `_img_to_b64(quality=85)` 和 `_save_api_result_jpg(quality=95)` 直接影响客户交付质量
-5. **API key 不能出现在日志里** — 使用 `_redact_api_key()` 包裹
-
-## 四、数据流与架构图
-
-### 4.1 模块依赖图
-
-```
-                    ┌─────────────┐
-                    │  __main__.py │  (启动器)
-                    └──────┬──────┘
-                           │ from .webui import *
-                           ▼
-                    ┌─────────────┐
-                    │   webui.py  │  (UI + 任务调度)
-                    └──────┬──────┘
-                           │
-            ┌──────────────┼──────────────────┐
-            │              │                  │
-            ▼              ▼                  ▼
-     ┌──────────┐   ┌──────────┐      ┌──────────┐
-     │  api.py  │   │prompts.py│      │records.py│
-     │(Gemini)  │   │(prompt)  │      │(持久化)  │
-     └────┬─────┘   └────┬─────┘      └────┬─────┘
-          │              │                  │
-          │         ┌────┴─────┐            │
-          │         │          │            │
-          │         ▼          ▼            │
-          │  ┌──────────┐ ┌──────────┐      │
-          │  │prompt_   │ │ records  │      │
-          │  │data.py   │ │  .py     │      │
-          │  │(数据字典) │ │(JSON CRUD)│     │
-          │  └────┬─────┘ └────┬─────┘      │
-          │       │            │            │
-          │       ▼            ▼            │
-          │  ┌──────────────────────┐       │
-          │  │     config.py        │◄──────┘
-          │  │  (路径/配置/工具)     │
-          │  └──────────┬───────────┘
-          │             │
-          │      ┌──────┴──────┐
-          │      │             │
-          │      ▼             ▼
-          │  ┌────────┐  ┌──────────┐
-          │  │themes  │  │logging   │
-          │  │.py     │  │_setup.py │
-          │  └────────┘  └──────────┘
-          │
-          ▼
-    ┌───────────┐
-    │ models.py │  (纯数据，无依赖)
-    └───────────┘
-```
-
-### 4.2 一次"双模型生成"请求的完整数据流
-
-```
-用户点击 "⚡ 双模型生成"
-        │
-        ▼
- webui._run_job('both')
-        │
-        ├─ 1. 校验 API key + 地板图存在
-        ├─ 2. 创建 JobRecord，添加到 _job_history
-        ├─ 3. 调用 _add_job_card() 在 UI 插入卡片
-        │
-        ├─ 4. 获取信号量 (asyncio.Semaphore(5))
-        │
-        ├─ 5. [参照模式] analyze_style_image() ─── Gemini 文字 API
-        │      └─ 返回风格描述文本（辅助）；同时参照图本身会作为 style_ref 直接喂给第 8 步生图
-        │
-        ├─ 6. save_task_files_html() ─── prompts.py
-        │      │
-        │      ├─ 图片预处理 (RGBA→RGB, ICC→sRGB, thumbnail 4096)
-        │      ├─ 翻译所有中文参数 → 英文 (prompt_data.translate_zh_to_en)
-        │      ├─ 匹配风格 must/ban (STYLE_ATMOSPHERE_MAP)
-        │      ├─ 匹配色调→家具对比色指令 (FLOOR_TONE_CONTRAST_MAP)
-        │      ├─ 构建 CN 市场上下文块 (如开启)
-        │      ├─ 构建海外真实感层 (如非 CN)
-        │      ├─ 无缝模式处理 (替换 CORE_MATERIAL_INSTRUCTION)
-        │      ├─ 拼接 4 套工作流之一的 f-string 模板
-        │      ├─ 追加 FLOOR_COLOR_MATCH_INSTRUCTION
-        │      ├─ 生成 B2 版 + Pro 版两个 prompt
-        │      ├─ 写入 JSON 记录 (_save_records)
-        │      └─ 返回 (processed_img, msg, combined_prompt, json_path, record_id, png_path, pro_prompt)
-        │
-        ├─ 7. extract_clean_prompt() ─── 去掉 UI 装饰文本，取纯英文 prompt
-        │
-        ├─ 8. asyncio.gather(
-        │        call_gemini_generate(B2 model,  cpt)  ─── Gemini 生图 API
-        │        call_gemini_generate(Pro model, cpt)  ─── Gemini 生图 API
-        │    )
-        │      │
-        │      └─ 各 3 次重试 + 指数退避
-        │
-        ├─ 9. _save_api_result_jpg() ─── 落盘到 output_files/ (JPEG quality=95)
-        │
-        ├─ 10. _api_write_to_record() ─── 写入 JSON 记录 (存相对路径 result_image_file，非内联 base64)
-        │
-        └─ 11. _refresh_job_card() ─── 更新 UI 卡片 (走 /thumb/outputs 缩略图 + 下载链接[原图] + 耗时)
-```
-
-### 4.3 关键数据结构
-
-```
-engine_config.json          # API key + proxy + theme + reveal_hash
-output_files/               # 所有生成结果
-  ├── {素材名}/
-  │   ├── {素材名}_记录.json   # 单素材的所有记录
-  │   └── {素材名}_优化图.png   # 预处理后的素材图
-  ├── {素材名}_Nano_Banana_2_{时间戳}.jpg   # B2 生成结果
-  └── {素材名}_Nano_Banana_Pro_{时间戳}.jpg # Pro 生成结果
-
-JSON 记录结构:
-{
-  "id": "20260604_143022",
-  "timestamp": "2026-06-04 14:30:22",
-  "workflow_mode": "纯效果图 (生成全新空间)",
-  "room_type": "客餐厅一体",
-  "params_summary": "纯效果图 · 客餐厅一体 · 原木风 ...",
-  "prompt_en": "Help me make a photo:\n...",     # B2 版英文 prompt
-  "prompt_en_pro": "Help me make a photo:\n...",  # Pro 版英文 prompt
-  "_pe": "base64加密的prompt",                    # 加密后的 prompt
-  "sample_image_b64": "base64缩略图(max_width=400)",
-  "results": [
-    {
-      "result_timestamp": "2026-06-04 14:31:45",
-      "result_image_file": "客餐厅一体/客餐厅一体_优化图_xxx.jpg",  # 相对 output_files 的路径(quality=95)
-      # 注：旧记录未迁移时这里可能仍是 result_image_b64(内联 base64 回退)，migrate_record_file() 可批量抽成文件
-      "comment": "API 自动生成 (3840×2160)",
-      "model_label": "Nano Banana 2"
-    },
-    ...
-  ]
-}
-```
-
-### 4.4 色调分析流程
-
-```
-用户上传地板图
-       │
-       ▼
-analyze_floor_tone() ─── prompt_data.py
-       │
-       ├─ 裁掉边缘 20%（去边框干扰）
-       ├─ 缩放到 160×160（加速）
-       ├─ RGB → HSV
-       ├─ 计算中位数 H, S, V
-       ├─ Sobel 边缘检测 → 方向性直方图 → 方向性分数
-       ├─ 判断木纹/石纹 (directionality > 0.12 → 木纹)
-       ├─ 分档：浅/中/深 × 暖/冷/中性/近白
-       ├─ 匹配 FLOOR_TONES 中的最佳档位
-       ├─ 计算置信度
-       └─ 返回 (matched_tone, analysis_html)
-              │
-              ▼
-       get_style_choices(matched_tone) ─── 按推荐度排序风格
-```
+### 0.5 启动逻辑（`一键启动.bat` 到底做了什么）
+- `cd /d "%~dp0"` 切到 bat 所在的 `test/`（后端必须在 `test/` 跑，原因见 §四：数据目录靠相对路径解析到这里）。
+- `start ... cmd /k "python -m Floor_engine_server.server_api"` 起后端窗口（`/k` = 跑完不关，方便看日志）。
+- `pushd web` → `start ... cmd /k "npm run dev"` 起前端窗口。
+- `timeout /t 8` 等前端首次编译，再 `start "" http://localhost:3000` 开浏览器。
+- **为什么两个窗口**：前后端是两个独立进程（解耦，互不阻塞）；这正是新架构相对老 NiceGUI「一锅炖」的核心改进——后端忙着出 4K 图时前端照样丝滑。
+- **为什么 bat 必须纯 ASCII**：中文 Windows 的 cmd 用 GBK 解析 .bat，文件里有中文会字节错位、命令报错。改 bat 时保持纯英文 + CRLF 换行。
 
 ---
 
-*最后更新：2026-06-23 | 版本 v7（增量：参照模式图+文混合重做、在线翻译换 GoogleTranslator 走代理 + 预设选项全量进词典[含宠物品种]、翻译失败回退裸原文、候选 ‹n/N› 同卡累积、工作台左栏重排、结果图缩略图 /thumb/outputs + 磨缝校色内存减半 + 卡片/候选自动收口、路径越界二次校验、prompt 黄金回归测试）*
-*更早（v6.0.1 起）：Fal 多供应商路由 + 自动备线、批量生成、逐张多抽、收藏⭐、PPTX 提案导出、记录文件化存储 + 旧记录迁移、圆弧倒角参考图换 clean_a*
+## 一、整体架构（绞杀者式迁移）
+
+```
+                 ┌─────────────────────────────────────────────┐
+  浏览器  ──────▶│  Next.js 前端 (web/, :3000)                  │  纯前端渲染(React)
+                 │   └─ api.ts ──HTTP/SSE──┐                    │
+                 └─────────────────────────┼───────────────────┘
+                                           ▼
+                 ┌─────────────────────────────────────────────┐
+                 │  FastAPI 无头后端 (server_api.py, :7870) ★    │  唯一新增的服务端源码
+                 │   作业队列 / SSE 进度 / 静态图 / 缩略图        │
+                 └─────────────────────────┬───────────────────┘
+                                           ▼ 复用（零改动）
+                 ┌─────────────────────────────────────────────┐
+                 │  引擎模块（headless，新旧版共用）             │
+                 │  config·models·prompt_data·prompts·recipes   │
+                 │  ·api·records·failure_kb·themes·logging_setup │
+                 └─────────────────────────────────────────────┘
+                                           ▲ 同样复用
+                 ┌─────────────────────────────────────────────┐
+                 │  webui.py (NiceGUI, :7869) ⚠️ 旧 UI，待退役   │
+                 └─────────────────────────────────────────────┘
+```
+
+三条铁律：
+1. **引擎零改**：所有重逻辑（提示词组装、模型调用、记录持久化、识色、配方、导出…）都在引擎模块里，新旧 UI 都只是「调引擎」。改业务逻辑优先落引擎模块（新仓库这份）。
+2. **新功能只往 `server_api.py` + `web/` 加**，不要再碰 `webui.py`（它在等退役，维护两套 UI 没意义）。
+3. **长请求改异步作业**：出 4K 图很慢、还会被公司软路由 reset 长连接。新设计是 `POST /api/jobs` **秒回 `job_id`** → `GET /api/jobs/{id}/stream`（SSE）看进度。触发请求立刻返回，根治 reset。
+
+**迁移进度**：STEP1（FastAPI 无头层）/ STEP2（Next.js 前端）/ STEP2.5（webui 功能全量 parity）/ 视觉重设计（Claude Design 整站换皮 + 侧栏外壳）**均已完成**。STEP3（退役 webui + 去 nicegui 依赖）**无限期延后**——旧版长期作 fallback，新版多轮实战验证后再做不可逆切换（详见 `开发日志.md` 与项目记忆）。
+
+---
+
+## 二、目录与模块地图
+
+```
+Floor_engine_server/
+├── server_api.py        ★ 新增：无头 FastAPI 层（端点 + 作业队列 + SSE + 静态/缩略图）
+├── webui.py             ⚠️ 旧 NiceGUI 界面（~2558 行，唯一 import nicegui 的业务文件，待退役）
+├── __main__.py          `python -m Floor_engine_server` 入口 → 拉起旧 webui（7869）
+├── __init__.py          包说明 / 公共导出指引
+│
+│   ── 引擎模块（全部 headless，import 不会拉起 nicegui，新旧共用）──
+├── config.py            路径/配置中心：BASE_DIR、目录常量、engine_config.json 读写、key/proxy/provider/速度档/failover/TLS
+├── models.py            纯数据：JobRecord(作业)、TaskParams(参数)、compute_final_status、候选图导航(add/nav_candidate)
+├── prompt_data.py       海量选项表（STYLES/LIGHTINGS/ANGLES/FLOOR_TONES/ROOM_TYPES/CN_*…）+ 识色 analyze_floor_tone + 中英翻译
+├── prompts.py           提示词组装：save_task_files_html(35+ 参数 → 英文 prompt + 落 JSON/PNG)，4 种工作流各一个 builder
+├── recipes.py           智能配方：recommend_recipes(按色调推荐) + pick_option_key(关键词→具体选项)
+├── api.py               模型调用：call_image_generate(Google→可选转Fal) / call_gemini_generate / call_fal_generate / call_gemini_edit(磨缝二改) / test_connection
+├── records.py           持久化：队列 persist/load、记录 JSON 读写、收藏/删除、解密 reveal、用量 load_usage_summary、导出 HTML/PPTX
+├── failure_kb.py        失败知识库：FAILURE_RULES + classify_failure(错误串→{title,cause,action})
+├── themes.py            旧 UI 主题 CSS 生成（NiceGUI 用；新前端不依赖它，主题在 web 的 globals.css）
+├── logging_setup.py     logger（输出到 test/app_local_save.log）
+│
+├── web/                 ★ Next.js 前端（见 §六）
+├── tests/               pytest：golden 提示词回归 + 安全硬化（路径逃逸/TLS/failover）
+├── assets/              bevel_ref*.jpg（倒角参考图）、logo.svg —— 入库
+├── requirements.txt     Python 依赖
+├── 开发日志.md          每次会话改了啥、为什么（最新在最上，接手前先读）
+├── README.md / DEVGUIDE.md
+└── .gitignore           忽略 __pycache__/*.log/*.bak/_ng_thumbs + 运行期产物(output_files/engine_config.json/.queue_state.json…)
+```
+
+**谁 import nicegui**：只有 `webui.py` 和 `__main__.py`。其余全部 headless——这是「后端能复用引擎而不被拖进 NiceGUI」的前提，改引擎时别破坏它（可用 `python -c "import sys,Floor_engine_server.server_api; print('nicegui' in sys.modules)"` 自检，应为 False）。
+
+---
+
+## 三、数据与配置（重要，别踩）
+
+`config.py` 里：`BASE_DIR = dirname(dirname(__file__))`。本仓库在 `test/` 下时，`BASE_DIR` 解析到 **`test/`**，于是所有运行期数据落在 `test/` 下、**与原型 `test/floor_engine/` 共享**：
+
+| 路径（相对 `test/`） | 内容 |
+|---|---|
+| `output_files/` | 出图、每个素材的 `*_记录.json`、优化图、磨缝候选 |
+| `output_files/.queue_state.json` | 任务队列持久化（最多 60 条，重启恢复） |
+| `engine_config.json` | **密钥**(gemini/fal)、proxy、provider、speed_profile、auto_failover、tls_verify/ca、并发等。**含敏感信息，已 gitignore，且在 `test/` 不在本仓库** |
+| `_ng_uploads/` | 上传的小样/参照图 |
+| `_ng_thumbs/` | 懒生成缩略图缓存（可随时重建，gitignore） |
+| `app_local_save.log` | 运行日志（gitignore） |
+
+- **新旧版共享同一份数据**：旧 NiceGUI(7869) 和新后端(7870) 同时跑也互不冲突，看到的是同一批历史与配置。
+- **将来迁出 `test/`**：把本仓库挪到别处，`BASE_DIR` 自动指向新位置 → 自动获得**独立**数据目录，无需改一行代码。`.gitignore` 已提前忽略这些运行期产物，防止迁出后误入库。
+- engine_config.json 关键字段：`gemini_api_key`/`proxy`/`fal_api_key`/`image_provider`(google|fal)/`speed_profile`(fast|resilient)/`auto_failover`/`tls_verify`/`tls_ca_bundle`/`max_concurrent_per_model`。前端「设置」页就是读写这些（经 `GET/PUT /api/config`，返回时密钥脱敏）。
+
+---
+
+## 四、后端：`server_api.py`
+
+### 4.1 运行约束
+- **必须单 worker**：`_job_history`、并发信号量都是**进程内**状态，多 worker 不共享。直接 `uvicorn.run(app, ...)`（不传 workers）即单进程。
+- 端口/host 可用环境变量覆盖：`FLOOR_API_PORT`(默认 7870)、`FLOOR_API_HOST`(默认 127.0.0.1)。
+- **CORS**：`FLOOR_API_CORS` 默认放行 `http://localhost:3000,http://127.0.0.1:3000`。**换前端端口必须改这个环境变量**，否则浏览器跨域被拦（后端能 200，但 JS fetch 拿不到）。
+
+### 4.2 作业生命周期
+```
+POST /api/jobs ──秒回 job_id──▶ 后台 asyncio task(_run_job_bg)
+                                  │  _task_prep_lock 内 save_task_files_html 组装提示词
+                                  │  _b2_semaphore / _pro_semaphore 限并发，分别调 call_image_generate
+                                  │  出一张 append_result_to_log 落盘一张；stage 文本实时更新
+前端 GET /api/jobs/{id}/stream ◀─ SSE 每秒推 _job_view 快照，进终态推 done 事件并关闭
+```
+进程内状态（都在 `_job_lock` 下读写）：`_job_history`(列表，新在前)、`_b2_semaphore`/`_pro_semaphore`(并发，lifespan 里按配置建)、`_cancel_jobs`(单作业取消集合)、`_cancel_generation`(全局取消计数器)。终态：`done`/`partial`/`failed`；`compute_final_status` 据 model_filter + 出图情况判定。
+
+### 4.3 端点目录（约 46 条）
+- **作业** `/api/jobs`：`POST`建 · `GET`列 · `GET {id}` · `GET {id}/stream`(SSE) · `POST {id}/cancel` · `POST cancel-all` · `POST clear-completed`(清完成) · `POST {id}/delete`(删单条) · `POST {id}/retry` · `GET {id}/result?model=&idx=`(候选切换) · `POST {id}/polish`(磨缝) · `POST {id}/edit`(二改) · `POST {id}/regen?n=`(重抽/多抽)。
+- **记录** `/api/records`：`GET`列文件 · `GET load` · `POST reveal`(解密) · `POST edit`(记录内二改) · `POST result/delete` · `POST result/favorite` · `POST delete`(删整条) · `GET export/{html,pptx,favorites-pptx}`(FileResponse 下载)。
+- **上传** `POST /api/uploads/{floor,room,ref}`；**小样** `GET /api/swatches/recent`；**配方** `GET /api/recipes`；**识色** `GET /api/floor/analyze`。
+- **失败** `POST /api/failure/classify` · `GET /api/failure/rules`；**连通** `GET /api/connection/test`。
+- **配置** `GET/PUT /api/config`；**模型** `GET /api/models`；**选项** `GET /api/options`(前端下拉真源)；**用量** `GET /api/usage`；**健康** `GET /api/healthz`。
+- **静态/缩略图**：`GET /thumb/{uploads,outputs}`(懒生成 JPEG)；`/outputs`、`/uploads` 挂目录服原图。
+
+### 4.4 加新端点的范式
+仿 `cancel_all` / `clear_completed`：改 `_job_history` 要持 `_job_lock`；**`_persist_jobs()` 必须在锁外调**（它内部会再取同一把锁，threading.Lock 不可重入，锁内调会死锁）。业务逻辑能复用引擎就复用（导出→`records.export_*`、识色→`prompt_data.analyze_floor_tone`、配方→`recipes.*`）。
+
+---
+
+## 五、前端：`web/`
+
+### 5.1 技术栈
+Next.js **16.2.9**（App Router + Turbopack）· React **19.2** · Tailwind **v4** · shadcn/ui（基于 `@base-ui/react`）· sonner（toast）· lucide（图标）。脚本：`npm run dev`(3000) / `npm run build` / `npm run start`。
+
+### 5.2 结构
+```
+web/src/
+├── app/
+│   ├── layout.tsx        根布局：引 Hanken Grotesk 字体 + 全高 body + <AppShell> 包壳 + <Toaster>
+│   ├── globals.css       ★ 设计令牌(珊瑚陶土 #c15f3c + 奶油米色) + 滚动条 + keyframes —— 改主题改这里
+│   ├── page.tsx          生成页（左 600px 参数列 + 右任务队列，两栏全高）
+│   ├── records/page.tsx  记录页（左 280px 文件列表 + 右记录卡）
+│   ├── usage/page.tsx    用量页（stat 卡 + 成功率条 + 明细表）
+│   └── settings/page.tsx 设置页（密钥卡 + 线路/网络卡）
+├── components/
+│   ├── AppShell.tsx      ★ 应用外壳：奶油侧边栏(236) + 顶栏(56,路由映射标题) + 内容槽
+│   ├── ParamsForm.tsx    参数表单（工作流 2×2 卡 / 市场·模型 segmented / 字段 Select / 胶囊 / 高级折叠）
+│   ├── JobCard.tsx       任务卡（SSE 实时 / 状态徽章 / 候选‹n/N› / 停止·重试·磨缝·二改·重抽·清除）
+│   ├── FloorUploader.tsx 地板上传 + 最近小样网格 + 历史弹窗
+│   ├── ImageZoom.tsx     全屏无边框看图（滚轮缩放/拖动/双击复位/Esc）
+│   ├── dc-ui.tsx         设计基元：SectionHeader(点头标)·Segmented(分段)·Pill(胶囊)
+│   └── ui/               shadcn 基础组件（button/select/dialog/switch/input…，令牌驱动）
+├── lib/
+│   ├── api.ts            ★ typed 客户端，base = NEXT_PUBLIC_API_BASE（.env.local，默认 7870）
+│   ├── types.ts          JobView/GenParams/OptionsView/ConfigView/UsageSummary/RecordEntry… 类型
+│   └── notify.ts         完成通知（浏览器 Notification + Web Audio 提示音）
+└── hooks/useJobStream.ts EventSource 封装（终态 close，防自动重连风暴）
+```
+
+### 5.3 设计系统
+全站颜色/圆角/卡片底色等是 **Tailwind v4 设计令牌**，集中在 `globals.css` 的 `:root`（`--primary #c15f3c`、`--background #f7f3ec`、`--card #fffdf9`、`--panel #faf7f0`、`--border #e3ded1`…）。shadcn 组件全部引用这些令牌——**改一处令牌即整站换肤**，不用动组件。重复的视觉模式抽进了 `dc-ui.tsx`。
+
+### 5.4 数据流
+页面 `useEffect` 调 `api.*` 取数；活动作业用 `useJobStream`(EventSource) 看 SSE 实时进度；生成页另有 2.5s 轮询 `listJobs` 做队列聚合进度。`api.imgUrl()` 把后端相对图 URL 拼成绝对地址。
+
+---
+
+## 六、关键约定 & 坑（务必读）
+
+1. **Next 16 ≠ 你训练里的 Next**（`web/AGENTS.md` 明确警告；改前端前先翻 `web/node_modules/next/dist/docs/`）：
+   - `params`/`searchParams` 变成 **Promise** → 本项目**所有页面用 `'use client'` + `useEffect` 取数**绕开。
+   - `next/image` 默认**拦本地 IP**（127.0.0.1:7870/outputs）→ 图片一律用普通 `<img>`（已加 eslint-disable）。
+   - `next build` **不再跑 ESLint**，只有 `tsc` 类型错会拦构建。
+2. **后端单 worker**（同 §4.1）。
+3. **CORS 只放 3000**（同 §4.1）；本地用别的端口调试要设 `FLOOR_API_CORS`。
+4. **bat 必须纯 ASCII + CRLF**（同 §0.5）。
+5. **`.env.local`** 控制前端的 `NEXT_PUBLIC_API_BASE`（构建期内联，改了要重 build/重启 dev）。
+6. **无头截图自检法**（验证视觉时用；本机实证）：dev 服务器在 headless Edge 里因 HMR 握手失败**不 hydrate**，截不到数据态；要截带数据的页面需 **prod build + 隔离后端(改 `FLOOR_API_CORS` 放行测试端口) + Node24 内置 WebSocket 走 CDP 真等几秒再 captureScreenshot**。隔离后端与正式实例共享 `.queue_state.json`，测试时**只读、别触发清除/删除**，免得误删真实任务。
+7. **设计稿落地**：照 mockup 的**实际视觉**还原（配色/胶囊/卡片/分段），别只搬报告文字；落地后无头截图比对设计稿。
+8. **别碰 `webui.py`**：新功能只加 `server_api.py` + `web/`。
+
+---
+
+## 七、开发工作流
+
+**加一个功能**（典型全链路）：
+1. （如需）引擎逻辑落 `records.py`/`prompts.py`/`api.py` 等（headless，别引 nicegui）。
+2. `server_api.py` 加端点（复用引擎；改队列持锁、`_persist_jobs` 在锁外）。
+3. `web/src/lib/api.ts` 加封装 + `types.ts` 加类型。
+4. 在对应页面/组件接 UI（沿用 `dc-ui` 基元与 `globals.css` 令牌）。
+5. **验证**：`cd web && npx tsc --noEmit`(0 错) + `npm run build`(过)；后端 `python -c "import Floor_engine_server.server_api"` 不报错、不拉 nicegui；必要时无头截图比对（§六.6）。
+6. 在 **`开发日志.md` 顶部追加一条**（改了啥、为什么）。
+7. 提交（见 §九）。
+
+**测试**：`cd Floor_engine_server && python -m pytest`（引擎层 golden 提示词回归 + 安全硬化；`tests/golden/` 基准入库，缓存不入）。
+
+---
+
+## 八、旧版 NiceGUI（过渡 fallback）
+
+- 本仓库仍保留 `webui.py` + `__main__.py`：`python -m Floor_engine_server`（在 `test/`）会拉起旧 NiceGUI 界面（`FLOOR_AI_PORT` 默认 **7869**）。
+- 真正的「日常 fallback」是被冻结的原型 `test/floor_engine/`（同源、共享数据）。两者**只为兜底**，**不再加新功能**。
+- 待新版跨多轮真实出图验证稳定后，STEP3 才会退役 webui 并从 `requirements.txt` 去掉 `nicegui`。在此之前别催收尾。
+
+---
+
+## 九、构建 / 打包 / Git
+
+- **前端生产模式**：`cd web && npm run build && npm run start`（dev 模式未优化，prod 更快）。
+- **打包 exe**：`test/build.bat`（由用户自己跑；Claude 只改打包文件 + 给命令，不替跑构建）。
+- **Git**：本仓库是独立 git 仓（分支 `master`，本地提交）。运行期产物与密钥已被 `.gitignore` + `web/.gitignore`（node_modules/.next）排除；`engine_config.json` 在 `test/` 不入库。提交信息沿用 `feat/fix/docs(scope): 说明` 风格，并保持「改完追加 `开发日志.md`」的习惯。
+
+---
+
+## 十、一句话回顾
+
+**改业务** → 引擎模块（headless，新仓库这份）；**改接口** → `server_api.py`；**改界面** → `web/`；**换主题** → `web/.../globals.css`；**别碰** → `webui.py`。启动就一句：`test/一键启动.bat`。

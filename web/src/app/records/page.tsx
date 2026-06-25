@@ -4,17 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
 import type { RecordEntry, RecordFile } from "@/lib/types";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { ImageZoom } from "@/components/ImageZoom";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { cn } from "@/lib/utils";
+
+const toolBtn =
+  "h-8 rounded-lg border border-border bg-card px-[13px] text-[12.5px] font-semibold text-[#6b6356] hover:bg-[#f2e9e0]";
 
 export default function RecordsPage() {
   const [files, setFiles] = useState<RecordFile[]>([]);
@@ -157,205 +153,229 @@ export default function RecordsPage() {
     }
   }
 
+  const roomChip = (active_: boolean) =>
+    cn(
+      "rounded-lg border px-[13px] py-1.5 text-[12.5px] font-semibold transition-colors",
+      active_
+        ? "border-primary bg-[#fbf3ee] text-[#a8472a]"
+        : "border-border bg-card text-[#6b6356] hover:bg-[#f2e9e0]",
+    );
+
   return (
-    <div className="mx-auto grid max-w-7xl grid-cols-1 gap-4 p-4 lg:grid-cols-[300px_1fr]">
+    <div className="flex h-full overflow-hidden">
       {/* 左栏：文件列表 + 搜索 + 导出收藏夹 */}
-      <aside className="h-fit space-y-2 rounded-xl border bg-background p-2">
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="🔍 搜索材料名…"
-          className="h-8"
-        />
-        <Button
-          variant="outline"
-          size="sm"
-          className="w-full"
+      <aside className="flex w-[280px] flex-none flex-col border-r border-border bg-panel px-[14px] py-[16px]">
+        <div className="relative mb-[9px]">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9a9082" strokeWidth="2" strokeLinecap="round" className="absolute left-[11px] top-[11px]">
+            <circle cx="11" cy="11" r="7" />
+            <path d="M21 21l-4-4" />
+          </svg>
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="搜索材料名…"
+            className="h-9 rounded-[9px] bg-card pl-8 text-[13px]"
+          />
+        </div>
+        <button
           onClick={() => download(api.exportFavoritesUrl())}
+          className="mb-[11px] flex h-9 w-full items-center justify-center gap-1.5 rounded-[9px] border border-border bg-card text-[12.5px] font-bold text-[#a8472a] hover:bg-[#f2e9e0]"
         >
           ⭐ 导出收藏夹 PPTX
-        </Button>
-        <div className="max-h-[70vh] space-y-0.5 overflow-auto">
+        </button>
+        <div className="px-1 pb-1.5 text-[11px] font-semibold text-[#9a9082]">
+          材料记录
+        </div>
+        <div className="flex flex-1 flex-col gap-0.5 overflow-y-auto">
           {visibleFiles.length === 0 && (
-            <div className="px-2 py-1 text-xs text-muted-foreground">无记录</div>
+            <div className="px-2 py-1 text-xs text-[#9a9082]">无记录</div>
           )}
-          {visibleFiles.map((f) => (
-            <button
-              key={f.json_path}
-              onClick={() => open(f.json_path)}
-              title={f.json_path}
-              className={`block w-full truncate rounded-md px-2 py-1.5 text-left text-xs hover:bg-muted ${
-                active === f.json_path ? "bg-muted font-medium" : ""
-              }`}
-            >
-              {f.json_path.split(/[\\/]/).pop()?.replace("_记录.json", "")}{" "}
-              <span className="text-muted-foreground">({f.labels.length})</span>
-            </button>
-          ))}
+          {visibleFiles.map((f) => {
+            const on = active === f.json_path;
+            return (
+              <button
+                key={f.json_path}
+                onClick={() => open(f.json_path)}
+                title={f.json_path}
+                className={cn(
+                  "block w-full whitespace-normal break-words rounded-lg px-[10px] py-2 text-left text-[12.5px] leading-snug",
+                  on
+                    ? "bg-[#f2e9e0] font-bold text-[#a8472a]"
+                    : "font-medium text-[#6b6356] hover:bg-[#f2e9e0]",
+                )}
+              >
+                {f.json_path.split(/[\\/]/).pop()?.replace("_记录.json", "")}{" "}
+                <span className="text-[#9a9082]">({f.labels.length})</span>
+              </button>
+            );
+          })}
         </div>
       </aside>
 
       {/* 右栏 */}
-      <section className="space-y-3">
-        {!active && (
-          <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-            选择左侧记录文件查看。
-          </div>
-        )}
-
-        {active && (
-          <div className="flex flex-wrap items-center gap-2">
-            <Select value={roomFilter} onValueChange={(v) => setRoomFilter(v ?? "__all__")}>
-              <SelectTrigger className="h-8 w-44">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__all__">🏠 全部房间</SelectItem>
-                {Object.entries(roomCounts).map(([rt, n]) => (
-                  <SelectItem key={rt} value={rt}>
-                    {rt} ({n})
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <div className="flex-1" />
-            <Button variant="outline" size="sm" onClick={reload}>
-              刷新
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => download(api.exportHtmlUrl(active))}
-            >
-              导出 HTML
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => download(api.exportPptxUrl(active))}
-            >
-              导出 PPTX
-            </Button>
-          </div>
-        )}
-
-        {loading && <div className="text-sm text-muted-foreground">加载中…</div>}
-
-        {!loading &&
-          active &&
-          shownRecords.map((r, i) => {
-            const rid = r.id || "";
-            return (
-              <div key={rid || i} className="rounded-xl border bg-background p-3">
-                <div className="mb-2 flex items-start justify-between gap-2">
-                  <div className="min-w-0 text-sm">
-                    <span className="font-medium">{rid || `记录 ${i + 1}`}</span>
-                    {r.room_type ? (
-                      <span className="text-muted-foreground"> · {r.room_type}</span>
-                    ) : null}
-                    {r.workflow_mode ? (
-                      <span className="text-muted-foreground">
-                        {" "}
-                        · {String(r.workflow_mode)}
-                      </span>
-                    ) : null}
-                  </div>
-                  <div className="flex shrink-0 gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 px-2"
-                      title="解密提示词"
-                      onClick={() =>
-                        setReveal({ open: true, rid, pw: "", text: "" })
-                      }
-                    >
-                      🔑
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 px-2 text-destructive"
-                      title="删除记录"
-                      onClick={() => doDeleteRecord(rid)}
-                    >
-                      🗑
-                    </Button>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
-                  {(r.results || []).map((res, j) => {
-                    const url = res.result_url || "";
-                    const thumb = res.result_thumb || url;
-                    return (
-                      <div key={j} className="space-y-1">
-                        {url ? (
-                          <img
-                            src={api.imgUrl(thumb)}
-                            alt={res.model_label || "result"}
-                            onClick={() => setZoom(api.imgUrl(url))}
-                            className="aspect-[4/3] w-full cursor-zoom-in rounded-lg border object-cover"
-                          />
-                        ) : (
-                          <div className="flex aspect-[4/3] items-center justify-center rounded-lg border bg-muted text-[11px] text-muted-foreground">
-                            {res.has_inline ? "内联图(旧)" : "无图"}
-                          </div>
-                        )}
-                        <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                          <span className="truncate">{res.model_label || ""}</span>
-                          <span className="flex shrink-0 gap-1">
-                            <button
-                              title="收藏"
-                              onClick={() => doFav(rid, j)}
-                              className="hover:text-foreground"
-                            >
-                              {res.favorite ? "⭐" : "☆"}
-                            </button>
-                            <button
-                              title="二改"
-                              onClick={() =>
-                                setEdit({
-                                  open: true,
-                                  rid,
-                                  idx: j,
-                                  instruction: "",
-                                })
-                              }
-                              className="hover:text-foreground"
-                            >
-                              ✏️
-                            </button>
-                            {url && (
-                              <button
-                                title="下载"
-                                onClick={() => download(api.imgUrl(url))}
-                                className="hover:text-foreground"
-                              >
-                                ⬇️
-                              </button>
-                            )}
-                            <button
-                              title="删除"
-                              onClick={() => doDeleteResult(rid, j)}
-                              className="hover:text-destructive"
-                            >
-                              🗑
-                            </button>
-                          </span>
-                        </div>
-                        {res.comment ? (
-                          <div className="text-[11px] text-muted-foreground">
-                            💬 {res.comment}
-                          </div>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
+      <section className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background">
+        {!active ? (
+          <div className="flex flex-1 items-center justify-center">
+            <div className="text-center text-[#9a9082]">
+              <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="#d3c8b3" strokeWidth="1.4" className="mx-auto mb-3">
+                <rect x="3" y="4" width="18" height="6" rx="1.6" />
+                <rect x="3" y="14" width="18" height="6" rx="1.6" />
+              </svg>
+              <div className="text-[13.5px] font-semibold">
+                从左侧选择一个材料记录查看
               </div>
-            );
-          })}
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="flex flex-none flex-wrap items-center justify-between gap-2.5 border-b border-border px-[22px] py-[14px]">
+              <div className="flex flex-wrap gap-[7px]">
+                <button
+                  onClick={() => setRoomFilter("__all__")}
+                  className={roomChip(roomFilter === "__all__")}
+                >
+                  全部房间
+                </button>
+                {Object.entries(roomCounts).map(([rt, n]) => (
+                  <button
+                    key={rt}
+                    onClick={() => setRoomFilter(rt)}
+                    className={roomChip(roomFilter === rt)}
+                  >
+                    {rt} ({n})
+                  </button>
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <button onClick={reload} className={toolBtn}>
+                  刷新
+                </button>
+                <button onClick={() => download(api.exportHtmlUrl(active))} className={toolBtn}>
+                  导出 HTML
+                </button>
+                <button onClick={() => download(api.exportPptxUrl(active))} className={toolBtn}>
+                  导出 PPTX
+                </button>
+              </div>
+            </div>
+
+            <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-[22px] py-[18px]">
+              {loading && <div className="text-sm text-[#9a9082]">加载中…</div>}
+              {!loading &&
+                shownRecords.map((r, i) => {
+                  const rid = r.id || "";
+                  return (
+                    <div
+                      key={rid || i}
+                      className="rounded-[14px] border border-border bg-card p-[15px] shadow-[0_2px_8px_rgba(120,90,60,.05)]"
+                    >
+                      <div className="mb-3 flex items-start justify-between gap-2">
+                        <span className="min-w-0 flex-1 break-words text-[13.5px] font-bold leading-snug text-[#2a241f]">
+                          {rid || `记录 ${i + 1}`}
+                          {r.room_type ? ` · ${r.room_type}` : ""}
+                          {r.workflow_mode ? ` · ${String(r.workflow_mode)}` : ""}
+                        </span>
+                        <div className="flex flex-none gap-2.5 text-[14px] text-[#bcae97]">
+                          <button
+                            title="解密提示词"
+                            onClick={() => setReveal({ open: true, rid, pw: "", text: "" })}
+                            className="hover:text-[#2a241f]"
+                          >
+                            🔑
+                          </button>
+                          <button
+                            title="删除记录"
+                            onClick={() => doDeleteRecord(rid)}
+                            className="hover:text-[#b5503a]"
+                          >
+                            🗑
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-[11px]">
+                        {(r.results || []).map((res, j) => {
+                          const url = res.result_url || "";
+                          const thumb = res.result_thumb || url;
+                          return (
+                            <div key={j}>
+                              <div className="relative aspect-[4/3] overflow-hidden rounded-[10px] border border-border">
+                                {url ? (
+                                  <>
+                                    <img
+                                      src={api.imgUrl(thumb)}
+                                      alt={res.model_label || "result"}
+                                      onClick={() => setZoom(api.imgUrl(url))}
+                                      className="absolute inset-0 h-full w-full cursor-zoom-in object-cover"
+                                    />
+                                    {res.model_label && (
+                                      <span className="absolute left-[7px] top-[7px] rounded-md bg-[rgba(26,24,21,.55)] px-[7px] py-[2px] text-[10px] font-bold text-white">
+                                        {res.model_label}
+                                      </span>
+                                    )}
+                                  </>
+                                ) : (
+                                  <div className="flex h-full items-center justify-center bg-muted text-[11px] text-[#9a9082]">
+                                    {res.has_inline ? "内联图(旧)" : "无图"}
+                                  </div>
+                                )}
+                              </div>
+                              <div className="mt-1.5 flex items-center justify-between text-[11px] text-[#9a9082]">
+                                <span className="truncate">{res.model_label || ""}</span>
+                                <span className="flex shrink-0 items-center gap-2.5 text-[12.5px]">
+                                  <button
+                                    title="收藏"
+                                    onClick={() => doFav(rid, j)}
+                                    className={
+                                      res.favorite
+                                        ? "text-primary"
+                                        : "text-[#bcae97] hover:text-[#2a241f]"
+                                    }
+                                  >
+                                    {res.favorite ? "★" : "☆"}
+                                  </button>
+                                  <button
+                                    title="二改"
+                                    onClick={() =>
+                                      setEdit({ open: true, rid, idx: j, instruction: "" })
+                                    }
+                                    className="hover:text-[#2a241f]"
+                                  >
+                                    ✎
+                                  </button>
+                                  {url && (
+                                    <button
+                                      title="下载"
+                                      onClick={() => download(api.imgUrl(url))}
+                                      className="hover:text-[#2a241f]"
+                                    >
+                                      ↓
+                                    </button>
+                                  )}
+                                  <button
+                                    title="删除"
+                                    onClick={() => doDeleteResult(rid, j)}
+                                    className="hover:text-[#b5503a]"
+                                  >
+                                    🗑
+                                  </button>
+                                </span>
+                              </div>
+                              {res.comment ? (
+                                <div className="mt-1 text-[11px] leading-snug text-[#857c6e]">
+                                  💬 {res.comment}
+                                </div>
+                              ) : null}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          </>
+        )}
       </section>
 
       {/* 放大 */}
@@ -368,20 +388,24 @@ export default function RecordsPage() {
       >
         <DialogContent>
           <div className="space-y-3">
-            <div className="text-sm font-medium">解密原始提示词</div>
+            <div className="text-[15px] font-bold">解密原始提示词</div>
             <Input
               type="password"
               value={reveal.pw}
               onChange={(e) => setReveal((s) => ({ ...s, pw: e.target.value }))}
               placeholder="输入密码"
+              className="h-10 rounded-[10px] bg-[#faf7f0]"
             />
             <div className="flex justify-end">
-              <Button size="sm" onClick={doReveal}>
+              <button
+                onClick={doReveal}
+                className="h-9 rounded-[9px] bg-primary px-4 text-[13px] font-bold text-primary-foreground hover:bg-[#a8472a]"
+              >
                 🔓 解密
-              </Button>
+              </button>
             </div>
             {reveal.text && (
-              <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-md bg-muted p-3 text-xs">
+              <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-[10px] bg-[#f2e9e0] p-3 text-xs text-[#2a241f]">
                 {reveal.text}
               </pre>
             )}
@@ -396,25 +420,28 @@ export default function RecordsPage() {
       >
         <DialogContent>
           <div className="space-y-3">
-            <div className="text-sm font-medium">二改（对这张结果图做图生图编辑）</div>
+            <div className="text-[15px] font-bold">二改（对这张结果图做图生图编辑）</div>
             <Input
               value={edit.instruction}
               onChange={(e) =>
                 setEdit((s) => ({ ...s, instruction: e.target.value }))
               }
               placeholder="编辑指令，例如：把沙发换成米白色布艺"
+              className="h-10 rounded-[10px] bg-[#faf7f0]"
             />
             <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                size="sm"
+              <button
                 onClick={() => setEdit((s) => ({ ...s, open: false }))}
+                className="h-9 rounded-[9px] border border-border bg-card px-4 text-[13px] font-semibold text-[#6b6356] hover:bg-[#f2e9e0]"
               >
                 取消
-              </Button>
-              <Button size="sm" onClick={doEditSubmit}>
+              </button>
+              <button
+                onClick={doEditSubmit}
+                className="h-9 rounded-[9px] bg-primary px-4 text-[13px] font-bold text-primary-foreground hover:bg-[#a8472a]"
+              >
                 提交
-              </Button>
+              </button>
             </div>
           </div>
         </DialogContent>

@@ -6,27 +6,32 @@ import { useJobStream } from "@/hooks/useJobStream";
 import { notifyJobEnd } from "@/lib/notify";
 import type { JobView } from "@/lib/types";
 import { toast } from "sonner";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ImageZoom } from "@/components/ImageZoom";
 import { cn } from "@/lib/utils";
 
-type BadgeVariant = "default" | "secondary" | "destructive" | "outline";
-const STATUS: Record<string, { label: string; variant: BadgeVariant }> = {
-  queued: { label: "排队", variant: "secondary" },
-  running: { label: "生成中", variant: "default" },
-  done: { label: "完成", variant: "default" },
-  partial: { label: "部分完成", variant: "outline" },
-  failed: { label: "失败", variant: "destructive" },
+const BADGE: Record<string, { label: string; color: string; bg: string }> = {
+  queued: { label: "排队", color: "#857c6e", bg: "#efe9dc" },
+  running: { label: "生成中", color: "#fff", bg: "#c15f3c" },
+  done: { label: "完成", color: "#fff", bg: "#2e8c7e" },
+  partial: { label: "部分完成", color: "#8a6d2e", bg: "#f3e4c4" },
+  failed: { label: "失败", color: "#fff", bg: "#b5503a" },
 };
 
 const REGEN_NS = [1, 2, 4, 6];
+const actBtn =
+  "h-[28px] rounded-lg border border-border bg-card px-[11px] text-[11.5px] font-semibold text-[#6b6356] transition-colors hover:bg-[#f2e9e0]";
 
 type SlotView = { idx: number; url: string; thumb: string };
 
-export function JobCard({ initial }: { initial: JobView }) {
+export function JobCard({
+  initial,
+  onRemove,
+}: {
+  initial: JobView;
+  onRemove?: (id: string) => void;
+}) {
   const [job, setJob] = useState<JobView>(initial);
   const [zoom, setZoom] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
@@ -64,6 +69,15 @@ export function JobCard({ initial }: { initial: JobView }) {
     }
   }
 
+  async function remove() {
+    try {
+      await api.deleteJob(job.job_id);
+      onRemove?.(job.job_id); // 即时从队列移除；后端已删，轮询不会复活
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
   async function nav(model: "b2" | "pro", delta: number) {
     const total = model === "b2" ? job.b2_total : job.pro_total;
     if (total <= 1) return;
@@ -78,7 +92,7 @@ export function JobCard({ initial }: { initial: JobView }) {
     }
   }
 
-  const st = STATUS[job.status] ?? STATUS.queued;
+  const b = BADGE[job.status] ?? BADGE.queued;
 
   const slots: {
     key: "b2" | "pro";
@@ -111,40 +125,73 @@ export function JobCard({ initial }: { initial: JobView }) {
     job.status === "done" || job.status === "partial" || job.status === "failed";
 
   return (
-    <div className="rounded-xl border bg-background p-3 shadow-sm">
+    <div className="animate-scfade rounded-[14px] border border-border bg-card p-[13px] shadow-[0_2px_8px_rgba(120,90,60,.05)]">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="truncate text-sm font-medium">{job.display_name}</div>
-          <div className="text-xs text-muted-foreground">
+          <div className="truncate text-[13.5px] font-bold text-[#2a241f]">
+            {job.display_name}
+          </div>
+          <div className="mt-0.5 text-[11px] text-[#9a9082]">
             {job.ts}
             {job.time_text ? ` · ${job.time_text}` : ""}
           </div>
         </div>
-        <Badge variant={st.variant}>{st.label}</Badge>
+        <span
+          className="flex-none rounded-full px-[10px] py-[3px] text-[11px] font-bold"
+          style={{ color: b.color, background: b.bg }}
+        >
+          {b.label}
+        </span>
       </div>
 
-      {active && <div className="mt-1 text-xs text-primary">{stageLine}</div>}
+      {active && (
+        <div className="mt-2.5">
+          <div className="mb-1.5 flex items-center gap-1.5 text-[11.5px] font-semibold text-primary">
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              className="animate-dc-spin"
+            >
+              <path d="M21 12a9 9 0 1 1-6.2-8.6" />
+            </svg>
+            {stageLine}
+          </div>
+          <div className="h-[5px] w-full overflow-hidden rounded-md bg-[#efe9dc]">
+            <div className="h-full w-2/5 animate-pulse rounded-md bg-primary" />
+          </div>
+        </div>
+      )}
 
       {job.error && (
-        <div className="mt-2 rounded-md bg-destructive/10 p-2 text-xs text-destructive">
+        <div className="mt-2.5 rounded-[9px] bg-[#f9e7e2] px-[11px] py-[9px] text-[11.5px] leading-relaxed text-[#9a3b29]">
           {job.error_kb ? (
-            <span className="font-medium">{job.error_kb.title} · </span>
+            <span className="font-semibold">{job.error_kb.title} · </span>
           ) : null}
           {job.error}
         </div>
       )}
 
       {slots.length > 0 && (
-        <div className="mt-2 grid grid-cols-2 gap-2">
+        <div className="mt-[11px] grid grid-cols-1 gap-[9px]">
           {slots.map((m) => (
-            <div key={m.key} className="space-y-1">
-              <img
-                src={api.imgUrl(m.thumb)}
-                alt={m.name}
-                onClick={() => setZoom(api.imgUrl(m.url))}
-                className="aspect-[4/3] w-full cursor-zoom-in rounded-lg border object-cover"
-              />
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
+            <div key={m.key}>
+              <div className="relative aspect-[4/3] cursor-zoom-in overflow-hidden rounded-[10px] border border-border">
+                <img
+                  src={api.imgUrl(m.thumb)}
+                  alt={m.name}
+                  onClick={() => setZoom(api.imgUrl(m.url))}
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+                <span className="absolute left-[7px] top-[7px] rounded-md bg-[rgba(26,24,21,.55)] px-[7px] py-[2px] text-[10px] font-bold text-white backdrop-blur-[2px]">
+                  {m.name}
+                </span>
+              </div>
+              <div className="mt-[5px] flex items-center justify-between text-[11px] text-[#9a9082]">
                 <span className="flex items-center gap-1">
                   {m.name}
                   {m.total > 1 && (
@@ -152,7 +199,7 @@ export function JobCard({ initial }: { initial: JobView }) {
                       <button
                         onClick={() => nav(m.key, -1)}
                         disabled={m.idx <= 0}
-                        className="rounded px-1 hover:bg-muted disabled:opacity-30"
+                        className="rounded px-1 hover:bg-[#f2e9e0] disabled:opacity-30"
                       >
                         ‹
                       </button>
@@ -162,7 +209,7 @@ export function JobCard({ initial }: { initial: JobView }) {
                       <button
                         onClick={() => nav(m.key, 1)}
                         disabled={m.idx >= m.total - 1}
-                        className="rounded px-1 hover:bg-muted disabled:opacity-30"
+                        className="rounded px-1 hover:bg-[#f2e9e0] disabled:opacity-30"
                       >
                         ›
                       </button>
@@ -173,9 +220,9 @@ export function JobCard({ initial }: { initial: JobView }) {
                   href={api.imgUrl(m.url)}
                   target="_blank"
                   rel="noreferrer"
-                  className="hover:underline"
+                  className="hover:text-[#2a241f]"
                 >
-                  原图↗
+                  ↗ 原图
                 </a>
               </div>
             </div>
@@ -183,11 +230,10 @@ export function JobCard({ initial }: { initial: JobView }) {
         </div>
       )}
 
-      <div className="mt-2 flex flex-wrap items-center gap-1.5">
+      <div className="mt-[11px] flex flex-wrap items-center gap-1.5">
         {active && (
-          <Button
-            size="sm"
-            variant="outline"
+          <button
+            className={actBtn}
             onClick={() =>
               act(
                 () =>
@@ -197,60 +243,71 @@ export function JobCard({ initial }: { initial: JobView }) {
             }
           >
             停止
-          </Button>
+          </button>
         )}
-        {terminal && job.has_retry && (job.status === "failed" || job.status === "partial") && (
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => act(() => api.retryJob(job.job_id), "已重试")}
-          >
-            重试
-          </Button>
-        )}
+        {terminal &&
+          job.has_retry &&
+          (job.status === "failed" || job.status === "partial") && (
+            <button
+              className={actBtn}
+              onClick={() => act(() => api.retryJob(job.job_id), "已重试")}
+            >
+              重试
+            </button>
+          )}
         {terminal && job.pro_url && (
-          <Button
-            size="sm"
-            variant="outline"
+          <button
+            className={actBtn}
             onClick={() => act(() => api.polishJob(job.job_id), "已提交磨缝")}
           >
             🪄 磨缝
-          </Button>
+          </button>
         )}
         {terminal && (job.pro_url || job.b2_url) && (
-          <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
+          <button className={actBtn} onClick={() => setEditOpen(true)}>
             ✏️ 二改
-          </Button>
+          </button>
         )}
 
         {/* 重抽 / 多抽 */}
         {terminal && job.has_retry && (
-          <div className="flex items-center gap-1 rounded-md border px-1.5 py-0.5">
+          <div className="flex items-center gap-1 rounded-lg border border-border px-1.5 py-0.5">
             {REGEN_NS.map((n) => (
               <button
                 key={n}
                 onClick={() => setRegenN(n)}
                 className={cn(
-                  "rounded px-1.5 text-xs",
+                  "rounded px-1.5 text-[11.5px] font-semibold",
                   regenN === n
                     ? "bg-primary text-primary-foreground"
-                    : "hover:bg-muted",
+                    : "text-[#857c6e] hover:bg-[#f2e9e0]",
                 )}
               >
                 ×{n}
               </button>
             ))}
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-6 px-2"
+            <button
+              className="ml-0.5 h-[24px] rounded-md border border-border bg-card px-2 text-[11.5px] font-semibold text-[#6b6356] hover:bg-[#f2e9e0]"
               onClick={() =>
                 act(() => api.regenJob(job.job_id, regenN), `已开始重抽 ×${regenN}`)
               }
             >
               🔄 重抽
-            </Button>
+            </button>
           </div>
+        )}
+
+        {terminal && (
+          <button
+            className={cn(
+              actBtn,
+              "hover:border-[#e7c7bf] hover:bg-[#f9e7e2] hover:text-[#b5503a]",
+            )}
+            onClick={remove}
+            title="从队列移除此卡（不影响出图与记录）"
+          >
+            ✕ 清除
+          </button>
         )}
       </div>
 
@@ -259,22 +316,21 @@ export function JobCard({ initial }: { initial: JobView }) {
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent>
           <div className="space-y-3">
-            <div className="text-sm font-medium">二改（对成图做图生图编辑）</div>
+            <div className="text-[15px] font-bold">二改（对成图做图生图编辑）</div>
             <Input
               value={editText}
               onChange={(e) => setEditText(e.target.value)}
               placeholder="编辑指令，例如：把墙换成米白色"
+              className="h-10 rounded-[10px] bg-[#faf7f0]"
             />
             <div className="flex justify-end gap-2">
-              <Button
-                variant="outline"
-                size="sm"
+              <button
                 onClick={() => setEditOpen(false)}
+                className="h-9 rounded-[9px] border border-border bg-card px-4 text-[13px] font-semibold text-[#6b6356] hover:bg-[#f2e9e0]"
               >
                 取消
-              </Button>
-              <Button
-                size="sm"
+              </button>
+              <button
                 onClick={() => {
                   const t = editText.trim();
                   if (!t) return;
@@ -282,9 +338,10 @@ export function JobCard({ initial }: { initial: JobView }) {
                   setEditOpen(false);
                   setEditText("");
                 }}
+                className="h-9 rounded-[9px] bg-primary px-4 text-[13px] font-bold text-primary-foreground hover:bg-[#a8472a]"
               >
                 提交
-              </Button>
+              </button>
             </div>
           </div>
         </DialogContent>

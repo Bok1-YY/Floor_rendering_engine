@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
@@ -45,73 +46,88 @@ export function FloorUploader({
   }
 
   return (
-    <div className="space-y-3">
-      <div
-        onClick={() => inputRef.current?.click()}
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => {
-          e.preventDefault();
-          const f = e.dataTransfer.files?.[0];
+    <div className="space-y-2.5">
+      <input
+        ref={inputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
           if (f) handleFile(f);
         }}
-        className="flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed border-muted-foreground/30 bg-muted/30 p-5 text-center text-sm hover:border-primary/50"
-      >
-        <input
-          ref={inputRef}
-          type="file"
-          accept="image/*"
-          className="hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0];
+      />
+
+      {!value ? (
+        <div
+          onClick={() => inputRef.current?.click()}
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault();
+            const f = e.dataTransfer.files?.[0];
             if (f) handleFile(f);
           }}
-        />
-        {busy ? "上传中…" : "📁 点击或拖拽上传地板小样"}
-      </div>
-
-      {value && (
-        <div className="flex items-center gap-3 rounded-lg border bg-background p-2">
-          {/* 用普通 img：图源是 127.0.0.1 本地后端，next/image 在 Next16 默认拦本地 IP */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
+          className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[13px] border-2 border-dashed border-[#d3c8b3] bg-card px-4 py-[26px] text-center transition hover:border-primary hover:bg-[#fbf6ee]"
+        >
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#c15f3c" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v3a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3v-3" />
+            <path d="M12 3v13M7.5 7.5L12 3l4.5 4.5" />
+          </svg>
+          <div className="text-[13.5px] font-bold text-[#2a241f]">
+            {busy ? "上传中…" : "点击或拖拽上传地板小样"}
+          </div>
+          <div className="text-[11.5px] text-[#9a9082]">
+            支持 JPG / PNG · 上传后自动识别色调并推荐配方
+          </div>
+        </div>
+      ) : (
+        <div className="flex items-center gap-3 rounded-[13px] border border-border bg-card p-[11px]">
           <img
             src={api.imgUrl(value.thumb)}
             alt={value.name}
-            className="h-14 w-20 rounded object-cover"
+            className="h-12 w-16 flex-none rounded-[9px] border border-border object-cover"
           />
-          <div className="min-w-0 text-xs">
-            <div className="truncate font-medium">{value.name}</div>
-            <div className="text-muted-foreground">已选地板</div>
+          <div className="min-w-0 flex-1 leading-tight">
+            <div className="truncate text-[13px] font-bold text-[#2a241f]">
+              {value.name}
+            </div>
+            <div className="mt-[3px] inline-flex items-center gap-1.5 rounded-full bg-[#f2e9e0] px-2 py-0.5 text-[11px] font-semibold text-[#a8472a]">
+              已选地板
+            </div>
           </div>
+          <button
+            onClick={() => inputRef.current?.click()}
+            className="h-[30px] flex-none rounded-lg border border-border bg-card px-[11px] text-[12px] font-semibold text-[#6b6356] hover:bg-[#f2e9e0]"
+          >
+            重新上传
+          </button>
         </div>
       )}
 
       {recent.length > 0 && (
-        <div>
-          <div className="mb-1 flex items-center justify-between">
-            <span className="text-xs font-medium text-muted-foreground">
-              最近小样
-            </span>
+        <div className="mt-2.5">
+          <div className="mb-1.5 flex items-center justify-between">
+            <span className="text-[11px] font-semibold text-[#9a9082]">最近小样</span>
             <button
               onClick={openMore}
-              className="text-xs text-muted-foreground hover:text-foreground"
+              className="text-[11px] text-[#9a9082] hover:text-foreground"
             >
               更多历史 →
             </button>
           </div>
-          <div className="grid grid-cols-6 gap-1.5">
+          <div className="grid grid-cols-8 gap-1.5">
             {recent.map((s) => (
               <button
                 key={s.path}
                 onClick={() => onPick(s)}
                 title={s.name}
                 className={cn(
-                  "overflow-hidden rounded border",
+                  "overflow-hidden rounded-lg border",
                   value?.path === s.path
-                    ? "ring-2 ring-primary"
-                    : "hover:opacity-80",
+                    ? "border-primary ring-2 ring-primary/20"
+                    : "border-border hover:opacity-80",
                 )}
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={api.imgUrl(s.thumb)}
                   alt={s.name}
@@ -125,7 +141,7 @@ export function FloorUploader({
 
       <Dialog open={moreOpen} onOpenChange={setMoreOpen}>
         <DialogContent className="max-h-[80vh] max-w-2xl overflow-auto">
-          <div className="text-sm font-medium">历史小样（点选即用）</div>
+          <div className="text-[15px] font-bold">历史小样（点选即用）</div>
           <div className="mt-2 grid grid-cols-5 gap-2 sm:grid-cols-6">
             {more.map((s) => (
               <button
@@ -135,7 +151,7 @@ export function FloorUploader({
                   setMoreOpen(false);
                 }}
                 title={s.name}
-                className="overflow-hidden rounded border hover:opacity-80"
+                className="overflow-hidden rounded-lg border border-border hover:opacity-80"
               >
                 <img
                   src={api.imgUrl(s.thumb)}

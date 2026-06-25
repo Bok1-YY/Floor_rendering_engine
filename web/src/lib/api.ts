@@ -65,6 +65,10 @@ export const api = {
   cancelJob: (id: string) =>
     jsend<{ cancelled: boolean }>(`/api/jobs/${id}/cancel`, "POST"),
   cancelAll: () => jsend<{ stopped: number }>(`/api/jobs/cancel-all`, "POST"),
+  clearCompleted: () =>
+    jsend<{ cleared: number }>(`/api/jobs/clear-completed`, "POST"),
+  deleteJob: (id: string) =>
+    jsend<{ deleted: number }>(`/api/jobs/${id}/delete`, "POST"),
   retryJob: (id: string) => jsend<JobView>(`/api/jobs/${id}/retry`, "POST"),
   jobResult: (id: string, model: "b2" | "pro", idx: number) =>
     jget<{ model: string; idx: number; total: number; url: string; thumb: string }>(

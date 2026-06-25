@@ -14,9 +14,8 @@ import { toast } from "sonner";
 import { FloorUploader } from "@/components/FloorUploader";
 import { ParamsForm } from "@/components/ParamsForm";
 import { JobCard } from "@/components/JobCard";
-import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { cn } from "@/lib/utils";
+import { SectionHeader, Pill } from "@/components/dc-ui";
 
 export default function GeneratePage() {
   const [options, setOptions] = useState<OptionsView | null>(null);
@@ -186,35 +185,47 @@ export default function GeneratePage() {
     : [];
 
   return (
-    <div className="mx-auto grid max-w-7xl grid-cols-1 gap-4 p-4 lg:grid-cols-[360px_1fr]">
-      <aside className="space-y-4">
-        <section className="rounded-xl border bg-background p-3">
-          <h2 className="mb-2 text-sm font-semibold">地板小样</h2>
+    <div className="flex h-full overflow-hidden">
+      {/* ── 左：参数列 ── */}
+      <section className="flex w-[600px] flex-none flex-col border-r border-border bg-panel">
+        <div className="flex-1 space-y-0 overflow-y-auto px-5 pb-2.5 pt-4">
+          <SectionHeader className="mx-0.5 mb-[11px] mt-1">
+            地板小样 / SWATCH
+          </SectionHeader>
           <FloorUploader value={floor} onPick={pickFloor} />
-        </section>
 
-        {recipes.length > 0 && (
-          <section className="rounded-xl border bg-background p-3">
-            <h2 className="mb-2 text-sm font-semibold">✨ 智能配方（按色调推荐）</h2>
-            <div className="flex gap-2 overflow-x-auto pb-1">
-              {recipes.map((r) => (
-                <button
-                  key={r.key}
-                  onClick={() => applyRecipe(r)}
-                  className="w-36 shrink-0 rounded-lg border bg-muted/20 p-2 text-left hover:border-primary"
-                >
-                  <div className="truncate text-xs font-medium">{r.label}</div>
-                  <div className="line-clamp-2 text-[11px] text-muted-foreground">
-                    {r.sub}
-                  </div>
-                </button>
-              ))}
-            </div>
-          </section>
-        )}
+          {recipes.length > 0 && (
+            <>
+              <SectionHeader className="mx-0.5 mb-[11px] mt-[22px]">
+                智能配方 / 按色调推荐
+              </SectionHeader>
+              <div className="flex gap-[9px] overflow-x-auto pb-1.5">
+                {recipes.map((r) => (
+                  <button
+                    key={r.key}
+                    onClick={() => applyRecipe(r)}
+                    className="w-[172px] flex-none rounded-xl border border-border bg-card p-[11px] text-left transition hover:border-primary hover:shadow-[0_6px_16px_rgba(120,90,60,.1)]"
+                  >
+                    <div className="mb-[7px] flex items-center gap-[7px]">
+                      <span
+                        className="h-[18px] w-[18px] flex-none rounded-md ring-1 ring-black/5"
+                        style={{
+                          background: "linear-gradient(135deg,#d8b48a,#bf945f)",
+                        }}
+                      />
+                      <span className="truncate text-[13px] font-bold text-[#2a241f]">
+                        {r.label}
+                      </span>
+                    </div>
+                    <div className="line-clamp-2 text-[11px] leading-relaxed text-[#857c6e]">
+                      {r.sub}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
 
-        <section className="rounded-xl border bg-background p-3">
-          <h2 className="mb-2 text-sm font-semibold">参数</h2>
           {options ? (
             <ParamsForm
               options={options}
@@ -226,44 +237,62 @@ export default function GeneratePage() {
               onRefPick={setRefImg}
             />
           ) : (
-            <div className="text-sm text-muted-foreground">加载选项中…</div>
+            <div className="mt-4 text-sm text-muted-foreground">加载选项中…</div>
           )}
-        </section>
+          <div className="h-2" />
+        </div>
 
-        <div className="flex gap-2">
-          <Button
-            className="flex-1"
-            size="lg"
-            disabled={submitting || !floor}
+        {/* sticky 底栏 */}
+        <div className="flex flex-none gap-2.5 border-t border-border bg-card px-[18px] py-[13px]">
+          <button
             onClick={generate}
+            disabled={submitting || !floor}
+            className="flex h-[46px] flex-1 items-center justify-center gap-2 rounded-xl bg-primary text-[14.5px] font-bold text-primary-foreground shadow-[0_6px_16px_rgba(193,95,60,.32)] transition hover:bg-[#a8472a] disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {submitting ? "提交中…" : "⚡ 生成"}
-          </Button>
-          <Button
-            size="lg"
-            variant="outline"
-            disabled={!floor || !options}
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M13 2L4.5 13.5H11l-1 8.5L19.5 10H13l0-8z" />
+            </svg>
+            {submitting ? "提交中…" : "生成效果图"}
+          </button>
+          <button
             onClick={() => setBatchOpen(true)}
+            disabled={!floor || !options}
+            className="h-[46px] flex-none rounded-xl border border-border bg-card px-[18px] text-[13.5px] font-bold text-[#6b6356] transition hover:bg-[#f2e9e0] disabled:cursor-not-allowed disabled:opacity-50"
           >
             批量
-          </Button>
+          </button>
         </div>
-      </aside>
+      </section>
 
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-semibold">任务队列</h2>
+      {/* ── 右：任务队列 ── */}
+      <section className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background">
+        <div className="flex flex-none items-center justify-between border-b border-border px-[22px] py-[14px]">
+          <div className="flex items-baseline gap-2.5">
+            <span className="text-[14.5px] font-bold">任务队列</span>
+            <span className="text-[12px] text-[#9a9082]">
+              {total} 个任务 · 完成 {doneCount}/{total}
+            </span>
+          </div>
           <div className="flex gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
+            <button
               onClick={() => api.listJobs(50).then(setJobs)}
+              className="h-[30px] rounded-lg border border-border bg-card px-3 text-[12.5px] font-semibold text-[#6b6356] hover:bg-[#f2e9e0]"
             >
               刷新
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
+            </button>
+            <button
+              onClick={() =>
+                api
+                  .clearCompleted()
+                  .then((r) => toast.success(`已清除 ${r.cleared} 个已完成`))
+                  .then(() => api.listJobs(50).then(setJobs))
+                  .catch((e) => toast.error((e as Error).message))
+              }
+              className="h-[30px] rounded-lg border border-border bg-card px-3 text-[12.5px] font-semibold text-[#6b6356] hover:bg-[#f2e9e0]"
+            >
+              清除已完成
+            </button>
+            <button
               onClick={() =>
                 api
                   .cancelAll()
@@ -271,90 +300,101 @@ export default function GeneratePage() {
                   .then(() => api.listJobs(50).then(setJobs))
                   .catch((e) => toast.error((e as Error).message))
               }
+              className="h-[30px] rounded-lg border border-border bg-card px-3 text-[12.5px] font-semibold text-[#b5503a] hover:bg-[#f9e7e2]"
             >
               全部停止
-            </Button>
+            </button>
           </div>
         </div>
 
         {activeCount > 0 && (
-          <div className="rounded-lg border bg-background p-2">
-            <div className="mb-1 flex justify-between text-xs text-muted-foreground">
-              <span>进行中 {activeCount} · 完成 {doneCount} / 共 {total}</span>
-              <span>{pct}%</span>
+          <div className="flex-none border-b border-border bg-card px-[22px] py-[11px]">
+            <div className="mb-1.5 flex justify-between text-[11.5px] text-[#857c6e]">
+              <span>
+                进行中 {activeCount} · 完成 {doneCount} / 共 {total}
+              </span>
+              <span className="font-bold text-[#2a241f]">{pct}%</span>
             </div>
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+            <div className="h-1.5 w-full overflow-hidden rounded-md bg-[#efe9dc]">
               <div
-                className="h-full bg-primary transition-all"
+                className="h-full rounded-md bg-primary transition-all duration-500"
                 style={{ width: `${pct}%` }}
               />
             </div>
           </div>
         )}
 
-        {jobs.length === 0 ? (
-          <div className="rounded-xl border border-dashed p-10 text-center text-sm text-muted-foreground">
-            还没有任务，左侧上传地板图并点「⚡ 生成」。
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {jobs.map((j) => (
-              <JobCard key={j.job_id} initial={j} />
-            ))}
-          </div>
-        )}
+        <div className="flex-1 overflow-y-auto px-[22px] py-[18px]">
+          {jobs.length === 0 ? (
+            <div className="rounded-2xl border-[1.5px] border-dashed border-[#d3c8b3] px-5 py-[54px] text-center text-[13px] text-[#9a9082]">
+              还没有任务 · 左侧上传地板图并点「生成效果图」
+            </div>
+          ) : (
+            <div className="grid items-start gap-4 [grid-template-columns:repeat(auto-fill,minmax(260px,1fr))]">
+              {jobs.map((j) => (
+                <JobCard
+                  key={j.job_id}
+                  initial={j}
+                  onRemove={(id) =>
+                    setJobs((s) => s.filter((x) => x.job_id !== id))
+                  }
+                />
+              ))}
+            </div>
+          )}
+        </div>
       </section>
 
       {/* 批量跨房间 */}
       <Dialog open={batchOpen} onOpenChange={setBatchOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-[520px]">
           <div className="space-y-3">
-            <div className="text-sm font-medium">
-              批量生成（同一地板 × 多个房间类型）
+            <div>
+              <div className="text-[15.5px] font-bold">批量生成</div>
+              <div className="mt-0.5 text-[12px] text-[#9a9082]">
+                同一地板 × 多个房间类型，一次性提交
+              </div>
             </div>
-            <div className="flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-[7px] pt-1">
               {batchRoomOptions.map((rt) => {
                 const on = batchRooms.includes(rt);
                 return (
-                  <button
+                  <Pill
                     key={rt}
+                    active={on}
                     onClick={() =>
                       setBatchRooms((s) =>
                         on ? s.filter((x) => x !== rt) : [...s, rt],
                       )
                     }
-                    className={cn(
-                      "rounded-full border px-2.5 py-1 text-xs",
-                      on
-                        ? "border-primary bg-primary text-primary-foreground"
-                        : "bg-background hover:bg-muted",
-                    )}
                   >
                     {rt}
-                  </button>
+                  </Pill>
                 );
               })}
             </div>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between pt-1">
               <div className="flex gap-2">
-                <Button
-                  variant="ghost"
-                  size="sm"
+                <button
                   onClick={() => setBatchRooms(batchRoomOptions)}
+                  className="h-8 rounded-lg border border-border bg-card px-[13px] text-[12.5px] font-semibold text-[#6b6356] hover:bg-[#f2e9e0]"
                 >
                   全选
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
+                </button>
+                <button
                   onClick={() => setBatchRooms([])}
+                  className="h-8 rounded-lg border border-border bg-card px-[13px] text-[12.5px] font-semibold text-[#6b6356] hover:bg-[#f2e9e0]"
                 >
                   清空
-                </Button>
+                </button>
               </div>
-              <Button size="sm" onClick={runBatch} disabled={batchRooms.length === 0}>
+              <button
+                onClick={runBatch}
+                disabled={batchRooms.length === 0}
+                className="h-[38px] rounded-[10px] bg-primary px-5 text-[13.5px] font-bold text-primary-foreground hover:bg-[#a8472a] disabled:opacity-50"
+              >
                 提交批量 ({batchRooms.length})
-              </Button>
+              </button>
             </div>
           </div>
         </DialogContent>
