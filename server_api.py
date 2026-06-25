@@ -56,7 +56,13 @@ from .models import (
 )
 from .failure_kb import classify_failure
 from .recipes import recommend_recipes, FLOOR_RECIPES
-from .prompt_data import ROOM_TYPES, CN_ROOM_TYPES, FLOOR_TONES, CONTINENTS, PROPERTY_TYPES
+from .prompt_data import (
+    ROOM_TYPES, CN_ROOM_TYPES, FLOOR_TONES, CONTINENTS, PROPERTY_TYPES,
+    VIEWS, STYLES, LOCATION_MAP, PET_TYPES, PET_ACTIONS, PET_FOCUS_OPTIONS,
+    LIGHTINGS, ANGLES, FLOOR_SIZES, MARKET_FURNITURE_CHOICES, AVOID_LIST,
+    CN_DEVELOPERS, CN_UNIT_TYPES, CN_TIERS, CN_DELIVERY_CHOICES,
+    CN_SPACE_FEATURES, CN_FACILITIES, CN_CITIES,
+)
 
 
 # ============================================================
@@ -827,10 +833,12 @@ _WORKFLOW_MODES = [
 _SEAM_TYPES = ['无缝拼接 (SPC/LVT专用)', '常规倒角缝 (如强化/木地板)', '圆弧倒角 (Pressed Bevel)']
 _GLOSSINESS = ['超哑光 (0-3°)', '哑光 (3-5°)', '高光 (High Gloss)']
 _RESOLUTIONS = ['4K', '2K']
+_ASPECT_RATIOS = ['4:3 (横向)', '16:9 (超宽)', '3:4 (竖向)', '9:16 (手机)']
 
 
 @app.get('/api/options')
 def options():
+    """前端表单全量下拉/多选项；除少数 UI 级常量外均取自 prompt_data 真源，避免与引擎漂移。"""
     return {
         'workflow_modes': _WORKFLOW_MODES,
         'model_filters': [
@@ -839,13 +847,36 @@ def options():
             {'value': 'both', 'label': '⚡ 双模型'},
         ],
         'resolutions': _RESOLUTIONS,
+        'aspect_ratios': _ASPECT_RATIOS,
         'seam_types': _SEAM_TYPES,
         'glossiness': _GLOSSINESS,
+        # ── 通用 ──
         'room_types': ROOM_TYPES,
-        'cn_room_types': CN_ROOM_TYPES,
-        'floor_tones': FLOOR_TONES,
-        'continents': CONTINENTS,
         'property_types': PROPERTY_TYPES,
+        'views': VIEWS,
+        'floor_tones': FLOOR_TONES,
+        'styles': STYLES,
+        'lightings': LIGHTINGS,
+        'angles': ANGLES,
+        'floor_sizes': FLOOR_SIZES,
+        'market_furniture': MARKET_FURNITURE_CHOICES,
+        'avoid_items': AVOID_LIST,
+        # ── 地区级联：大洲→国家→城市 ──
+        'continents': CONTINENTS,
+        'location_map': LOCATION_MAP,
+        # ── 宠物友好 ──
+        'pet_types': PET_TYPES,
+        'pet_actions': PET_ACTIONS,
+        'pet_focus': PET_FOCUS_OPTIONS,
+        # ── 国内市场 ──
+        'cn_room_types': CN_ROOM_TYPES,
+        'cn_developers': CN_DEVELOPERS,
+        'cn_cities': CN_CITIES,
+        'cn_tiers': CN_TIERS,
+        'cn_unit_types': CN_UNIT_TYPES,
+        'cn_delivery_choices': CN_DELIVERY_CHOICES,
+        'cn_space_features': list(CN_SPACE_FEATURES.keys()),
+        'cn_facilities': list(CN_FACILITIES.keys()),
     }
 
 

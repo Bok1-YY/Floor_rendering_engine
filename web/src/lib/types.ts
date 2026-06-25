@@ -134,13 +134,36 @@ export interface OptionsView {
   workflow_modes: string[];
   model_filters: { value: ModelFilter; label: string }[];
   resolutions: string[];
+  aspect_ratios: string[];
   seam_types: string[];
   glossiness: string[];
+  // 通用
   room_types: string[];
-  cn_room_types: string[];
-  floor_tones: string[];
-  continents: string[];
   property_types: string[];
+  views: string[];
+  floor_tones: string[];
+  styles: string[];
+  lightings: string[];
+  angles: string[];
+  floor_sizes: string[];
+  market_furniture: string[];
+  avoid_items: string[];
+  // 地区级联
+  continents: string[];
+  location_map: Record<string, Record<string, string[]>>;
+  // 宠物
+  pet_types: string[];
+  pet_actions: string[];
+  pet_focus: string[];
+  // 国内市场
+  cn_room_types: string[];
+  cn_developers: string[];
+  cn_cities: string[];
+  cn_tiers: string[];
+  cn_unit_types: string[];
+  cn_delivery_choices: string[];
+  cn_space_features: string[];
+  cn_facilities: string[];
 }
 
 export type Recipe = Record<string, unknown> & { label?: string; sub?: string };
