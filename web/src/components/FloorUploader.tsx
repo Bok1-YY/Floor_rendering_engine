@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import type { Swatch } from "@/lib/types";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 export function FloorUploader({
   value,
@@ -14,7 +15,14 @@ export function FloorUploader({
 }) {
   const [recent, setRecent] = useState<Swatch[]>([]);
   const [busy, setBusy] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [more, setMore] = useState<Swatch[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  function openMore() {
+    setMoreOpen(true);
+    api.recentSwatches(200).then(setMore).catch(() => {});
+  }
 
   const loadRecent = () =>
     api.recentSwatches(18).then(setRecent).catch(() => {});
@@ -79,8 +87,16 @@ export function FloorUploader({
 
       {recent.length > 0 && (
         <div>
-          <div className="mb-1 text-xs font-medium text-muted-foreground">
-            最近小样
+          <div className="mb-1 flex items-center justify-between">
+            <span className="text-xs font-medium text-muted-foreground">
+              最近小样
+            </span>
+            <button
+              onClick={openMore}
+              className="text-xs text-muted-foreground hover:text-foreground"
+            >
+              更多历史 →
+            </button>
           </div>
           <div className="grid grid-cols-6 gap-1.5">
             {recent.map((s) => (
@@ -106,6 +122,31 @@ export function FloorUploader({
           </div>
         </div>
       )}
+
+      <Dialog open={moreOpen} onOpenChange={setMoreOpen}>
+        <DialogContent className="max-h-[80vh] max-w-2xl overflow-auto">
+          <div className="text-sm font-medium">历史小样（点选即用）</div>
+          <div className="mt-2 grid grid-cols-5 gap-2 sm:grid-cols-6">
+            {more.map((s) => (
+              <button
+                key={s.path}
+                onClick={() => {
+                  onPick(s);
+                  setMoreOpen(false);
+                }}
+                title={s.name}
+                className="overflow-hidden rounded border hover:opacity-80"
+              >
+                <img
+                  src={api.imgUrl(s.thumb)}
+                  alt={s.name}
+                  className="aspect-square w-full object-cover"
+                />
+              </button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

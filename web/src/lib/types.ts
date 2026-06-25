@@ -111,6 +111,7 @@ export interface ConfigView {
   speed_profile: string;
   auto_failover: boolean;
   tls_verify: boolean;
+  tls_ca_bundle: string;
   proxy: string;
   max_concurrent_per_model: number;
   speed_params: Record<string, unknown>;
@@ -123,6 +124,9 @@ export interface ConfigPatch {
   speed_profile?: string;
   auto_failover?: boolean;
   proxy?: string;
+  tls_verify?: boolean;
+  tls_ca_bundle?: string;
+  max_concurrent_per_model?: number;
 }
 
 export interface ModelsView {

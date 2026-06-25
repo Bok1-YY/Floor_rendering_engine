@@ -133,4 +133,5 @@ export const api = {
   floorAnalyze: (path: string) =>
     jget<FloorAnalyze>(`/api/floor/analyze?path=${encodeURIComponent(path)}`),
   getUsage: () => jget<UsageSummary>(`/api/usage`),
+  getFailureRules: () => jget<FailureKB[]>(`/api/failure/rules`),
 };

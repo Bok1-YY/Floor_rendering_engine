@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { ImageZoom } from "@/components/ImageZoom";
 import { cn } from "@/lib/utils";
 
 type BadgeVariant = "default" | "secondary" | "destructive" | "outline";
@@ -253,17 +254,7 @@ export function JobCard({ initial }: { initial: JobView }) {
         )}
       </div>
 
-      <Dialog open={!!zoom} onOpenChange={(o) => !o && setZoom(null)}>
-        <DialogContent className="max-w-4xl p-2">
-          {zoom && (
-            <img
-              src={zoom}
-              alt="zoom"
-              className="max-h-[80vh] w-full object-contain"
-            />
-          )}
-        </DialogContent>
-      </Dialog>
+      <ImageZoom url={zoom} onClose={() => setZoom(null)} />
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent>

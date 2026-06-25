@@ -32,10 +32,10 @@ from pydantic import BaseModel
 # ── 引擎依赖（全部包内相对导入；这些模块均与前端无关，可安全 import 而不拉进 NiceGUI）──
 from .config import (
     MAIN_OUTPUT_DIR, UPLOAD_DIR, THUMB_DIR, logger,
-    _load_config, GEMINI_MODEL_MAP, FAL_MODEL_MAP,
+    _load_config, _save_config, GEMINI_MODEL_MAP, FAL_MODEL_MAP,
     get_image_provider, save_api_key, save_provider_settings,
     get_speed_profile, save_speed_profile, get_auto_failover, save_auto_failover,
-    get_tls_verify, get_proxy, get_speed_profile_params,
+    get_tls_verify, get_tls_ca_bundle, get_proxy, get_speed_profile_params,
     safe_upload_path, extract_clean_prompt, get_bevel_ref_image,
 )
 from .api import (
@@ -57,7 +57,7 @@ from .models import (
     job_time_text, running_model_status_text, add_candidate, ensure_candidate_lists,
     TaskParams, task_params_to_kwargs,
 )
-from .failure_kb import classify_failure
+from .failure_kb import classify_failure, FAILURE_RULES
 from .recipes import recommend_recipes, FLOOR_RECIPES, pick_option_key
 from .prompt_data import (
     ROOM_TYPES, CN_ROOM_TYPES, FLOOR_TONES, CONTINENTS, PROPERTY_TYPES,
@@ -515,6 +515,9 @@ class ConfigPatch(BaseModel):
     speed_profile: Optional[str] = None
     auto_failover: Optional[bool] = None
     proxy: Optional[str] = None
+    tls_verify: Optional[bool] = None
+    tls_ca_bundle: Optional[str] = None
+    max_concurrent_per_model: Optional[int] = None
 
 
 def _config_view() -> dict:
@@ -526,6 +529,7 @@ def _config_view() -> dict:
         'speed_profile': get_speed_profile(),
         'auto_failover': get_auto_failover(),
         'tls_verify': get_tls_verify(),
+        'tls_ca_bundle': get_tls_ca_bundle(),
         'proxy': get_proxy(),
         'max_concurrent_per_model': int(cfg.get('max_concurrent_per_model', 1) or 1),
         'speed_params': get_speed_profile_params(cfg),
@@ -821,6 +825,16 @@ def put_config(req: ConfigPatch):
         save_speed_profile(req.speed_profile)
     if req.auto_failover is not None:
         save_auto_failover(req.auto_failover)
+    if (req.tls_verify is not None or req.tls_ca_bundle is not None
+            or req.max_concurrent_per_model is not None):
+        cfg2 = _load_config()
+        if req.tls_verify is not None:
+            cfg2['tls_verify'] = bool(req.tls_verify)
+        if req.tls_ca_bundle is not None:
+            cfg2['tls_ca_bundle'] = req.tls_ca_bundle
+        if req.max_concurrent_per_model is not None:
+            cfg2['max_concurrent_per_model'] = max(1, int(req.max_concurrent_per_model))
+        _save_config(cfg2)
     return _config_view()
 
 
@@ -1145,6 +1159,21 @@ def floor_analyze(path: str):
 @app.get('/api/usage')
 def usage():
     return load_usage_summary()
+
+
+# ── 失败知识库：常见失败参考 ──
+@app.get('/api/failure/rules')
+def failure_rules():
+    out = []
+    for r in FAILURE_RULES:
+        d = r if isinstance(r, dict) else {}
+        out.append({
+            'key': d.get('key', ''),
+            'title': d.get('title', ''),
+            'cause': d.get('cause', ''),
+            'action': d.get('action', ''),
+        })
+    return [r for r in out if r['title']]
 
 
 # ============================================================

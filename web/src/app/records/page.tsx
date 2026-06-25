@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { ImageZoom } from "@/components/ImageZoom";
 import {
   Select,
   SelectContent,
@@ -358,13 +359,7 @@ export default function RecordsPage() {
       </section>
 
       {/* 放大 */}
-      <Dialog open={!!zoom} onOpenChange={(o) => !o && setZoom(null)}>
-        <DialogContent className="max-w-4xl p-2">
-          {zoom && (
-            <img src={zoom} alt="zoom" className="max-h-[80vh] w-full object-contain" />
-          )}
-        </DialogContent>
-      </Dialog>
+      <ImageZoom url={zoom} onClose={() => setZoom(null)} />
 
       {/* 解密 */}
       <Dialog
