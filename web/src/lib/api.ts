@@ -12,6 +12,9 @@ import type {
   RecordEntry,
   RecordFile,
   FailureKB,
+  UsageSummary,
+  FloorAnalyze,
+  RecordEditRequest,
 } from "./types";
 
 export const API =
@@ -99,4 +102,35 @@ export const api = {
     jsend<ConfigView>(`/api/config`, "PUT", patch),
   getModels: () => jget<ModelsView>(`/api/models`),
   getOptions: () => jget<OptionsView>(`/api/options`),
+
+  // ── STEP 2.5 迁移补齐 ──
+  regenJob: (id: string, n: number) =>
+    jsend<JobView>(`/api/jobs/${id}/regen?n=${n}`, "POST"),
+  recordEdit: (body: RecordEditRequest) =>
+    jsend<JobView>(`/api/records/edit`, "POST", body),
+  deleteResult: (json_path: string, record_id: string, result_index: number) =>
+    jsend<{ ok: boolean }>(`/api/records/result/delete`, "POST", {
+      json_path,
+      record_id,
+      result_index,
+    }),
+  favoriteResult: (json_path: string, record_id: string, result_index: number) =>
+    jsend<{ favorite: boolean }>(`/api/records/result/favorite`, "POST", {
+      json_path,
+      record_id,
+      result_index,
+    }),
+  deleteRecord: (json_path: string, record_id: string) =>
+    jsend<{ ok: boolean }>(`/api/records/delete`, "POST", {
+      json_path,
+      record_id,
+    }),
+  exportHtmlUrl: (json_path: string) =>
+    `${API}/api/records/export/html?json_path=${encodeURIComponent(json_path)}`,
+  exportPptxUrl: (json_path: string) =>
+    `${API}/api/records/export/pptx?json_path=${encodeURIComponent(json_path)}`,
+  exportFavoritesUrl: () => `${API}/api/records/export/favorites-pptx`,
+  floorAnalyze: (path: string) =>
+    jget<FloorAnalyze>(`/api/floor/analyze?path=${encodeURIComponent(path)}`),
+  getUsage: () => jget<UsageSummary>(`/api/usage`),
 };

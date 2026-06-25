@@ -1,14 +1,16 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { useJobStream } from "@/hooks/useJobStream";
+import { notifyJobEnd } from "@/lib/notify";
 import type { JobView } from "@/lib/types";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 type BadgeVariant = "default" | "secondary" | "destructive" | "outline";
 const STATUS: Record<string, { label: string; variant: BadgeVariant }> = {
@@ -19,13 +21,33 @@ const STATUS: Record<string, { label: string; variant: BadgeVariant }> = {
   failed: { label: "失败", variant: "destructive" },
 };
 
+const REGEN_NS = [1, 2, 4, 6];
+
+type SlotView = { idx: number; url: string; thumb: string };
+
 export function JobCard({ initial }: { initial: JobView }) {
   const [job, setJob] = useState<JobView>(initial);
   const [zoom, setZoom] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [editText, setEditText] = useState("");
+  const [regenN, setRegenN] = useState(1);
+  // 候选切换的本地覆盖（不影响后端"当前下标"，仅前端浏览）
+  const [view, setView] = useState<{ b2?: SlotView; pro?: SlotView }>({});
 
-  const onUpdate = useCallback((j: JobView) => setJob(j), []);
+  const prevStatus = useRef(initial.status);
+  // SSE 更新：刷新 job、清候选覆盖；非终态→终态时触发完成提醒(系统通知+提示音)
+  const onUpdate = useCallback((j: JobView) => {
+    const was = prevStatus.current;
+    const wasActive = was === "queued" || was === "running";
+    const nowTerminal =
+      j.status === "done" || j.status === "partial" || j.status === "failed";
+    if (wasActive && nowTerminal) {
+      notifyJobEnd(j.status, j.display_name, j.error);
+    }
+    prevStatus.current = j.status;
+    setJob(j);
+    setView({});
+  }, []);
   const active =
     job.status === "queued" || job.status === "running" || job.pro_polishing;
   useJobStream(active ? job.job_id : null, onUpdate);
@@ -34,7 +56,22 @@ export function JobCard({ initial }: { initial: JobView }) {
     try {
       const j = await fn();
       setJob(j);
+      setView({});
       if (okMsg) toast.success(okMsg);
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  async function nav(model: "b2" | "pro", delta: number) {
+    const total = model === "b2" ? job.b2_total : job.pro_total;
+    if (total <= 1) return;
+    const cur = view[model]?.idx ?? (model === "b2" ? job.b2_idx : job.pro_idx);
+    const next = Math.max(0, Math.min(cur + delta, total - 1));
+    if (next === cur && view[model]) return;
+    try {
+      const r = await api.jobResult(job.job_id, model, next);
+      setView((v) => ({ ...v, [model]: { idx: r.idx, url: r.url, thumb: r.thumb } }));
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -42,7 +79,7 @@ export function JobCard({ initial }: { initial: JobView }) {
 
   const st = STATUS[job.status] ?? STATUS.queued;
 
-  const models: {
+  const slots: {
     key: "b2" | "pro";
     name: string;
     url: string;
@@ -50,29 +87,27 @@ export function JobCard({ initial }: { initial: JobView }) {
     idx: number;
     total: number;
   }[] = [];
-  if (job.b2_url)
-    models.push({
-      key: "b2",
-      name: "B2",
-      url: job.b2_url,
-      thumb: job.b2_thumb,
-      idx: job.b2_idx,
-      total: job.b2_total,
+  for (const key of ["b2", "pro"] as const) {
+    const baseUrl = key === "b2" ? job.b2_url : job.pro_url;
+    if (!baseUrl) continue;
+    const ov = view[key];
+    slots.push({
+      key,
+      name: key === "b2" ? "B2" : "Pro",
+      url: ov?.url ?? baseUrl,
+      thumb: ov?.thumb ?? (key === "b2" ? job.b2_thumb : job.pro_thumb),
+      idx: ov?.idx ?? (key === "b2" ? job.b2_idx : job.pro_idx),
+      total: key === "b2" ? job.b2_total : job.pro_total,
     });
-  if (job.pro_url)
-    models.push({
-      key: "pro",
-      name: "Pro",
-      url: job.pro_url,
-      thumb: job.pro_thumb,
-      idx: job.pro_idx,
-      total: job.pro_total,
-    });
+  }
 
   const stageLine =
     [job.b2_stage && `B2 ${job.b2_stage}`, job.pro_stage && `Pro ${job.pro_stage}`]
       .filter(Boolean)
       .join(" · ") || "处理中…";
+
+  const terminal =
+    job.status === "done" || job.status === "partial" || job.status === "failed";
 
   return (
     <div className="rounded-xl border bg-background p-3 shadow-sm">
@@ -98,9 +133,9 @@ export function JobCard({ initial }: { initial: JobView }) {
         </div>
       )}
 
-      {models.length > 0 && (
+      {slots.length > 0 && (
         <div className="mt-2 grid grid-cols-2 gap-2">
-          {models.map((m) => (
+          {slots.map((m) => (
             <div key={m.key} className="space-y-1">
               <img
                 src={api.imgUrl(m.thumb)}
@@ -109,9 +144,29 @@ export function JobCard({ initial }: { initial: JobView }) {
                 className="aspect-[4/3] w-full cursor-zoom-in rounded-lg border object-cover"
               />
               <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <span>
+                <span className="flex items-center gap-1">
                   {m.name}
-                  {m.total > 1 ? ` ‹${m.idx + 1}/${m.total}›` : ""}
+                  {m.total > 1 && (
+                    <>
+                      <button
+                        onClick={() => nav(m.key, -1)}
+                        disabled={m.idx <= 0}
+                        className="rounded px-1 hover:bg-muted disabled:opacity-30"
+                      >
+                        ‹
+                      </button>
+                      <span>
+                        {m.idx + 1}/{m.total}
+                      </span>
+                      <button
+                        onClick={() => nav(m.key, 1)}
+                        disabled={m.idx >= m.total - 1}
+                        className="rounded px-1 hover:bg-muted disabled:opacity-30"
+                      >
+                        ›
+                      </button>
+                    </>
+                  )}
                 </span>
                 <a
                   href={api.imgUrl(m.url)}
@@ -127,7 +182,7 @@ export function JobCard({ initial }: { initial: JobView }) {
         </div>
       )}
 
-      <div className="mt-2 flex flex-wrap gap-1.5">
+      <div className="mt-2 flex flex-wrap items-center gap-1.5">
         {active && (
           <Button
             size="sm"
@@ -143,7 +198,7 @@ export function JobCard({ initial }: { initial: JobView }) {
             停止
           </Button>
         )}
-        {(job.status === "failed" || job.status === "partial") && (
+        {terminal && job.has_retry && (job.status === "failed" || job.status === "partial") && (
           <Button
             size="sm"
             variant="outline"
@@ -152,7 +207,7 @@ export function JobCard({ initial }: { initial: JobView }) {
             重试
           </Button>
         )}
-        {!active && job.pro_url && (
+        {terminal && job.pro_url && (
           <Button
             size="sm"
             variant="outline"
@@ -161,10 +216,40 @@ export function JobCard({ initial }: { initial: JobView }) {
             🪄 磨缝
           </Button>
         )}
-        {!active && (job.pro_url || job.b2_url) && (
+        {terminal && (job.pro_url || job.b2_url) && (
           <Button size="sm" variant="outline" onClick={() => setEditOpen(true)}>
             ✏️ 二改
           </Button>
+        )}
+
+        {/* 重抽 / 多抽 */}
+        {terminal && job.has_retry && (
+          <div className="flex items-center gap-1 rounded-md border px-1.5 py-0.5">
+            {REGEN_NS.map((n) => (
+              <button
+                key={n}
+                onClick={() => setRegenN(n)}
+                className={cn(
+                  "rounded px-1.5 text-xs",
+                  regenN === n
+                    ? "bg-primary text-primary-foreground"
+                    : "hover:bg-muted",
+                )}
+              >
+                ×{n}
+              </button>
+            ))}
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-6 px-2"
+              onClick={() =>
+                act(() => api.regenJob(job.job_id, regenN), `已开始重抽 ×${regenN}`)
+              }
+            >
+              🔄 重抽
+            </Button>
+          </div>
         )}
       </div>
 
@@ -183,9 +268,7 @@ export function JobCard({ initial }: { initial: JobView }) {
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent>
           <div className="space-y-3">
-            <div className="text-sm font-medium">
-              二改（对成图做图生图编辑）
-            </div>
+            <div className="text-sm font-medium">二改（对成图做图生图编辑）</div>
             <Input
               value={editText}
               onChange={(e) => setEditText(e.target.value)}

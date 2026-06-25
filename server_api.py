@@ -47,7 +47,10 @@ from .records import (
     persist_jobs, load_persisted_jobs, record_usage,
     _save_api_result_jpg, _api_write_to_record,
     _safe_output_path, scan_json_files, _load_records, get_record_labels,
-    reveal_prompt_fn, _list_recent_floor_swatches,
+    reveal_prompt_fn, _list_recent_floor_swatches, _b64_to_pil,
+    _delete_record, _delete_result_image, toggle_result_favorite,
+    append_edited_result_to_record, load_usage_summary,
+    export_html_from_json, export_pptx_from_json, export_favorites_pptx,
 )
 from .models import (
     JobRecord, new_job, update_job, compute_final_status,
@@ -55,13 +58,13 @@ from .models import (
     TaskParams, task_params_to_kwargs,
 )
 from .failure_kb import classify_failure
-from .recipes import recommend_recipes, FLOOR_RECIPES
+from .recipes import recommend_recipes, FLOOR_RECIPES, pick_option_key
 from .prompt_data import (
     ROOM_TYPES, CN_ROOM_TYPES, FLOOR_TONES, CONTINENTS, PROPERTY_TYPES,
     VIEWS, STYLES, LOCATION_MAP, PET_TYPES, PET_ACTIONS, PET_FOCUS_OPTIONS,
     LIGHTINGS, ANGLES, FLOOR_SIZES, MARKET_FURNITURE_CHOICES, AVOID_LIST,
     CN_DEVELOPERS, CN_UNIT_TYPES, CN_TIERS, CN_DELIVERY_CHOICES,
-    CN_SPACE_FEATURES, CN_FACILITIES, CN_CITIES,
+    CN_SPACE_FEATURES, CN_FACILITIES, CN_CITIES, analyze_floor_tone,
 )
 
 
@@ -148,6 +151,7 @@ def _job_view(job: JobRecord) -> dict:
         'time_text': job_time_text(job),
         'model_status': running_model_status_text(job),
         'pro_polishing': job.pro_polishing,
+        'has_retry': bool(job.retry_ctx),
         'record_id': job.record_id,
         'json_path': job.json_path,
         # 结果图：原图走 /outputs，缩略图走 /thumb/outputs（4K 原图大，列表用小图）
@@ -878,6 +882,269 @@ def options():
         'cn_space_features': list(CN_SPACE_FEATURES.keys()),
         'cn_facilities': list(CN_FACILITIES.keys()),
     }
+
+
+# ============================================================
+# STEP 2.5 迁移补齐：重抽/多抽、记录内二改、导出、记录管理、识色、用量
+# ============================================================
+
+async def _regen_once(job: JobRecord):
+    """复用 job.retry_ctx 再跑全部模型、把新图 append 进候选（移植 webui._regen_job 去 UI）。"""
+    ctx = job.retry_ctx or {}
+    api_key = (ctx.get('api_key') or '').strip() or _load_config().get('gemini_api_key', '').strip()
+    mf = ctx.get('model_filter', job.model_filter)
+    generation = _cancel_generation[0]
+    should_cancel = lambda: _is_cancelled(job.job_id, generation)
+
+    def gen_one(model_id, prompt_text, sk, name):
+        return _generate_one_model(job, model_id, prompt_text, sk, name, api_key=api_key,
+                                   pnp=ctx['pnp'], ims=ctx['ims'], ar=ctx['ar'], rp=ctx['rp'],
+                                   sref=ctx['sref'], bevel_ref=ctx.get('bevel_ref'),
+                                   jpt=ctx['jpt'], rid=ctx['rid'], should_cancel=should_cancel)
+
+    tasks = []
+    if mf in ('b2', 'both'):
+        tasks.append(gen_one(GEMINI_MODEL_MAP['Nano Banana 2'], ctx['cpt'], 'b2', 'Nano Banana 2'))
+    if mf in ('pro', 'both'):
+        tasks.append(gen_one(GEMINI_MODEL_MAP['Nano Banana Pro'], ctx['cpt_pro'], 'pro', 'Nano Banana Pro'))
+    await asyncio.gather(*tasks, return_exceptions=True)
+
+
+async def _regen_bg(job: JobRecord, n: int):
+    """一键多抽 ×n：串行重抽 n 次（每次 append 候选）；用户停止(加入 _cancel_jobs)即跑完当前后停。"""
+    if not job.retry_ctx:
+        update_job(job, error='缺少重抽上下文')
+        return
+    _cancel_jobs.discard(job.job_id)
+    mf = job.retry_ctx.get('model_filter', job.model_filter)
+    # 整批期间保持 running（不在迭代间置终态）——否则 SSE 见终态即关流，多抽第二张起就断了。
+    update_job(job, status='running', started_at=time.time(), error='')
+    err = ''
+    try:
+        for _i in range(max(1, n)):
+            if _is_cancelled(job.job_id, _cancel_generation[0]):
+                break
+            await _regen_once(job)
+            _persist_jobs()
+    except Exception as e:
+        logger.exception(f"[API多抽] 异常 job={job.job_id}")
+        err = str(e)
+    finally:
+        update_job(job, status=compute_final_status(mf, job.b2_path, job.pro_path), error=err)
+        _cancel_jobs.discard(job.job_id)
+        _persist_jobs()
+
+
+async def _record_edit_bg(job: JobRecord, *, src_pil, api_key, instruction, model_id, model_label,
+                          image_size, preserve, json_path, record_id, source_index):
+    """记录内二改：对已存记录的某张结果做图生图编辑，结果 append 回该记录（移植 webui._do_edit 去 UI）。"""
+    jid = job.job_id
+    generation = _cancel_generation[0]
+    update_job(job, status='running', started_at=time.time(), pro_polishing=True)
+
+    def _on_stage(t):
+        try:
+            job.pro_stage = t
+        except Exception:
+            pass
+
+    try:
+        buf = io.BytesIO()
+        src_pil.convert('RGB').save(buf, format='JPEG', quality=95)
+        b64 = base64.b64encode(buf.getvalue()).decode()
+        ar = _infer_aspect_ratio_from_b64(b64)
+        if _pro_semaphore.locked():
+            _on_stage('排队中')
+        async with _pro_semaphore:
+            out, err = await asyncio.to_thread(
+                call_gemini_edit, api_key, model_id, instruction, b64,
+                image_size, ar, preserve, _on_stage, lambda: _is_cancelled(jid, generation))
+        if out is None:
+            update_job(job, status='failed', error=f'二改失败：{err}')
+            return
+        ppath = _save_api_result_jpg(out, model_label, job.png_path or os.path.join(MAIN_OUTPUT_DIR, 'edit'))
+        add_candidate(job, 'pro', ppath)
+        try:
+            await asyncio.to_thread(append_edited_result_to_record, json_path, record_id,
+                                    source_index, out, instruction, model_label, ppath)
+        except Exception as ex:
+            logger.warning(f"[记录二改] 写记录失败 job={jid}: {ex}")
+        update_job(job, status='done', pro_path=ppath)
+        logger.info(f"[记录二改] 完成 job={jid}, record={record_id}, path={ppath}")
+    except Exception as e:
+        logger.exception(f"[记录二改] 异常 job={jid}")
+        update_job(job, status='failed', error=str(e))
+    finally:
+        update_job(job, pro_polishing=False, pro_stage='')
+        _cancel_jobs.discard(jid)
+        _persist_jobs()
+
+
+# ── 请求模型 ──
+class ResultRef(BaseModel):
+    json_path: str
+    record_id: str
+    result_index: int
+
+
+class RecordRef(BaseModel):
+    json_path: str
+    record_id: str
+
+
+class RecordEditRequest(BaseModel):
+    model_config = {'protected_namespaces': ()}
+    json_path: str
+    record_id: str
+    result_index: int
+    instruction: str
+    api_key: str = ''
+    image_size: str = '4K'
+    preserve_floor_geometry: bool = True
+    model_choice: str = 'Nano Banana Pro'
+
+
+def _serve_export(result_msg: str, out_dir: str, media_type: str):
+    """records.export_* 写文件并返回 '✅ 已导出：<basename>'；据此定位文件流式下载。"""
+    if not result_msg.startswith('✅'):
+        raise HTTPException(400, result_msg)
+    base = result_msg.split('：', 1)[1].strip() if '：' in result_msg else result_msg
+    path = os.path.join(out_dir, base)
+    if not os.path.exists(path):
+        raise HTTPException(500, f'导出文件未找到: {base}')
+    return FileResponse(path, media_type=media_type, filename=base)
+
+
+_PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+
+
+# ── 重抽/多抽 ──
+@app.post('/api/jobs/{jid}/regen')
+async def regen_job(jid: str, n: int = 1):
+    job = _get_job(jid)
+    if not job:
+        raise HTTPException(404, 'job not found')
+    if not job.retry_ctx:
+        raise HTTPException(400, '该任务缺少重抽上下文(可能重启后丢失)，请重新提交')
+    if job.status in ('running', 'queued') or job.pro_polishing:
+        raise HTTPException(409, '任务进行中，请稍后再抽')
+    asyncio.create_task(_regen_bg(job, n))
+    return _job_view(job)
+
+
+# ── 记录内二改 ──
+@app.post('/api/records/edit')
+async def record_edit(req: RecordEditRequest):
+    api_key = (req.api_key or '').strip() or _load_config().get('gemini_api_key', '').strip()
+    if not api_key:
+        raise HTTPException(400, '缺少 API Key')
+    recs = _load_records(req.json_path)
+    rec = next((r for r in recs if r.get('id') == req.record_id), None)
+    if not rec:
+        raise HTTPException(404, '未找到记录')
+    results = rec.get('results', [])
+    if not (0 <= req.result_index < len(results)):
+        raise HTTPException(404, '结果索引越界')
+    res = results[req.result_index]
+    src_pil = None
+    rel = res.get('result_image_file')
+    abs_src = _safe_output_path(rel) if rel else None
+    if abs_src:
+        try:
+            src_pil = Image.open(abs_src)
+            src_pil.load()
+        except Exception:
+            src_pil = None
+    if src_pil is None and res.get('result_image_b64'):
+        src_pil = _b64_to_pil(res['result_image_b64'])
+    if src_pil is None:
+        raise HTTPException(404, '该结果无可用图片')
+
+    material = os.path.basename(req.json_path).replace('_记录.json', '')
+    job = new_job(f'二改 · {material}', time.strftime('%H:%M:%S'), 'pro')
+    job.workflow_mode = rec.get('workflow_mode', '')
+    job.json_path = req.json_path
+    job.record_id = req.record_id
+    job.png_path = abs_src or os.path.join(MAIN_OUTPUT_DIR, 'edit')
+    with _job_lock:
+        _job_history.insert(0, job)
+    model_id = GEMINI_MODEL_MAP.get(req.model_choice, GEMINI_MODEL_MAP['Nano Banana Pro'])
+    asyncio.create_task(_record_edit_bg(
+        job, src_pil=src_pil, api_key=api_key, instruction=req.instruction, model_id=model_id,
+        model_label=f'{req.model_choice} 二改', image_size=req.image_size,
+        preserve=req.preserve_floor_geometry, json_path=req.json_path,
+        record_id=req.record_id, source_index=req.result_index))
+    return _job_view(job)
+
+
+# ── 记录管理：删除结果 / 删除记录 / 收藏结果 ──
+@app.post('/api/records/result/delete')
+def delete_result(req: ResultRef):
+    if not _delete_result_image(req.json_path, req.record_id, req.result_index):
+        raise HTTPException(404, '未找到该效果图')
+    return {'ok': True}
+
+
+@app.post('/api/records/result/favorite')
+def favorite_result(req: ResultRef):
+    new = toggle_result_favorite(req.json_path, req.record_id, req.result_index)
+    if new is None:
+        raise HTTPException(404, '未找到该效果图')
+    return {'favorite': new}
+
+
+@app.post('/api/records/delete')
+def delete_record(req: RecordRef):
+    if not _delete_record(req.json_path, req.record_id):
+        raise HTTPException(404, '未找到该记录')
+    return {'ok': True}
+
+
+# ── 导出：HTML / PPTX / 收藏夹PPTX ──
+@app.get('/api/records/export/html')
+def export_html(json_path: str):
+    return _serve_export(export_html_from_json(json_path), os.path.dirname(json_path), 'text/html')
+
+
+@app.get('/api/records/export/pptx')
+def export_pptx(json_path: str):
+    return _serve_export(export_pptx_from_json(json_path), os.path.dirname(json_path), _PPTX_MIME)
+
+
+@app.get('/api/records/export/favorites-pptx')
+def export_favorites():
+    return _serve_export(export_favorites_pptx(), MAIN_OUTPUT_DIR, _PPTX_MIME)
+
+
+# ── 地板识色 + 智能配方 ──
+def _resolve_recipe(r: dict) -> dict:
+    """把配方的 kw 提示用 pick_option_key 解析成前端可直接套用的具体选项值
+    （拼缝/光泽/板材尺寸跟地板小样定,配方不覆盖——与老版 _apply_recipe 一致）。"""
+    return {
+        'key': r.get('key', ''),
+        'label': r.get('label', ''),
+        'sub': r.get('sub', ''),
+        'style_type': pick_option_key(STYLES, r.get('style_kw') or []) or '',
+        'lighting': pick_option_key(LIGHTINGS, r.get('light_kw') or []) or '',
+        'angle': pick_option_key(ANGLES, r.get('angle_kw') or []) or '',
+        'aspect_ratio': pick_option_key(_ASPECT_RATIOS, r.get('aspect_kw') or []) or '',
+        'resolution': pick_option_key(_RESOLUTIONS, r.get('res_kw') or []) or '',
+    }
+
+
+@app.get('/api/floor/analyze')
+def floor_analyze(path: str):
+    if not path or not os.path.exists(path):
+        raise HTTPException(400, '图片不存在')
+    tone, _html = analyze_floor_tone(path)
+    matched = next((t for t in FLOOR_TONES if tone and (tone in t or t in tone)), tone or FLOOR_TONES[0])
+    return {'tone': matched, 'recipes': [_resolve_recipe(r) for r in recommend_recipes(matched, 6)]}
+
+
+# ── 用量统计 ──
+@app.get('/api/usage')
+def usage():
+    return load_usage_summary()
 
 
 # ============================================================

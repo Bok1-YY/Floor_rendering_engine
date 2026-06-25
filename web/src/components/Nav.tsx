@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 const LINKS: [string, string][] = [
   ["/", "生成"],
   ["/records", "记录"],
+  ["/usage", "用量"],
   ["/settings", "设置"],
 ];
 

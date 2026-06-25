@@ -27,6 +27,7 @@ export interface JobView {
   time_text: string;
   model_status: string;
   pro_polishing: boolean;
+  has_retry: boolean;
   record_id: string;
   json_path: string;
   b2_url: string;
@@ -173,7 +174,10 @@ export interface RecordResult {
   result_thumb?: string;
   has_inline?: boolean;
   model?: string;
+  model_label?: string;
   comment?: string;
+  favorite?: boolean;
+  result_timestamp?: string;
   [k: string]: unknown;
 }
 
@@ -187,4 +191,43 @@ export interface RecordEntry {
 export interface RecordFile {
   json_path: string;
   labels: string[];
+}
+
+export interface UsageRow {
+  mode: string;
+  model: string;
+  provider: string;
+  ok: number;
+  fail: number;
+}
+export interface UsageSummary {
+  rows: UsageRow[];
+  totals: { ok: number; fail: number; total: number };
+}
+
+export interface ResolvedRecipe {
+  key: string;
+  label: string;
+  sub: string;
+  style_type: string;
+  lighting: string;
+  angle: string;
+  aspect_ratio: string;
+  resolution: string;
+}
+
+export interface FloorAnalyze {
+  tone: string;
+  recipes: ResolvedRecipe[];
+}
+
+export interface RecordEditRequest {
+  json_path: string;
+  record_id: string;
+  result_index: number;
+  instruction: string;
+  api_key?: string;
+  image_size?: string;
+  preserve_floor_geometry?: boolean;
+  model_choice?: string;
 }
