@@ -5,7 +5,12 @@
 #       等都是 Python 标准库, 无需安装。nicegui 会自动带来 fastapi/uvicorn 等
 #       间接依赖, pip 会自动处理, 不用手动列出。
 
-nicegui==3.12.1
+nicegui==3.12.1          # 过渡期保留(webui.py 仍在)；STEP 3 退休 webui 后可移除
+# ── server_api.py(FastAPI 无头服务层)直接依赖 ──
+# 现阶段 fastapi/uvicorn 由 nicegui 间接带来；显式列出以便 STEP 3 移除 nicegui 后服务仍可独立跑。
+fastapi                  # 版本随 nicegui 约束自动解析，勿强行 pin 以免与 nicegui 冲突
+uvicorn[standard]        # ASGI 服务器：uvicorn Floor_engine_server.server_api:app
+python-multipart         # FastAPI 解析 multipart 上传(UploadFile)所需
 Pillow==12.2.0
 requests==2.34.2
 numpy==2.4.6
