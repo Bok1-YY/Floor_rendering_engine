@@ -1,4 +1,56 @@
-# floor_engine v7 — 开发者手册
+# Floor Engine Server（地板AI生图引擎 · 商业版）— 开发者手册
+
+> 本仓库是从老 `floor_engine`(NiceGUI 单体) **fork 出的商业版**，架构已拆成
+> **FastAPI 无头后端 (`server_api.py`) + Next.js 前端 (`web/`)**，引擎模块(api/prompts/records/...)原样复用、零改动。
+> 老 `webui.py` 暂留作过渡基线，待功能验收无误后(STEP 3)删除。
+
+---
+
+## 零、快速启动（先看这里）⭐
+
+### TL;DR — 一键启动
+双击 **`test\一键启动.bat`**（在本仓库的**上一级** `test\` 目录里）。它会:
+1. 开「后端」窗口 → FastAPI 跑在 **http://127.0.0.1:7870**
+2. 开「前端」窗口 → Next.js dev 跑在 **http://localhost:3000**
+3. 等 ~8 秒前端编译完，自动打开浏览器到 `localhost:3000`
+
+**停止**：关掉对应的「后端/前端」窗口即可。
+**注意**：`一键启动.bat` 必须是 **纯 ASCII + 无 BOM + CRLF** 换行，否则中文版 Windows 的 cmd 会乱码崩(踩过坑)。
+
+### 手动启动（调试时分开跑）
+```bash
+# 后端（在 test/ 目录下，把本仓库当包导入）——必须单 worker
+python -m Floor_engine_server.server_api
+# 等价：uvicorn Floor_engine_server.server_api:app --host 127.0.0.1 --port 7870 --workers 1
+
+# 前端（在 Floor_engine_server/web/ 目录下）
+npm run dev        # → http://localhost:3000
+```
+环境变量（可选）：后端 `FLOOR_API_HOST` / `FLOOR_API_PORT`(默认 127.0.0.1:7870) / `FLOOR_API_CORS`(放行的前端源，默认含 localhost:3000)；前端 `web/.env.local` 的 `NEXT_PUBLIC_API_BASE`(默认 `http://127.0.0.1:7870`)。
+
+### 首次准备（装依赖，只做一次）
+```bash
+pip install -r Floor_engine_server/requirements.txt     # 后端(含 fastapi/uvicorn/python-multipart)
+cd Floor_engine_server/web && npm install               # 前端
+```
+
+### 启动逻辑（发生了什么）
+- **后端 `server_api.py`**：FastAPI app。**lifespan 启动钩子**里——按 `engine_config.json` 的 `max_concurrent_per_model`(默认1) 在**本进程事件循环**上创建 B2/Pro 并发信号量 + prep 锁，并 `load_persisted_jobs()` 从 `.queue_state.json` 恢复历史任务卡。**必须单 worker**：`_job_history`、信号量都是进程内状态，多 worker 不共享。
+- **生图不阻塞 HTTP**：`POST /api/jobs` 秒回 `job_id`，真正生成在后台 task 跑；前端用 **SSE**(`GET /api/jobs/{id}/stream`，`EventSource`) 看实时进度。这绕开了"长 4K 请求把连接撑爆被软路由 reset"的老毛病。
+- **前端 `web/`**：Next.js 16(App Router, Turbopack)。页面全是 `'use client'` + `useEffect` 取数，通过 `lib/api.ts`(读 `NEXT_PUBLIC_API_BASE`) 调后端;图片用普通 `<img>`(避开 Next16 对本地 IP 的 `next/image` 拦截)。
+- **数据位置**：`config.BASE_DIR = dirname(dirname(__file__))`——本仓库在 `test/` 下时解析到 **`test/`**，故与老 app **共享** `output_files/` / `engine_config.json`(含 API key) / `_ng_uploads/` / `.queue_state.json`。把本仓库迁出 `test/` 即自动获得独立数据目录，无需改码。
+
+### 端口 / 进程
+| 进程 | 端口 | 命令 | 说明 |
+|---|---|---|---|
+| 后端 FastAPI | 7870 | `python -m Floor_engine_server.server_api` | 无头 API + SSE，单 worker |
+| 前端 Next.js | 3000 | `cd web && npm run dev` | 商业版界面 |
+| (旧)NiceGUI | 7869 | `python -m Floor_engine_server`（即 webui） | 过渡基线，STEP3 删 |
+
+### 前端页面
+`/` 生成（上传+参数+队列+SSE）· `/records` 记录管理（搜索/筛选/二改/删除/收藏/解密/导出）· `/usage` 用量 · `/settings` 设置（key/线路/网络/TLS/并发/连通自检）。
+
+---
 
 ## 一、项目概述
 
@@ -6,25 +58,34 @@
 
 - **目标客户**：地板品牌的社媒/网站部门
 - **卖点**：视觉真实度（不是预览精度），核心壁垒在提示词工程 + 中国市场参数系统
-- **技术栈**：Python 3.10+ / NiceGUI (Quasar/Vue3) / Google Gemini API / PIL / numpy
+- **技术栈（商业版）**：后端 Python 3.10+ / **FastAPI + uvicorn**（无头 API + SSE）；前端 **Next.js 16 (App Router) + React 19 + Tailwind v4 + shadcn/ui**；生图 Google Gemini API（备线 Fal）/ PIL / numpy。
+  - 旧版 UI 为 NiceGUI(Quasar/Vue3)，即 `webui.py`，过渡期保留。
 
 ## 二、模块地图
 
 ```
-floor_engine/
-├── __init__.py          # 包标记，公共 API 文档
-├── __main__.py          # 启动入口：python -m floor_engine
-├── config.py            # 核心配置：路径、API key 持久化、工具函数
-├── themes.py            # 5 套 UI 主题定义 + CSS 构建器
-├── logging_setup.py     # 日志初始化（文件 + 控制台）
-├── models.py            # 纯数据类 + 任务生命周期/候选累积纯逻辑：JobRecord, TaskParams
-├── records.py           # JSON 文件 CRUD、文件化图片存储、队列持久化、并发锁、用量统计、加密
-├── prompt_data.py       # 提示词数据字典（~1465 行）：翻译表、风格/色调/CN市场参数、宠物
-├── prompts.py           # 提示词组装引擎：4 套工作流的 prompt 拼接逻辑
-├── api.py               # Gemini API 客户端：生图、编辑、风格分析、色彩迁移
-├── webui.py             # NiceGUI Web 界面：工作台 + 队列 + 记录管理
-└── requirements.txt     # Python 依赖
+Floor_engine_server/          # 商业版独立仓库（本仓库）
+├── server_api.py         # ★ FastAPI 无头服务层：把引擎暴露为 REST+SSE，前端对接。引擎零改
+├── __init__.py           # 包标记，公共 API 文档
+├── __main__.py           # 旧 NiceGUI 入口：python -m Floor_engine_server（即跑 webui，7869）
+├── config.py             # 核心配置：路径、API key 持久化、工具函数
+├── themes.py             # （旧 NiceGUI 主题；新前端主题在 web/src/app/globals.css）
+├── logging_setup.py      # 日志初始化（文件 + 控制台）
+├── models.py             # 纯数据类 + 任务生命周期/候选累积纯逻辑：JobRecord, TaskParams
+├── records.py            # JSON CRUD、文件化图片存储、队列持久化、并发锁、用量统计、加密、导出(HTML/PPTX)
+├── prompt_data.py        # 提示词数据字典：翻译表、风格/色调/CN市场参数、宠物、地区级联、识色
+├── prompts.py            # 提示词组装引擎：4 套工作流的 prompt 拼接逻辑
+├── api.py                # Gemini/Fal 客户端：生图、编辑、风格分析、色彩迁移、连通自检
+├── webui.py              # ⚠️旧 NiceGUI 界面（过渡基线，STEP3 删；新功能不要往这里加）
+├── recipes.py / failure_kb.py
+├── requirements.txt      # Python 依赖（已含 fastapi/uvicorn/python-multipart）
+└── web/                  # ★ Next.js 16 前端
+    ├── src/app/          # 页面：page(生成)/records/usage/settings + layout + globals.css(品牌主题)
+    ├── src/components/   # FloorUploader / ParamsForm / JobCard / ImageZoom / Nav / ui(shadcn)
+    ├── src/lib/          # api.ts(端点封装)/types.ts/notify.ts
+    └── src/hooks/        # useJobStream.ts(SSE)
 ```
+> **改后端能力** → `server_api.py` 加端点(引擎模块尽量不改)。**改界面** → `web/`。**勿动 `webui.py`**。
 
 ### 2.1 各模块职责
 
@@ -161,18 +222,22 @@ floor_engine/
 
 ### 3.2 开发工作流
 
+**商业版（首选）——见「零、快速启动」**：双击 `test\一键启动.bat`，或手动两个进程：
 ```bash
-# 生产模式（默认端口 7869，仅监听本机 127.0.0.1）
-python -m floor_engine
-
-# 开发模式（热重载）——首选
-python dev_floor.py
-#（或 set FLOOR_AI_RELOAD=1 && python -m floor_engine，仍可用但非首选）
-
-# 指定端口 / 局域网共用（后者需自配登录/访问控制）
-set FLOOR_AI_PORT=7890 && python -m floor_engine
-set FLOOR_AI_HOST=0.0.0.0 && python -m floor_engine
+python -m Floor_engine_server.server_api      # 后端 7870（在 test/ 下）
+cd Floor_engine_server/web && npm run dev      # 前端 3000
+# 改后端：server_api.py(加端点) / 引擎模块。uvicorn 不自动重载 → 重启后端生效。
+# 改前端：web/ 下文件，npm run dev 自动热重载，刷新浏览器即可。
+# 前端验类型/构建：cd web && npx tsc --noEmit && npm run build
 ```
+
+<details><summary>旧 NiceGUI 单体启动方式（过渡期保留，STEP3 后废弃）</summary>
+
+```bash
+python -m Floor_engine_server          # 旧 webui，端口 7869
+set FLOOR_AI_PORT=7890 && python -m Floor_engine_server
+```
+</details>
 
 > ✅ **测试基建已建立（prompt 黄金回归）**：`tests/test_prompts_golden.py` 固定参数跑
 > `save_task_files_html()` 的 4 套工作流，把返回的 combined/Pro 两段 prompt 与 `tests/golden/*.txt`
