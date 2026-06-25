@@ -56,6 +56,7 @@ from .models import (
 )
 from .failure_kb import classify_failure
 from .recipes import recommend_recipes, FLOOR_RECIPES
+from .prompt_data import ROOM_TYPES, CN_ROOM_TYPES, FLOOR_TONES, CONTINENTS, PROPERTY_TYPES
 
 
 # ============================================================
@@ -816,6 +817,36 @@ def put_config(req: ConfigPatch):
 @app.get('/api/models')
 def models_endpoint():
     return {'gemini': GEMINI_MODEL_MAP, 'fal': FAL_MODEL_MAP, 'provider': get_image_provider()}
+
+
+# 下拉选项：从 prompt_data 取真源，避免前端硬编码与引擎漂移（workflow/seam/gloss/res 是 UI 级常量）
+_WORKFLOW_MODES = [
+    '纯效果图 (生成全新空间)', '地板替换 (保持原图换地板)',
+    '宠物友好 (动物独处/主宠互动)', '参照模式 (风格参照图生新图)',
+]
+_SEAM_TYPES = ['无缝拼接 (SPC/LVT专用)', '常规倒角缝 (如强化/木地板)', '圆弧倒角 (Pressed Bevel)']
+_GLOSSINESS = ['超哑光 (0-3°)', '哑光 (3-5°)', '高光 (High Gloss)']
+_RESOLUTIONS = ['4K', '2K']
+
+
+@app.get('/api/options')
+def options():
+    return {
+        'workflow_modes': _WORKFLOW_MODES,
+        'model_filters': [
+            {'value': 'b2', 'label': '⚡ B2'},
+            {'value': 'pro', 'label': '⚡ Pro'},
+            {'value': 'both', 'label': '⚡ 双模型'},
+        ],
+        'resolutions': _RESOLUTIONS,
+        'seam_types': _SEAM_TYPES,
+        'glossiness': _GLOSSINESS,
+        'room_types': ROOM_TYPES,
+        'cn_room_types': CN_ROOM_TYPES,
+        'floor_tones': FLOOR_TONES,
+        'continents': CONTINENTS,
+        'property_types': PROPERTY_TYPES,
+    }
 
 
 # ============================================================

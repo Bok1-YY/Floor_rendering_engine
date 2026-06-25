@@ -1,0 +1,102 @@
+// server_api.py 的 typed 客户端。base 走 NEXT_PUBLIC_API_BASE（.env.local）。
+import type {
+  JobView,
+  JobSubmit,
+  EditRequest,
+  Swatch,
+  ConfigView,
+  ConfigPatch,
+  ModelsView,
+  OptionsView,
+  Recipe,
+  RecordEntry,
+  RecordFile,
+  FailureKB,
+} from "./types";
+
+export const API =
+  process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:7870";
+
+async function handle<T>(r: Response): Promise<T> {
+  if (!r.ok) {
+    let detail = `HTTP ${r.status}`;
+    try {
+      const j = await r.json();
+      detail = (j && (j.detail || JSON.stringify(j))) || detail;
+    } catch {
+      /* 非 JSON 错误体，保留状态码 */
+    }
+    throw new Error(detail);
+  }
+  return (await r.json()) as T;
+}
+
+const jget = <T>(p: string) => fetch(API + p).then((r) => handle<T>(r));
+
+const jsend = <T>(p: string, method: "POST" | "PUT", body?: unknown) =>
+  fetch(API + p, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  }).then((r) => handle<T>(r));
+
+async function upload(path: string, file: File): Promise<Swatch> {
+  const fd = new FormData();
+  fd.append("file", file);
+  return fetch(API + path, { method: "POST", body: fd }).then((r) =>
+    handle<Swatch>(r),
+  );
+}
+
+export const api = {
+  /** 把后端给的相对 URL(/outputs.. /thumb..)拼成可用的绝对地址 */
+  imgUrl: (p: string) => (!p ? "" : p.startsWith("http") ? p : API + p),
+
+  uploadFloor: (f: File) => upload("/api/uploads/floor", f),
+  uploadRoom: (f: File) => upload("/api/uploads/room", f),
+  uploadRef: (f: File) => upload("/api/uploads/ref", f),
+
+  createJob: (req: JobSubmit) => jsend<JobView>("/api/jobs", "POST", req),
+  listJobs: (limit = 50) => jget<JobView[]>(`/api/jobs?limit=${limit}`),
+  getJob: (id: string) => jget<JobView>(`/api/jobs/${id}`),
+  cancelJob: (id: string) =>
+    jsend<{ cancelled: boolean }>(`/api/jobs/${id}/cancel`, "POST"),
+  cancelAll: () => jsend<{ stopped: number }>(`/api/jobs/cancel-all`, "POST"),
+  retryJob: (id: string) => jsend<JobView>(`/api/jobs/${id}/retry`, "POST"),
+  jobResult: (id: string, model: "b2" | "pro", idx: number) =>
+    jget<{ model: string; idx: number; total: number; url: string; thumb: string }>(
+      `/api/jobs/${id}/result?model=${model}&idx=${idx}`,
+    ),
+  polishJob: (id: string) => jsend<JobView>(`/api/jobs/${id}/polish`, "POST"),
+  editJob: (id: string, body: EditRequest) =>
+    jsend<JobView>(`/api/jobs/${id}/edit`, "POST", body),
+
+  recentSwatches: (limit = 24) =>
+    jget<Swatch[]>(`/api/swatches/recent?limit=${limit}`),
+
+  listRecords: () => jget<RecordFile[]>(`/api/records`),
+  loadRecord: (jsonPath: string) =>
+    jget<RecordEntry[]>(
+      `/api/records/load?json_path=${encodeURIComponent(jsonPath)}`,
+    ),
+  reveal: (json_path: string, record_id: string, password: string) =>
+    jsend<{ text: string; ok: boolean }>(`/api/records/reveal`, "POST", {
+      json_path,
+      record_id,
+      password,
+    }),
+
+  recipes: (tone = "", limit = 6) =>
+    jget<Recipe[]>(
+      `/api/recipes?tone=${encodeURIComponent(tone)}&limit=${limit}`,
+    ),
+  classifyFailure: (err: string) =>
+    jsend<FailureKB>(`/api/failure/classify`, "POST", { err }),
+  connectionTest: () => jget<{ result: string }>(`/api/connection/test`),
+
+  getConfig: () => jget<ConfigView>(`/api/config`),
+  putConfig: (patch: ConfigPatch) =>
+    jsend<ConfigView>(`/api/config`, "PUT", patch),
+  getModels: () => jget<ModelsView>(`/api/models`),
+  getOptions: () => jget<OptionsView>(`/api/options`),
+};
