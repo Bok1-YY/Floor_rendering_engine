@@ -659,7 +659,12 @@ EDITING RULES:
     RETRYABLE = (_req.exceptions.SSLError, _req.exceptions.ConnectionError,
                  _req.exceptions.ChunkedEncodingError, _ProtocolError)
     def _sleep_backoff(attempt):
-        time.sleep(backoffs[min(attempt, len(backoffs) - 1)] + random.uniform(0, 1.5))
+        d = backoffs[min(attempt, len(backoffs) - 1)] + random.uniform(0, 1.5)
+        end = time.time() + d
+        while time.time() < end:
+            if should_cancel and should_cancel():
+                return
+            time.sleep(0.5)
     last_err = None
     resp = None
     for attempt in range(max_attempts):

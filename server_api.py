@@ -647,10 +647,11 @@ def cancel_job(jid: str):
 def cancel_all():
     _cancel_generation[0] += 1
     n = 0
-    for job in list(_job_history):
-        if job.status in ('queued', 'running'):
-            _cancel_jobs.add(job.job_id)
-            n += 1
+    with _job_lock:
+        for job in _job_history:
+            if job.status in ('queued', 'running'):
+                _cancel_jobs.add(job.job_id)
+                n += 1
     return {'stopped': n}
 
 

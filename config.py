@@ -172,7 +172,10 @@ def get_image_provider() -> str:
 # 在 engine_config.json 设 tls_verify=false 关闭，或把代理根证书路径填到 tls_ca_bundle。
 def get_tls_verify() -> bool:
     """是否启用 HTTPS 证书校验。默认 True（已实测本网络可过）；坏网络可设 false 关闭。"""
-    return bool(_load_config().get("tls_verify", True))
+    v = _load_config().get("tls_verify", True)
+    if isinstance(v, str):
+        return v.strip().lower() not in ("false", "0", "no", "off")
+    return bool(v)
 
 
 def get_tls_ca_bundle() -> str:
