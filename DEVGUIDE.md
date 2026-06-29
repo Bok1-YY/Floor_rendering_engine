@@ -75,16 +75,16 @@ cd Floor_engine_server\web && npm install
                  └─────────────────────────────────────────────┘
                                            ▲ 同样复用
                  ┌─────────────────────────────────────────────┐
-                 │  webui.py (NiceGUI, :7869) ⚠️ 旧 UI，待退役   │
+                 │  webui.py (NiceGUI, :7869) ❌ 2026-06-29 退役 │
                  └─────────────────────────────────────────────┘
 ```
 
 三条铁律：
 1. **引擎零改**：所有重逻辑（提示词组装、模型调用、记录持久化、识色、配方、导出…）都在引擎模块里，新旧 UI 都只是「调引擎」。改业务逻辑优先落引擎模块（新仓库这份）。
-2. **新功能只往 `server_api.py` + `web/` 加**，不要再碰 `webui.py`（它在等退役，维护两套 UI 没意义）。
+2. **新功能只往 `server_api.py` + `web/` 加**。旧 `webui.py` 已于 2026-06-29 退役删除，不再有第二套 UI 需要维护。
 3. **长请求改异步作业**：出 4K 图很慢、还会被公司软路由 reset 长连接。新设计是 `POST /api/jobs` **秒回 `job_id`** → `GET /api/jobs/{id}/stream`（SSE）看进度。触发请求立刻返回，根治 reset。
 
-**迁移进度**：STEP1（FastAPI 无头层）/ STEP2（Next.js 前端）/ STEP2.5（webui 功能全量 parity）/ 视觉重设计（Claude Design 整站换皮 + 侧栏外壳）**均已完成**。STEP3（退役 webui + 去 nicegui 依赖）**无限期延后**——旧版长期作 fallback，新版多轮实战验证后再做不可逆切换（详见 `开发日志.md` 与项目记忆）。
+**迁移进度**：STEP1（FastAPI 无头层）/ STEP2（Next.js 前端）/ STEP2.5（webui 功能全量 parity）/ 视觉重设计（Claude Design 整站换皮 + 侧栏外壳）**均已完成**。**STEP3（退役 webui + 去 nicegui 依赖）已于 2026-06-29 执行**：删除 `webui.py`、`requirements.txt` 去掉 `nicegui`、`__main__.py` 改为退役提示桩。日常兜底改由冻结原型 `test/floor_engine/` 承担（同源、共享数据，见 §八）。
 
 ---
 
@@ -93,8 +93,7 @@ cd Floor_engine_server\web && npm install
 ```
 Floor_engine_server/
 ├── server_api.py        ★ 新增：无头 FastAPI 层（端点 + 作业队列 + SSE + 静态/缩略图）
-├── webui.py             ⚠️ 旧 NiceGUI 界面（~2558 行，唯一 import nicegui 的业务文件，待退役）
-├── __main__.py          `python -m Floor_engine_server` 入口 → 拉起旧 webui（7869）
+├── __main__.py          `python -m Floor_engine_server` → 退役提示桩（旧 webui 入口已退役；打印新启动方式后 exit 1）
 ├── __init__.py          包说明 / 公共导出指引
 │
 │   ── 引擎模块（全部 headless，import 不会拉起 nicegui，新旧共用）──
@@ -106,7 +105,7 @@ Floor_engine_server/
 ├── api.py               模型调用：call_image_generate(Google→可选转Fal) / call_gemini_generate / call_fal_generate / call_gemini_edit(磨缝二改) / test_connection
 ├── records.py           持久化：队列 persist/load、记录 JSON 读写、收藏/删除、解密 reveal、用量 load_usage_summary、导出 HTML/PPTX
 ├── failure_kb.py        失败知识库：FAILURE_RULES + classify_failure(错误串→{title,cause,action})
-├── themes.py            旧 UI 主题 CSS 生成（NiceGUI 用；新前端不依赖它，主题在 web 的 globals.css）
+├── themes.py            旧 UI 主题 CSS 生成（曾供 NiceGUI；webui 退役后已无运行期消费者，留待后续清理）
 ├── logging_setup.py     logger（输出到 test/app_local_save.log）
 │
 ├── web/                 ★ Next.js 前端（见 §六）
@@ -118,7 +117,7 @@ Floor_engine_server/
 └── .gitignore           忽略 __pycache__/*.log/*.bak/_ng_thumbs + 运行期产物(output_files/engine_config.json/.queue_state.json…)
 ```
 
-**谁 import nicegui**：只有 `webui.py` 和 `__main__.py`。其余全部 headless——这是「后端能复用引擎而不被拖进 NiceGUI」的前提，改引擎时别破坏它（可用 `python -c "import sys,Floor_engine_server.server_api; print('nicegui' in sys.modules)"` 自检，应为 False）。
+**谁 import nicegui**：webui 退役后**已无任何业务文件 import nicegui**，整包纯 headless。改引擎时维持这一点（可用 `python -c "import sys,Floor_engine_server.server_api; print('nicegui' in sys.modules)"` 自检，应为 False）。
 
 ---
 
@@ -221,7 +220,7 @@ web/src/
 5. **`.env.local`** 控制前端的 `NEXT_PUBLIC_API_BASE`（构建期内联，改了要重 build/重启 dev）。
 6. **无头截图自检法**（验证视觉时用；本机实证）：dev 服务器在 headless Edge 里因 HMR 握手失败**不 hydrate**，截不到数据态；要截带数据的页面需 **prod build + 隔离后端(改 `FLOOR_API_CORS` 放行测试端口) + Node24 内置 WebSocket 走 CDP 真等几秒再 captureScreenshot**。隔离后端与正式实例共享 `.queue_state.json`，测试时**只读、别触发清除/删除**，免得误删真实任务。
 7. **设计稿落地**：照 mockup 的**实际视觉**还原（配色/胶囊/卡片/分段），别只搬报告文字；落地后无头截图比对设计稿。
-8. **别碰 `webui.py`**：新功能只加 `server_api.py` + `web/`。
+8. **`webui.py` 已退役删除**：UI 只有 `web/` 一套，新功能只加 `server_api.py` + `web/`。
 
 ---
 
@@ -240,11 +239,11 @@ web/src/
 
 ---
 
-## 八、旧版 NiceGUI（过渡 fallback）
+## 八、旧版 NiceGUI（已退役）
 
-- 本仓库仍保留 `webui.py` + `__main__.py`：`python -m Floor_engine_server`（在 `test/`）会拉起旧 NiceGUI 界面（`FLOOR_AI_PORT` 默认 **7869**）。
-- 真正的「日常 fallback」是被冻结的原型 `test/floor_engine/`（同源、共享数据）。两者**只为兜底**，**不再加新功能**。
-- 待新版跨多轮真实出图验证稳定后，STEP3 才会退役 webui 并从 `requirements.txt` 去掉 `nicegui`。在此之前别催收尾。
+- **`webui.py` 已于 2026-06-29 删除**（STEP3）。`python -m Floor_engine_server` 不再起界面，只打印退役提示并 `exit 1`（见 `__main__.py`）；`requirements.txt` 也去掉了 `nicegui`，整包不再依赖 NiceGUI。
+- **日常兜底改由冻结原型 `test/floor_engine/` 承担**（同源、共享数据，仍是完整可跑的 NiceGUI 版）。它**只为兜底、不再加新功能**；本仓库 `Floor_engine_server/` 已是唯一在维护的代码。
+- 退役理由与时点见 `开发日志.md`（2026-06-29 条）。如需回滚，`git revert` 本次退役提交即可恢复 `webui.py` 与 `nicegui` 依赖。
 
 ---
 
@@ -258,4 +257,4 @@ web/src/
 
 ## 十、一句话回顾
 
-**改业务** → 引擎模块（headless，新仓库这份）；**改接口** → `server_api.py`；**改界面** → `web/`；**换主题** → `web/.../globals.css`；**别碰** → `webui.py`。启动就一句：`test/一键启动.bat`。
+**改业务** → 引擎模块（headless，新仓库这份）；**改接口** → `server_api.py`；**改界面** → `web/`；**换主题** → `web/.../globals.css`。旧 `webui.py` 已退役，UI 只有 `web/` 一套。启动就一句：`test/一键启动.bat`。
