@@ -22,7 +22,7 @@ const WF_SUB: Record<string, string> = {
   纯效果图: "用地板小样直接生成全新空间",
   参照模式: "按参照图的风格与氛围生成",
   宠物友好: "画面中加入宠物生活场景",
-  实景替换: "替换实拍照片里的原地面",
+  地板替换: "保留原图空间，仅替换原地面",
 };
 
 function Check() {
@@ -105,20 +105,26 @@ function Chips({
   );
 }
 
-function RefUpload({
+function ImageUpload({
   value,
   onPick,
+  uploadFn,
+  buttonLabel,
+  okMsg,
 }: {
   value: Swatch | null;
   onPick: (s: Swatch) => void;
+  uploadFn: (f: File) => Promise<Swatch>;
+  buttonLabel: string;
+  okMsg: string;
 }) {
   const ref = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   async function up(f: File) {
     setBusy(true);
     try {
-      onPick(await api.uploadRef(f));
-      toast.success("参照图已上传");
+      onPick(await uploadFn(f));
+      toast.success(okMsg);
     } catch (e) {
       toast.error("上传失败：" + (e as Error).message);
     } finally {
@@ -132,7 +138,7 @@ function RefUpload({
         onClick={() => ref.current?.click()}
         className="h-9 rounded-[9px] border border-border bg-card px-3 text-[12.5px] font-semibold text-[#6b6356] hover:bg-[#f2e9e0]"
       >
-        {busy ? "上传中…" : "上传参照图"}
+        {busy ? "上传中…" : value ? "重新上传" : buttonLabel}
       </button>
       <input
         ref={ref}
@@ -147,7 +153,7 @@ function RefUpload({
       {value && (
         <img
           src={api.imgUrl(value.thumb)}
-          alt="ref"
+          alt="preview"
           className="h-10 w-14 rounded-md border border-border object-cover"
         />
       )}
@@ -163,6 +169,8 @@ export function ParamsForm({
   onModelFilter,
   refValue,
   onRefPick,
+  roomValue,
+  onRoomPick,
 }: {
   options: OptionsView;
   params: GenParams;
@@ -171,9 +179,12 @@ export function ParamsForm({
   onModelFilter: (m: ModelFilter) => void;
   refValue: Swatch | null;
   onRefPick: (s: Swatch) => void;
+  roomValue: Swatch | null;
+  onRoomPick: (s: Swatch) => void;
 }) {
   const cnMode = !!params.cn_mode;
   const isRef = params.workflow_mode.includes("参照模式");
+  const isReplace = params.workflow_mode.includes("地板替换");
   const isPet = params.workflow_mode.includes("宠物友好");
   const [advOpen, setAdvOpen] = useState(false);
 
@@ -253,6 +264,58 @@ export function ParamsForm({
           );
         })}
       </div>
+
+      {/* ── 源图上传：随工作流出现（地板替换=房间原图 / 参照模式=参照图）── */}
+      {(isReplace || isRef) && (
+        <div className="mt-[13px] space-y-2.5 rounded-xl border border-primary/40 bg-[#fbf3ee] p-[13px]">
+          {isReplace && (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[11.5px] font-semibold text-[#a8472a]">
+                待替换图 · 房间原图（地板替换必传）
+              </span>
+              <ImageUpload
+                value={roomValue}
+                onPick={onRoomPick}
+                uploadFn={api.uploadRoom}
+                buttonLabel="上传房间原图"
+                okMsg="房间原图已上传"
+              />
+              <span className="text-[11px] text-[#9a9082]">
+                保留原图的空间、家具与采光，仅把原地面替换为所选地板
+              </span>
+            </div>
+          )}
+          {isRef && (
+            <>
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[11.5px] font-semibold text-[#a8472a]">
+                  参照风格图（参照模式必传）
+                </span>
+                <ImageUpload
+                  value={refValue}
+                  onPick={onRefPick}
+                  uploadFn={api.uploadRef}
+                  buttonLabel="上传参照图"
+                  okMsg="参照图已上传"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <span className="text-[11.5px] font-semibold text-[#857c6e]">
+                  参照修正（可选，纠正风格提取偏差）
+                </span>
+                <Input
+                  value={params.style_ref_correction || ""}
+                  onChange={(e) =>
+                    onParams({ style_ref_correction: e.target.value })
+                  }
+                  placeholder="例如：墙面其实是米白色，不是灰色"
+                  className="h-10 rounded-[10px] bg-card"
+                />
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {/* ── 市场 + 模型线路 ── */}
       <div className="mt-[18px] flex gap-4">
@@ -465,29 +528,6 @@ export function ParamsForm({
             onChange={(v) => onParams({ pet_focus: v })}
             options={options.pet_focus}
           />
-        </div>
-      )}
-
-      {/* ── 参照模式 ── */}
-      {isRef && (
-        <div className="mt-[13px] space-y-2.5 rounded-xl border border-border bg-card p-[13px]">
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[11.5px] font-semibold text-[#857c6e]">
-              参照风格图（参照模式必传）
-            </span>
-            <RefUpload value={refValue} onPick={onRefPick} />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[11.5px] font-semibold text-[#857c6e]">
-              参照修正（可选，纠正风格提取偏差）
-            </span>
-            <Input
-              value={params.style_ref_correction || ""}
-              onChange={(e) => onParams({ style_ref_correction: e.target.value })}
-              placeholder="例如：墙面其实是米白色，不是灰色"
-              className="h-10 rounded-[10px] bg-[#faf7f0]"
-            />
-          </div>
         </div>
       )}
 

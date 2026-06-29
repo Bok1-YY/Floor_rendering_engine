@@ -21,6 +21,7 @@ export default function GeneratePage() {
   const [options, setOptions] = useState<OptionsView | null>(null);
   const [floor, setFloor] = useState<Swatch | null>(null);
   const [refImg, setRefImg] = useState<Swatch | null>(null);
+  const [roomImg, setRoomImg] = useState<Swatch | null>(null);
   const [modelFilter, setModelFilter] = useState<ModelFilter>("both");
   const [params, setParams] = useState<GenParams>({
     workflow_mode: "纯效果图 (生成全新空间)",
@@ -121,12 +122,16 @@ export default function GeneratePage() {
       toast.warning("参照模式需上传参照图");
       return;
     }
+    if (params.workflow_mode.includes("地板替换") && !roomImg) {
+      toast.warning("地板替换需上传房间原图");
+      return;
+    }
     setSubmitting(true);
     try {
       const job = await api.createJob({
         image_path: floor.path,
         model_filter: modelFilter,
-        room_path: null,
+        room_path: roomImg?.path ?? null,
         ref_path: refImg?.path ?? null,
         params,
       });
@@ -148,6 +153,14 @@ export default function GeneratePage() {
       toast.warning("请至少勾选一个房间类型");
       return;
     }
+    if (params.workflow_mode.includes("参照模式") && !refImg) {
+      toast.warning("参照模式需上传参照图");
+      return;
+    }
+    if (params.workflow_mode.includes("地板替换") && !roomImg) {
+      toast.warning("地板替换需上传房间原图");
+      return;
+    }
     const cnMode = !!params.cn_mode;
     try {
       const created = await Promise.all(
@@ -155,7 +168,7 @@ export default function GeneratePage() {
           api.createJob({
             image_path: floor.path,
             model_filter: modelFilter,
-            room_path: null,
+            room_path: roomImg?.path ?? null,
             ref_path: refImg?.path ?? null,
             params: cnMode
               ? { ...params, cn_room_type: room }
@@ -235,6 +248,8 @@ export default function GeneratePage() {
               onModelFilter={setModelFilter}
               refValue={refImg}
               onRefPick={setRefImg}
+              roomValue={roomImg}
+              onRoomPick={setRoomImg}
             />
           ) : (
             <div className="mt-4 text-sm text-muted-foreground">加载选项中…</div>

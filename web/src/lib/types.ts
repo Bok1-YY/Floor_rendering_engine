@@ -194,7 +194,7 @@ export interface RecordEntry {
 
 export interface RecordFile {
   json_path: string;
-  labels: string[];
+  labels: [string, string][];
 }
 
 export interface UsageRow {
