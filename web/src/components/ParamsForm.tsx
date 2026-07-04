@@ -2,7 +2,7 @@
 "use client";
 import { useRef, useState } from "react";
 import { api } from "@/lib/api";
-import type { GenParams, ModelFilter, OptionsView, Swatch } from "@/lib/types";
+import type { GenParams, ModelFilter, OptionsView, Swatch, OmakaseOption } from "@/lib/types";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,7 @@ const WF_SUB: Record<string, string> = {
   参照模式: "按参照图的风格与氛围生成",
   宠物友好: "画面中加入宠物生活场景",
   地板替换: "保留原图空间，仅替换原地面",
+  Omakase: "AI 代笔场景，配置精简",
 };
 
 function Check() {
@@ -147,6 +148,7 @@ function ImageUpload({
         className="hidden"
         onChange={(e) => {
           const f = e.target.files?.[0];
+          e.target.value = ""; // 重置：否则上传失败后重选同一文件不触发 onChange
           if (f) up(f);
         }}
       />
@@ -186,7 +188,30 @@ export function ParamsForm({
   const isRef = params.workflow_mode.includes("参照模式");
   const isReplace = params.workflow_mode.includes("地板替换");
   const isPet = params.workflow_mode.includes("宠物友好");
+  const isOmakase = params.workflow_mode.includes("Omakase");
   const [advOpen, setAdvOpen] = useState(false);
+
+  // ── Omakase：本地状态（诉求输入 / 加载 / 候选）。最终 scene_override 存进 params 交给后端 ──
+  const [omaIdea, setOmaIdea] = useState("");
+  const [omaLoading, setOmaLoading] = useState(false);
+  const [omaOptions, setOmaOptions] = useState<OmakaseOption[]>([]);
+  const runOmakase = async () => {
+    const idea = omaIdea.trim();
+    if (!idea) {
+      toast.error("先用一句话描述想要的画面/氛围");
+      return;
+    }
+    setOmaLoading(true);
+    try {
+      const r = await api.omakaseScenes(idea);
+      setOmaOptions(r.options || []);
+      if (!r.options?.length) toast.error("没生成到候选，换个说法再试");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Omakase 生成失败");
+    } finally {
+      setOmaLoading(false);
+    }
+  };
 
   // 地区级联
   const continent = params.continent || options.continents[0];
@@ -319,6 +344,7 @@ export function ParamsForm({
 
       {/* ── 市场 + 模型线路 ── */}
       <div className="mt-[18px] flex gap-4">
+        {!isOmakase && (
         <div className="w-40 flex-none">
           <div className="mb-[7px] text-[11.5px] font-semibold text-[#857c6e]">市场</div>
           <Segmented
@@ -330,6 +356,7 @@ export function ParamsForm({
             onChange={(v) => onParams({ cn_mode: v === "cn" })}
           />
         </div>
+        )}
         <div className="flex-1">
           <div className="mb-[7px] text-[11.5px] font-semibold text-[#857c6e]">模型线路</div>
           <Segmented<ModelFilter>
@@ -343,6 +370,7 @@ export function ParamsForm({
         </div>
       </div>
 
+      {!isOmakase && (<>
       {/* ── 位置 ── */}
       <SectionHeader className="mx-0.5 mb-[11px] mt-[22px]">
         {cnMode ? "位置 / 国内市场" : "位置 / 海外市场"}
@@ -450,6 +478,7 @@ export function ParamsForm({
           </div>
         </div>
       )}
+      </>)}
 
       {/* ── 板材与工艺 ── */}
       <SectionHeader className="mx-0.5 mb-[11px] mt-[22px]">
@@ -482,6 +511,82 @@ export function ParamsForm({
         />
       </div>
 
+      {/* ── Omakase 独立模式：AI 代笔场景层，接管风格/光线/镜头；地板规格仍由下方控制 ── */}
+      {isOmakase && (
+        <>
+          <SectionHeader className="mx-0.5 mb-[11px] mt-[22px]">
+            ✨ OMAKASE · 场景代笔（必填）
+          </SectionHeader>
+          <div className="space-y-2.5 rounded-xl border border-border bg-card p-[13px]">
+            <p className="text-[11px] leading-relaxed text-[#9a9082]">
+              一句话描述想要的画面/氛围（可以很抽象），AI 会写几段「怎么拍」的场景供你选或改。选定后将
+              <b className="text-[#c8785a]">接管风格·光线·镜头等场景描述</b>；地板与物理规格仍由下方设置控制。场景定稿为必填——未选或未填写场景时无法提交生成。
+            </p>
+            <Textarea
+              rows={2}
+              value={omaIdea}
+              onChange={(e) => setOmaIdea(e.target.value)}
+              placeholder="例：荷兰普通人家，一个女人和孩子在玩耍；或：体现耐刮耐磨；或：温馨时光…"
+              className="rounded-[9px] bg-[#faf7f0]"
+            />
+            <button
+              type="button"
+              disabled={omaLoading}
+              onClick={runOmakase}
+              className="w-full rounded-[9px] bg-[#c8785a] px-[13px] py-[9px] text-[12.5px] font-bold text-white transition hover:brightness-105 disabled:opacity-60"
+            >
+              {omaLoading ? "生成中…" : "✨ Omakase 生成场景"}
+            </button>
+            {omaOptions.length > 0 && (
+              <div className="space-y-2">
+                {omaOptions.map((o, i) => {
+                  const chosen = (params.scene_override || "") === o.text;
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => onParams({ scene_override: o.text })}
+                      className={cn(
+                        "block w-full rounded-[9px] border p-[11px] text-left transition",
+                        chosen
+                          ? "border-[#c8785a] bg-[#faf1ec]"
+                          : "border-border bg-[#faf7f0] hover:bg-[#f2e9e0]",
+                      )}
+                    >
+                      <div className="mb-1 flex items-center gap-1.5">
+                        {o.recommended && (
+                          <span className="rounded bg-[#c8785a] px-1.5 py-0.5 text-[10px] font-bold text-white">
+                            推荐
+                          </span>
+                        )}
+                        {chosen && (
+                          <span className="text-[11px] font-bold text-[#c8785a]">✓ 已选</span>
+                        )}
+                      </div>
+                      <p className="text-[12px] leading-relaxed text-[#5c5346]">{o.text}</p>
+                      {o.why && <p className="mt-1 text-[10.5px] text-[#9a9082]">💡 {o.why}</p>}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[11.5px] font-semibold text-[#857c6e]">
+                场景定稿（必填，可直接编辑）
+              </span>
+              <Textarea
+                rows={3}
+                value={params.scene_override || ""}
+                onChange={(e) => onParams({ scene_override: e.target.value })}
+                placeholder="选一段候选会填到这里，可直接改；也可完全手写。必填。"
+                className="rounded-[9px] bg-[#faf7f0]"
+              />
+            </div>
+          </div>
+        </>
+      )}
+
+      {!isOmakase && (<>
       {/* ── 风格与镜头 ── */}
       <SectionHeader className="mx-0.5 mb-[11px] mt-[22px]">
         风格与镜头 / STYLE
@@ -506,6 +611,7 @@ export function ParamsForm({
           options={options.angles}
         />
       </div>
+      </>)}
 
       {/* ── 宠物友好 ── */}
       {isPet && (
@@ -550,6 +656,7 @@ export function ParamsForm({
         />
       </div>
 
+      {!isOmakase && (<>
       {/* ── 高级：回避清单 / 自定义补充 ── */}
       <button
         type="button"
@@ -581,6 +688,7 @@ export function ParamsForm({
           </div>
         </div>
       )}
+      </>)}
     </div>
   );
 }

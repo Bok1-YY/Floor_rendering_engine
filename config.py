@@ -62,6 +62,12 @@ GEMINI_MODEL_MAP = {
     "Nano Banana Pro": "gemini-3-pro-image-preview",
 }
 
+# ── Nano Banana 2 Lite（Gemini 3.1 Flash-Lite Image）——「快速预览/草稿」专用 ──
+# 特意【不】放进 GEMINI_MODEL_MAP：它不是 B2/Pro 的平级生产模型。
+# 约束（2026-06-30 上线，官方文档核实）：① 只出 1K，不支持 2K/4K → 做不了 4K 交付图，仅当出图前的
+# 快速构图/风格预览；② Fal 暂无对应 endpoint → 预览恒走 Google 直连，不参与自动转 Fal。
+LITE_PREVIEW_MODEL = "gemini-3.1-flash-lite-image"
+
 # ── Fal 路由模型映射 ────────────────────────────────────────────
 # 把同一批 Nano Banana 模型改走 Fal 的图生图(/edit)端点：同模型、保真/4K 不变，
 # 只换更稳的线路(国内→Fal→Google)。key = 上面 GEMINI_MODEL_MAP 里的 Gemini model_id，
@@ -97,8 +103,17 @@ def _load_config() -> Dict[str, str]:
         try:
             with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
                 return json.load(f)
-        except Exception:
-            pass
+        except json.JSONDecodeError as e:
+            # 损坏：改名备份留待人工抢救（里面有三把 API key）。若原样留下，
+            # 下一次任何 save_* 都会用默认空配置把损坏文件整份覆盖、再无法抢救。
+            backup = f"{CONFIG_FILE}.corrupt_{time.strftime('%Y%m%d_%H%M%S')}"
+            try:
+                os.replace(CONFIG_FILE, backup)
+                logger.error(f"配置文件损坏，已备份到 {backup} / {e}")
+            except OSError as be:
+                logger.error(f"配置文件损坏且备份失败: {CONFIG_FILE} / {e} / 备份错误: {be}")
+        except Exception as e:
+            logger.error(f"配置读取失败: {CONFIG_FILE} / {e}")
     return {"gemini_api_key": ""}
 
 
@@ -122,13 +137,29 @@ def get_bevel_ref_image() -> str:
 
 
 def _save_config(config: Dict[str, str]) -> bool:
-    """持久化配置到 engine_config.json。"""
+    """持久化配置到 engine_config.json。先写临时文件再原子替换：写一半崩溃/断电不会截断
+    （文件里存着 Gemini/Fal/DeepSeek 三把 key，截断即全丢）。replace 撞上正在读配置的
+    句柄（Windows 上会 PermissionError）时短重试。"""
+    tmp = CONFIG_FILE + ".tmp"
     try:
-        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+        with open(tmp, 'w', encoding='utf-8') as f:
             json.dump(config, f, ensure_ascii=False, indent=2)
+        for _i in range(5):
+            try:
+                os.replace(tmp, CONFIG_FILE)
+                break
+            except PermissionError:
+                if _i == 4:
+                    raise
+                time.sleep(0.1)
         return True
     except Exception as e:
         logger.error(f"配置保存失败: {e}")
+        try:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+        except OSError:
+            pass
         return False
 
 
@@ -269,6 +300,43 @@ def save_auto_failover(enabled) -> None:
     """保存『直连失败自动转 Fal』开关。"""
     cfg = _load_config()
     cfg["auto_failover"] = bool(enabled)
+    _save_config(cfg)
+
+
+# ── Omakase 模式 / DeepSeek 文本模型（自由场景层散文生成用）───────────────
+# DeepSeek OpenAI 兼容：base_url 可配(将来可换端点/自托管)。key 是用户自己的钱(同 Fal)。
+# omakase_enabled 默认关(照 auto_failover 现式)：关或无 key 时前端不出 ✨ 按钮，退化为手写场景框。
+def get_deepseek_api_key() -> str:
+    """读取 DeepSeek API Key；为空表示未配置(Omakase 不可用)。"""
+    return (_load_config().get("deepseek_api_key") or "").strip()
+
+
+def get_deepseek_base_url() -> str:
+    """DeepSeek(或任意 OpenAI 兼容)基址；缺省官方端点，去掉末尾斜杠便于拼 /chat/completions。"""
+    return (_load_config().get("deepseek_base_url") or "https://api.deepseek.com").strip().rstrip("/") or "https://api.deepseek.com"
+
+
+def get_deepseek_model() -> str:
+    """DeepSeek 模型名；缺省 deepseek-chat。"""
+    return (_load_config().get("deepseek_model") or "deepseek-chat").strip() or "deepseek-chat"
+
+
+def get_omakase_enabled() -> bool:
+    """Omakase 模式开关；缺省关闭。"""
+    return bool(_load_config().get("omakase_enabled", False))
+
+
+def save_deepseek_settings(api_key=None, base_url=None, model=None, enabled=None) -> None:
+    """保存 DeepSeek / Omakase 配置；传 None 的字段不改动(照 save_provider_settings 现式)。"""
+    cfg = _load_config()
+    if api_key is not None:
+        cfg["deepseek_api_key"] = (api_key or "").strip()
+    if base_url is not None:
+        cfg["deepseek_base_url"] = (base_url or "").strip()
+    if model is not None:
+        cfg["deepseek_model"] = (model or "").strip()
+    if enabled is not None:
+        cfg["omakase_enabled"] = bool(enabled)
     _save_config(cfg)
 
 

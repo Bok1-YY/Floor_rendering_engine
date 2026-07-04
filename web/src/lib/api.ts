@@ -15,6 +15,9 @@ import type {
   UsageSummary,
   FloorAnalyze,
   RecordEditRequest,
+  PreviewRequest,
+  PreviewView,
+  OmakaseOption,
 } from "./types";
 
 export const API =
@@ -78,6 +81,13 @@ export const api = {
   editJob: (id: string, body: EditRequest) =>
     jsend<JobView>(`/api/jobs/${id}/edit`, "POST", body),
 
+  // ── 快速预览（Nano Banana 2 Lite · 1K，与 4K 队列解耦；短轮询状态）──
+  createPreview: (req: PreviewRequest) =>
+    jsend<{ preview_id: string; status: string }>("/api/preview", "POST", req),
+  previewStatus: (pid: string) => jget<PreviewView>(`/api/preview/${pid}`),
+  cancelPreview: (pid: string) =>
+    jsend<{ cancelled: boolean }>(`/api/preview/${pid}/cancel`, "POST"),
+
   recentSwatches: (limit = 24) =>
     jget<Swatch[]>(`/api/swatches/recent?limit=${limit}`),
 
@@ -100,6 +110,10 @@ export const api = {
   classifyFailure: (err: string) =>
     jsend<FailureKB>(`/api/failure/classify`, "POST", { err }),
   connectionTest: () => jget<{ result: string }>(`/api/connection/test`),
+
+  // ── Omakase：客户诉求 → DeepSeek 生成场景散文候选（先填后审，不在此生图）──
+  omakaseScenes: (idea: string) =>
+    jsend<{ options: OmakaseOption[] }>(`/api/omakase/scenes`, "POST", { idea }),
 
   getConfig: () => jget<ConfigView>(`/api/config`),
   putConfig: (patch: ConfigPatch) =>

@@ -122,6 +122,30 @@ FAILURE_RULES = [
         'action': '微调提示词或更换素材/参照图后重试。',
         'subs': ['安全拦截'],
     },
+    # ── Omakase / DeepSeek（文本模型）专属：必须排在 overload/network 之前，
+    #    否则 "DeepSeek HTTP 429/5xx" 会被通用 overload 正则抢走、给出转 Fal 之类的错误建议 ──
+    {
+        'key': 'deepseek_auth',
+        'title': '🔑 DeepSeek 认证/余额问题',
+        'cause': 'Omakase 用的 DeepSeek API Key 无效或过期(401)，或账户余额不足(402)——与生图的 Gemini/Fal Key 无关。',
+        'action': '到「设置」检查 DeepSeek API Key 是否正确；若是余额不足(402)，去 DeepSeek 平台充值后再试。',
+        'subs': ['DeepSeek HTTP 401', 'DeepSeek HTTP 402', '未配置 DeepSeek', 'insufficient balance',
+                 'invalid_api_key', 'authentication fails'],
+    },
+    {
+        'key': 'deepseek_limit',
+        'title': '🚦 DeepSeek 限流·稍后重试',
+        'cause': 'DeepSeek 文本服务临时限流(429)或并发过高。',
+        'action': '等一会儿再点「✨ Omakase 生成」；若频繁出现可降低使用频率或升级 DeepSeek 订阅。',
+        'subs': ['DeepSeek HTTP 429'],
+    },
+    {
+        'key': 'deepseek_error',
+        'title': '❌ Omakase 场景生成失败',
+        'cause': 'DeepSeek 处理你的场景诉求时出错（服务端异常、网络波动或返回格式异常）。这只影响 Omakase 场景生成，不影响手动生图。',
+        'action': '换个说法或简化诉求再试；也可直接在场景框里手写描述、跳过 Omakase 照常生图。',
+        'subs': ['DeepSeek', 'Omakase', '场景诉求为空', '未返回可用场景', '返回解析失败'],
+    },
     {
         'key': 'overload',
         'title': '🔥 服务端过载·稍后重试',

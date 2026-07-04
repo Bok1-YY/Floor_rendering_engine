@@ -237,6 +237,9 @@ class TaskParams:
     style_ref_correction: str = ''
     style_analysis_text: str = ''
 
+    # ── Omakase mode (自由场景层：AI 原创散文，作为 Omakase 工作流的场景段；仅 Omakase 工作流生效) ──
+    scene_override: str = ''
+
 
 def task_params_to_kwargs(p: TaskParams) -> dict:
     """Convert a TaskParams instance to the legacy kwargs dict.
@@ -283,4 +286,5 @@ def task_params_to_kwargs(p: TaskParams) -> dict:
         'cn_facilities': p.cn_facilities,
         'style_ref_correction': p.style_ref_correction,
         'style_analysis_text': p.style_analysis_text,
+        'scene_override': p.scene_override,
     }

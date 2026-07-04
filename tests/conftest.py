@@ -1,8 +1,8 @@
 """pytest 公共夹具：让 prompt 黄金测试在隔离、离线、确定的环境下跑。
 
 三件事：
-  1. 把 floor_engine 的【父目录】塞进 sys.path —— 包内部是相对导入（from .config ...），
-     必须以顶层包 `floor_engine` 被导入，故需父目录可见。
+  1. 把 Floor_engine_server 的【父目录】塞进 sys.path —— 包内部是相对导入（from .config ...），
+     必须以顶层包 `Floor_engine_server` 被导入，故需父目录可见。
   2. 把 records.MAIN_OUTPUT_DIR 重定向到 pytest 临时目录 —— save_task_files_html 会经
      _get_json_path() 在 MAIN_OUTPUT_DIR 下写 JSON 记录 + 优化图 png，重定向后绝不污染真实 output_files/。
   3. 强制翻译走【离线 FALLBACK 路径】（prompt_data.TRANSLATOR_AVAILABLE=False）—— 否则
@@ -14,7 +14,7 @@ import sys
 
 import pytest
 
-# ── 1. 让 `import floor_engine` 可用（父目录 = 含 floor_engine/ 的目录）──
+# ── 1. 让 `import Floor_engine_server` 可用（父目录 = 含 Floor_engine_server/ 的目录）──
 _PKG_PARENT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if _PKG_PARENT not in sys.path:
     sys.path.insert(0, _PKG_PARENT)
@@ -26,9 +26,9 @@ def isolated_offline_env(monkeypatch, tmp_path):
     out_dir = tmp_path / "output_files"
     out_dir.mkdir(parents=True, exist_ok=True)
     # _get_json_path() 读的是 records 模块里的 MAIN_OUTPUT_DIR 这个名字，patch 它即可。
-    monkeypatch.setattr("floor_engine.records.MAIN_OUTPUT_DIR", str(out_dir))
+    monkeypatch.setattr("Floor_engine_server.records.MAIN_OUTPUT_DIR", str(out_dir))
     # translate_zh_to_en() 在调用时读 prompt_data 模块全局 TRANSLATOR_AVAILABLE，patch 成 False 强制离线。
-    monkeypatch.setattr("floor_engine.prompt_data.TRANSLATOR_AVAILABLE", False)
+    monkeypatch.setattr("Floor_engine_server.prompt_data.TRANSLATOR_AVAILABLE", False)
     return out_dir
 
 

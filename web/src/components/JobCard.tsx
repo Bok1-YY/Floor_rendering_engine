@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { useJobStream } from "@/hooks/useJobStream";
 import { notifyJobEnd } from "@/lib/notify";
@@ -41,8 +41,11 @@ export function JobCard({
   const [view, setView] = useState<{ b2?: SlotView; pro?: SlotView }>({});
 
   const prevStatus = useRef(initial.status);
-  // SSE 更新：刷新 job、清候选覆盖；非终态→终态时触发完成提醒(系统通知+提示音)
-  const onUpdate = useCallback((j: JobView) => {
+  const totalsRef = useRef({ b2: initial.b2_total, pro: initial.pro_total });
+  // 快照统一入口（SSE / 父级 2.5s 轮询 / 操作回执三路共用）：刷新 job；
+  // 仅当候选总数变化(新图落地)才清候选浏览覆盖，避免每秒把用户正在翻的 ‹n/N› 重置回去；
+  // 非终态→终态时触发完成提醒(系统通知+提示音)——放在共用路径上，SSE 断流时轮询也能补上通知。
+  const applySnapshot = useCallback((j: JobView) => {
     const was = prevStatus.current;
     const wasActive = was === "queued" || was === "running";
     const nowTerminal =
@@ -51,18 +54,29 @@ export function JobCard({
       notifyJobEnd(j.status, j.display_name, j.error);
     }
     prevStatus.current = j.status;
+    if (
+      j.b2_total !== totalsRef.current.b2 ||
+      j.pro_total !== totalsRef.current.pro
+    ) {
+      totalsRef.current = { b2: j.b2_total, pro: j.pro_total };
+      setView({});
+    }
     setJob(j);
-    setView({});
   }, []);
   const active =
     job.status === "queued" || job.status === "running" || job.pro_polishing;
-  useJobStream(active ? job.job_id : null, onUpdate);
+  useJobStream(active ? job.job_id : null, applySnapshot);
+  // 轮询兜底：SSE 断流(后端重启/流异常关闭)时，父级轮询的新快照仍能解冻卡片。
+  // SSE 与轮询同源同结构，last-writer-wins，1s 周期的 SSE 会覆盖偶尔旧一拍的轮询数据。
+  useEffect(() => {
+    applySnapshot(initial);
+  }, [initial, applySnapshot]);
 
   async function act(fn: () => Promise<JobView>, okMsg?: string) {
     try {
       const j = await fn();
-      setJob(j);
-      setView({});
+      applySnapshot(j);
+      setView({}); // 用户主动操作后总是重置候选浏览
       if (okMsg) toast.success(okMsg);
     } catch (e) {
       toast.error((e as Error).message);

@@ -7,20 +7,20 @@ prompts.save_task_files_html() 是这工具的核心壁垒——4 套工作流�
 纯本地：不联网、不调 API、不写真实 output_files/（见 conftest.py 的隔离夹具）。
 
 用法：
-  pytest floor_engine/tests/ -q            # 跑回归比对
-  UPDATE_GOLDEN=1 pytest floor_engine/tests/   # 有意改了 prompt 后，刷新基准（务必人工核对 diff！）
+  pytest Floor_engine_server/tests/ -q            # 跑回归比对
+  UPDATE_GOLDEN=1 pytest Floor_engine_server/tests/   # 有意改了 prompt 后，刷新基准（务必人工核对 diff！）
 """
 import difflib
 import os
 
 import pytest
 
-from floor_engine.models import TaskParams, task_params_to_kwargs
-from floor_engine.prompts import save_task_files_html
+from Floor_engine_server.models import TaskParams, task_params_to_kwargs
+from Floor_engine_server.prompts import save_task_files_html
 
 GOLDEN_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "golden")
 
-# 4 套工作流，每套一组固定参数（mode 字符串照搬 webui.py 的选项；用子串匹配分支）。
+# 5 套工作流 + 2 个无缝拼法专项，每套一组固定参数（mode 字符串取自 server_api._WORKFLOW_MODES；用子串匹配分支）。
 # 公共参数尽量用 TaskParams 默认值（都是真实 UI 取值），只覆盖区分各工作流所必需的字段。
 CASES = [
     ("pure", "纯效果图 (生成全新空间)", {}),
@@ -35,6 +35,16 @@ CASES = [
             "windows, white walls, and minimal natural-wood furniture."
         ),
     }),
+    ("omakase", "Omakase (AI 代笔场景)", {
+        # 固定英文散文（不经翻译，离线确定）——锁住"场景层散文 + 地板技术层焊接"的组装结构。
+        "scene_override": (
+            "A cozy Dutch family living room on a rainy afternoon, a mother and a small child "
+            "playing with wooden blocks on the floor, soft window light, lived-in everyday details."
+        ),
+    }),
+    # 无缝拼法专项：收尾覆盖段(SEAMLESS_NEGATIVE)的 motif 按拼法切换，曾有方格拼误落 chevron 的 bug。
+    ("seamless_square", "纯效果图 (生成全新空间)", {"floor_size": "正方形拼：609 x 609 mm"}),
+    ("seamless_hb", "纯效果图 (生成全新空间)", {"floor_size": "常规人字拼：125 x 625 mm"}),
 ]
 
 
@@ -96,3 +106,26 @@ def test_prompt_assembly_is_deterministic(swatch_image):
     r2 = save_task_files_html(**task_params_to_kwargs(params))
     assert r1[2] == r2[2], "combined prompt 两次不一致——prompt 组装里混入了非确定性"
     assert r1[7] == r2[7], "Pro prompt 两次不一致——prompt 组装里混入了非确定性"
+
+
+def test_seamless_square_has_no_chevron(swatch_image):
+    """语义锁：无缝+正方形拼的 B2/Pro 提示词绝不能出现 chevron（人字纹）——
+    收尾覆盖段(READ THIS LAST)曾硬编码 chevron，以最高优先级压过正文的方格描述。"""
+    params = _build_params("纯效果图 (生成全新空间)", swatch_image,
+                           {"floor_size": "正方形拼：609 x 609 mm"})
+    result = save_task_files_html(**task_params_to_kwargs(params))
+    assert "chevron" not in result[2].lower(), "B2/combined 提示词混入 chevron"
+    assert "chevron" not in result[7].lower(), "Pro 提示词混入 chevron"
+
+
+def test_error_paths_return_8_tuple():
+    """契约锁：错误路径与成功路径同为 8 元组——曾返回 7 元组导致调用方解包崩溃、真实报错被吞。"""
+    r = save_task_files_html(**task_params_to_kwargs(
+        TaskParams(workflow_mode="纯效果图 (生成全新空间)", model_choice="Pro", image_path="")))
+    assert isinstance(r, tuple) and len(r) == 8, f"空路径返回结构不对: {r!r}"
+    r2 = save_task_files_html(**task_params_to_kwargs(
+        TaskParams(workflow_mode="纯效果图 (生成全新空间)", model_choice="Pro",
+                   image_path=os.path.join(os.path.dirname(__file__), "conftest.py"),  # 非图片文件 → 处理失败分支
+                   last_image_path="")))
+    assert isinstance(r2, tuple) and len(r2) == 8, f"坏图返回结构不对: {r2!r}"
+    assert r2[0] is None and "失败" in r2[1]

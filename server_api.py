@@ -15,6 +15,7 @@ import os
 import io
 import time
 import json
+import uuid
 import base64
 import asyncio
 import hashlib
@@ -36,10 +37,13 @@ from .config import (
     get_image_provider, save_api_key, save_provider_settings,
     get_speed_profile, save_speed_profile, get_auto_failover, save_auto_failover,
     get_tls_verify, get_tls_ca_bundle, get_proxy, get_speed_profile_params,
-    safe_upload_path, extract_clean_prompt, get_bevel_ref_image,
+    safe_upload_path, extract_clean_prompt, get_bevel_ref_image, LITE_PREVIEW_MODEL,
+    get_deepseek_api_key, get_deepseek_base_url, get_deepseek_model, get_omakase_enabled,
+    save_deepseek_settings,
 )
 from .api import (
-    call_image_generate, call_gemini_edit, test_connection, analyze_style_image,
+    call_image_generate, call_gemini_generate, call_gemini_edit, test_connection, analyze_style_image,
+    call_deepseek_scenes,
     FLOOR_DESEAM_INSTRUCTION, _infer_aspect_ratio_from_b64, _match_color_to_reference,
 )
 from .prompts import save_task_files_html
@@ -82,6 +86,12 @@ _task_prep_lock: Optional[asyncio.Lock] = None
 # 取消：单任务用集合(stop this one)；全局用单调计数器(stop all：in-flight 任务捕获的旧值 < 新值即自行退出)。
 _cancel_jobs: set = set()
 _cancel_generation = [0]
+# 后台任务强引用：asyncio 事件循环只对 task 持弱引用，无强引用者可能在完成前被 GC。
+# 所有后台 task 统一经 _spawn() 排程并收进此集合，done 回调里自动清理（见 _spawn）。
+_bg_tasks: set = set()
+# 内存里最多保留 N 条任务卡（与磁盘 QUEUE_PERSIST_MAX 对齐）；超出丢最旧的【终态】卡，
+# in-flight(queued/running/磨缝中) 永不删。见 _trim_history。
+_MAX_RESIDENT_JOBS = 60
 
 
 def _is_cancelled(job_id: str, generation: Optional[int] = None) -> bool:
@@ -101,6 +111,50 @@ def _get_job(jid: str) -> Optional[JobRecord]:
             if j.job_id == jid:
                 return j
     return None
+
+
+def _spawn(coro):
+    """asyncio.create_task + 持强引用直到完成——避免事件循环仅持弱引用导致后台任务被 GC。
+    done 回调把自身从集合移除，不留泄漏。所有后台生图/重试/重抽/磨缝/二改 task 统一走这里。"""
+    t = asyncio.create_task(coro)
+    _bg_tasks.add(t)
+    t.add_done_callback(_bg_tasks.discard)
+    return t
+
+
+def _trim_history() -> None:
+    """把 _job_history 收口到 _MAX_RESIDENT_JOBS：只删最旧的【终态】任务卡；
+    queued/running/磨缝中(in-flight) 永不删（删了就丢用户在等的进度/结果）。
+    新任务用 insert(0)、最旧在列表尾，故从尾向前扫。调用方须持 _job_lock。"""
+    over = len(_job_history) - _MAX_RESIDENT_JOBS
+    i = len(_job_history) - 1
+    while over > 0 and i >= 0:
+        job = _job_history[i]
+        if job.status in ('done', 'partial', 'failed') and not job.pro_polishing:
+            _cancel_jobs.discard(job.job_id)
+            del _job_history[i]
+            over -= 1
+        i -= 1
+
+
+# ── 快速预览（Nano Banana 2 Lite · 1K · 仅 Google 直连）───────────────────────────
+# 与 4K 队列完全解耦：不进 _job_history、不占 b2/pro 信号量、不写记录。pid → 状态快照，前端短轮询。
+_previews: dict = {}          # pid → {status, stage, url, thumb, error, ts}
+_preview_lock = threading.Lock()
+_preview_cancel: set = set()
+_MAX_PREVIEWS = 20            # 预览是临时草稿，只留最近 N 条终态
+
+
+def _trim_previews() -> None:
+    """收口 _previews 到 _MAX_PREVIEWS：按 ts 删最旧的终态项（running 不删）。调用方须持 _preview_lock。"""
+    if len(_previews) <= _MAX_PREVIEWS:
+        return
+    done = sorted(((pid, v) for pid, v in _previews.items()
+                   if v.get('status') in ('done', 'failed')),
+                  key=lambda kv: kv[1].get('ts', 0))
+    for pid, _ in done[:len(_previews) - _MAX_PREVIEWS]:
+        _previews.pop(pid, None)
+        _preview_cancel.discard(pid)
 
 
 # ── URL 工具（移植自 webui，realpath+commonpath 归属校验，拒绝 ../ 逃逸）──
@@ -475,6 +529,7 @@ class GenParams(BaseModel):
     cn_space_features: Optional[List[str]] = None
     cn_facilities: Optional[List[str]] = None
     style_ref_correction: str = ''
+    scene_override: str = ''   # Omakase 模式：AI 原创场景散文，接管整个场景层(仅 Omakase 工作流生效)
 
 
 class JobSubmitRequest(BaseModel):
@@ -485,6 +540,17 @@ class JobSubmitRequest(BaseModel):
     api_key: str = ''                     # 缺省回退 engine_config.json 里的 gemini_api_key
     room_path: Optional[str] = None       # 房间替换图（地板替换流程）
     ref_path: Optional[str] = None        # 参照模式参考图
+    params: GenParams
+
+
+class PreviewRequest(BaseModel):
+    """快速预览（NB2 Lite · 1K）：字段同 JobSubmit 但无 model_filter（预览恒用 Lite）。"""
+    model_config = {'protected_namespaces': ()}
+
+    image_path: str
+    api_key: str = ''
+    room_path: Optional[str] = None
+    ref_path: Optional[str] = None
     params: GenParams
 
 
@@ -518,6 +584,10 @@ class ConfigPatch(BaseModel):
     tls_verify: Optional[bool] = None
     tls_ca_bundle: Optional[str] = None
     max_concurrent_per_model: Optional[int] = None
+    deepseek_api_key: Optional[str] = None
+    deepseek_base_url: Optional[str] = None
+    deepseek_model: Optional[str] = None
+    omakase_enabled: Optional[bool] = None
 
 
 def _config_view() -> dict:
@@ -533,6 +603,11 @@ def _config_view() -> dict:
         'proxy': get_proxy(),
         'max_concurrent_per_model': int(cfg.get('max_concurrent_per_model', 1) or 1),
         'speed_params': get_speed_profile_params(cfg),
+        # Omakase / DeepSeek：只回是否已配置，绝不回明文 key
+        'has_deepseek_key': bool((cfg.get('deepseek_api_key') or '').strip()),
+        'omakase_enabled': get_omakase_enabled(),
+        'deepseek_model': get_deepseek_model(),
+        'deepseek_base_url': get_deepseek_base_url(),
     }
 
 
@@ -582,6 +657,11 @@ async def create_job(req: JobSubmitRequest):
         raise HTTPException(400, '缺少 API Key')
     if not req.image_path or not os.path.exists(req.image_path):
         raise HTTPException(400, '地板图文件不存在，请先上传')
+    # 房间图/参照图失效必须在提交口拦：引擎侧读不到会静默丢图照常计费，生成结果完全不对
+    if req.room_path and not os.path.exists(req.room_path):
+        raise HTTPException(400, '房间图文件已失效，请重新上传')
+    if req.ref_path and not os.path.exists(req.ref_path):
+        raise HTTPException(400, '参照图文件已失效，请重新上传')
     label = {'b2': '[B2]', 'pro': '[Pro]', 'both': '[双模型]'}.get(req.model_filter, '')
     room_disp = req.params.cn_room_type if req.params.cn_mode else req.params.room_type
     dname = f"{os.path.splitext(os.path.basename(req.image_path))[0]} · {room_disp} {label}"
@@ -589,7 +669,8 @@ async def create_job(req: JobSubmitRequest):
     job.workflow_mode = req.params.workflow_mode
     with _job_lock:
         _job_history.insert(0, job)
-    asyncio.create_task(_run_job_bg(job, req))   # 立即返回，不为整个 4K 生成挂起 HTTP
+        _trim_history()   # 收口最旧的终态卡，防长会话内存缓涨
+    _spawn(_run_job_bg(job, req))   # 立即返回，不为整个 4K 生成挂起 HTTP
     return _job_view(job)
 
 
@@ -694,7 +775,9 @@ async def retry_job(jid: str):
         raise HTTPException(400, '该任务缺少重试信息（可能重启后丢失），请重新提交')
     if job.status not in ('failed', 'partial'):
         return _job_view(job)
-    asyncio.create_task(_retry_bg(job))
+    # 回执前预置 active 状态（镜像 _retry_bg 开场），前端据此即刻开 SSE；后台会再设同值，幂等
+    update_job(job, status='running', started_at=time.time(), error='', b2_stage='', pro_stage='')
+    _spawn(_retry_bg(job))
     return _job_view(job)
 
 
@@ -726,7 +809,9 @@ async def polish_job(jid: str):
     api_key = _load_config().get('gemini_api_key', '').strip()
     if not api_key:
         raise HTTPException(400, '缺少 API Key')
-    asyncio.create_task(_edit_bg(
+    # 回执前预置 active 状态（镜像 _edit_bg 开场），前端据此即刻开 SSE
+    update_job(job, status='running', started_at=time.time(), pro_polishing=True, pro_stage='')
+    _spawn(_edit_bg(
         job, api_key=api_key, instruction=FLOOR_DESEAM_INSTRUCTION,
         model_id=GEMINI_MODEL_MAP['Nano Banana Pro'], model_label='Nano Banana Pro_磨缝',
         preserve=False, image_size='4K', color_match=True))
@@ -744,11 +829,102 @@ async def edit_job(jid: str, req: EditRequest):
     if not api_key:
         raise HTTPException(400, '缺少 API Key')
     model_id = GEMINI_MODEL_MAP.get(req.model_choice, GEMINI_MODEL_MAP['Nano Banana Pro'])
-    asyncio.create_task(_edit_bg(
+    # 回执前预置 active 状态（镜像 _edit_bg 开场），前端据此即刻开 SSE
+    update_job(job, status='running', started_at=time.time(), pro_polishing=True, pro_stage='')
+    _spawn(_edit_bg(
         job, api_key=api_key, instruction=req.instruction, model_id=model_id,
         model_label=f'{req.model_choice} 二改', preserve=req.preserve_floor_geometry,
         image_size=req.image_size, color_match=False))
     return _job_view(job)
+
+
+# ── 快速预览：Nano Banana 2 Lite 出一张 1K 草图（不进队列、不写记录、恒 Google 直连）──
+async def _preview_bg(pid: str, req: 'PreviewRequest'):
+    """借用 save_task_files_html(persist=False) 的提示词逻辑，用 Lite 出 1K 预览。
+    prep(rp/sref/bevel_ref) 是 _run_job_bg(约 269-274 行) 的精简版；预览只用 Pro 提示词、无 retry_ctx。
+    刻意在预览侧写精简副本、不重构 4K 热路径（4K 主编排是命脉，本仓库测试覆盖不到它）。"""
+    def _set(**kw):
+        with _preview_lock:
+            if pid in _previews:
+                _previews[pid].update(kw)
+
+    def _on_stage(t):
+        _set(stage=t)
+
+    should_cancel = lambda: pid in _preview_cancel
+    api_key = (req.api_key or '').strip() or _load_config().get('gemini_api_key', '').strip()
+    p = req.params
+    try:
+        if should_cancel():
+            _set(status='failed', error='已取消'); return
+        is_ref_mode = '参照模式' in (p.workflow_mode or '')
+        # 参照模式 Step-1：提取风格（失败即中止，不发计费请求）
+        style_text = ''
+        if is_ref_mode and req.ref_path:
+            style_text, sa_err = await asyncio.to_thread(analyze_style_image, api_key, req.ref_path)
+            if sa_err or not style_text:
+                _set(status='failed', error=f'风格分析失败: {sa_err or "返回为空"}'); return
+        # 组装提示词（persist=False：借提示词/PNG，不新建记录）；与 4K 主流程共用 _task_prep_lock
+        tp = TaskParams(image_path=req.image_path, style_analysis_text=style_text, **p.model_dump())
+        async with _task_prep_lock:
+            (_pil, _sms, prt, _sip, _jpt, _rid, pnp, prt_pro) = await asyncio.to_thread(
+                save_task_files_html, persist=False, **task_params_to_kwargs(tp))
+        cpt = extract_clean_prompt(prt_pro or prt)   # 预览用 Pro 终极提示词，最贴近最终 4K 观感
+        ar = (p.aspect_ratio or '4:3').split(' ')[0]
+        rp = None if is_ref_mode else (req.room_path or None)
+        sref = (req.ref_path or None) if is_ref_mode else None
+        _seam_v = p.seam_type or ''
+        _is_pressed_bevel = ('圆弧倒角' in _seam_v and '无缝' not in _seam_v)
+        bevel_ref = get_bevel_ref_image() if _is_pressed_bevel else None
+        if should_cancel():
+            _set(status='failed', error='已取消', stage=''); return
+        # Lite 只出 1K、且不在 Fal → 直接调 Google 直连函数，绕过 call_image_generate 的 provider 路由/转 Fal
+        img, err = await asyncio.to_thread(
+            call_gemini_generate, api_key, LITE_PREVIEW_MODEL, cpt, pnp,
+            '1K', ar, rp, sref, _on_stage, should_cancel, bevel_ref)
+        if img is None:
+            _set(status='failed', error=err or '预览生成失败', stage=''); return
+        path = _save_api_result_jpg(img, 'NB2Lite预览', pnp)
+        _set(status='done', stage='', url=_to_url(path), thumb=_result_thumb_url(path))
+        logger.info(f"[快速预览] 完成 pid={pid}, path={path}")
+    except Exception as e:
+        logger.exception(f"[快速预览] 异常 pid={pid}")
+        _set(status='failed', error=str(e), stage='')
+    finally:
+        _preview_cancel.discard(pid)
+
+
+@app.post('/api/preview')
+async def create_preview(req: PreviewRequest):
+    if not ((req.api_key or '').strip() or _load_config().get('gemini_api_key', '').strip()):
+        raise HTTPException(400, '缺少 API Key')
+    if not req.image_path or not os.path.exists(req.image_path):
+        raise HTTPException(400, '地板图文件不存在，请先上传')
+    if req.room_path and not os.path.exists(req.room_path):
+        raise HTTPException(400, '房间图文件已失效，请重新上传')
+    if req.ref_path and not os.path.exists(req.ref_path):
+        raise HTTPException(400, '参照图文件已失效，请重新上传')
+    pid = f'pv_{uuid.uuid4().hex}'
+    with _preview_lock:
+        _previews[pid] = {'status': 'running', 'stage': '', 'url': '', 'thumb': '', 'error': '', 'ts': time.time()}
+        _trim_previews()
+    _spawn(_preview_bg(pid, req))   # 秒回 pid，前端轮询 /api/preview/{pid}
+    return {'preview_id': pid, 'status': 'running'}
+
+
+@app.get('/api/preview/{pid}')
+def get_preview(pid: str):
+    with _preview_lock:
+        snap = dict(_previews.get(pid) or {})
+    if not snap:
+        raise HTTPException(404, 'preview not found')
+    return {'preview_id': pid, **snap}
+
+
+@app.post('/api/preview/{pid}/cancel')
+def cancel_preview(pid: str):
+    _preview_cancel.add(pid)   # _preview_bg 与底层 call_gemini_generate 均会读 should_cancel
+    return {'cancelled': True}
 
 
 # ── 上传 / 历史小样 ──
@@ -866,7 +1042,36 @@ def put_config(req: ConfigPatch):
         if req.max_concurrent_per_model is not None:
             cfg2['max_concurrent_per_model'] = max(1, int(req.max_concurrent_per_model))
         _save_config(cfg2)
+    if (req.deepseek_api_key is not None or req.deepseek_base_url is not None
+            or req.deepseek_model is not None or req.omakase_enabled is not None):
+        save_deepseek_settings(api_key=req.deepseek_api_key, base_url=req.deepseek_base_url,
+                               model=req.deepseek_model, enabled=req.omakase_enabled)
     return _config_view()
+
+
+# ── Omakase：客户自由诉求 → DeepSeek 生成 2-3 段场景散文候选（先填后审，此处不生图）──
+class OmakaseRequest(BaseModel):
+    idea: str = ''
+
+
+@app.post('/api/omakase/scenes')
+async def omakase_scenes(req: OmakaseRequest):
+    if not get_omakase_enabled():
+        raise HTTPException(400, 'Omakase 模式未启用（请在设置里开启并填写 DeepSeek API Key）')
+    api_key = get_deepseek_api_key()
+    if not api_key:
+        raise HTTPException(400, '缺少 DeepSeek API Key，请在设置里配置')
+    idea = (req.idea or '').strip()
+    if not idea:
+        raise HTTPException(400, '请先描述你想要的画面/氛围')
+    options, err = await asyncio.to_thread(
+        call_deepseek_scenes, idea,
+        api_key=api_key, base_url=get_deepseek_base_url(), model=get_deepseek_model())
+    if err:
+        info = classify_failure(err)
+        detail = f"{info.get('title', 'Omakase 生成失败')}：{info.get('action', '')}".rstrip('：')
+        raise HTTPException(502, detail)
+    return {'options': options}
 
 
 @app.get('/api/models')
@@ -878,6 +1083,7 @@ def models_endpoint():
 _WORKFLOW_MODES = [
     '纯效果图 (生成全新空间)', '地板替换 (保持原图换地板)',
     '宠物友好 (动物独处/主宠互动)', '参照模式 (风格参照图生新图)',
+    'Omakase (AI 代笔场景)',
 ]
 _SEAM_TYPES = ['无缝拼接 (SPC/LVT专用)', '常规倒角缝 (如强化/木地板)', '圆弧倒角 (Pressed Bevel)']
 _GLOSSINESS = ['超哑光 (0-3°)', '哑光 (3-5°)', '高光 (High Gloss)']
@@ -934,7 +1140,8 @@ def options():
 # ============================================================
 
 async def _regen_once(job: JobRecord):
-    """复用 job.retry_ctx 再跑全部模型、把新图 append 进候选（移植 webui._regen_job 去 UI）。"""
+    """复用 job.retry_ctx 再跑全部模型、把新图 append 进候选（移植 webui._regen_job 去 UI）。
+    返回本轮每模型错误拼接串（'B2: xx Pro: yy'，全成功为 ''），供 _regen_bg 写进 job.error。"""
     ctx = job.retry_ctx or {}
     api_key = (ctx.get('api_key') or '').strip() or _load_config().get('gemini_api_key', '').strip()
     mf = ctx.get('model_filter', job.model_filter)
@@ -949,14 +1156,24 @@ async def _regen_once(job: JobRecord):
 
     tasks = []
     if mf in ('b2', 'both'):
-        tasks.append(gen_one(GEMINI_MODEL_MAP['Nano Banana 2'], ctx['cpt'], 'b2', 'Nano Banana 2'))
+        tasks.append(('b2', gen_one(GEMINI_MODEL_MAP['Nano Banana 2'], ctx['cpt'], 'b2', 'Nano Banana 2')))
     if mf in ('pro', 'both'):
-        tasks.append(gen_one(GEMINI_MODEL_MAP['Nano Banana Pro'], ctx['cpt_pro'], 'pro', 'Nano Banana Pro'))
-    await asyncio.gather(*tasks, return_exceptions=True)
+        tasks.append(('pro', gen_one(GEMINI_MODEL_MAP['Nano Banana Pro'], ctx['cpt_pro'], 'pro', 'Nano Banana Pro')))
+    results = await asyncio.gather(*[c for _, c in tasks], return_exceptions=True)
+    # 收集每模型错误串（镜像 _run_job_bg）：否则重抽失败对用户完全静默——没出新图也没任何提示
+    b2_err = pro_err = ''
+    for (k, _), res in zip(tasks, results):
+        e = str(res) if isinstance(res, Exception) else (res[1] or '')
+        if k == 'b2':
+            b2_err = e
+        else:
+            pro_err = e
+    return (('B2: ' + b2_err) if b2_err else '') + ((' Pro: ' + pro_err) if pro_err else '')
 
 
 async def _regen_bg(job: JobRecord, n: int):
-    """一键多抽 ×n：串行重抽 n 次（每次 append 候选）；用户停止(加入 _cancel_jobs)即跑完当前后停。"""
+    """一键多抽 ×n：串行重抽 n 次（每次 append 候选）；用户停止(加入 _cancel_jobs)即跑完当前后停。
+    保留最后一轮的每模型错误串写进 job.error（用户主动取消不算失败原因，过滤掉）。"""
     if not job.retry_ctx:
         update_job(job, error='缺少重抽上下文')
         return
@@ -965,17 +1182,20 @@ async def _regen_bg(job: JobRecord, n: int):
     # 整批期间保持 running（不在迭代间置终态）——否则 SSE 见终态即关流，多抽第二张起就断了。
     update_job(job, status='running', started_at=time.time(), error='')
     err = ''
+    last_err = ''
     try:
         for _i in range(max(1, n)):
             if _is_cancelled(job.job_id, _cancel_generation[0]):
                 break
-            await _regen_once(job)
+            round_err = ((await _regen_once(job)) or '').strip()
+            if round_err and '取消' not in round_err:
+                last_err = round_err
             _persist_jobs()
     except Exception as e:
         logger.exception(f"[API多抽] 异常 job={job.job_id}")
         err = str(e)
     finally:
-        update_job(job, status=compute_final_status(mf, job.b2_path, job.pro_path), error=err)
+        update_job(job, status=compute_final_status(mf, job.b2_path, job.pro_path), error=err or last_err)
         _cancel_jobs.discard(job.job_id)
         _persist_jobs()
 
@@ -1073,7 +1293,9 @@ async def regen_job(jid: str, n: int = 1):
         raise HTTPException(400, '该任务缺少重抽上下文(可能重启后丢失)，请重新提交')
     if job.status in ('running', 'queued') or job.pro_polishing:
         raise HTTPException(409, '任务进行中，请稍后再抽')
-    asyncio.create_task(_regen_bg(job, n))
+    # 回执前预置 active 状态（镜像 _regen_bg 开场），前端据此即刻开 SSE
+    update_job(job, status='running', started_at=time.time(), error='')
+    _spawn(_regen_bg(job, n))
     return _job_view(job)
 
 
@@ -1113,8 +1335,9 @@ async def record_edit(req: RecordEditRequest):
     job.png_path = abs_src or os.path.join(MAIN_OUTPUT_DIR, 'edit')
     with _job_lock:
         _job_history.insert(0, job)
+        _trim_history()   # 收口最旧的终态卡（新建的二改 job 是 queued/in-flight，不会被删）
     model_id = GEMINI_MODEL_MAP.get(req.model_choice, GEMINI_MODEL_MAP['Nano Banana Pro'])
-    asyncio.create_task(_record_edit_bg(
+    _spawn(_record_edit_bg(
         job, src_pil=src_pil, api_key=api_key, instruction=req.instruction, model_id=model_id,
         model_label=f'{req.model_choice} 二改', image_size=req.image_size,
         preserve=req.preserve_floor_geometry, json_path=req.json_path,

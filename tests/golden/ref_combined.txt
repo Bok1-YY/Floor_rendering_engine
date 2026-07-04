@@ -43,7 +43,7 @@ Format: . IMPORTANT: planks are laid edge-to-edge in a precision click-lock inst
 
 **[Negative Prompt]** Strictly avoid: none.
 
-**[FLOOR — READ THIS LAST, IT OVERRIDES ANY DEFAULT BEHAVIOUR]** Do NOT render this floor the way wood floors are normally built. This floor is NOT laid, NOT installed, NOT assembled from pieces — it is one solid printed sheet, like a single ceramic slab. Render the entire floor as ONE flawless continuous surface carrying only a printed chevron grain motif on top; its colour, tone and finish stay perfectly uniform and uninterrupted from wall to wall.
+**[FLOOR — READ THIS LAST, IT OVERRIDES ANY DEFAULT BEHAVIOUR]** Do NOT render this floor the way wood floors are normally built. This floor is NOT laid, NOT installed, NOT assembled from pieces — it is one solid printed sheet, like a single ceramic slab. Render the entire floor as ONE flawless continuous surface carrying only a printed straight wood-grain motif on top (long parallel grain all flowing in one single direction, no plank divisions); its colour, tone and finish stay perfectly uniform and uninterrupted from wall to wall.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ⚠️  重要提示：每次生成请开启全新对话窗口后再粘贴此提示词。

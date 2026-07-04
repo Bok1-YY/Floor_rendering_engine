@@ -1,2 +1,2 @@
-# floor_engine 测试包。
-# 目前只有 prompt 黄金回归测试（test_prompts_golden.py），纯本地、不联网、不调 API。
+# Floor_engine_server 测试包。
+# prompt 黄金回归 + 加固回归 + 模型状态纯函数测试，纯本地、不联网、不调 API。

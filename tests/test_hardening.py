@@ -4,11 +4,11 @@ import os
 
 import pytest
 
-from floor_engine.models import new_job
-from floor_engine import config as cfg_mod
-from floor_engine.config import safe_upload_path, get_tls_verify
-from floor_engine import api as api_mod
-from floor_engine.api import _verify_arg, call_image_generate
+from Floor_engine_server.models import new_job
+from Floor_engine_server import config as cfg_mod
+from Floor_engine_server.config import safe_upload_path, get_tls_verify
+from Floor_engine_server import api as api_mod
+from Floor_engine_server.api import _verify_arg, call_image_generate
 
 
 # ── 1. job_id 唯一性（毫秒时间戳会撞，uuid 不会）──────────────────────────
@@ -24,7 +24,7 @@ def test_job_id_unique_10000():
     "a/b/c.png", "  spaced name .JPG", "木地板.png",
 ])
 def test_safe_upload_stays_inside(evil, tmp_path, monkeypatch):
-    monkeypatch.setattr("floor_engine.config.UPLOAD_DIR", str(tmp_path))
+    monkeypatch.setattr("Floor_engine_server.config.UPLOAD_DIR", str(tmp_path))
     p = safe_upload_path(evil, prefix="ref_")
     assert p is not None
     real_base = os.path.realpath(str(tmp_path))
@@ -35,12 +35,12 @@ def test_safe_upload_stays_inside(evil, tmp_path, monkeypatch):
 
 @pytest.mark.parametrize("bad", ["hack.exe", "shell.php", "note.txt", "noext", "a.svg"])
 def test_safe_upload_rejects_non_image(bad, tmp_path, monkeypatch):
-    monkeypatch.setattr("floor_engine.config.UPLOAD_DIR", str(tmp_path))
+    monkeypatch.setattr("Floor_engine_server.config.UPLOAD_DIR", str(tmp_path))
     assert safe_upload_path(bad) is None
 
 
 def test_safe_upload_no_overwrite(tmp_path, monkeypatch):
-    monkeypatch.setattr("floor_engine.config.UPLOAD_DIR", str(tmp_path))
+    monkeypatch.setattr("Floor_engine_server.config.UPLOAD_DIR", str(tmp_path))
     p1 = safe_upload_path("pic.png")
     open(p1, "wb").close()
     p2 = safe_upload_path("pic.png")

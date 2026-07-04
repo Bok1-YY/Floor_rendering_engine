@@ -231,7 +231,16 @@ def _save_records(json_path, records):
         fd, tmp_path = tempfile.mkstemp(prefix='.records_', suffix='.tmp', dir=dir_path)
         with os.fdopen(fd, 'w', encoding='utf-8') as f:
             json.dump(records, f, ensure_ascii=False, indent=2)
-        os.replace(tmp_path, json_path)
+        # Windows: os.replace 撞上无锁读者(记录页浏览/导出/收藏扫描短暂 open 同文件)会
+        # PermissionError；读者都是瞬时打开，写侧短重试即可，不给所有读者加锁。
+        for _i in range(5):
+            try:
+                os.replace(tmp_path, json_path)
+                break
+            except PermissionError:
+                if _i == 4:
+                    raise
+                time.sleep(0.1)
         tmp_path = None
     except Exception as e:
         logger.error(f"记录保存失败: {json_path} / {e}")

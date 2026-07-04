@@ -1,6 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import type { RecordEntry, RecordFile } from "@/lib/types";
 import { toast } from "sonner";
@@ -44,25 +44,34 @@ export default function RecordsPage() {
       .catch((e) => toast.error((e as Error).message));
   }, []);
 
+  // 加载乱序防护：快速连点两个记录文件时，先发的响应后到会覆盖后选文件的内容（左侧高亮与右侧内容错位）
+  const openSeq = useRef(0);
+
   async function open(jsonPath: string) {
+    const seq = ++openSeq.current;
     setActive(jsonPath);
     setRoomFilter("__all__");
     setLoading(true);
     try {
-      setRecords(await api.loadRecord(jsonPath));
+      const recs = await api.loadRecord(jsonPath);
+      if (seq !== openSeq.current) return;
+      setRecords(recs);
     } catch (e) {
-      toast.error((e as Error).message);
+      if (seq === openSeq.current) toast.error((e as Error).message);
     } finally {
-      setLoading(false);
+      if (seq === openSeq.current) setLoading(false);
     }
   }
 
   async function reload() {
     if (!active) return;
+    const seq = ++openSeq.current;
     try {
-      setRecords(await api.loadRecord(active));
+      const recs = await api.loadRecord(active);
+      if (seq !== openSeq.current) return;
+      setRecords(recs);
     } catch (e) {
-      toast.error((e as Error).message);
+      if (seq === openSeq.current) toast.error((e as Error).message);
     }
   }
 

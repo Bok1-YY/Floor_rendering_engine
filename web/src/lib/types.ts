@@ -78,6 +78,7 @@ export interface GenParams {
   cn_space_features?: string[] | null;
   cn_facilities?: string[] | null;
   style_ref_correction?: string;
+  scene_override?: string;   // Omakase：AI 原创场景散文，接管 Omakase 工作流的场景层（仅 Omakase 生效，其他工作流忽略）
 }
 
 export interface JobSubmit {
@@ -95,6 +96,25 @@ export interface EditRequest {
   image_size?: string;
   preserve_floor_geometry?: boolean;
   model_choice?: string;
+}
+
+/** 快速预览（Nano Banana 2 Lite · 1K）请求；字段同 JobSubmit 但无 model_filter。 */
+export interface PreviewRequest {
+  image_path: string;
+  api_key?: string;
+  room_path?: string | null;
+  ref_path?: string | null;
+  params: GenParams;
+}
+
+/** 快速预览状态快照（/api/preview 系列返回）。 */
+export interface PreviewView {
+  preview_id: string;
+  status: "running" | "done" | "failed";
+  stage: string;
+  url: string;
+  thumb: string;
+  error: string;
 }
 
 export interface Swatch {
@@ -115,6 +135,10 @@ export interface ConfigView {
   proxy: string;
   max_concurrent_per_model: number;
   speed_params: Record<string, unknown>;
+  has_deepseek_key?: boolean;
+  omakase_enabled?: boolean;
+  deepseek_model?: string;
+  deepseek_base_url?: string;
 }
 
 export interface ConfigPatch {
@@ -127,6 +151,17 @@ export interface ConfigPatch {
   tls_verify?: boolean;
   tls_ca_bundle?: string;
   max_concurrent_per_model?: number;
+  deepseek_api_key?: string;
+  deepseek_base_url?: string;
+  deepseek_model?: string;
+  omakase_enabled?: boolean;
+}
+
+/** Omakase：DeepSeek 返回的单个场景散文候选 */
+export interface OmakaseOption {
+  text: string;
+  why: string;
+  recommended: boolean;
 }
 
 export interface ModelsView {

@@ -17,6 +17,7 @@ export function ImageZoom({
     null,
   );
   const moved = useRef(false);
+  const boxRef = useRef<HTMLDivElement>(null);
 
   // url 变化时复位缩放/位移
   useEffect(() => {
@@ -34,17 +35,27 @@ export function ImageZoom({
     return () => window.removeEventListener("keydown", onKey);
   }, [url, onClose]);
 
+  // 滚轮缩放必须用原生非 passive 监听：React 的根级 wheel 监听是 passive 的，
+  // onWheel 里 preventDefault 无效（控制台报错），缩放时会连带滚动遮罩后面的页面。
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      setScale((s) =>
+        Math.min(8, Math.max(1, s * (e.deltaY < 0 ? 1.15 : 1 / 1.15))),
+      );
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [url]);
+
   if (!url) return null;
 
   return (
     <div
+      ref={boxRef}
       className="fixed inset-0 z-[100] flex select-none items-center justify-center overflow-hidden bg-black/95"
-      onWheel={(e) => {
-        e.preventDefault();
-        setScale((s) =>
-          Math.min(8, Math.max(1, s * (e.deltaY < 0 ? 1.15 : 1 / 1.15))),
-        );
-      }}
       onDoubleClick={() => {
         setScale(1);
         setPos({ x: 0, y: 0 });

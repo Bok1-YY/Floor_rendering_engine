@@ -28,6 +28,8 @@ export default function SettingsPage() {
   const [rulesOpen, setRulesOpen] = useState(false);
   const [rules, setRules] = useState<FailureKB[]>([]);
   const [showGemini, setShowGemini] = useState(false);
+  const [deepseekKey, setDeepseekKey] = useState("");
+  const [omakaseEnabled, setOmakaseEnabled] = useState(false);
 
   function load() {
     api
@@ -40,6 +42,7 @@ export default function SettingsPage() {
         setFailover(c.auto_failover);
         setTlsVerify(c.tls_verify);
         setConc(c.max_concurrent_per_model);
+        setOmakaseEnabled(!!c.omakase_enabled);
       })
       .catch((e) => toast.error((e as Error).message));
   }
@@ -60,10 +63,13 @@ export default function SettingsPage() {
       };
       if (geminiKey.trim()) patch.gemini_api_key = geminiKey.trim();
       if (falKey.trim()) patch.fal_api_key = falKey.trim();
+      if (deepseekKey.trim()) patch.deepseek_api_key = deepseekKey.trim();
+      patch.omakase_enabled = omakaseEnabled;
       const c = await api.putConfig(patch);
       setCfg(c);
       setGeminiKey("");
       setFalKey("");
+      setDeepseekKey("");
       toast.success("已保存");
     } catch (e) {
       toast.error((e as Error).message);
@@ -159,6 +165,32 @@ export default function SettingsPage() {
                   placeholder={cfg.has_fal_key ? "•••••••• 已配置，留空不改" : "未配置"}
                   className={fieldInput}
                 />
+              </div>
+
+              <div className="mb-[15px] flex flex-col gap-[7px]">
+                <span className={fieldLabel}>
+                  DeepSeek API Key（Omakase 场景代笔）
+                  {cfg.has_deepseek_key && (
+                    <span className="text-[#2e8c7e]">（已配置，留空不改）</span>
+                  )}
+                </span>
+                <Input
+                  type="password"
+                  value={deepseekKey}
+                  onChange={(e) => setDeepseekKey(e.target.value)}
+                  placeholder={cfg.has_deepseek_key ? "•••••••• 已配置，留空不改" : "未配置（用户自己的 key）"}
+                  className={fieldInput}
+                />
+              </div>
+
+              <div className="mb-[15px] flex items-center justify-between rounded-[10px] border border-border bg-[#faf7f0] p-[13px]">
+                <div className="leading-snug">
+                  <div className="text-[13px] font-bold text-[#2a241f]">启用 Omakase 模式</div>
+                  <div className="mt-px text-[11px] text-[#9a9082]">
+                    开启「Omakase (AI 代笔场景)」工作流的 AI 场景生成（DeepSeek）；关闭后该工作流仍可选，仅「✨ 生成场景」不可用，需手写场景定稿
+                  </div>
+                </div>
+                <Switch checked={omakaseEnabled} onCheckedChange={setOmakaseEnabled} />
               </div>
 
               <div className="flex flex-col gap-[7px]">

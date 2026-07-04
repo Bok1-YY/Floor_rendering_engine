@@ -1,0 +1,39 @@
+====== 🇬🇧 英文专业版 (发给AI模型的最终提示词) ======
+
+Help me make a photo:
+
+Professional photorealistic interior architectural photography. modern detached villa, living-dining combo. Location: unspecified location. Neighborhood: modern neighborhood. View outside: natural open view. Aspect ratio 4:3, 4K resolution.
+
+**[Style & Atmosphere]** 原木风 aesthetic. Authentic and inviting atmosphere.
+
+
+
+
+
+
+
+
+
+**[Camera & Composition]** 28mm lens.
+**Composition**: Wide-angle perspective, emphasizing spaciousness and room scale. Strong floor perspective lines converging into the distance. Floor texture must be the absolute visual anchor of the image.
+
+**Lighting — **: Natural balanced indoor lighting.
+
+**[Floor Specification]**
+🔥 CRITICAL MATERIAL INSTRUCTION 🔥 The uploaded reference image IS the floor material sample/swatch — it shows the wood grain pattern, color palette, and surface texture you must reproduce. However, the reference image's individual plank boundaries and joint lines are NOT part of the material spec — they are photographic artifacts of the sample board and must be completely ignored. Your task: reproduce the material's EXACT grain pattern, color tone, color variation, and micro-texture across the entire floor as ONE CONTINUOUS UNIFIED SURFACE. Gloss level: matte. FOR SQUARE GRID: The square grid pattern is a subtle VISUAL TEXTURE within the single continuous floor surface — NOT an assembly of separate tiles. The grid is created purely by subtle alternating grain direction or micro-tonal variation between adjacent square zones. Where square zones meet, there is ONLY a subtle tonal or grain-direction shift — ZERO joint lines, ZERO grout, ZERO gaps, ZERO chamfer marks.
+
+**[FLOOR COLOR — MANDATORY EXACT MATCH]** The overall color of the wooden floor in the final image MUST be IDENTICAL to the uploaded floor swatch — the same hue, the same warm/cool register, the same lightness/darkness, and the same saturation. The uploaded swatch is the SINGLE source of truth for the floor color: read the floor's base color directly from it and reproduce that exact color consistently across the entire floor. Do NOT shift the floor warmer, cooler, lighter, darker, more golden, more orange, more grey, or more/less saturated to suit the room's style, furniture or ambient lighting. Only natural light falloff may change brightness (slightly brighter near windows, gradually softer away from them) — the underlying material color stays exactly the swatch's color everywhere. The finished floor must be instantly recognizable as the very same product as the uploaded swatch.
+Format: square tile staggered layout (609 x 609 mm). PATTERN TYPE: Seamless square grid — the check pattern is a surface-level visual rhythm, NOT a physical assembly of tiles. There are ZERO tile boundaries or grout lines anywhere. The grid is defined exclusively by subtle alternating grain direction or micro-tonal variation between adjacent square zones. Every zone transition is a smooth, continuous tonal shift — no line, no groove, no gap, no grout, no shadow.. Grain orientation: grain alternating subtly between adjacent square zones in a checkerboard rhythm, with every zone transition being a seamless tonal or grain-direction shift, zero hard lines anywhere. A high-end continuous floor surface engineered with optical continuity. The organic wood grain pattern spans seamlessly across the entire room with zero structural interruption. Visual rhythm is achieved purely through natural wood tone variations and grain flow, completely replacing the need for geometric division lines. Individual planks are visually perceptible, but their boundaries reveal themselves ONLY through the most subtle organic cues: a slight grain direction shift where one plank meets the next, a micro-tonal variation at the transition, or the natural material discontinuity of wood grain patterns at the seam. These boundaries read as material transitions — not as drawn lines, not as shadow grooves, not as filled gaps, not as chamfer bevels. Absolute requirement: plank boundaries are organic material transitions only — no joint lines, no edge shadows, no grooves, no hairline gaps, no chamfer marks anywhere on the surface.
+
+**Floor Coverage**: The floor must occupy a minimum of 40-50% of the total image area. Furniture placement should deliberately reveal large unobstructed floor zones. Camera angle must maximize visible floor surface.
+
+**[Quality Requirements]** Ultra-sharp texture details at pixel level. Physically accurate, true-to-swatch colors with clean, faithful white balance and natural, consistent tone across the entire floor.
+
+**[Negative Prompt]** Strictly avoid: none.
+
+**[FLOOR — READ THIS LAST, IT OVERRIDES ANY DEFAULT BEHAVIOUR]** Do NOT render this floor the way wood floors are normally built. This floor is NOT laid, NOT installed, NOT assembled from pieces — it is one solid printed sheet, like a single ceramic slab. Render the entire floor as ONE flawless continuous surface carrying only a printed square-grid grain motif on top (adjacent square zones distinguished only by subtle micro-tonal or grain-direction shifts — zero joint lines, zero grout, zero gaps); its colour, tone and finish stay perfectly uniform and uninterrupted from wall to wall.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️  重要提示：每次生成请开启全新对话窗口后再粘贴此提示词。
+    在同一对话内连续生成会导致模型受上次结果影响，质量下滑。
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

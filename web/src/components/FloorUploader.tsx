@@ -54,6 +54,7 @@ export function FloorUploader({
         className="hidden"
         onChange={(e) => {
           const f = e.target.files?.[0];
+          e.target.value = ""; // 重置：否则上传失败后重选同一文件不触发 onChange
           if (f) handleFile(f);
         }}
       />

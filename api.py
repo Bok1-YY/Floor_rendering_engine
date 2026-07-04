@@ -705,7 +705,12 @@ EDITING RULES:
             err_msg = resp.text[:400]
         logger.error(f"[API二改] HTTP失败 model={model_id}, status={resp.status_code}, err={_short_text(err_msg, 800)}")
         return None, f"HTTP {resp.status_code}: {err_msg}"
-    data = resp.json()
+    try:
+        data = resp.json()
+    except Exception as e:
+        # 透明代理劫持/半截响应可能 200 但 body 非 JSON——不能让 JSONDecodeError 冒出破坏 (img, err) 契约
+        logger.error(f"[API二改] 响应 JSON 解析失败 model={model_id}: {_redact_api_key(e)}")
+        return None, f"响应解析失败: {_redact_api_key(e)}"
     for candidate in data.get('candidates', []):
         for part in candidate.get('content', {}).get('parts', []):
             if 'inlineData' in part:
@@ -863,6 +868,81 @@ def analyze_style_image(api_key: str, image_path: str) -> Tuple[str, Optional[st
             logger.warning(f"[参照模式] 模型 {model_name} 请求异常: {last_err}")
             continue
     return "", f"所有备选模型均不可用，请检查 API Key 和网络（最后错误: {last_err}）"
+
+
+# ── Omakase 模式：DeepSeek 把客户自由诉求 → 2-3 段可拍的场景散文（供客户选/改）────
+# 只产候选、不写最终提示词；地板技术层永远由 prompts.py 焊接(见 save_task_files_html 的 scene_override)。
+# 配管镜像 analyze_style_image：_req.post + proxies + _verify_arg + (结果,错误)元组 + _redact_api_key。
+_OMAKASE_TIMEOUT = (10, 40)  # (连接, 读取) 秒；纯文本调用短平快，比生图/风格分析更快
+
+_OMAKASE_SYSTEM_PROMPT = (
+    "你是地板营销摄影的美术指导。客户会给你一句关于想要什么照片的诉求(可能很抽象，比如只说一种功能卖点或一种情绪)。"
+    "你的任务：把它转成 2-3 段【互不雷同、具体可拍】的居家室内场景中文散文，每段 2-4 句，用来拍一张突出【地板】的室内实景照。\n\n"
+    "硬性规则：\n"
+    "1. 地板必须是画面视觉重点；场景里的家具/人物/道具都不能把地板埋掉或遮挡主要地面。\n"
+    "2. 只写真实、可拍的居家场景；不堆奢华辞藻，不出现任何品牌名。\n"
+    "3. 绝对不要描写地板的划痕/磨损/损坏，也不要任何『前后对比/好坏对比』画面——"
+    "要体现耐用等功能，就写『高强度使用但地板依然完好如新』的正向场景。\n"
+    "4. 每段只写场景/氛围/光线/人物活动；不要写相机参数，也不要写地板的物理规格(尺寸/拼缝/光泽/颜色)——那些由系统另行控制。\n\n"
+    "只返回 JSON，格式：{\"options\":[{\"text\":\"场景散文\",\"why\":\"一句话说明为什么这么拍能体现客户诉求\",\"recommended\":true}]}。"
+    "恰好把最稳妥的一段标 recommended:true、其余为 false。不要输出 JSON 以外的任何内容。"
+)
+
+
+def call_deepseek_scenes(idea, *, api_key, base_url, model):
+    """Omakase：把客户诉求 idea 交给 DeepSeek，返回 (options, None) 或 ([], 错误信息)。
+
+    options 是 [{text, why, recommended}]，供前端做选择题给客户选/改。
+    错误绝不冒泡——调用方按 (结果, 错误) 元组处理(照 analyze_style_image 约定)。
+    """
+    idea = (idea or "").strip()
+    if not idea:
+        return [], "场景诉求为空"
+    if not api_key:
+        return [], "未配置 DeepSeek API Key"
+    cfg = _load_config()
+    proxy = cfg.get("proxy", "").strip()
+    proxies = {"http": proxy, "https": proxy} if proxy else None
+    url = f"{base_url}/chat/completions"
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": _OMAKASE_SYSTEM_PROMPT},
+            {"role": "user", "content": idea},
+        ],
+        "temperature": 0.7,
+        "response_format": {"type": "json_object"},
+    }
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
+    try:
+        resp = _req.post(url, headers=headers, json=payload,
+                         timeout=_OMAKASE_TIMEOUT, proxies=proxies, verify=_verify_arg(cfg))
+    except Exception as e:
+        return [], f"DeepSeek 请求异常: {_redact_api_key(e)}"
+    if resp.status_code != 200:
+        # 401 / 402(余额不足) / 429(限流) 等交给 failure_kb 分类
+        body = _short_text(getattr(resp, "text", ""), 200)
+        return [], f"DeepSeek HTTP {resp.status_code}: {body}"
+    try:
+        content = resp.json()["choices"][0]["message"]["content"]
+        options = (json.loads(content) or {}).get("options") or []
+    except Exception as e:
+        return [], f"DeepSeek 返回解析失败: {_redact_api_key(e)}"
+    # 清洗 + 保底：只留有 text 的项；若无任何 recommended，则把第一段设为推荐(你帮我定的默认)
+    clean = []
+    for o in options:
+        if isinstance(o, dict) and (o.get("text") or "").strip():
+            clean.append({
+                "text": str(o.get("text")).strip(),
+                "why": str(o.get("why") or "").strip(),
+                "recommended": bool(o.get("recommended", False)),
+            })
+    if not clean:
+        return [], "DeepSeek 未返回可用场景"
+    if not any(o["recommended"] for o in clean):
+        clean[0]["recommended"] = True
+    return clean, None
+
 
 def _match_color_to_reference(src_img, ref_img, strength=1.0):
     """把 src 的整体色彩统计对齐到 ref（LAB 空间均值/方差迁移，Reinhard 色彩迁移）。

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """running_model_status_text 纯函数：运行中任务的分模型徽章串。"""
-from floor_engine.models import JobRecord, running_model_status_text
+from Floor_engine_server.models import JobRecord, running_model_status_text
 
 
 def _job(**kw):

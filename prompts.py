@@ -109,8 +109,8 @@ def save_task_files_html(workflow_mode, model_choice, image_path, continent, cou
                          cn_delivery="🏆 样板间 / 展示单位",
                          cn_room_type="客餐厅一体", cn_view="自然通透景观",
                          cn_space_features=None, cn_facilities=None,
-                         style_ref_correction="", style_analysis_text=""):
-    if not image_path: return None, "⚠️ 请上传图片", "", "", "", "", ""
+                         style_ref_correction="", style_analysis_text="", scene_override="", persist=True):
+    if not image_path: return None, "⚠️ 请上传图片", "", "", "", "", "", ""
     json_path, base_name, target_dir = _get_json_path(image_path)
     png_path = os.path.join(target_dir, f"{base_name}_优化图.png")
 
@@ -135,7 +135,7 @@ def save_task_files_html(workflow_mode, model_choice, image_path, continent, cou
             img.save(png_path, **_get_srgb_save_kwargs())
             processed_img = img; msg_prefix = "✅ 新图片已处理并"
         except Exception as e:
-            return None, f"❌ 图片处理失败: {e}", "", last_image_path, "", "", ""
+            return None, f"❌ 图片处理失败: {e}", "", last_image_path, "", "", "", ""
     else:
         processed_img = Image.open(png_path); msg_prefix = "⚡ 图片未改变，秒速"
 
@@ -411,6 +411,7 @@ def save_task_files_html(workflow_mode, model_choice, image_path, continent, cou
     en_surface_direction_pro = None
     SEAMLESS_NEGATIVE_PRO = None
     SEAMLESS_NEGATIVE_PRO_MOTIF = None  # Pro 收尾约束里"表面印花图案"的措辞，按拼法切换
+    SEAMLESS_NEGATIVE_MOTIF = None      # B2 收尾约束里同款措辞，按拼法切换（方格拼绝不能落回 chevron）
     if is_seamless_clean:
         if "人字拼" in floor_size:
             # ── 无缝人字拼（B2 词·对抗版）：把"整块"当不容置疑的物理事实强灌 ──
@@ -473,6 +474,7 @@ def save_task_files_html(workflow_mode, model_choice, image_path, continent, cou
             SEAMLESS_NEGATIVE_PRO_MOTIF = (
                 "a printed staggered-zigzag grain motif on top (rows offset from each other, not continuous pointed V's)"
             )
+            SEAMLESS_NEGATIVE_MOTIF = "a printed chevron grain motif on top"   # 人字拼原文措辞，须逐字节保持
         elif "正方形拼" in floor_size:
             # ── 无缝正方形拼：图案由微色调差异定义，而非接缝线 ──
             CORE_MATERIAL_INSTRUCTION = (
@@ -500,6 +502,10 @@ def save_task_files_html(workflow_mode, model_choice, image_path, continent, cou
             en_surface_direction = (
                 "grain alternating subtly between adjacent square zones in a checkerboard rhythm, "
                 "with every zone transition being a seamless tonal or grain-direction shift, zero hard lines anywhere"
+            )
+            SEAMLESS_NEGATIVE_MOTIF = (
+                "a printed square-grid grain motif on top (adjacent square zones distinguished only by subtle "
+                "micro-tonal or grain-direction shifts — zero joint lines, zero grout, zero gaps)"
             )
         else:
             # ── 无缝直拼：app_19 原版 —— 板材存在但边界仅为有机纹理过渡 ──
@@ -560,6 +566,8 @@ def save_task_files_html(workflow_mode, model_choice, image_path, continent, cou
                 "a printed straight wood-grain motif on top (long parallel grain all flowing in one single direction, "
                 "no plank divisions)"
             )
+            # 无缝直拼时 B2 实际发的是 Pro 提示词(见 server_api._run_job_bg)，此处仅影响记录/展示文本，与 Pro 措辞对齐
+            SEAMLESS_NEGATIVE_MOTIF = SEAMLESS_NEGATIVE_PRO_MOTIF
 
         en_floor_spec_line = f"Format: {en_floor_sz_seamless}. Grain orientation: {en_surface_direction}. {en_seam}"
         en_floor_spec_line_inpaint = (
@@ -579,12 +587,13 @@ def save_task_files_html(workflow_mode, model_choice, image_path, continent, cou
 
         # 无缝模式收尾约束（对抗版）：放在 prompt 最末尾覆盖默认建造逻辑。
         # 直接告诉模型"别按常规木地板那样建"，把它当一整块印花大板渲染。
+        # motif 措辞按拼法由 SEAMLESS_NEGATIVE_MOTIF 提供（人字=chevron 原文 / 直拼=平行直纹 / 方格=微色差方格）。
         SEAMLESS_NEGATIVE = (
             "\n\n**[FLOOR — READ THIS LAST, IT OVERRIDES ANY DEFAULT BEHAVIOUR]** "
             "Do NOT render this floor the way wood floors are normally built. This floor is NOT laid, NOT installed, "
             "NOT assembled from pieces — it is one solid printed sheet, like a single ceramic slab. "
-            "Render the entire floor as ONE flawless continuous surface carrying only a printed chevron grain motif on "
-            "top; its colour, tone and finish stay perfectly uniform and uninterrupted from wall to wall."
+            f"Render the entire floor as ONE flawless continuous surface carrying only {SEAMLESS_NEGATIVE_MOTIF}; "
+            "its colour, tone and finish stay perfectly uniform and uninterrupted from wall to wall."
         )
         # Pro 专属收尾（无 "chevron" 字样，措辞随拼法切换：人字拼=交错锯齿印花，直拼=单向平行直纹印花）
         if CORE_MATERIAL_INSTRUCTION_PRO:
@@ -745,6 +754,18 @@ Professional photorealistic interior architectural photography. {en_room}. Aspec
 
 {_floor_spec_block(CORE_MATERIAL_INSTRUCTION, en_floor_spec_line, en_floor_visibility, en_quality, avoid_en, extra_cmd_en, furniture_contrast=en_furniture_contrast)}"""
 
+    elif "Omakase" in workflow_mode:
+        # 独立 Omakase 模式：场景层=AI 原创散文(scene_override)，地板技术层(_floor_spec_block)逐字节原样焊接。
+        # 精简 preamble 只留画幅/分辨率，其余场景由散文接管；散文空时给中性兜底(前端另有必填校验，双保险)。
+        _oma_scene = scene_override or "A clean, well-lit residential interior room, a natural everyday domestic scene."
+        final_prompt_en = f"""Help me make a photo:
+
+Professional photorealistic interior architectural photography. Aspect ratio {ar_value}, {resolution} resolution.
+
+{_oma_scene}
+
+{_floor_spec_block(CORE_MATERIAL_INSTRUCTION, en_floor_spec_line, en_floor_visibility, en_quality, avoid_en, extra_cmd_en)}"""
+
     else:  # 纯效果图 — SCHEMA order: Style → Composition → Lighting → Floor → Output
         final_prompt_en = f"""Help me make a photo:
 
@@ -827,10 +848,12 @@ Professional photorealistic interior architectural photography. {en_property}, {
         "sample_image_b64": _img_to_b64(processed_img, max_width=400),
         "results": []
     }
-    with record_file_lock(json_path):
-        records = _load_records(json_path)
-        records.append(new_record)
-        _save_records(json_path, records)
+    # persist=False（快速预览借用提示词逻辑）：只出 PNG + 提示词，不新建 JSON 记录，避免污染记录页。
+    if persist:
+        with record_file_lock(json_path):
+            records = _load_records(json_path)
+            records.append(new_record)
+            _save_records(json_path, records)
     return processed_img, f"{msg_prefix}生成成功！当前模式：{workflow_mode}", final_prompt_combined, image_path, json_path, record_id, png_path, final_prompt_en_pro
 
 
