@@ -256,7 +256,7 @@ web/src/
 
 - **前端生产模式**：`cd web && npm run build && npm run start`（dev 模式未优化，prod 更快）。
 - **打包 exe**（Windows 专属）：`test/build.bat`（由用户自己跑；Claude 只改打包文件 + 给命令，不替跑构建）。
-- **Git**：本仓库是独立 git 仓（分支 `master`，本地提交）。运行期产物与密钥已被 `.gitignore` + `web/.gitignore`（node_modules/.next）排除；`engine_config.json` 在 `test/` 不入库。提交信息沿用 `feat/fix/docs(scope): 说明` 风格，并保持「改完追加 `开发日志.md`」的习惯。
+- **Git**：本仓库是独立 git 仓（分支 `main`，提交后 push 到远程 `origin`）。运行期产物与密钥已被 `.gitignore` + `web/.gitignore`（node_modules/.next）排除；`engine_config.json` 在 `test/` 不入库。提交信息沿用 `feat/fix/docs(scope): 说明` 风格，并保持「改完追加 `开发日志.md`」的习惯。
 
 ---
 
