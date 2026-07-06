@@ -33,15 +33,57 @@ from .records import (
 
 _IMAGE_MIME = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
 
+# 上传前压缩默认参数：大图转 JPEG 并限制长边，避免走代理时上传体积过大导致写超时
+# （如 20MB PNG → ~3.5MB JPEG）。可在 engine_config.json 覆盖：
+#   upload_max_side(默认4096) / upload_jpeg_quality(默认92) / upload_compress_threshold_mb(默认4)
+_UPLOAD_MAX_SIDE_DEFAULT = 4096
+_UPLOAD_JPEG_QUALITY_DEFAULT = 92
+_UPLOAD_THRESHOLD_MB_DEFAULT = 4.0
+
+
 def _read_image_b64(path: Optional[str]) -> Tuple[Optional[str], str]:
-    """读本地图片为 (base64, mime)；路径为空或文件不存在返回 (None, "image/jpeg")。"""
+    """读本地图片为 (base64, mime)；路径为空或文件不存在返回 (None, "image/jpeg")。
+
+    体积超阈值(默认4MB)的图会先转成 JPEG、长边限到上限(默认4096)再编码，显著减小
+    上传体积，避免走代理时上传写超时；小图原样返回(不重压、不丢质量、保留原 mime)。
+    """
     if not path or not os.path.exists(path):
         return None, "image/jpeg"
     ext = os.path.splitext(path)[1].lower().lstrip('.')
     mime = _IMAGE_MIME.get(ext, "image/jpeg")
     with open(path, 'rb') as f:
-        b64 = base64.b64encode(f.read()).decode('utf-8')
-    return b64, mime
+        raw = f.read()
+
+    try:
+        cfg = _load_config()
+        max_side = int(cfg.get("upload_max_side", _UPLOAD_MAX_SIDE_DEFAULT))
+        quality = int(cfg.get("upload_jpeg_quality", _UPLOAD_JPEG_QUALITY_DEFAULT))
+        threshold = float(cfg.get("upload_compress_threshold_mb", _UPLOAD_THRESHOLD_MB_DEFAULT)) * 1024 * 1024
+    except Exception:
+        max_side, quality, threshold = (_UPLOAD_MAX_SIDE_DEFAULT, _UPLOAD_JPEG_QUALITY_DEFAULT,
+                                        _UPLOAD_THRESHOLD_MB_DEFAULT * 1024 * 1024)
+
+    if len(raw) > threshold:
+        try:
+            im = Image.open(_io_mod.BytesIO(raw))
+            if im.mode in ("RGBA", "LA", "P"):  # JPEG 不支持透明通道 → 拍平到白底
+                im = im.convert("RGBA")
+                bg = Image.new("RGB", im.size, (255, 255, 255))
+                bg.paste(im, mask=im.split()[-1])
+                im = bg
+            else:
+                im = im.convert("RGB")
+            if max(im.size) > max_side:
+                im.thumbnail((max_side, max_side))
+            buf = _io_mod.BytesIO()
+            im.save(buf, "JPEG", quality=quality)
+            out = buf.getvalue()
+            logger.info(f"[上传压缩] {os.path.basename(path)}: {len(raw)/1024/1024:.1f}MB "
+                        f"→ {len(out)/1024/1024:.1f}MB JPEG({im.width}x{im.height})")
+            return base64.b64encode(out).decode('utf-8'), "image/jpeg"
+        except Exception:
+            logger.exception(f"[上传压缩] 失败，回退原图 path={path}")
+    return base64.b64encode(raw).decode('utf-8'), mime
 
 def _redact_api_key(text):
     return re.sub(r'([?&]key=)[^&\s)]+', r'\1***', str(text or ""))
@@ -120,7 +162,7 @@ def call_gemini_generate(api_key: str, model_id: str, prompt_text: str, image_pa
     if not os.path.exists(image_path):
         logger.error(f"[API生成] 素材图不存在: {image_path}")
         return None, f"素材图不存在: {image_path}"
-    floor_b64, _ = _read_image_b64(image_path)
+    floor_b64, floor_mime = _read_image_b64(image_path)
     room_b64, room_mime = _read_image_b64(room_image_path)
     sref_b64, sref_mime = _read_image_b64(style_ref_image_path)
     # 圆弧倒角参考图：只供模型参考板边倒角形状(颜色/木纹仍取地板小样)。放在地板小样之前。
@@ -130,7 +172,7 @@ def call_gemini_generate(api_key: str, model_id: str, prompt_text: str, image_pa
     if sref_b64: parts.append({"inlineData": {"mimeType": sref_mime, "data": sref_b64}})
     if room_b64: parts.append({"inlineData": {"mimeType": room_mime, "data": room_b64}})
     if bevel_b64: parts.append({"inlineData": {"mimeType": bevel_mime, "data": bevel_b64}})
-    parts.append({"inlineData": {"mimeType": "image/png", "data": floor_b64}})
+    parts.append({"inlineData": {"mimeType": floor_mime, "data": floor_b64}})
 
     cfg = _load_config(); proxy = cfg.get("proxy", "").strip()
     proxies = {"http": proxy, "https": proxy} if proxy else None
