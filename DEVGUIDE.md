@@ -9,31 +9,36 @@
 ## 零、快速启动 ⭐（先看这里）
 
 ### 0.1 一键启动（推荐）
-双击 **`test/一键启动.bat`**（注意：bat 在仓库的**上一级** `test/` 目录，不在本仓库内）。它会：
-1. 起**后端** FastAPI（端口 **7870**）—— 独立 cmd 窗口；
-2. 起**前端** Next.js dev（端口 **3000**）—— 独立 cmd 窗口；
+双击仓库**上一级** `test/` 目录下的一键启动脚本（脚本在 `test/`，不在本仓库内）：
+- **Windows**：`test/一键启动.bat`
+- **Linux / macOS**：`test/一键启动.sh`
+
+它会：
+1. 起**后端** FastAPI（端口 **7870**）—— 独立终端窗口；
+2. 起**前端** Next.js dev（端口 **3000**）—— 独立终端窗口；
 3. 等 8 秒让前端编译完，自动打开浏览器 `http://localhost:3000`。
 
-关掉某个 cmd 窗口 = 停掉对应服务。
+关掉某个终端窗口 = 停掉对应服务。
 
 ### 0.2 手动启动（开发时常用）
+路径以仓库上一级的 `test/` 目录为基准（下面 `<项目根>` 代表你本地放 `test/` 的位置）。
 ```bash
 # 后端（务必在 test/ 目录下运行，单 worker）
-cd  C:\Users\1_1\Desktop\新系统\test
+cd  <项目根>/test
 python -m Floor_engine_server.server_api          # → http://127.0.0.1:7870
 
 # 前端（另开一个终端）
-cd  C:\Users\1_1\Desktop\新系统\test\Floor_engine_server\web
+cd  <项目根>/test/Floor_engine_server/web
 npm run dev                                        # → http://localhost:3000
 ```
 浏览器开 **http://localhost:3000**。后端健康检查：`GET http://127.0.0.1:7870/api/healthz` → `{"ok":true}`。
 
 ### 0.3 首次准备（只做一次）
 ```bash
-# 引擎/后端 Python 依赖
-pip install -r Floor_engine_server\requirements.txt
-# 前端 Node 依赖（需 Node 18+，本机 v24）
-cd Floor_engine_server\web && npm install
+# 引擎/后端 Python 依赖（建议先建虚拟环境后再装）
+pip install -r Floor_engine_server/requirements.txt
+# 前端 Node 依赖（需 Node 18+）
+cd Floor_engine_server/web && npm install
 ```
 然后在前端「**设置**」页填 Gemini API Key（或直接写 `test/engine_config.json`）。没有 key 也能开界面，但出图会失败。
 
@@ -45,13 +50,13 @@ cd Floor_engine_server\web && npm install
 | **后端** FastAPI（无头） | **7870** | `python -m Floor_engine_server.server_api`（在 `test/`） | 主线 API + SSE + 静态图 |
 | 旧版 NiceGUI（过渡 fallback） | 7869 | 见 §八 | 老界面，**不加新功能**，留作兜底 |
 
-### 0.5 启动逻辑（`一键启动.bat` 到底做了什么）
-- `cd /d "%~dp0"` 切到 bat 所在的 `test/`（后端必须在 `test/` 跑，原因见 §四：数据目录靠相对路径解析到这里）。
-- `start ... cmd /k "python -m Floor_engine_server.server_api"` 起后端窗口（`/k` = 跑完不关，方便看日志）。
-- `pushd web` → `start ... cmd /k "npm run dev"` 起前端窗口。
-- `timeout /t 8` 等前端首次编译，再 `start "" http://localhost:3000` 开浏览器。
+### 0.5 启动逻辑（一键启动脚本到底做了什么）
+两个平台的脚本逻辑一致，只是语法不同（Windows 用 `.bat`，Linux/macOS 用 `.sh`）：
+- 先切到脚本所在的 `test/`（后端必须在 `test/` 跑，原因见 §四：数据目录靠相对路径解析到这里）。Windows 用 `cd /d "%~dp0"`，Linux/macOS 用 `cd "$(dirname "$0")"`。
+- 各起一个**独立终端窗口**分别跑后端 `python -m Floor_engine_server.server_api` 和前端 `npm run dev`（跑完不关，方便看日志）。
+- 等前端首次编译（约 8 秒），再打开浏览器 `http://localhost:3000`。
 - **为什么两个窗口**：前后端是两个独立进程（解耦，互不阻塞）；这正是新架构相对老 NiceGUI「一锅炖」的核心改进——后端忙着出 4K 图时前端照样丝滑。
-- **为什么 bat 必须纯 ASCII**：中文 Windows 的 cmd 用 GBK 解析 .bat，文件里有中文会字节错位、命令报错。改 bat 时保持纯英文 + CRLF 换行。
+- **（Windows 专属）为什么 .bat 必须纯 ASCII**：中文 Windows 的 cmd 用 GBK 解析 .bat，文件里有中文会字节错位、命令报错，故 .bat 保持纯英文 + CRLF 换行。`.sh` 无此限制（UTF-8 + LF）。
 
 ---
 
@@ -216,9 +221,9 @@ web/src/
    - `next build` **不再跑 ESLint**，只有 `tsc` 类型错会拦构建。
 2. **后端单 worker**（同 §4.1）。
 3. **CORS 只放 3000**（同 §4.1）；本地用别的端口调试要设 `FLOOR_API_CORS`。
-4. **bat 必须纯 ASCII + CRLF**（同 §0.5）。
+4. **（Windows 专属）`.bat` 必须纯 ASCII + CRLF**（同 §0.5；`.sh` 无此限制）。
 5. **`.env.local`** 控制前端的 `NEXT_PUBLIC_API_BASE`（构建期内联，改了要重 build/重启 dev）。
-6. **无头截图自检法**（验证视觉时用；本机实证）：dev 服务器在 headless Edge 里因 HMR 握手失败**不 hydrate**，截不到数据态；要截带数据的页面需 **prod build + 隔离后端(改 `FLOOR_API_CORS` 放行测试端口) + Node24 内置 WebSocket 走 CDP 真等几秒再 captureScreenshot**。隔离后端与正式实例共享 `.queue_state.json`，测试时**只读、别触发清除/删除**，免得误删真实任务。
+6. **无头截图自检法**（验证视觉时用；实测）：dev 服务器在无头浏览器里因 HMR 握手失败**不 hydrate**，截不到数据态；要截带数据的页面需 **prod build + 隔离后端(改 `FLOOR_API_CORS` 放行测试端口) + Node（v22+，内置 WebSocket）走 CDP 真等几秒再 captureScreenshot**。隔离后端与正式实例共享 `.queue_state.json`，测试时**只读、别触发清除/删除**，免得误删真实任务。
 7. **设计稿落地**：照 mockup 的**实际视觉**还原（配色/胶囊/卡片/分段），别只搬报告文字；落地后无头截图比对设计稿。
 8. **`webui.py` 已退役删除**：UI 只有 `web/` 一套，新功能只加 `server_api.py` + `web/`。
 
@@ -250,11 +255,11 @@ web/src/
 ## 九、构建 / 打包 / Git
 
 - **前端生产模式**：`cd web && npm run build && npm run start`（dev 模式未优化，prod 更快）。
-- **打包 exe**：`test/build.bat`（由用户自己跑；Claude 只改打包文件 + 给命令，不替跑构建）。
+- **打包 exe**（Windows 专属）：`test/build.bat`（由用户自己跑；Claude 只改打包文件 + 给命令，不替跑构建）。
 - **Git**：本仓库是独立 git 仓（分支 `master`，本地提交）。运行期产物与密钥已被 `.gitignore` + `web/.gitignore`（node_modules/.next）排除；`engine_config.json` 在 `test/` 不入库。提交信息沿用 `feat/fix/docs(scope): 说明` 风格，并保持「改完追加 `开发日志.md`」的习惯。
 
 ---
 
 ## 十、一句话回顾
 
-**改业务** → 引擎模块（headless，新仓库这份）；**改接口** → `server_api.py`；**改界面** → `web/`；**换主题** → `web/.../globals.css`。旧 `webui.py` 已退役，UI 只有 `web/` 一套。启动就一句：`test/一键启动.bat`。
+**改业务** → 引擎模块（headless，新仓库这份）；**改接口** → `server_api.py`；**改界面** → `web/`；**换主题** → `web/.../globals.css`。旧 `webui.py` 已退役，UI 只有 `web/` 一套。启动就一句：跑 `test/` 下的一键启动脚本（Windows `.bat` / Linux·macOS `.sh`）。

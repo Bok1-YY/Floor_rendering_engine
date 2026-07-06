@@ -8,7 +8,7 @@ import sys
 _MSG = """\
 [已退役] NiceGUI webui 已删除，`python -m Floor_engine_server` 不再启动任何界面。
 请改用：
-  一键启动.bat                                （后端 7870 + 前端 3000，推荐）
+  test/ 下的一键启动脚本（Windows 一键启动.bat / Linux·macOS 一键启动.sh，后端 7870 + 前端 3000，推荐）
   python -m Floor_engine_server.server_api    （仅后端 FastAPI，7870）
 详见 DEVGUIDE.md 第八节「旧版 NiceGUI（已退役）」。"""
 
