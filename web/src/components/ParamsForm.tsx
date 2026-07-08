@@ -24,6 +24,7 @@ const WF_SUB: Record<string, string> = {
   宠物友好: "画面中加入宠物生活场景",
   地板替换: "保留原图空间，仅替换原地面",
   Omakase: "AI 代笔场景，配置精简",
+  墙板模式: "护墙板/木饰面：再设计 / 替换 / 原创",
 };
 
 function Check() {
@@ -189,6 +190,9 @@ export function ParamsForm({
   const isReplace = params.workflow_mode.includes("地板替换");
   const isPet = params.workflow_mode.includes("宠物友好");
   const isOmakase = params.workflow_mode.includes("Omakase");
+  const isPanel = params.workflow_mode.includes("墙板");
+  const panelSub = params.panel_submode || "再设计";
+  const isPanelScene = isPanel && !panelSub.includes("替换"); // 再设计/纯原创：暴露场景控件；替换保留原图
   const [advOpen, setAdvOpen] = useState(false);
 
   // ── Omakase：本地状态（诉求输入 / 加载 / 候选）。最终 scene_override 存进 params 交给后端 ──
@@ -342,9 +346,102 @@ export function ParamsForm({
         </div>
       )}
 
+      {/* ── 墙板模式：子行为切换 + 按需第二张图（上方的地板小样此时即墙板木纹样图）── */}
+      {isPanel && (
+        <div className="mt-[13px] space-y-2.5 rounded-xl border border-primary/40 bg-[#fbf3ee] p-[13px]">
+          <div className="flex flex-col gap-1.5">
+            <span className="text-[11.5px] font-semibold text-[#a8472a]">墙板子模式</span>
+            <Segmented
+              value={panelSub}
+              options={[
+                { value: "再设计", label: "再设计" },
+                { value: "替换", label: "替换" },
+                { value: "纯原创", label: "纯原创" },
+              ]}
+              onChange={(v) => onParams({ panel_submode: v })}
+            />
+            <span className="text-[11px] text-[#9a9082]">
+              上方上传的小样即「墙板木纹样图」。再设计=按场景参照图生新图；替换=保留原场景仅换木纹；纯原创=仅凭木纹样图原创场景。
+            </span>
+          </div>
+          {panelSub.includes("再设计") && (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[11.5px] font-semibold text-[#a8472a]">
+                场景参照图（再设计必传）
+              </span>
+              <ImageUpload
+                value={refValue}
+                onPick={onRefPick}
+                uploadFn={api.uploadRef}
+                buttonLabel="上传场景参照图"
+                okMsg="场景参照图已上传"
+              />
+              <Input
+                value={params.style_ref_correction || ""}
+                onChange={(e) => onParams({ style_ref_correction: e.target.value })}
+                placeholder="参照修正（可选）：例如强调竖向线条更细密"
+                className="h-10 rounded-[10px] bg-card"
+              />
+            </div>
+          )}
+          {panelSub.includes("替换") && (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[11.5px] font-semibold text-[#a8472a]">
+                原墙板场景图（替换必传）
+              </span>
+              <ImageUpload
+                value={roomValue}
+                onPick={onRoomPick}
+                uploadFn={api.uploadRoom}
+                buttonLabel="上传原墙板场景图"
+                okMsg="原墙板场景图已上传"
+              />
+              <span className="text-[11px] text-[#9a9082]">
+                保留原图的结构、比例、收口条与光影，仅把墙板木纹替换为所选样图
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── 墙板场景（再设计/纯原创）：空间类型 + 墙板尺寸（预设下拉 + 自定义）── */}
+      {isPanelScene && (
+        <div className="mt-[13px] grid grid-cols-2 gap-[11px] rounded-xl bg-[#f2e9e0] p-[11px]">
+          <Field
+            label="空间类型"
+            value={params.room_type || options.room_types[0]}
+            onChange={(v) => onParams({ room_type: v })}
+            options={options.room_types}
+          />
+          <Field
+            label="墙板尺寸"
+            value={
+              options.panel_sizes.includes(params.panel_size || "")
+                ? (params.panel_size as string)
+                : options.panel_sizes[0]
+            }
+            onChange={(v) => onParams({ panel_size: v })}
+            options={options.panel_sizes}
+          />
+          <div className="col-span-2 flex flex-col gap-1.5">
+            <span className="text-[11.5px] font-semibold text-[#857c6e]">自定义墙板尺寸（可选）</span>
+            <Input
+              value={
+                options.panel_sizes.includes(params.panel_size || "")
+                  ? ""
+                  : params.panel_size || ""
+              }
+              onChange={(e) => onParams({ panel_size: e.target.value })}
+              placeholder="填了以此为准，如：600宽菱形拼 / 竖向凹槽线条板"
+              className="h-10 rounded-[10px] bg-card"
+            />
+          </div>
+        </div>
+      )}
+
       {/* ── 市场 + 模型线路 ── */}
       <div className="mt-[18px] flex gap-4">
-        {!isOmakase && (
+        {!isOmakase && !isPanel && (
         <div className="w-40 flex-none">
           <div className="mb-[7px] text-[11.5px] font-semibold text-[#857c6e]">市场</div>
           <Segmented
@@ -370,7 +467,7 @@ export function ParamsForm({
         </div>
       </div>
 
-      {!isOmakase && (<>
+      {!isOmakase && !isPanel && (<>
       {/* ── 位置 ── */}
       <SectionHeader className="mx-0.5 mb-[11px] mt-[22px]">
         {cnMode ? "位置 / 国内市场" : "位置 / 海外市场"}
@@ -480,7 +577,8 @@ export function ParamsForm({
       )}
       </>)}
 
-      {/* ── 板材与工艺 ── */}
+      {/* ── 板材与工艺（墙板模式不适用：木纹/竖纹/哑光已由墙板模板固化，隐藏地板专用字段）── */}
+      {!isPanel && (<>
       <SectionHeader className="mx-0.5 mb-[11px] mt-[22px]">
         板材与工艺 / MATERIAL
       </SectionHeader>
@@ -510,6 +608,7 @@ export function ParamsForm({
           options={options.floor_tones}
         />
       </div>
+      </>)}
 
       {/* ── Omakase 独立模式：AI 代笔场景层，接管风格/光线/镜头；地板规格仍由下方控制 ── */}
       {isOmakase && (
@@ -586,8 +685,8 @@ export function ParamsForm({
         </>
       )}
 
-      {!isOmakase && (<>
-      {/* ── 风格与镜头 ── */}
+      {!isOmakase && !(isPanel && panelSub.includes("替换")) && (<>
+      {/* ── 风格与镜头（墙板·替换保留原图风格/光影/镜头，故隐藏）── */}
       <SectionHeader className="mx-0.5 mb-[11px] mt-[22px]">
         风格与镜头 / STYLE
       </SectionHeader>

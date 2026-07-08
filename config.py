@@ -17,11 +17,22 @@ import logging
 from typing import Dict, Optional, Tuple, Union
 
 # ── 路径常量 ────────────────────────────────────────────────────
-# 打包(PyInstaller)后 __file__ 位于临时解压目录(_MEIxxx)，必须改用 exe 所在目录，
-# 否则 output_files/engine_config.json 会写进临时目录、程序一关就丢。
-# 开发(源码)运行时仍用包的上级目录。webui.py 的 UPLOAD_DIR 用的是同款写法。
-if getattr(sys, 'frozen', False):
-    BASE_DIR = os.path.dirname(sys.executable)
+# 打包后 __file__ 位于临时解压目录(PyInstaller 的 _MEIxxx / Nuitka onefile 的 temp)，
+# 必须改用 exe 所在目录，否则 output_files/engine_config.json（含 API key）会写进临时目录、
+# 程序一关就丢。开发(源码)运行时仍用包的上级目录。
+#   PyInstaller → 设 sys.frozen；Nuitka → 设全局 __compiled__（不设 sys.frozen），两者都要认。
+#   坑：Nuitka onefile 下 sys.executable 指向缓存里解包出来的 payload（.cache/.../FloorEngine.bin），
+#   不是用户双击的那个 exe —— 直接用它会把 engine_config.json(含 key)/output_files 写进缓存目录、
+#   换版本就丢。必须拿「用户双击的那个 exe」的路径：不同 Nuitka 版本给的信号不一样，
+#   新版给 NUITKA_ONEFILE_BINARY，4.x 给 NUITKA_ORIGINAL_ARGV0；都没有再退回 argv[0]/executable。
+#   （config 在启动早期导入、期间无人 chdir，故相对 argv0 用 abspath 解析安全。）
+_IS_FROZEN = getattr(sys, 'frozen', False) or ('__compiled__' in globals())
+if _IS_FROZEN:
+    _exe = (os.environ.get('NUITKA_ONEFILE_BINARY')
+            or os.environ.get('NUITKA_ORIGINAL_ARGV0')
+            or sys.argv[0]
+            or sys.executable)
+    BASE_DIR = os.path.dirname(os.path.abspath(_exe))
 else:
     BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MAIN_OUTPUT_DIR = os.path.join(BASE_DIR, "output_files")

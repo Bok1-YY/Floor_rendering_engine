@@ -57,6 +57,8 @@ function buildDefaultParams(o: OptionsView, prevWorkflow?: string): GenParams {
     pet_action: o.pet_actions[0],
     pet_focus: o.pet_focus[0],
     avoid_items: o.avoid_items,
+    panel_submode: "再设计",
+    panel_size: o.panel_sizes[0],
   };
 }
 
@@ -179,6 +181,11 @@ export default function GeneratePage() {
       toast.warning("Omakase 模式：请先生成或填写场景定稿");
       return;
     }
+    if (params.workflow_mode.includes("墙板")) {
+      const sub = params.panel_submode || "再设计";
+      if (sub.includes("替换") && !roomImg) { toast.warning("墙板替换需上传原墙板场景图"); return; }
+      if (sub.includes("再设计") && !refImg) { toast.warning("墙板再设计需上传场景参照图"); return; }
+    }
     setSubmitting(true);
     try {
       const job = await api.createJob({
@@ -206,6 +213,11 @@ export default function GeneratePage() {
     if (params.workflow_mode.includes("Omakase")) {
       // Omakase 提示词不含房间类型（场景全由散文接管），按房间批量只会 N 倍计费出 N 张同图
       toast.warning("Omakase 工作流不支持批量：提示词不含房间类型，多张只是同图重复计费");
+      return;
+    }
+    if (params.workflow_mode.includes("墙板")) {
+      // 墙板模式按空间类型批量意义不大（替换/再设计由图片驱动），避免 N× 重复计费
+      toast.warning("墙板模式不支持按房间类型批量");
       return;
     }
     if (batchRooms.length === 0) {
@@ -296,6 +308,11 @@ export default function GeneratePage() {
     if (params.workflow_mode.includes("Omakase") && !(params.scene_override || "").trim()) {
       toast.warning("Omakase 模式：请先生成或填写场景定稿");
       return;
+    }
+    if (params.workflow_mode.includes("墙板")) {
+      const sub = params.panel_submode || "再设计";
+      if (sub.includes("替换") && !roomImg) { toast.warning("墙板替换需上传原墙板场景图"); return; }
+      if (sub.includes("再设计") && !refImg) { toast.warning("墙板再设计需上传场景参照图"); return; }
     }
     const run = ++previewRun.current;
     previewWanted.current = true;
@@ -433,10 +450,12 @@ export default function GeneratePage() {
           </button>
           <button
             onClick={() => setBatchOpen(true)}
-            disabled={!floor || !options || params.workflow_mode.includes("Omakase")}
+            disabled={!floor || !options || params.workflow_mode.includes("Omakase") || params.workflow_mode.includes("墙板")}
             title={
               params.workflow_mode.includes("Omakase")
                 ? "Omakase 工作流不支持批量（提示词不含房间类型，多张只是同图重复计费）"
+                : params.workflow_mode.includes("墙板")
+                ? "墙板模式不支持按房间类型批量"
                 : undefined
             }
             className="h-[46px] flex-none rounded-xl border border-border bg-card px-[18px] text-[13.5px] font-bold text-[#6b6356] transition hover:bg-[#f2e9e0] disabled:cursor-not-allowed disabled:opacity-50"

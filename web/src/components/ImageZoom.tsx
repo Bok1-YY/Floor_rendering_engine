@@ -10,6 +10,18 @@ export function ImageZoom({
   url: string | null;
   onClose: () => void;
 }) {
+  if (!url) return null;
+
+  return <ImageZoomSurface key={url} url={url} onClose={onClose} />;
+}
+
+function ImageZoomSurface({
+  url,
+  onClose,
+}: {
+  url: string;
+  onClose: () => void;
+}) {
   const [scale, setScale] = useState(1);
   const [pos, setPos] = useState({ x: 0, y: 0 });
   const [dragging, setDragging] = useState(false);
@@ -19,15 +31,8 @@ export function ImageZoom({
   const moved = useRef(false);
   const boxRef = useRef<HTMLDivElement>(null);
 
-  // url 变化时复位缩放/位移
-  useEffect(() => {
-    setScale(1);
-    setPos({ x: 0, y: 0 });
-  }, [url]);
-
   // Esc 关闭
   useEffect(() => {
-    if (!url) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
@@ -49,8 +54,6 @@ export function ImageZoom({
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
   }, [url]);
-
-  if (!url) return null;
 
   return (
     <div

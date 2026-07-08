@@ -66,7 +66,7 @@ from .recipes import recommend_recipes, FLOOR_RECIPES, pick_option_key
 from .prompt_data import (
     ROOM_TYPES, CN_ROOM_TYPES, FLOOR_TONES, CONTINENTS, PROPERTY_TYPES,
     VIEWS, STYLES, LOCATION_MAP, PET_TYPES, PET_ACTIONS, PET_FOCUS_OPTIONS,
-    LIGHTINGS, ANGLES, FLOOR_SIZES, MARKET_FURNITURE_CHOICES, AVOID_LIST,
+    LIGHTINGS, ANGLES, FLOOR_SIZES, PANEL_SIZES, MARKET_FURNITURE_CHOICES, AVOID_LIST,
     CN_DEVELOPERS, CN_UNIT_TYPES, CN_TIERS, CN_DELIVERY_CHOICES,
     CN_SPACE_FEATURES, CN_FACILITIES, CN_CITIES, analyze_floor_tone,
 )
@@ -292,10 +292,14 @@ async def _run_job_bg(job: JobRecord, req: 'JobSubmitRequest'):
     b2j = proj = None
     try:
         is_ref_mode = '参照模式' in (p.workflow_mode or '')
+        is_panel = '墙板' in (p.workflow_mode or '')
+        _psub = p.panel_submode or ''
+        # 墙板·再设计复用参照模式的风格分析(analyze_style_image 通用、非地板专用)
+        _panel_redesign = is_panel and ('再设计' in _psub or _psub == '')
 
-        # 参照模式 Step-1：提取风格描述（失败即中止，不发起计费生图）
+        # 参照模式 / 墙板再设计 Step-1：提取风格描述（失败即中止，不发起计费生图）
         style_text = ''
-        if is_ref_mode and req.ref_path:
+        if (is_ref_mode or _panel_redesign) and req.ref_path:
             style_text, sa_err = await asyncio.to_thread(analyze_style_image, api_key, req.ref_path)
             if sa_err or not style_text:
                 update_job(job, status='failed',
@@ -320,9 +324,14 @@ async def _run_job_bg(job: JobRecord, req: 'JobSubmitRequest'):
         if not _is_straight_bevel:
             cpt = cpt_pro
         ims = (p.resolution or '4K').split(' ')[0]
-        # 参照模式：参照图当风格参照(sref)，不发房间替换图(rp)
-        rp = None if is_ref_mode else (req.room_path or None)
-        sref = (req.ref_path or None) if is_ref_mode else None
+        # 图片通道：sref=风格参照图, rp=房间/场景底图。
+        # 参照模式：参照图当 sref。墙板：再设计→场景参照图当 sref；替换→原墙板场景图当 rp；纯原创→两者皆空。
+        if is_panel:
+            rp = (req.room_path or None) if '替换' in _psub else None
+            sref = (req.ref_path or None) if _panel_redesign else None
+        else:
+            rp = None if is_ref_mode else (req.room_path or None)
+            sref = (req.ref_path or None) if is_ref_mode else None
         # 圆弧倒角(任意拼法)：自动附内置倒角参考图（只供模型抄板边圆弧形状）；B2/Pro 同带。
         _is_pressed_bevel = ('圆弧倒角' in _seam_v and '无缝' not in _seam_v)
         bevel_ref = get_bevel_ref_image() if _is_pressed_bevel else None
@@ -530,6 +539,8 @@ class GenParams(BaseModel):
     cn_facilities: Optional[List[str]] = None
     style_ref_correction: str = ''
     scene_override: str = ''   # Omakase 模式：AI 原创场景散文，接管整个场景层(仅 Omakase 工作流生效)
+    panel_submode: str = '再设计'   # 墙板模式子行为：再设计 / 替换 / 纯原创(仅墙板模式生效)
+    panel_size: str = ''            # 墙板尺寸/板型(预设或自定义；仅墙板再设计/纯原创生效)
 
 
 class JobSubmitRequest(BaseModel):
@@ -650,6 +661,39 @@ def healthz():
     return {'ok': True}
 
 
+def _require_record_json_path(json_path: str) -> str:
+    """Resolve a client-provided record path and keep it inside output_files."""
+    if not json_path:
+        raise HTTPException(400, '记录路径为空')
+    try:
+        base = os.path.realpath(MAIN_OUTPUT_DIR)
+        path = os.path.realpath(json_path)
+        if os.path.commonpath([base, path]) != base:
+            raise HTTPException(400, '记录路径不在 output_files 内')
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(400, '记录路径无效')
+    if not os.path.basename(path).endswith('_记录.json'):
+        raise HTTPException(400, '记录文件名无效')
+    if not os.path.exists(path):
+        raise HTTPException(404, '记录文件不存在')
+    return path
+
+
+def _panel_require_second_image(req):
+    """墙板模式子行为的第二张图校验：再设计需场景参照图(ref)，替换需原墙板场景图(room)。
+    纯原创只需 image_path(已在上游校验)。缺图直接 400，避免静默丢图照常计费。"""
+    wf = req.params.workflow_mode or ''
+    if '墙板' not in wf:
+        return
+    sub = req.params.panel_submode or '再设计'
+    if '替换' in sub and not (req.room_path and os.path.exists(req.room_path)):
+        raise HTTPException(400, '墙板替换：请先上传原墙板场景图')
+    if ('再设计' in sub or sub == '') and not (req.ref_path and os.path.exists(req.ref_path)):
+        raise HTTPException(400, '墙板再设计：请先上传场景参照图')
+
+
 # ── 任务：提交 / 列表 / 详情 / SSE / 取消 / 重试 ──
 @app.post('/api/jobs')
 async def create_job(req: JobSubmitRequest):
@@ -662,6 +706,7 @@ async def create_job(req: JobSubmitRequest):
         raise HTTPException(400, '房间图文件已失效，请重新上传')
     if req.ref_path and not os.path.exists(req.ref_path):
         raise HTTPException(400, '参照图文件已失效，请重新上传')
+    _panel_require_second_image(req)
     label = {'b2': '[B2]', 'pro': '[Pro]', 'both': '[双模型]'}.get(req.model_filter, '')
     room_disp = req.params.cn_room_type if req.params.cn_mode else req.params.room_type
     dname = f"{os.path.splitext(os.path.basename(req.image_path))[0]} · {room_disp} {label}"
@@ -858,9 +903,12 @@ async def _preview_bg(pid: str, req: 'PreviewRequest'):
         if should_cancel():
             _set(status='failed', error='已取消'); return
         is_ref_mode = '参照模式' in (p.workflow_mode or '')
-        # 参照模式 Step-1：提取风格（失败即中止，不发计费请求）
+        is_panel = '墙板' in (p.workflow_mode or '')
+        _psub = p.panel_submode or ''
+        _panel_redesign = is_panel and ('再设计' in _psub or _psub == '')
+        # 参照模式 / 墙板再设计 Step-1：提取风格（失败即中止，不发计费请求）
         style_text = ''
-        if is_ref_mode and req.ref_path:
+        if (is_ref_mode or _panel_redesign) and req.ref_path:
             style_text, sa_err = await asyncio.to_thread(analyze_style_image, api_key, req.ref_path)
             if sa_err or not style_text:
                 _set(status='failed', error=f'风格分析失败: {sa_err or "返回为空"}'); return
@@ -871,8 +919,12 @@ async def _preview_bg(pid: str, req: 'PreviewRequest'):
                 save_task_files_html, persist=False, **task_params_to_kwargs(tp))
         cpt = extract_clean_prompt(prt_pro or prt)   # 预览用 Pro 终极提示词，最贴近最终 4K 观感
         ar = (p.aspect_ratio or '4:3').split(' ')[0]
-        rp = None if is_ref_mode else (req.room_path or None)
-        sref = (req.ref_path or None) if is_ref_mode else None
+        if is_panel:
+            rp = (req.room_path or None) if '替换' in _psub else None
+            sref = (req.ref_path or None) if _panel_redesign else None
+        else:
+            rp = None if is_ref_mode else (req.room_path or None)
+            sref = (req.ref_path or None) if is_ref_mode else None
         _seam_v = p.seam_type or ''
         _is_pressed_bevel = ('圆弧倒角' in _seam_v and '无缝' not in _seam_v)
         bevel_ref = get_bevel_ref_image() if _is_pressed_bevel else None
@@ -904,6 +956,7 @@ async def create_preview(req: PreviewRequest):
         raise HTTPException(400, '房间图文件已失效，请重新上传')
     if req.ref_path and not os.path.exists(req.ref_path):
         raise HTTPException(400, '参照图文件已失效，请重新上传')
+    _panel_require_second_image(req)
     pid = f'pv_{uuid.uuid4().hex}'
     with _preview_lock:
         _previews[pid] = {'status': 'running', 'stage': '', 'url': '', 'thumb': '', 'error': '', 'ts': time.time()}
@@ -972,6 +1025,7 @@ def list_records():
 
 @app.get('/api/records/load')
 def load_records(json_path: str):
+    json_path = _require_record_json_path(json_path)
     recs = _load_records(json_path)
     # 结果图引用改写成 URL；内联 base64(老记录)不回传大 blob，仅标记 has_inline。
     for r in recs:
@@ -987,7 +1041,8 @@ def load_records(json_path: str):
 
 @app.post('/api/records/reveal')
 def reveal(req: RevealRequest):
-    text = reveal_prompt_fn(req.json_path, req.record_id, req.password)
+    json_path = _require_record_json_path(req.json_path)
+    text = reveal_prompt_fn(json_path, req.record_id, req.password)
     ok = not (text.startswith('🔒') or text.startswith('❌'))
     return {'text': text, 'ok': ok}
 
@@ -1084,6 +1139,7 @@ _WORKFLOW_MODES = [
     '纯效果图 (生成全新空间)', '地板替换 (保持原图换地板)',
     '宠物友好 (动物独处/主宠互动)', '参照模式 (风格参照图生新图)',
     'Omakase (AI 代笔场景)',
+    '墙板模式 (护墙板/木饰面：再设计/替换/原创)',
 ]
 _SEAM_TYPES = ['无缝拼接 (SPC/LVT专用)', '常规倒角缝 (如强化/木地板)', '圆弧倒角 (Pressed Bevel)']
 _GLOSSINESS = ['超哑光 (0-3°)', '哑光 (3-5°)', '高光 (High Gloss)']
@@ -1114,6 +1170,7 @@ def options():
         'lightings': LIGHTINGS,
         'angles': ANGLES,
         'floor_sizes': FLOOR_SIZES,
+        'panel_sizes': PANEL_SIZES,
         'market_furniture': MARKET_FURNITURE_CHOICES,
         'avoid_items': AVOID_LIST,
         # ── 地区级联：大洲→国家→城市 ──
@@ -1305,7 +1362,8 @@ async def record_edit(req: RecordEditRequest):
     api_key = (req.api_key or '').strip() or _load_config().get('gemini_api_key', '').strip()
     if not api_key:
         raise HTTPException(400, '缺少 API Key')
-    recs = _load_records(req.json_path)
+    json_path = _require_record_json_path(req.json_path)
+    recs = _load_records(json_path)
     rec = next((r for r in recs if r.get('id') == req.record_id), None)
     if not rec:
         raise HTTPException(404, '未找到记录')
@@ -1327,10 +1385,10 @@ async def record_edit(req: RecordEditRequest):
     if src_pil is None:
         raise HTTPException(404, '该结果无可用图片')
 
-    material = os.path.basename(req.json_path).replace('_记录.json', '')
+    material = os.path.basename(json_path).replace('_记录.json', '')
     job = new_job(f'二改 · {material}', time.strftime('%H:%M:%S'), 'pro')
     job.workflow_mode = rec.get('workflow_mode', '')
-    job.json_path = req.json_path
+    job.json_path = json_path
     job.record_id = req.record_id
     job.png_path = abs_src or os.path.join(MAIN_OUTPUT_DIR, 'edit')
     with _job_lock:
@@ -1340,7 +1398,7 @@ async def record_edit(req: RecordEditRequest):
     _spawn(_record_edit_bg(
         job, src_pil=src_pil, api_key=api_key, instruction=req.instruction, model_id=model_id,
         model_label=f'{req.model_choice} 二改', image_size=req.image_size,
-        preserve=req.preserve_floor_geometry, json_path=req.json_path,
+        preserve=req.preserve_floor_geometry, json_path=json_path,
         record_id=req.record_id, source_index=req.result_index))
     return _job_view(job)
 
@@ -1348,14 +1406,16 @@ async def record_edit(req: RecordEditRequest):
 # ── 记录管理：删除结果 / 删除记录 / 收藏结果 ──
 @app.post('/api/records/result/delete')
 def delete_result(req: ResultRef):
-    if not _delete_result_image(req.json_path, req.record_id, req.result_index):
+    json_path = _require_record_json_path(req.json_path)
+    if not _delete_result_image(json_path, req.record_id, req.result_index):
         raise HTTPException(404, '未找到该效果图')
     return {'ok': True}
 
 
 @app.post('/api/records/result/favorite')
 def favorite_result(req: ResultRef):
-    new = toggle_result_favorite(req.json_path, req.record_id, req.result_index)
+    json_path = _require_record_json_path(req.json_path)
+    new = toggle_result_favorite(json_path, req.record_id, req.result_index)
     if new is None:
         raise HTTPException(404, '未找到该效果图')
     return {'favorite': new}
@@ -1363,7 +1423,8 @@ def favorite_result(req: ResultRef):
 
 @app.post('/api/records/delete')
 def delete_record(req: RecordRef):
-    if not _delete_record(req.json_path, req.record_id):
+    json_path = _require_record_json_path(req.json_path)
+    if not _delete_record(json_path, req.record_id):
         raise HTTPException(404, '未找到该记录')
     return {'ok': True}
 
@@ -1371,11 +1432,13 @@ def delete_record(req: RecordRef):
 # ── 导出：HTML / PPTX / 收藏夹PPTX ──
 @app.get('/api/records/export/html')
 def export_html(json_path: str):
+    json_path = _require_record_json_path(json_path)
     return _serve_export(export_html_from_json(json_path), os.path.dirname(json_path), 'text/html')
 
 
 @app.get('/api/records/export/pptx')
 def export_pptx(json_path: str):
+    json_path = _require_record_json_path(json_path)
     return _serve_export(export_pptx_from_json(json_path), os.path.dirname(json_path), _PPTX_MIME)
 
 
@@ -1491,6 +1554,37 @@ def serve_output_thumb(relpath: str, s: int = 480):
 # 原图静态服务（缩略图路由已在上面注册，优先匹配；这里挂目录服务原图/下载）
 app.mount('/outputs', StaticFiles(directory=MAIN_OUTPUT_DIR), name='outputs')
 app.mount('/uploads', StaticFiles(directory=UPLOAD_DIR), name='uploads')
+
+
+# ============================================================
+# 前端静态站（Next.js 静态导出 web/out）——「单一程序」用：
+# 后端直接把前端整站挂在 /，做到一个进程、一个端口。
+# 本 mount 必须放在最后：/ 是贪婪匹配，注册在最后才不会盖住上面的
+# /api、/thumb、/outputs、/uploads。找不到 out/（纯后端开发）时自动跳过。
+# ============================================================
+def _find_frontend_dir():
+    """依次探测前端静态目录，兼容源码运行与 Nuitka onefile 冻结后。"""
+    import sys
+    cands = []
+    here = os.path.dirname(os.path.abspath(__file__))
+    cands.append(os.path.join(here, 'web', 'out'))          # 源码/dev 布局
+    # Nuitka onefile：数据被 --include-data-dir 释放到解包目录；exe 同级或其内
+    exe_dir = os.path.dirname(os.path.abspath(sys.argv[0] or sys.executable))
+    cands.append(os.path.join(exe_dir, 'web', 'out'))       # out/ 与 exe 同级（非内嵌时）
+    cands.append(os.path.join(here, '..', 'web', 'out'))    # 包在子目录时的兜底
+    for d in cands:
+        if os.path.isfile(os.path.join(d, 'index.html')):
+            return os.path.abspath(d)
+    return None
+
+
+_FRONTEND_DIR = _find_frontend_dir()
+if _FRONTEND_DIR:
+    # html=True：目录请求回退 index.html，支持前端深链接刷新
+    app.mount('/', StaticFiles(directory=_FRONTEND_DIR, html=True), name='frontend')
+    logger.info(f"[前端] 已挂载静态站: {_FRONTEND_DIR}")
+else:
+    logger.warning("[前端] 未找到 web/out（未构建前端？），仅提供 /api 后端服务")
 
 
 # ============================================================

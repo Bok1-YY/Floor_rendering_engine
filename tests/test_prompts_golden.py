@@ -45,6 +45,21 @@ CASES = [
     # 无缝拼法专项：收尾覆盖段(SEAMLESS_NEGATIVE)的 motif 按拼法切换，曾有方格拼误落 chevron 的 bug。
     ("seamless_square", "纯效果图 (生成全新空间)", {"floor_size": "正方形拼：609 x 609 mm"}),
     ("seamless_hb", "纯效果图 (生成全新空间)", {"floor_size": "常规人字拼：125 x 625 mm"}),
+    # 墙板模式三子行为：参数化模板（消费 style/lighting/angle/room + panel_size），走独立墙板管线。
+    ("panel_redesign", "墙板模式 (护墙板/木饰面：再设计/替换/原创)", {
+        "panel_submode": "再设计", "panel_size": "标准竖板 约200mm宽",
+        "lighting": "🌤️ 漫反射柔光 (Diffused Light) - 光线均匀柔和，无直射高光，完美还原地板色彩。",
+        "style_analysis_text": (
+            "A warm minimalist wall-panel entry with vertical walnut wainscoting, slim brass "
+            "trim, matte stone floor, off-white walls, soft even daylight."
+        ),
+    }),
+    ("panel_replace", "墙板模式 (护墙板/木饰面：再设计/替换/原创)", {"panel_submode": "替换"}),
+    ("panel_pure", "墙板模式 (护墙板/木饰面：再设计/替换/原创)", {
+        "panel_submode": "纯原创", "panel_size": "细木格栅/线条板",
+        "angle": "85mm lens (Telephoto)",
+        "lighting": "🌅 黄金时刻逆光 (Golden Hour) - 傍晚低角度暖光，拉长阴影。",
+    }),
 ]
 
 

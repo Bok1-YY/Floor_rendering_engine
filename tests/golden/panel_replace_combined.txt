@@ -1,0 +1,24 @@
+====== 🇬🇧 英文专业版 (发给AI模型的最终提示词) ======
+
+Help me make a photo:
+
+Task: Wall-Panel Texture Replacement (keep the scene, swap only the panel wood). Aspect ratio 4:3, 4K resolution.
+
+**[Scene Preservation]** One of the attached images is the ORIGINAL wall-panel scene. Keep it COMPLETELY UNCHANGED — the panels' overall structure, proportions, panel-block sizes, vertical seams, horizontal lines and frame profiles MUST match the original exactly; all accessories (metal trim strips, skirting, walls, floor, every prop) stay in the same position, size and perspective; camera, composition, focal length and depth-of-field are identical to the original. The ONLY modification is replacing the wall-panel wood texture.
+
+**[Lighting Preservation]** Fully preserve the original image's light direction, shadow positions and intensity — do NOT change the lighting or the color temperature. The new grain must respond correctly to the existing light.
+
+**[Wall-Panel Specification]**
+🔥 CRITICAL MATERIAL INSTRUCTION 🔥 The uploaded reference image IS the wall-panel wood-grain sample/swatch. Reproduce its EXACT physical characteristics on every visible panel face: (1) grain pattern and flow, (2) knot positions, pores, mineral streaks and natural surface variation, (3) color tone, warm/cool balance and color variation between boards, (4) real matte wood-veneer micro-texture. CRITICAL — GRAIN DIRECTION: the wood grain on every panel MUST run strictly VERTICALLY (top-to-bottom), never horizontal, never diagonal. Treat the swatch as a grain-and-color specification only — completely disregard its outline, aspect ratio and any board proportions visible in the sample; panel sizing is defined by the scene, not by the swatch. Every panel must look milled from the same real wood batch as the swatch: 100% faithful, sharp, high-resolution, with authentic micro-detail and NO blur, NO smearing, NO repeated-tile stamping, NO plastic/CG/fake-gloss look.
+
+**[PANEL COLOR — MANDATORY EXACT MATCH]** The overall color of the wall panels in the final image MUST be IDENTICAL to the uploaded swatch — the same hue, warm/cool register, lightness and saturation. Read the panel color directly from the swatch and reproduce it consistently across every panel. Do NOT shift it warmer, cooler, lighter, darker, more golden, more grey, or more/less saturated to suit the room's lighting, furniture or style. Only natural light falloff may change brightness; the underlying veneer color stays exactly the swatch's color everywhere.
+Wall-panel / wainscoting (护墙板 / 木饰面): reproduce the ORIGINAL wall's existing panel layout, board proportions, vertical seams and trim EXACTLY; strictly VERTICAL wood grain; real matte wood veneer, no fake gloss.
+
+**[Quality Requirements]** Real-camera photographic quality with a slight, natural depth-of-field — NOT CG, NOT a 3D render, NOT archviz. Ultra-sharp panel grain at pixel level, physically accurate true-to-swatch color, and a clean, accurate neutral-warm white balance (~4500-5000K). Ultra-high resolution, ultra-sharp, no noise, no blur.
+
+**[Negative Prompt]** Strictly avoid: horizontal or diagonal wood grain, any color deviation from the swatch, repeated-tile / stamped / AI-looking texture, blur or smearing, plastic or fake glossy panel surface, stylized / illustrated / cartoon rendering, CG / 3D-render / archviz look, hard-edged or heavy shadows, dark / cold / underexposed lighting.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️  重要提示：每次生成请开启全新对话窗口后再粘贴此提示词。
+    在同一对话内连续生成会导致模型受上次结果影响，质量下滑。
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

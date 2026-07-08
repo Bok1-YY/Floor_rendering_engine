@@ -103,13 +103,79 @@ def _floor_spec_block(core_material, spec_line, visibility, quality, avoid_en, e
         f"**[Negative Prompt]** Strictly avoid: {avoid_en}.{extra_cmd_en}"
     )
 
+
+# ── 墙板模式(护墙板/木饰面)专属提示词块 ────────────────────────────────
+# 与地板管线完全隔离：绝不复用 CORE_MATERIAL_INSTRUCTION / en_floor_* / 全局 extra_cmd_en
+# （后者在无缝分支被塞进了 SEAMLESS_NEGATIVE，会把地板缝纹串进墙板画面）。
+def _panel_spec_block(core_material, spec_line, quality, avoid_en, extra_cmd_en):
+    """墙板模式尾巴：墙板规格 → 质量 → 负向。无地板覆盖率槽、无家具对比槽。"""
+    return (
+        f"**[Wall-Panel Specification]**\n{core_material}\n{spec_line}\n\n"
+        f"{quality}\n\n"
+        f"**[Negative Prompt]** Strictly avoid: {avoid_en}.{extra_cmd_en}"
+    )
+
+PANEL_CORE_MATERIAL_INSTRUCTION = (
+    "🔥 CRITICAL MATERIAL INSTRUCTION 🔥 The uploaded reference image IS the wall-panel wood-grain "
+    "sample/swatch. Reproduce its EXACT physical characteristics on every visible panel face: (1) grain "
+    "pattern and flow, (2) knot positions, pores, mineral streaks and natural surface variation, (3) color "
+    "tone, warm/cool balance and color variation between boards, (4) real matte wood-veneer micro-texture. "
+    "CRITICAL — GRAIN DIRECTION: the wood grain on every panel MUST run strictly VERTICALLY (top-to-bottom), "
+    "never horizontal, never diagonal. Treat the swatch as a grain-and-color specification only — completely "
+    "disregard its outline, aspect ratio and any board proportions visible in the sample; panel sizing is "
+    "defined by the scene, not by the swatch. Every panel must look milled from the same real wood batch as "
+    "the swatch: 100% faithful, sharp, high-resolution, with authentic micro-detail and NO blur, NO smearing, "
+    "NO repeated-tile stamping, NO plastic/CG/fake-gloss look."
+)
+PANEL_COLOR_MATCH = (
+    "**[PANEL COLOR — MANDATORY EXACT MATCH]** The overall color of the wall panels in the final image MUST "
+    "be IDENTICAL to the uploaded swatch — the same hue, warm/cool register, lightness and saturation. Read "
+    "the panel color directly from the swatch and reproduce it consistently across every panel. Do NOT shift "
+    "it warmer, cooler, lighter, darker, more golden, more grey, or more/less saturated to suit the room's "
+    "lighting, furniture or style. Only natural light falloff may change brightness; the underlying veneer "
+    "color stays exactly the swatch's color everywhere."
+)
+# 墙板尺寸/板型（中文预设 → 英文板型描述；自定义值走 translate_zh_to_en 兜底）
+PANEL_SIZE_MAP = {
+    "通高整板（无横向分缝）": "full-height single boards running floor-to-ceiling with no horizontal joints",
+    "竖向长条密拼（细密竖缝）": "narrow vertical strips in tight repetition with fine, evenly-spaced vertical seam reveals",
+    "标准竖板 约200mm宽": "standard vertical boards about 200 mm wide",
+    "宽板竖拼 约300–400mm宽": "wide vertical boards about 300–400 mm wide",
+    "窄板密拼 约100–150mm宽": "narrow vertical boards about 100–150 mm wide, densely arrayed",
+    "细木格栅/线条板": "slim fluted battens forming a fine vertical wood grille",
+}
+
+# 墙板灯光：魔改自地板 LIGHTING_INSTRUCTION_MAP（同键，措辞 floor→wall-panel；靠 en_light_key 命中）。
+# 复用界面已调好的 6 档光线选择，只把"光扫过地板/揭示地板纹理"改写为"光扫过墙面/揭示竖向木纹"。
+PANEL_LIGHTING_INSTRUCTION_MAP = {
+    "Hard Light":       "Strong directional light rakes across the wall panels with crisp shadow edges from nearby objects. ~20% of the panel surface catches bright warm light that dramatically reveals the vertical grain and 3D relief; the rest sits in rich, detailed shadow — never overexposed.",
+    "Diffused Light":   "Perfectly even illumination with no hot spots on the panels. Soft shadows only. Ideal for true-to-life reproduction of the panel wood color.",
+    "Overcast":         "Cool, flat, shadowless ambient daylight. No highlights, no harsh shadows. Panel color appears most neutral and accurate.",
+    "Ambient Only":     "Exclusively warm tungsten/LED sources (wall sconces, LED strips, pendants). No natural light. Panels show rich warm tones under point-source lighting.",
+    "Golden Hour":      "Low-angle late-afternoon sunlight rakes across the wall at a shallow angle. Long soft highlights sweep along the vertical grain, emphasizing texture depth.",
+    "Curtain-Filtered": "Sheer curtains drawn; soft, even, directionless ambient light fills the room. Panels receive perfectly uniform illumination — consistent color and brightness, zero light bands, zero shadow stripes, zero hotspots on the panel surface.",
+}
+PANEL_QUALITY = (
+    "**[Quality Requirements]** Real-camera photographic quality with a slight, natural depth-of-field — NOT "
+    "CG, NOT a 3D render, NOT archviz. Ultra-sharp panel grain at pixel level, physically accurate "
+    "true-to-swatch color, and a clean, accurate neutral-warm white balance (~4500-5000K). Ultra-high "
+    "resolution, ultra-sharp, no noise, no blur."
+)
+PANEL_NEGATIVE = (
+    "horizontal or diagonal wood grain, any color deviation from the swatch, repeated-tile / stamped / "
+    "AI-looking texture, blur or smearing, plastic or fake glossy panel surface, stylized / illustrated / "
+    "cartoon rendering, CG / 3D-render / archviz look, hard-edged or heavy shadows, dark / cold / "
+    "underexposed lighting"
+)
+
 def save_task_files_html(workflow_mode, model_choice, image_path, continent, country, city, neighborhood, property_type, style_type, room_type, view, lighting, pet_type, pet_action, pet_focus, angle, aspect_ratio, resolution, glossiness, seam_type, avoid_items, floor_size, custom_addition, floor_tone, market_furniture, last_image_path,
                          cn_mode=False, cn_developer="── 不指定 ──", cn_city="上海",
                          cn_tier="── 不指定 ──", cn_unit_type="── 不指定 ──",
                          cn_delivery="🏆 样板间 / 展示单位",
                          cn_room_type="客餐厅一体", cn_view="自然通透景观",
                          cn_space_features=None, cn_facilities=None,
-                         style_ref_correction="", style_analysis_text="", scene_override="", persist=True):
+                         style_ref_correction="", style_analysis_text="", scene_override="",
+                         panel_submode="再设计", panel_size="", persist=True):
     if not image_path: return None, "⚠️ 请上传图片", "", "", "", "", "", ""
     json_path, base_name, target_dir = _get_json_path(image_path)
     png_path = os.path.join(target_dir, f"{base_name}_优化图.png")
@@ -766,6 +832,99 @@ Professional photorealistic interior architectural photography. Aspect ratio {ar
 
 {_floor_spec_block(CORE_MATERIAL_INSTRUCTION, en_floor_spec_line, en_floor_visibility, en_quality, avoid_en, extra_cmd_en)}"""
 
+    elif "墙板" in workflow_mode:
+        # 墙板模式：三子行为 (再设计 / 替换 / 纯原创)。参数化——复用分支上方已算好的通用变量
+        # en_room / en_style_raw / en_atmosphere / en_light_key / en_light_name / en_angle，
+        # 让界面的 空间类型/风格/光线/镜头/墙板尺寸 真正生效。自建材质/规格/负向，绝不复用地板管线的
+        # CORE_MATERIAL_INSTRUCTION / en_floor_* / 全局 extra_cmd_en(后者已被 SEAMLESS_NEGATIVE 污染)。
+        _panel_core  = PANEL_CORE_MATERIAL_INSTRUCTION + "\n\n" + PANEL_COLOR_MATCH
+        _panel_extra = f"\n**Additional Requirements**: {translate_zh_to_en(custom_addition)}" if custom_addition else ""
+        # 光线（魔改版墙板灯光，靠界面已选 lighting 命中的 en_light_key）
+        _en_panel_light = PANEL_LIGHTING_INSTRUCTION_MAP.get(
+            en_light_key, "Natural balanced indoor lighting evenly illuminating the wall panels.")
+        en_panel_light_inst = f"**Lighting — {en_light_name}**: {_en_panel_light}"
+        # 镜头 → 墙板构图（不含 floor 措辞；墙板为绝对视觉主体）
+        if any(w in en_angle for w in ['24mm', '28mm', '35mm']):
+            _pc = "Wide-angle perspective emphasizing the full height and breadth of the feature wall, with strong vertical lines."
+        elif any(w in en_angle for w in ['85mm', '135mm']):
+            _pc = "Telephoto compression with intimate, editorial framing; the panel grain fills the frame."
+        else:
+            _pc = "Natural eye-level perspective with true-to-life proportions."
+        en_panel_comp = f"**Composition**: {_pc} The wall panel is the absolute visual anchor of the image."
+        # 墙板尺寸 → spec line（再设计/纯原创用所选尺寸；替换用"沿用原图"中性句）
+        # 注意：预设命中直接取表，只有自定义值才调在线翻译（避免 .get 默认参数被无条件求值而空跑翻译）。
+        if not panel_size:
+            en_panel_size = "full-height vertical wood-veneer panels"
+        elif panel_size in PANEL_SIZE_MAP:
+            en_panel_size = PANEL_SIZE_MAP[panel_size]
+        else:
+            en_panel_size = translate_zh_to_en(panel_size)
+        _spec_scene = (
+            f"Wall-panel / wainscoting (护墙板 / 木饰面) design: {en_panel_size}; strictly VERTICAL wood grain, "
+            "slim vertical seam reveals between boards, thin metal trim strips (金属收口条) at the edges, and a "
+            "matching skirting/baseboard (踢脚线). Adjacent panels read as naturally continuous grain or "
+            "reasonably staggered boards with subtle natural differences; real matte wood veneer with no fake gloss."
+        )
+        _spec_replace = (
+            "Wall-panel / wainscoting (护墙板 / 木饰面): reproduce the ORIGINAL wall's existing panel layout, board "
+            "proportions, vertical seams and trim EXACTLY; strictly VERTICAL wood grain; real matte wood veneer, no fake gloss."
+        )
+        _tail_scene   = _panel_spec_block(_panel_core, _spec_scene,   PANEL_QUALITY, PANEL_NEGATIVE, _panel_extra)
+        _tail_replace = _panel_spec_block(_panel_core, _spec_replace, PANEL_QUALITY, PANEL_NEGATIVE, _panel_extra)
+
+        if "替换" in panel_submode:
+            final_prompt_en = f"""Help me make a photo:
+
+Task: Wall-Panel Texture Replacement (keep the scene, swap only the panel wood). Aspect ratio {ar_value}, {resolution} resolution.
+
+**[Scene Preservation]** One of the attached images is the ORIGINAL wall-panel scene. Keep it COMPLETELY UNCHANGED — the panels' overall structure, proportions, panel-block sizes, vertical seams, horizontal lines and frame profiles MUST match the original exactly; all accessories (metal trim strips, skirting, walls, floor, every prop) stay in the same position, size and perspective; camera, composition, focal length and depth-of-field are identical to the original. The ONLY modification is replacing the wall-panel wood texture.
+
+**[Lighting Preservation]** Fully preserve the original image's light direction, shadow positions and intensity — do NOT change the lighting or the color temperature. The new grain must respond correctly to the existing light.
+
+{_tail_replace}"""
+
+        elif "纯原创" in panel_submode:
+            final_prompt_en = f"""Help me make a photo:
+
+Professional photorealistic interior architectural photography of {en_room} featuring a wall-panel (wainscoting / 木饰面) feature wall. Aspect ratio {ar_value}, {resolution} resolution.
+
+**[Style & Atmosphere]** {en_style_raw} aesthetic. {en_atmosphere}
+
+**[Feature Wall]** The hero of the space is a floor-to-ceiling wall-panel feature wall executed entirely in the uploaded wood grain, styled to suit the room. Furniture and décor stay minimal and secondary so the paneling remains the focus.
+
+**[Camera & Composition]** {en_angle}. {en_panel_comp}
+
+{en_panel_light_inst}
+
+{_tail_scene}"""
+
+        else:  # 再设计（默认，V2.0）——参照图为主，界面所选风格/镜头/灯光作强化
+            _p_style = (
+                "**[STYLE SUMMARY — supports the reference image, does not replace it]** Use the attached "
+                "reference image as the primary guide for style; the notes below only reinforce it.\n"
+                + style_analysis_text.strip()
+                if style_analysis_text else
+                "**[STYLE SUMMARY]** Use the attached reference image as the primary guide for the overall "
+                "style, materials, palette, lighting and mood."
+            )
+            if style_ref_correction:
+                _p_style += f"\n**Additional direction from user**: {style_ref_correction}"
+            final_prompt_en = f"""Help me make a photo:
+
+Professional photorealistic interior architectural photography of {en_room} as a wall-panel (wainscoting / wood feature wall) scene. Aspect ratio {ar_value}, {resolution} resolution.
+
+**[REFERENCE IMAGE — STYLE / ATMOSPHERE ONLY]** One of the attached images is a REFERENCE PHOTO of an existing wall-panel space. Study its spatial type, atmosphere and how the paneling is applied, and EMULATE that overall feel — but do NOT copy its composition, camera angle, wall layout or furniture arrangement. INVENT A BRAND-NEW original scene of the SAME TYPE of space with a DIFFERENT arrangement, so it feels like it belongs to the same home and designer as the reference rather than a copy.
+
+{_p_style}
+
+**[Style Reinforcement]** Lean the overall look toward a {en_style_raw} aesthetic. {en_atmosphere} The visual focus stays on the WALL-PANEL MATERIAL. Preserve the core wainscoting design logic: full-height vertical panels, vertical seam lines, slim metal trim strips and a matching skirting.
+
+**[Camera & Composition]** {en_angle}. {en_panel_comp}
+
+{en_panel_light_inst}
+
+{_tail_scene}"""
+
     else:  # 纯效果图 — SCHEMA order: Style → Composition → Lighting → Floor → Output
         final_prompt_en = f"""Help me make a photo:
 
@@ -799,7 +958,9 @@ Professional photorealistic interior architectural photography. {en_property}, {
 
     # ── Pro 模型专属提示词：仅"无缝人字拼"时与 B2 不同；其余情况完全一致 ──
     # 把 B2 版地板三段替换成 Pro 版（终极版，去 herringbone/chevron 词、纯几何描述）。
-    if CORE_MATERIAL_INSTRUCTION_PRO:
+    if "墙板" in workflow_mode:
+        final_prompt_en_pro = final_prompt_en            # 墙板模式无 Pro 分歧（不含地板串，.replace 全 no-op，显式短路防串味）
+    elif CORE_MATERIAL_INSTRUCTION_PRO:
         final_prompt_en_pro = (
             final_prompt_en
             .replace(CORE_MATERIAL_INSTRUCTION, CORE_MATERIAL_INSTRUCTION_PRO)

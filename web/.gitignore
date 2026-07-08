@@ -16,9 +16,12 @@
 # next.js
 /.next/
 /out/
+**/.next/
+**/out/
 
 # production
 /build
+**/build
 
 # misc
 .DS_Store
@@ -39,3 +42,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# accidental copied/generated Windows-path directories on POSIX
+C:*/
+**/C:*/

@@ -1,0 +1,24 @@
+Help me make a photo:
+
+Professional photorealistic interior architectural photography of living-dining combo as a wall-panel (wainscoting / wood feature wall) scene. Aspect ratio 4:3, 4K resolution.
+
+**[REFERENCE IMAGE — STYLE / ATMOSPHERE ONLY]** One of the attached images is a REFERENCE PHOTO of an existing wall-panel space. Study its spatial type, atmosphere and how the paneling is applied, and EMULATE that overall feel — but do NOT copy its composition, camera angle, wall layout or furniture arrangement. INVENT A BRAND-NEW original scene of the SAME TYPE of space with a DIFFERENT arrangement, so it feels like it belongs to the same home and designer as the reference rather than a copy.
+
+**[STYLE SUMMARY — supports the reference image, does not replace it]** Use the attached reference image as the primary guide for style; the notes below only reinforce it.
+A warm minimalist wall-panel entry with vertical walnut wainscoting, slim brass trim, matte stone floor, off-white walls, soft even daylight.
+
+**[Style Reinforcement]** Lean the overall look toward a 原木风 aesthetic. Authentic and inviting atmosphere. The visual focus stays on the WALL-PANEL MATERIAL. Preserve the core wainscoting design logic: full-height vertical panels, vertical seam lines, slim metal trim strips and a matching skirting.
+
+**[Camera & Composition]** 28mm lens. **Composition**: Wide-angle perspective emphasizing the full height and breadth of the feature wall, with strong vertical lines. The wall panel is the absolute visual anchor of the image.
+
+**Lighting — Diffused Light**: Perfectly even illumination with no hot spots on the panels. Soft shadows only. Ideal for true-to-life reproduction of the panel wood color.
+
+**[Wall-Panel Specification]**
+🔥 CRITICAL MATERIAL INSTRUCTION 🔥 The uploaded reference image IS the wall-panel wood-grain sample/swatch. Reproduce its EXACT physical characteristics on every visible panel face: (1) grain pattern and flow, (2) knot positions, pores, mineral streaks and natural surface variation, (3) color tone, warm/cool balance and color variation between boards, (4) real matte wood-veneer micro-texture. CRITICAL — GRAIN DIRECTION: the wood grain on every panel MUST run strictly VERTICALLY (top-to-bottom), never horizontal, never diagonal. Treat the swatch as a grain-and-color specification only — completely disregard its outline, aspect ratio and any board proportions visible in the sample; panel sizing is defined by the scene, not by the swatch. Every panel must look milled from the same real wood batch as the swatch: 100% faithful, sharp, high-resolution, with authentic micro-detail and NO blur, NO smearing, NO repeated-tile stamping, NO plastic/CG/fake-gloss look.
+
+**[PANEL COLOR — MANDATORY EXACT MATCH]** The overall color of the wall panels in the final image MUST be IDENTICAL to the uploaded swatch — the same hue, warm/cool register, lightness and saturation. Read the panel color directly from the swatch and reproduce it consistently across every panel. Do NOT shift it warmer, cooler, lighter, darker, more golden, more grey, or more/less saturated to suit the room's lighting, furniture or style. Only natural light falloff may change brightness; the underlying veneer color stays exactly the swatch's color everywhere.
+Wall-panel / wainscoting (护墙板 / 木饰面) design: standard vertical boards about 200 mm wide; strictly VERTICAL wood grain, slim vertical seam reveals between boards, thin metal trim strips (金属收口条) at the edges, and a matching skirting/baseboard (踢脚线). Adjacent panels read as naturally continuous grain or reasonably staggered boards with subtle natural differences; real matte wood veneer with no fake gloss.
+
+**[Quality Requirements]** Real-camera photographic quality with a slight, natural depth-of-field — NOT CG, NOT a 3D render, NOT archviz. Ultra-sharp panel grain at pixel level, physically accurate true-to-swatch color, and a clean, accurate neutral-warm white balance (~4500-5000K). Ultra-high resolution, ultra-sharp, no noise, no blur.
+
+**[Negative Prompt]** Strictly avoid: horizontal or diagonal wood grain, any color deviation from the swatch, repeated-tile / stamped / AI-looking texture, blur or smearing, plastic or fake glossy panel surface, stylized / illustrated / cartoon rendering, CG / 3D-render / archviz look, hard-edged or heavy shadows, dark / cold / underexposed lighting.

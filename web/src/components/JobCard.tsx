@@ -69,7 +69,13 @@ export function JobCard({
   // 轮询兜底：SSE 断流(后端重启/流异常关闭)时，父级轮询的新快照仍能解冻卡片。
   // SSE 与轮询同源同结构，last-writer-wins，1s 周期的 SSE 会覆盖偶尔旧一拍的轮询数据。
   useEffect(() => {
-    applySnapshot(initial);
+    let alive = true;
+    queueMicrotask(() => {
+      if (alive) applySnapshot(initial);
+    });
+    return () => {
+      alive = false;
+    };
   }, [initial, applySnapshot]);
 
   async function act(fn: () => Promise<JobView>, okMsg?: string) {

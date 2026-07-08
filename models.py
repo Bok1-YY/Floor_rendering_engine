@@ -240,6 +240,10 @@ class TaskParams:
     # ── Omakase mode (自由场景层：AI 原创散文，作为 Omakase 工作流的场景段；仅 Omakase 工作流生效) ──
     scene_override: str = ''
 
+    # ── Panel mode (墙板模式子行为：再设计 / 替换 / 纯原创；仅墙板模式生效) ──
+    panel_submode: str = '再设计'
+    panel_size: str = ''   # 墙板尺寸/板型（预设或自定义；空串→模板给通高整板兜底）
+
 
 def task_params_to_kwargs(p: TaskParams) -> dict:
     """Convert a TaskParams instance to the legacy kwargs dict.
@@ -287,4 +291,6 @@ def task_params_to_kwargs(p: TaskParams) -> dict:
         'style_ref_correction': p.style_ref_correction,
         'style_analysis_text': p.style_analysis_text,
         'scene_override': p.scene_override,
+        'panel_submode': p.panel_submode,
+        'panel_size': p.panel_size,
     }

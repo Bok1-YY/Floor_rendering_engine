@@ -79,6 +79,8 @@ export interface GenParams {
   cn_facilities?: string[] | null;
   style_ref_correction?: string;
   scene_override?: string;   // Omakase：AI 原创场景散文，接管 Omakase 工作流的场景层（仅 Omakase 生效，其他工作流忽略）
+  panel_submode?: string;    // 墙板模式子行为：再设计 / 替换 / 纯原创（仅墙板模式生效，其他工作流忽略）
+  panel_size?: string;       // 墙板尺寸/板型（预设或自定义；仅墙板再设计/纯原创生效）
 }
 
 export interface JobSubmit {
@@ -186,6 +188,7 @@ export interface OptionsView {
   lightings: string[];
   angles: string[];
   floor_sizes: string[];
+  panel_sizes: string[];
   market_furniture: string[];
   avoid_items: string[];
   // 地区级联

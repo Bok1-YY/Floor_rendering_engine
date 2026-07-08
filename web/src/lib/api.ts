@@ -20,8 +20,12 @@ import type {
   OmakaseOption,
 } from "./types";
 
+// dev（next dev 在 :3000）用 .env.local 里的 NEXT_PUBLIC_API_BASE 指到后端 :7870；
+// 生产静态导出由后端同源托管，走空 base → 相对地址（window.location.origin），
+// 这样无论客户从 localhost 还是局域网 IP 打开都能命中后端。
 export const API =
-  process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:7870";
+  process.env.NEXT_PUBLIC_API_BASE ||
+  (typeof window !== "undefined" ? window.location.origin : "http://127.0.0.1:7870");
 
 async function handle<T>(r: Response): Promise<T> {
   if (!r.ok) {
