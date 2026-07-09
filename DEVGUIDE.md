@@ -108,7 +108,7 @@ Floor_engine_server/
 ├── prompts.py           提示词组装：save_task_files_html(35+ 参数 → 英文 prompt + 落 JSON/PNG)，4 种工作流各一个 builder
 ├── recipes.py           智能配方：recommend_recipes(按色调推荐) + pick_option_key(关键词→具体选项)
 ├── api.py               模型调用：call_image_generate(Google→可选转Fal) / call_gemini_generate / call_fal_generate / call_gemini_edit(磨缝二改) / test_connection
-├── records.py           持久化：队列 persist/load、记录 JSON 读写、收藏/删除、解密 reveal、用量 load_usage_summary、导出 HTML/PPTX
+├── records.py           持久化：队列 persist/load、记录 JSON 读写、收藏/删除/人工评审、解密 reveal、用量 load_usage_summary、导出 HTML/PPTX
 ├── failure_kb.py        失败知识库：FAILURE_RULES + classify_failure(错误串→{title,cause,action})
 ├── themes.py            旧 UI 主题 CSS 生成（曾供 NiceGUI；webui 退役后已无运行期消费者，留待后续清理）
 ├── logging_setup.py     logger（输出到 test/app_local_save.log）
@@ -157,14 +157,14 @@ Floor_engine_server/
 POST /api/jobs ──秒回 job_id──▶ 后台 asyncio task(_run_job_bg)
                                   │  _task_prep_lock 内 save_task_files_html 组装提示词
                                   │  _b2_semaphore / _pro_semaphore 限并发，分别调 call_image_generate
-                                  │  出一张 append_result_to_log 落盘一张；stage 文本实时更新
+                                  │  出一张 _api_write_to_record 落盘一张；stage 文本实时更新
 前端 GET /api/jobs/{id}/stream ◀─ SSE 每秒推 _job_view 快照，进终态推 done 事件并关闭
 ```
 进程内状态（都在 `_job_lock` 下读写）：`_job_history`(列表，新在前)、`_b2_semaphore`/`_pro_semaphore`(并发，lifespan 里按配置建)、`_cancel_jobs`(单作业取消集合)、`_cancel_generation`(全局取消计数器)。终态：`done`/`partial`/`failed`；`compute_final_status` 据 model_filter + 出图情况判定。
 
-### 4.3 端点目录（约 46 条）
+### 4.3 端点目录（40+ API 路由）
 - **作业** `/api/jobs`：`POST`建 · `GET`列 · `GET {id}` · `GET {id}/stream`(SSE) · `POST {id}/cancel` · `POST cancel-all` · `POST clear-completed`(清完成) · `POST {id}/delete`(删单条) · `POST {id}/retry` · `GET {id}/result?model=&idx=`(候选切换) · `POST {id}/polish`(磨缝) · `POST {id}/edit`(二改) · `POST {id}/regen?n=`(重抽/多抽)。
-- **记录** `/api/records`：`GET`列文件 · `GET load` · `POST reveal`(解密) · `POST edit`(记录内二改) · `POST result/delete` · `POST result/favorite` · `POST delete`(删整条) · `GET export/{html,pptx,favorites-pptx}`(FileResponse 下载)。
+- **记录** `/api/records`：`GET`列文件 · `GET load` · `POST reveal`(解密) · `POST edit`(记录内二改) · `POST result/delete` · `POST result/favorite` · `POST result/review`(人工评审：通过/备选/淘汰、标签、备注、最佳图) · `POST delete`(删整条) · `GET export/{html,pptx,favorites-pptx}`(FileResponse 下载)。
 - **上传** `POST /api/uploads/{floor,room,ref}`；**小样** `GET /api/swatches/recent`；**配方** `GET /api/recipes`；**识色** `GET /api/floor/analyze`。
 - **失败** `POST /api/failure/classify` · `GET /api/failure/rules`；**连通** `GET /api/connection/test`。
 - **配置** `GET/PUT /api/config`；**模型** `GET /api/models`；**选项** `GET /api/options`(前端下拉真源)；**用量** `GET /api/usage`；**健康** `GET /api/healthz`。
@@ -187,7 +187,7 @@ web/src/
 │   ├── layout.tsx        根布局：引 Hanken Grotesk 字体 + 全高 body + <AppShell> 包壳 + <Toaster>
 │   ├── globals.css       ★ 设计令牌(珊瑚陶土 #c15f3c + 奶油米色) + 滚动条 + keyframes —— 改主题改这里
 │   ├── page.tsx          生成页（左 600px 参数列 + 右任务队列，两栏全高）
-│   ├── records/page.tsx  记录页（左 280px 文件列表 + 右记录卡）
+│   ├── records/page.tsx  记录页（左 280px 文件列表 + 右记录卡；房间/评审筛选、收藏、最佳图、人工标注）
 │   ├── usage/page.tsx    用量页（stat 卡 + 成功率条 + 明细表）
 │   └── settings/page.tsx 设置页（密钥卡 + 线路/网络卡）
 ├── components/
@@ -240,7 +240,7 @@ web/src/
 6. 在 **`开发日志.md` 顶部追加一条**（改了啥、为什么）。
 7. 提交（见 §九）。
 
-**测试**：`cd Floor_engine_server && python -m pytest`（引擎层 golden 提示词回归 + 安全硬化；`tests/golden/` 基准入库，缓存不入）。
+**测试**：`cd Floor_engine_server && python -m pytest`（引擎层 golden 提示词回归 + 安全硬化 + 人工评审元数据回归；当前 43 项）。本机若系统 `python` 无 pytest，可用项目虚拟环境：`.venv/bin/python -m pytest`。`tests/golden/` 基准入库，缓存不入。
 
 ---
 

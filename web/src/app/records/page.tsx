@@ -2,7 +2,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { api } from "@/lib/api";
-import type { RecordEntry, RecordFile } from "@/lib/types";
+import type { RecordEntry, RecordFile, RecordResult, ReviewStatus } from "@/lib/types";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -12,12 +12,32 @@ import { cn } from "@/lib/utils";
 const toolBtn =
   "h-8 rounded-lg border border-border bg-card px-[13px] text-[12.5px] font-semibold text-[#6b6356] hover:bg-[#f2e9e0]";
 
+const REVIEW_TAGS = [
+  "色偏",
+  "缝太黑",
+  "缝消失",
+  "纹理不准",
+  "空间太假",
+  "地板占比低",
+  "风格不对",
+  "构图好",
+  "客户可用",
+];
+
+const REVIEW_STATUS: { value: ReviewStatus; label: string; color: string }[] = [
+  { value: "unreviewed", label: "未评", color: "#857c6e" },
+  { value: "pass", label: "通过", color: "#2e8c7e" },
+  { value: "backup", label: "备选", color: "#8a6d2e" },
+  { value: "rejected", label: "淘汰", color: "#b5503a" },
+];
+
 export default function RecordsPage() {
   const [files, setFiles] = useState<RecordFile[]>([]);
   const [search, setSearch] = useState("");
   const [active, setActive] = useState<string | null>(null);
   const [records, setRecords] = useState<RecordEntry[]>([]);
   const [roomFilter, setRoomFilter] = useState("__all__");
+  const [reviewFilter, setReviewFilter] = useState<"__all__" | ReviewStatus | "__best__">("__all__");
   const [loading, setLoading] = useState(false);
   const [zoom, setZoom] = useState<string | null>(null);
 
@@ -37,6 +57,24 @@ export default function RecordsPage() {
     instruction: string;
   }>({ open: false, rid: "", idx: 0, instruction: "" });
 
+  const [review, setReview] = useState<{
+    open: boolean;
+    rid: string;
+    idx: number;
+    status: ReviewStatus;
+    tags: string[];
+    note: string;
+    best: boolean;
+  }>({
+    open: false,
+    rid: "",
+    idx: 0,
+    status: "unreviewed",
+    tags: [],
+    note: "",
+    best: false,
+  });
+
   useEffect(() => {
     api
       .listRecords()
@@ -51,6 +89,7 @@ export default function RecordsPage() {
     const seq = ++openSeq.current;
     setActive(jsonPath);
     setRoomFilter("__all__");
+    setReviewFilter("__all__");
     setLoading(true);
     try {
       const recs = await api.loadRecord(jsonPath);
@@ -92,10 +131,21 @@ export default function RecordsPage() {
     return c;
   }, [records]);
 
-  const shownRecords =
-    roomFilter === "__all__"
-      ? records
-      : records.filter((r) => (r.room_type || "") === roomFilter);
+  function resultVisible(res: RecordResult) {
+    if (reviewFilter === "__all__") return true;
+    if (reviewFilter === "__best__") return !!res.best;
+    return (res.review_status || "unreviewed") === reviewFilter;
+  }
+
+  const shownRecords = records
+    .filter((r) => roomFilter === "__all__" || (r.room_type || "") === roomFilter)
+    .map((r) => ({
+      ...r,
+      results: (r.results || [])
+        .map((res, idx) => ({ ...res, __idx: idx }))
+        .filter(resultVisible),
+    }))
+    .filter((r) => (r.results || []).length > 0);
 
   function download(url: string) {
     window.open(url, "_blank");
@@ -121,6 +171,60 @@ export default function RecordsPage() {
     } catch (e) {
       toast.error((e as Error).message);
     }
+  }
+
+  async function doReview(
+    rid: string,
+    idx: number,
+    patch: Partial<{
+      status: ReviewStatus;
+      tags: string[];
+      note: string;
+      best: boolean;
+    }>,
+    source?: RecordResult,
+  ) {
+    if (!active) return;
+    const src = source || records
+      .find((r) => r.id === rid)
+      ?.results?.[idx];
+    try {
+      await api.reviewResult({
+        json_path: active,
+        record_id: rid,
+        result_index: idx,
+        review_status: patch.status ?? src?.review_status ?? "unreviewed",
+        review_tags: patch.tags ?? src?.review_tags ?? [],
+        review_note: patch.note ?? src?.review_note ?? "",
+        best: patch.best ?? !!src?.best,
+      });
+      toast.success("已保存标注");
+      reload();
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
+  function openReviewDialog(rid: string, idx: number, res: RecordResult) {
+    setReview({
+      open: true,
+      rid,
+      idx,
+      status: res.review_status || "unreviewed",
+      tags: [...(res.review_tags || [])],
+      note: res.review_note || "",
+      best: !!res.best,
+    });
+  }
+
+  async function doReviewSubmit() {
+    await doReview(review.rid, review.idx, {
+      status: review.status,
+      tags: review.tags,
+      note: review.note,
+      best: review.best,
+    });
+    setReview((s) => ({ ...s, open: false }));
   }
 
   async function doDeleteRecord(rid: string) {
@@ -165,6 +269,14 @@ export default function RecordsPage() {
   const roomChip = (active_: boolean) =>
     cn(
       "rounded-lg border px-[13px] py-1.5 text-[12.5px] font-semibold transition-colors",
+      active_
+        ? "border-primary bg-[#fbf3ee] text-[#a8472a]"
+        : "border-border bg-card text-[#6b6356] hover:bg-[#f2e9e0]",
+    );
+
+  const reviewChip = (active_: boolean) =>
+    cn(
+      "rounded-lg border px-[11px] py-1.5 text-[12px] font-semibold transition-colors",
       active_
         ? "border-primary bg-[#fbf3ee] text-[#a8472a]"
         : "border-border bg-card text-[#6b6356] hover:bg-[#f2e9e0]",
@@ -238,22 +350,47 @@ export default function RecordsPage() {
         ) : (
           <>
             <div className="flex flex-none flex-wrap items-center justify-between gap-2.5 border-b border-border px-[22px] py-[14px]">
-              <div className="flex flex-wrap gap-[7px]">
-                <button
-                  onClick={() => setRoomFilter("__all__")}
-                  className={roomChip(roomFilter === "__all__")}
-                >
-                  全部房间
-                </button>
-                {Object.entries(roomCounts).map(([rt, n]) => (
+              <div className="flex min-w-0 flex-1 flex-col gap-2">
+                <div className="flex flex-wrap gap-[7px]">
                   <button
-                    key={rt}
-                    onClick={() => setRoomFilter(rt)}
-                    className={roomChip(roomFilter === rt)}
+                    onClick={() => setRoomFilter("__all__")}
+                    className={roomChip(roomFilter === "__all__")}
                   >
-                    {rt} ({n})
+                    全部房间
                   </button>
-                ))}
+                  {Object.entries(roomCounts).map(([rt, n]) => (
+                    <button
+                      key={rt}
+                      onClick={() => setRoomFilter(rt)}
+                      className={roomChip(roomFilter === rt)}
+                    >
+                      {rt} ({n})
+                    </button>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-[7px]">
+                  <button
+                    onClick={() => setReviewFilter("__all__")}
+                    className={reviewChip(reviewFilter === "__all__")}
+                  >
+                    全部评审
+                  </button>
+                  <button
+                    onClick={() => setReviewFilter("__best__")}
+                    className={reviewChip(reviewFilter === "__best__")}
+                  >
+                    最佳
+                  </button>
+                  {REVIEW_STATUS.map((s) => (
+                    <button
+                      key={s.value}
+                      onClick={() => setReviewFilter(s.value)}
+                      className={reviewChip(reviewFilter === s.value)}
+                    >
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
               </div>
               <div className="flex gap-2">
                 <button onClick={reload} className={toolBtn}>
@@ -304,8 +441,12 @@ export default function RecordsPage() {
 
                       <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-[11px]">
                         {(r.results || []).map((res, j) => {
+                          const realIdx = Number(res.__idx ?? j);
                           const url = res.result_url || "";
                           const thumb = res.result_thumb || url;
+                          const status = res.review_status || "unreviewed";
+                          const statusMeta =
+                            REVIEW_STATUS.find((s) => s.value === status) || REVIEW_STATUS[0];
                           return (
                             <div key={j}>
                               <div className="relative aspect-[4/3] overflow-hidden rounded-[10px] border border-border">
@@ -322,6 +463,11 @@ export default function RecordsPage() {
                                         {res.model_label}
                                       </span>
                                     )}
+                                    {res.best && (
+                                      <span className="absolute right-[7px] top-[7px] rounded-md bg-primary px-[7px] py-[2px] text-[10px] font-bold text-white">
+                                        最佳
+                                      </span>
+                                    )}
                                   </>
                                 ) : (
                                   <div className="flex h-full items-center justify-center bg-muted text-[11px] text-[#9a9082]">
@@ -334,7 +480,7 @@ export default function RecordsPage() {
                                 <span className="flex shrink-0 items-center gap-2.5 text-[12.5px]">
                                   <button
                                     title="收藏"
-                                    onClick={() => doFav(rid, j)}
+                                    onClick={() => doFav(rid, realIdx)}
                                     className={
                                       res.favorite
                                         ? "text-primary"
@@ -346,7 +492,7 @@ export default function RecordsPage() {
                                   <button
                                     title="二改"
                                     onClick={() =>
-                                      setEdit({ open: true, rid, idx: j, instruction: "" })
+                                      setEdit({ open: true, rid, idx: realIdx, instruction: "" })
                                     }
                                     className="hover:text-[#2a241f]"
                                   >
@@ -363,13 +509,71 @@ export default function RecordsPage() {
                                   )}
                                   <button
                                     title="删除"
-                                    onClick={() => doDeleteResult(rid, j)}
+                                    onClick={() => doDeleteResult(rid, realIdx)}
                                     className="hover:text-[#b5503a]"
                                   >
                                     🗑
                                   </button>
                                 </span>
                               </div>
+                              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                                {REVIEW_STATUS.slice(1).map((s) => (
+                                  <button
+                                    key={s.value}
+                                    onClick={() =>
+                                      doReview(
+                                        rid,
+                                        realIdx,
+                                        { status: status === s.value ? "unreviewed" : s.value },
+                                        res,
+                                      )
+                                    }
+                                    className={cn(
+                                      "h-6 rounded-md border px-2 text-[11px] font-semibold",
+                                      status === s.value
+                                        ? "border-transparent text-white"
+                                        : "border-border bg-card text-[#6b6356] hover:bg-[#f2e9e0]",
+                                    )}
+                                    style={status === s.value ? { background: s.color } : undefined}
+                                  >
+                                    {s.label}
+                                  </button>
+                                ))}
+                                <button
+                                  onClick={() =>
+                                    doReview(rid, realIdx, { best: !res.best }, res)
+                                  }
+                                  className={cn(
+                                    "h-6 rounded-md border px-2 text-[11px] font-semibold",
+                                    res.best
+                                      ? "border-primary bg-primary text-white"
+                                      : "border-border bg-card text-[#6b6356] hover:bg-[#f2e9e0]",
+                                  )}
+                                >
+                                  最佳
+                                </button>
+                                <button
+                                  onClick={() => openReviewDialog(rid, realIdx, res)}
+                                  className="h-6 rounded-md border border-border bg-card px-2 text-[11px] font-semibold text-[#6b6356] hover:bg-[#f2e9e0]"
+                                >
+                                  标注
+                                </button>
+                              </div>
+                              <div className="mt-1 flex items-center gap-1.5 text-[11px]">
+                                <span style={{ color: statusMeta.color }} className="font-bold">
+                                  {statusMeta.label}
+                                </span>
+                                {(res.review_tags || []).length > 0 && (
+                                  <span className="truncate text-[#857c6e]">
+                                    {(res.review_tags || []).join("、")}
+                                  </span>
+                                )}
+                              </div>
+                              {res.review_note ? (
+                                <div className="mt-1 text-[11px] leading-snug text-[#2e6f63]">
+                                  评审：{res.review_note}
+                                </div>
+                              ) : null}
                               {res.comment ? (
                                 <div className="mt-1 text-[11px] leading-snug text-[#857c6e]">
                                   💬 {res.comment}
@@ -418,6 +622,97 @@ export default function RecordsPage() {
                 {reveal.text}
               </pre>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 人工评审标注 */}
+      <Dialog
+        open={review.open}
+        onOpenChange={(o) => setReview((s) => ({ ...s, open: o }))}
+      >
+        <DialogContent>
+          <div className="space-y-3">
+            <div className="text-[15px] font-bold">人工评审标注</div>
+            <div className="flex flex-wrap gap-2">
+              {REVIEW_STATUS.map((s) => (
+                <button
+                  key={s.value}
+                  onClick={() => setReview((v) => ({ ...v, status: s.value }))}
+                  className={cn(
+                    "h-8 rounded-lg border px-3 text-[12.5px] font-semibold",
+                    review.status === s.value
+                      ? "border-transparent text-white"
+                      : "border-border bg-card text-[#6b6356] hover:bg-[#f2e9e0]",
+                  )}
+                  style={review.status === s.value ? { background: s.color } : undefined}
+                >
+                  {s.label}
+                </button>
+              ))}
+              <button
+                onClick={() => setReview((v) => ({ ...v, best: !v.best }))}
+                className={cn(
+                  "h-8 rounded-lg border px-3 text-[12.5px] font-semibold",
+                  review.best
+                    ? "border-primary bg-primary text-white"
+                    : "border-border bg-card text-[#6b6356] hover:bg-[#f2e9e0]",
+                )}
+              >
+                最佳图
+              </button>
+            </div>
+            <div>
+              <div className="mb-1.5 text-[12px] font-semibold text-[#857c6e]">
+                问题标签
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {REVIEW_TAGS.map((tag) => {
+                  const on = review.tags.includes(tag);
+                  return (
+                    <button
+                      key={tag}
+                      onClick={() =>
+                        setReview((v) => ({
+                          ...v,
+                          tags: on
+                            ? v.tags.filter((x) => x !== tag)
+                            : [...v.tags, tag],
+                        }))
+                      }
+                      className={cn(
+                        "rounded-full border px-3 py-[5px] text-[12px] font-semibold",
+                        on
+                          ? "border-primary bg-primary text-white"
+                          : "border-border bg-card text-[#6b6356] hover:bg-[#f2e9e0]",
+                      )}
+                    >
+                      {tag}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <textarea
+              value={review.note}
+              onChange={(e) => setReview((s) => ({ ...s, note: e.target.value }))}
+              placeholder="人工备注，例如：颜色准但空间略假，适合做备选"
+              className="min-h-[90px] w-full resize-none rounded-[10px] border border-border bg-[#faf7f0] px-3 py-2 text-[13px] outline-none focus:ring-2 focus:ring-primary/20"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setReview((s) => ({ ...s, open: false }))}
+                className="h-9 rounded-[9px] border border-border bg-card px-4 text-[13px] font-semibold text-[#6b6356] hover:bg-[#f2e9e0]"
+              >
+                取消
+              </button>
+              <button
+                onClick={doReviewSubmit}
+                className="h-9 rounded-[9px] bg-primary px-4 text-[13px] font-bold text-primary-foreground hover:bg-[#a8472a]"
+              >
+                保存
+              </button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

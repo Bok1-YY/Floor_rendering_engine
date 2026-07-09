@@ -369,11 +369,25 @@ def export_html_from_json(json_path):
             cmt = (f'<div style="margin-top:8px;padding:8px 12px;background:#fff8f0;border-left:3px solid #e8874a;border-radius:4px;">'
                    f'<p style="margin:0;font-size:0.82em;color:#7a4010;">💬 备注：{html.escape(res.get("comment",""))}</p></div>'
                    ) if res.get('comment') else ''
+            review_bits = []
+            if res.get('best'):
+                review_bits.append('最佳图')
+            _status = {'pass': '通过', 'backup': '备选', 'rejected': '淘汰', 'unreviewed': '未评'}.get(
+                res.get('review_status', 'unreviewed'), '未评')
+            if _status != '未评':
+                review_bits.append(_status)
+            if res.get('review_tags'):
+                review_bits.append('标签：' + '、'.join(html.escape(str(t)) for t in res.get('review_tags', [])))
+            if res.get('review_note'):
+                review_bits.append('评审备注：' + html.escape(res.get('review_note', '')))
+            review = (f'<div style="margin-top:8px;padding:8px 12px;background:#f3fbf8;border-left:3px solid #2e8c7e;border-radius:4px;">'
+                      f'<p style="margin:0;font-size:0.82em;color:#235f55;">{" ｜ ".join(review_bits)}</p></div>'
+                      ) if review_bits else ''
             _rb = _html_b64(res, 'result_image_file', 'result_image_b64')
             results_html += (f'<div style="margin-top:12px;padding:12px;background:#fdf8f4;border-radius:8px;">'
                              f'<p style="margin:0 0 8px 0;font-size:0.8em;color:#b07040;">📸 效果图 {i+1} — {res.get("result_timestamp","")}</p>'
                              f'<img src="data:image/jpeg;base64,{_rb}" style="max-width:100%;border-radius:6px;" />'
-                             f'{cmt}</div>')
+                             f'{cmt}{review}</div>')
         entries.append(f'<div style="padding:20px;border-bottom:3px solid #e8874a;margin-bottom:10px;">'
                        f'<p style="margin:0 0 8px 0;font-size:0.85em;color:#555;"><strong>🕒 {r.get("timestamp","")}</strong>'
                        f' &nbsp;|&nbsp; {r.get("workflow_mode","")} &nbsp;|&nbsp; {r.get("room_type","")}</p>'
@@ -576,6 +590,61 @@ def toggle_result_favorite(json_path, record_id, result_index):
     return None
 
 
+REVIEW_STATUSES = {'unreviewed', 'pass', 'backup', 'rejected'}
+
+
+def update_result_review(json_path, record_id, result_index, *,
+                         review_status='unreviewed', review_tags=None,
+                         review_note='', best=False):
+    """写入单张效果图的人工评审元数据。
+
+    best=True 时，同一 record 下其它结果的 best 会被清掉，保证“最佳图”唯一。
+    返回更新后的评审快照；找不到记录/索引返回 None。
+    """
+    status = (review_status or 'unreviewed').strip()
+    if status not in REVIEW_STATUSES:
+        status = 'unreviewed'
+    tags = []
+    for t in review_tags or []:
+        s = str(t or '').strip()
+        if s and s not in tags:
+            tags.append(s)
+    note = str(review_note or '').strip()
+    best = bool(best)
+
+    with record_file_lock(json_path):
+        records = _load_records(json_path)
+        for r in records:
+            if r.get('id') != record_id:
+                continue
+            results = r.get('results', [])
+            if not (0 <= result_index < len(results)):
+                break
+            if best:
+                for res in results:
+                    res['best'] = False
+            target = results[result_index]
+            target['review_status'] = status
+            target['review_tags'] = tags
+            target['review_note'] = note
+            target['best'] = best
+            target['reviewed_at'] = time.strftime("%Y-%m-%d %H:%M:%S")
+            _save_records(json_path, records)
+            logger.info(
+                f"[记录] 评审更新 json={json_path}, record={record_id}, "
+                f"idx={result_index}, status={status}, tags={tags}, best={best}"
+            )
+            return {
+                'review_status': status,
+                'review_tags': tags,
+                'review_note': note,
+                'best': best,
+                'reviewed_at': target['reviewed_at'],
+            }
+    logger.warning(f"[记录] 评审更新失败 json={json_path}, record={record_id}, idx={result_index}")
+    return None
+
+
 def collect_favorites():
     """扫描所有记录文件，汇总被收藏(favorite=True)的结果，按出图时间倒序。
     返回 [{json_path, material, record_id, record, result_index, res}, ...]。"""
@@ -683,7 +752,21 @@ def _result_caption(material, res, record):
         (record.get('params_summary', '') or ''),
     ] if p)
     cmt = res.get('comment', '')
-    return caption + (f"\n备注：{cmt}" if cmt else "")
+    review = []
+    status = {'pass': '通过', 'backup': '备选', 'rejected': '淘汰', 'unreviewed': ''}.get(
+        res.get('review_status', 'unreviewed'), '')
+    if res.get('best'):
+        review.append('最佳图')
+    if status:
+        review.append(status)
+    if res.get('review_tags'):
+        review.append('标签：' + '、'.join(str(t) for t in res.get('review_tags', [])))
+    if res.get('review_note'):
+        review.append('评审备注：' + str(res.get('review_note', '')))
+    tail = (f"\n备注：{cmt}" if cmt else "")
+    if review:
+        tail += "\n评审：" + " ｜ ".join(review)
+    return caption + tail
 
 
 def export_pptx_from_json(json_path):
@@ -777,6 +860,6 @@ __all__ = [
     'append_result_to_log', 'append_edited_result_to_record',
     '_obfuscate', '_deobfuscate', 'reveal_prompt_fn',
     '_api_write_to_record', '_save_api_result_jpg', 'migrate_record_file',
-    'toggle_result_favorite', 'collect_favorites',
+    'toggle_result_favorite', 'update_result_review', 'collect_favorites',
     'export_pptx_from_json', 'export_favorites_pptx',
 ]

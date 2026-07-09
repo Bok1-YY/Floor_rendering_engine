@@ -11,6 +11,7 @@ import type {
   Recipe,
   RecordEntry,
   RecordFile,
+  ResultReviewPatch,
   FailureKB,
   UsageSummary,
   FloorAnalyze,
@@ -142,6 +143,14 @@ export const api = {
       record_id,
       result_index,
     }),
+  reviewResult: (body: ResultReviewPatch) =>
+    jsend<{
+      review_status: string;
+      review_tags: string[];
+      review_note: string;
+      best: boolean;
+      reviewed_at: string;
+    }>(`/api/records/result/review`, "POST", body),
   deleteRecord: (json_path: string, record_id: string) =>
     jsend<{ ok: boolean }>(`/api/records/delete`, "POST", {
       json_path,

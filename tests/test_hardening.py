@@ -7,6 +7,7 @@ import pytest
 from Floor_engine_server.models import new_job
 from Floor_engine_server import config as cfg_mod
 from Floor_engine_server.config import safe_upload_path, get_tls_verify
+from Floor_engine_server.records import _load_records, _save_records, update_result_review
 from Floor_engine_server import api as api_mod
 from Floor_engine_server.api import _verify_arg, call_image_generate
 
@@ -99,3 +100,41 @@ def test_call_image_generate_google_fail_no_failover_is_google(monkeypatch):
                         lambda *a, **k: (None, "网络错误: reset"))
     img, err, provider = call_image_generate("key", "m", "p", "img.png")
     assert img is None and provider == "google"
+
+
+# ── 5. 人工评审元数据 ───────────────────────────────────────────────────
+def test_update_result_review_writes_metadata_and_single_best(tmp_path):
+    jp = tmp_path / "x_记录.json"
+    _save_records(str(jp), [{
+        "id": "r1",
+        "results": [
+            {"model_label": "B2"},
+            {"model_label": "Pro"},
+        ],
+    }])
+
+    r1 = update_result_review(
+        str(jp), "r1", 0,
+        review_status="pass",
+        review_tags=["色偏", "色偏", "构图好", ""],
+        review_note="颜色准",
+        best=True,
+    )
+    assert r1["review_status"] == "pass"
+    assert r1["review_tags"] == ["色偏", "构图好"]
+    assert r1["best"] is True
+
+    r2 = update_result_review(str(jp), "r1", 1, review_status="backup", best=True)
+    assert r2["review_status"] == "backup"
+
+    data = _load_records(str(jp))
+    assert data[0]["results"][0]["best"] is False
+    assert data[0]["results"][1]["best"] is True
+    assert data[0]["results"][0]["review_note"] == "颜色准"
+
+
+def test_update_result_review_invalid_target_returns_none(tmp_path):
+    jp = tmp_path / "x_记录.json"
+    _save_records(str(jp), [{"id": "r1", "results": []}])
+    assert update_result_review(str(jp), "missing", 0) is None
+    assert update_result_review(str(jp), "r1", 0) is None

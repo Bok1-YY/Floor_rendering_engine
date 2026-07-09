@@ -36,7 +36,7 @@ python -c "import sys,Floor_engine_server.server_api; print('nicegui' in sys.mod
 ## 提示词层（保真红线）
 
 ### 改 `prompts.py` 必跑 golden + 字节比对
-`tests/golden/*.txt` 锁 4 套工作流输出。凡「应一致」的路径必须逐字节相等，「应改变」的人工核对 diff 后再 `UPDATE_GOLDEN=1` 刷新。这是保真的唯一自动护栏。→ [[mental-model|Golden 护栏]]。
+`tests/golden/*.txt` 锁核心工作流输出（含 Omakase、无缝拼法专项、墙板模式）。凡「应一致」的路径必须逐字节相等，「应改变」的人工核对 diff 后再 `UPDATE_GOLDEN=1` 刷新。这是保真的唯一自动护栏。→ [[mental-model|Golden 护栏]]。
 
 ### 测试导入必须指向本仓库包
 历史坑：`tests/` 曾全部 `from floor_engine.*`（旧同级包）= **对本仓库零覆盖**、「N passed」是假保护。现已重指 `Floor_engine_server.*`，勿再指回。→ [[mental-model|假保护]]。

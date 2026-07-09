@@ -53,7 +53,7 @@ from .records import (
     _safe_output_path, scan_json_files, _load_records, get_record_labels,
     reveal_prompt_fn, _list_recent_floor_swatches, _b64_to_pil,
     _delete_record, _delete_result_image, toggle_result_favorite,
-    append_edited_result_to_record, load_usage_summary,
+    update_result_review, append_edited_result_to_record, load_usage_summary,
     export_html_from_json, export_pptx_from_json, export_favorites_pptx,
 )
 from .models import (
@@ -1309,6 +1309,13 @@ class ResultRef(BaseModel):
     result_index: int
 
 
+class ResultReviewRequest(ResultRef):
+    review_status: str = 'unreviewed'
+    review_tags: List[str] = []
+    review_note: str = ''
+    best: bool = False
+
+
 class RecordRef(BaseModel):
     json_path: str
     record_id: str
@@ -1419,6 +1426,21 @@ def favorite_result(req: ResultRef):
     if new is None:
         raise HTTPException(404, '未找到该效果图')
     return {'favorite': new}
+
+
+@app.post('/api/records/result/review')
+def review_result(req: ResultReviewRequest):
+    json_path = _require_record_json_path(req.json_path)
+    new = update_result_review(
+        json_path, req.record_id, req.result_index,
+        review_status=req.review_status,
+        review_tags=req.review_tags,
+        review_note=req.review_note,
+        best=req.best,
+    )
+    if new is None:
+        raise HTTPException(404, '未找到该效果图')
+    return new
 
 
 @app.post('/api/records/delete')

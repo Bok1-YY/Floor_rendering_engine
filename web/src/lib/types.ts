@@ -211,6 +211,8 @@ export interface OptionsView {
 
 export type Recipe = Record<string, unknown> & { label?: string; sub?: string };
 
+export type ReviewStatus = "unreviewed" | "pass" | "backup" | "rejected";
+
 export interface RecordResult {
   result_url?: string;
   result_thumb?: string;
@@ -219,13 +221,29 @@ export interface RecordResult {
   model_label?: string;
   comment?: string;
   favorite?: boolean;
+  best?: boolean;
+  review_status?: ReviewStatus;
+  review_tags?: string[];
+  review_note?: string;
+  reviewed_at?: string;
   result_timestamp?: string;
   [k: string]: unknown;
+}
+
+export interface ResultReviewPatch {
+  json_path: string;
+  record_id: string;
+  result_index: number;
+  review_status: ReviewStatus;
+  review_tags: string[];
+  review_note: string;
+  best: boolean;
 }
 
 export interface RecordEntry {
   id?: string;
   room_type?: string;
+  workflow_mode?: string;
   results?: RecordResult[];
   [k: string]: unknown;
 }

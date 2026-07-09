@@ -15,7 +15,7 @@
                                                  ▼
                  ┌──────────────────────────────────────────────┐
                  │  FastAPI 无头后端 server_api.py (:7870) ★     │  作业队列 · SSE
-                 │    ~55 端点 · 进程内编排 · 静态/缩略图         │  唯一新增服务端源码
+                 │    40+ API 路由 · 进程内编排 · 静态/缩略图     │  唯一新增服务端源码
                  └───────────────────────────────┬──────────────┘
                                                  ▼  复用（零改动）
                  ┌──────────────────────────────────────────────┐
@@ -96,10 +96,10 @@
 | `failure_kb` | 失败知识库：错误串 → {title, cause, action} | `classify_failure`, `FAILURE_RULES` |
 | `config` | 路径/配置中心：`BASE_DIR`、engine_config.json 读写、key/proxy/provider/速度档/failover/TLS/DeepSeek | `BASE_DIR`, `_load_config/_save_config`, `get_*` getter 群, `safe_upload_path` |
 | `prompt_data` | 海量选项表 + 识色 + 中英翻译 + 提示词层构建 | `translate_zh_to_en`, `analyze_floor_tone`, `build_overseas_realism_layer`, `STYLES/FLOOR_TONES/TECH_DICT/CN_*…` |
-| `records` | 持久化：队列 persist/load、记录读写、收藏/删除、解密、用量、导出 HTML/PPTX | `persist_jobs/load_persisted_jobs`, `export_*`, `record_usage/load_usage_summary`, `record_file_lock` |
+| `records` | 持久化：队列 persist/load、记录读写、收藏/删除、人工评审/最佳图、解密、用量、导出 HTML/PPTX | `persist_jobs/load_persisted_jobs`, `update_result_review`, `export_*`, `record_usage/load_usage_summary`, `record_file_lock` |
 | `recipes` | 智能配方：按色调推荐 + 关键词→选项键 | `recommend_recipes`, `pick_option_key`, `FLOOR_RECIPES` |
 | `api` | 模型调用：Google/Fal 生图、二改、参照分析、DeepSeek、连通测试 | `call_image_generate`, `call_gemini_generate/call_fal_generate`, `call_gemini_edit`, `analyze_style_image`, `call_deepseek_scenes`, `test_connection` |
-| `prompts` | 提示词组装：35+ 参数 → 英文 prompt + 落 JSON/PNG（4 套工作流） | `save_task_files_html` |
+| `prompts` | 提示词组装：35+ 参数 → 英文 prompt + 落 JSON/PNG（多工作流：地板、Omakase、墙板） | `save_task_files_html` |
 | `server_api` | FastAPI 无头层：端点 + 作业队列 + SSE + 静态/缩略图 + 进程内编排 | `app` |
 | `serve` | 启动入口：uvicorn 单进程单 worker | `main()` |
 
@@ -131,6 +131,7 @@ POST /api/jobs
 - **快速预览**：`POST /api/preview` → `save_task_files_html(persist=False)` → 直连 `call_gemini_generate(LITE_PREVIEW_MODEL)`（**绕过 provider 路由**）。见 [[mental-model|Lite 预览通道]]。
 - **识色→配方**：`GET /api/floor/analyze` → `analyze_floor_tone` (prompt_data) → `recommend_recipes` (recipes)。
 - **Omakase 场景**：`POST /api/omakase/scenes` → `call_deepseek_scenes` (api)；失败经 `classify_failure` (failure_kb)。
+- **人工评审**：`POST /api/records/result/review` → `update_result_review` (records) → 原子写回记录 JSON；`best=True` 时同记录内其它结果自动取消最佳。
 - **导出**：`/api/records/export/{html,pptx,favorites-pptx}` → `export_*` (records) → FileResponse。
 
 ---
@@ -177,7 +178,7 @@ web/src/
 └── hooks/useJobStream.ts       EventSource 封装（终态 close，防重连风暴）
 ```
 
-**`lib/api.ts` 单一 `api` 对象**，方法覆盖：上传 / 任务全生命周期 / 预览 / 小样 / 记录 / 导出 URL / 配置 / 选项 / 识色 / 用量 / 失败规则 / `imgUrl`。
+**`lib/api.ts` 单一 `api` 对象**，方法覆盖：上传 / 任务全生命周期 / 预览 / 小样 / 记录 / 人工评审 / 导出 URL / 配置 / 选项 / 识色 / 用量 / 失败规则 / `imgUrl`。
 
 **数据流**：页面 `useEffect` 调 `api.*` 取数；活动作业用 `useJobStream`(SSE) 看实时进度；生成页另有 2.5s 轮询 `listJobs` 做队列聚合兜底。
 
