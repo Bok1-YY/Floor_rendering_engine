@@ -14,6 +14,7 @@ import json
 import re
 import time
 import logging
+import threading
 from typing import Dict, Optional, Tuple, Union
 
 # ── 路径常量 ────────────────────────────────────────────────────
@@ -39,6 +40,7 @@ MAIN_OUTPUT_DIR = os.path.join(BASE_DIR, "output_files")
 os.makedirs(MAIN_OUTPUT_DIR, exist_ok=True)
 
 CONFIG_FILE = os.path.join(BASE_DIR, "engine_config.json")
+_config_lock = threading.RLock()
 
 # 上传原图 + 缩略图缓存目录（webui 上传/历史小样扫描、records 小样扫描共用，故放配置层）。
 # BASE_DIR 已是 frozen-aware（打包时 = exe 所在目录），与旧 webui 里的 sys.frozen 写法等价。
@@ -152,26 +154,35 @@ def _save_config(config: Dict[str, str]) -> bool:
     （文件里存着 Gemini/Fal/DeepSeek 三把 key，截断即全丢）。replace 撞上正在读配置的
     句柄（Windows 上会 PermissionError）时短重试。"""
     tmp = CONFIG_FILE + ".tmp"
-    try:
-        with open(tmp, 'w', encoding='utf-8') as f:
-            json.dump(config, f, ensure_ascii=False, indent=2)
-        for _i in range(5):
-            try:
-                os.replace(tmp, CONFIG_FILE)
-                break
-            except PermissionError:
-                if _i == 4:
-                    raise
-                time.sleep(0.1)
-        return True
-    except Exception as e:
-        logger.error(f"配置保存失败: {e}")
+    with _config_lock:
         try:
-            if os.path.exists(tmp):
-                os.remove(tmp)
-        except OSError:
-            pass
-        return False
+            with open(tmp, 'w', encoding='utf-8') as f:
+                json.dump(config, f, ensure_ascii=False, indent=2)
+            for _i in range(5):
+                try:
+                    os.replace(tmp, CONFIG_FILE)
+                    break
+                except PermissionError:
+                    if _i == 4:
+                        raise
+                    time.sleep(0.1)
+            return True
+        except Exception as e:
+            logger.error(f"配置保存失败: {e}")
+            try:
+                if os.path.exists(tmp):
+                    os.remove(tmp)
+            except OSError:
+                pass
+            return False
+
+
+def update_config(patch: dict) -> bool:
+    """Atomically apply a partial config update without lost concurrent writes."""
+    with _config_lock:
+        cfg = _load_config()
+        cfg.update(patch)
+        return _save_config(cfg)
 
 
 def save_api_key(api_key_val: str, proxy_val: str = "") -> None:
@@ -227,7 +238,7 @@ def get_tls_ca_bundle() -> str:
 
 # ── 上传文件名安全化 ────────────────────────────────────────────────────
 # 用户上传的原始文件名不可信：可能带路径(../、C:\)、危险字符、或与已有文件同名导致静默覆盖。
-_UPLOAD_ALLOWED_EXT = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+_UPLOAD_ALLOWED_EXT = {".png", ".jpg", ".jpeg", ".webp"}
 
 
 def safe_upload_path(orig_name: str, prefix: str = "") -> Optional[str]:

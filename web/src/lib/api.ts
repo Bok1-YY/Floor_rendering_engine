@@ -62,6 +62,7 @@ async function upload(path: string, file: File): Promise<Swatch> {
 export const api = {
   /** 把后端给的相对 URL(/outputs.. /thumb..)拼成可用的绝对地址 */
   imgUrl: (p: string) => (!p ? "" : p.startsWith("http") ? p : API + p),
+  health: () => jget<{ ok: boolean }>("/api/healthz"),
 
   uploadFloor: (f: File) => upload("/api/uploads/floor", f),
   uploadRoom: (f: File) => upload("/api/uploads/room", f),
@@ -131,17 +132,17 @@ export const api = {
     jsend<JobView>(`/api/jobs/${id}/regen?n=${n}`, "POST"),
   recordEdit: (body: RecordEditRequest) =>
     jsend<JobView>(`/api/records/edit`, "POST", body),
-  deleteResult: (json_path: string, record_id: string, result_index: number) =>
+  deleteResult: (json_path: string, record_id: string, result_id: string) =>
     jsend<{ ok: boolean }>(`/api/records/result/delete`, "POST", {
       json_path,
       record_id,
-      result_index,
+      result_id,
     }),
-  favoriteResult: (json_path: string, record_id: string, result_index: number) =>
+  favoriteResult: (json_path: string, record_id: string, result_id: string) =>
     jsend<{ favorite: boolean }>(`/api/records/result/favorite`, "POST", {
       json_path,
       record_id,
-      result_index,
+      result_id,
     }),
   reviewResult: (body: ResultReviewPatch) =>
     jsend<{

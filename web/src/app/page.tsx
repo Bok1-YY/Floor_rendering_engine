@@ -77,6 +77,8 @@ export default function GeneratePage() {
   const [batchOpen, setBatchOpen] = useState(false);
   const [batchRooms, setBatchRooms] = useState<string[]>([]);
   const [batchSubmitting, setBatchSubmitting] = useState(false);
+  const submitLock = useRef(false);
+  const batchLock = useRef(false);
   // 快速预览（NB2 Lite · 1K，与 4K 队列解耦，短轮询）
   const [preview, setPreview] = useState<PreviewView | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -90,7 +92,6 @@ export default function GeneratePage() {
   const floorSeq = useRef(0);
 
   useEffect(() => {
-    requestNotifyPermission();
     api
       .getOptions()
       .then((o) => {
@@ -165,6 +166,7 @@ export default function GeneratePage() {
   }
 
   async function generate() {
+    if (submitLock.current) return;
     if (!floor) {
       toast.warning("请先上传地板图");
       return;
@@ -186,6 +188,8 @@ export default function GeneratePage() {
       if (sub.includes("替换") && !roomImg) { toast.warning("墙板替换需上传原墙板场景图"); return; }
       if (sub.includes("再设计") && !refImg) { toast.warning("墙板再设计需上传场景参照图"); return; }
     }
+    submitLock.current = true;
+    requestNotifyPermission();
     setSubmitting(true);
     try {
       const job = await api.createJob({
@@ -200,12 +204,13 @@ export default function GeneratePage() {
     } catch (e) {
       toast.error("提交失败：" + (e as Error).message);
     } finally {
+      submitLock.current = false;
       setSubmitting(false);
     }
   }
 
   async function runBatch() {
-    if (batchSubmitting) return; // 双击防护：批量是 N 个 4K 任务，重复提交=直接翻倍计费
+    if (batchLock.current) return;
     if (!floor) {
       toast.warning("请先上传地板图");
       return;
@@ -233,9 +238,11 @@ export default function GeneratePage() {
       return;
     }
     const cnMode = !!params.cn_mode;
+    batchLock.current = true;
+    requestNotifyPermission();
     setBatchSubmitting(true);
     try {
-      const created = await Promise.all(
+      const settled = await Promise.allSettled(
         batchRooms.map((room) =>
           api.createJob({
             image_path: floor.path,
@@ -248,12 +255,21 @@ export default function GeneratePage() {
           }),
         ),
       );
-      setJobs((j) => [...created.reverse(), ...j]);
-      toast.success(`已批量提交 ${created.length} 个房间`);
-      setBatchOpen(false);
-    } catch (e) {
-      toast.error("批量提交失败：" + (e as Error).message);
+      const created = settled.flatMap((result) =>
+        result.status === "fulfilled" ? [result.value] : [],
+      );
+      const failedRooms = settled.flatMap((result, index) =>
+        result.status === "rejected" ? [batchRooms[index]] : [],
+      );
+      if (created.length) setJobs((j) => [...created.reverse(), ...j]);
+      if (failedRooms.length) {
+        toast.error(`已提交 ${created.length} 个，失败：${failedRooms.join("、")}`);
+      } else {
+        toast.success(`已批量提交 ${created.length} 个房间`);
+        setBatchOpen(false);
+      }
     } finally {
+      batchLock.current = false;
       setBatchSubmitting(false);
     }
   }
@@ -357,7 +373,11 @@ export default function GeneratePage() {
 
   const total = jobs.length;
   const activeCount = jobs.filter(
-    (j) => j.status === "queued" || j.status === "running" || j.pro_polishing,
+    (j) =>
+      j.status === "queued" ||
+      j.status === "running" ||
+      j.pro_polishing ||
+      j.operation_status === "running",
   ).length;
   const doneCount = total - activeCount;
   const pct = total > 0 ? Math.round((doneCount / total) * 100) : 0;

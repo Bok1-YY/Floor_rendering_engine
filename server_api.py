@@ -20,15 +20,16 @@ import base64
 import asyncio
 import hashlib
 import threading
+import mimetypes
 from typing import Optional, List, Literal
 from contextlib import asynccontextmanager
 
 from PIL import Image
-from fastapi import FastAPI, UploadFile, File, HTTPException, Request
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Query
 from fastapi.responses import StreamingResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # ── 引擎依赖（全部包内相对导入；这些模块均与前端无关，可安全 import 而不拉进 NiceGUI）──
 from .config import (
@@ -40,6 +41,7 @@ from .config import (
     safe_upload_path, extract_clean_prompt, get_bevel_ref_image, LITE_PREVIEW_MODEL,
     get_deepseek_api_key, get_deepseek_base_url, get_deepseek_model, get_omakase_enabled,
     save_deepseek_settings,
+    update_config,
 )
 from .api import (
     call_image_generate, call_gemini_generate, call_gemini_edit, test_connection, analyze_style_image,
@@ -55,6 +57,7 @@ from .records import (
     _delete_record, _delete_result_image, toggle_result_favorite,
     update_result_review, append_edited_result_to_record, load_usage_summary,
     export_html_from_json, export_pptx_from_json, export_favorites_pptx,
+    migrate_all_record_storage,
 )
 from .models import (
     JobRecord, new_job, update_job, compute_final_status,
@@ -118,7 +121,11 @@ def _spawn(coro):
     done 回调把自身从集合移除，不留泄漏。所有后台生图/重试/重抽/磨缝/二改 task 统一走这里。"""
     t = asyncio.create_task(coro)
     _bg_tasks.add(t)
-    t.add_done_callback(_bg_tasks.discard)
+    def _done(task):
+        _bg_tasks.discard(task)
+        if not task.cancelled() and task.exception() is not None:
+            logger.error(f"[后台任务] 未处理异常: {task.exception()}")
+    t.add_done_callback(_done)
     return t
 
 
@@ -189,6 +196,7 @@ def _result_thumb_url(p, s: int = 480) -> str:
 def _job_view(job: JobRecord) -> dict:
     """把 JobRecord 序列化成前端友好的 JSON（含实时阶段、耗时文案、结果图 URL/缩略图、候选下标）。"""
     ensure_candidate_lists(job)   # 向后兼容 + 同步 *_path = *_paths[*_idx]
+    effective_error = job.operation_error or job.error
     return {
         'job_id': job.job_id,
         'display_name': job.display_name,
@@ -197,7 +205,7 @@ def _job_view(job: JobRecord) -> dict:
         'model_filter': job.model_filter,
         'workflow_mode': job.workflow_mode,
         'error': job.error,
-        'error_kb': classify_failure(job.error) if (job.error and '取消' not in job.error) else None,
+        'error_kb': classify_failure(effective_error) if (effective_error and '取消' not in effective_error) else None,
         'b2_stage': job.b2_stage,
         'pro_stage': job.pro_stage,
         'b2_secs': job.b2_secs,
@@ -205,6 +213,9 @@ def _job_view(job: JobRecord) -> dict:
         'time_text': job_time_text(job),
         'model_status': running_model_status_text(job),
         'pro_polishing': job.pro_polishing,
+        'operation': job.operation,
+        'operation_status': job.operation_status,
+        'operation_error': job.operation_error,
         'has_retry': bool(job.retry_ctx),
         'record_id': job.record_id,
         'json_path': job.json_path,
@@ -258,6 +269,9 @@ async def _generate_one_model(job: JobRecord, model_id, prompt_text, stage_key, 
     if img is not None:
         # 图已生成 = 已计费 → 即便随后判定取消也先存盘，避免白花钱（与 webui 同序）
         path = _save_api_result_jpg(img, model_name, pnp)
+        if not path:
+            record_usage(job.workflow_mode, model_name, provider, True, job.operation)
+            return None, '图片已生成，但保存到磁盘失败'
         add_candidate(job, stage_key, path)
         try:
             await asyncio.to_thread(_api_write_to_record, img, model_name, jpt, rid, path)
@@ -268,7 +282,7 @@ async def _generate_one_model(job: JobRecord, model_id, prompt_text, stage_key, 
     # 出图=ok；没出图且非取消=fail（取消不计失败）。provider 用引擎返回的【实际】线路(自动转 Fal 能记对)。
     if img is not None or '取消' not in _err:
         try:
-            record_usage(job.workflow_mode, model_name, provider, img is not None)
+            record_usage(job.workflow_mode, model_name, provider, img is not None, job.operation)
         except Exception as ex:
             logger.debug(f"记录用量失败 job={job.job_id}: {ex}")
     return path, _err
@@ -285,10 +299,14 @@ async def _run_job_bg(job: JobRecord, req: 'JobSubmitRequest'):
     api_key = (req.api_key or '').strip() or _load_config().get('gemini_api_key', '').strip()
 
     if _is_cancelled(jid, generation):
-        update_job(job, status='failed', error='已取消（用户停止）')
+        update_job(job, status='failed', error='已取消（用户停止）',
+                   operation='generate', operation_status='cancelled', operation_error='已取消')
+        _cancel_jobs.discard(jid)
+        _persist_jobs()
         return
 
-    update_job(job, status='running', started_at=time.time())
+    update_job(job, status='running', started_at=time.time(), operation='generate',
+               operation_status='running', operation_error='')
     b2j = proj = None
     try:
         is_ref_mode = '参照模式' in (p.workflow_mode or '')
@@ -303,7 +321,8 @@ async def _run_job_bg(job: JobRecord, req: 'JobSubmitRequest'):
             style_text, sa_err = await asyncio.to_thread(analyze_style_image, api_key, req.ref_path)
             if sa_err or not style_text:
                 update_job(job, status='failed',
-                           error=f'风格分析失败，已中止（未发起生图）: {sa_err or "返回为空"}')
+                           error=f'风格分析失败，已中止（未发起生图）: {sa_err or "返回为空"}',
+                           operation_status='failed', operation_error=sa_err or '返回为空')
                 return
 
         # 组装提示词参数 → save_task_files_html（prep 串行：同张小样并发任务共享输出路径）
@@ -378,18 +397,23 @@ async def _run_job_bg(job: JobRecord, req: 'JobSubmitRequest'):
             # 取消后：已返回的图(已计费)已在 _gen_one 里存盘，这里据实标注，不丢弃
             if b2j or proj:
                 update_job(job, status=('done' if (b2j and proj) else 'partial'),
-                           b2_path=b2j, pro_path=proj, error='已取消，但已出图已保留（已付费）')
+                           b2_path=b2j, pro_path=proj, error='已取消，但已出图已保留（已付费）',
+                           operation_status='cancelled', operation_error='已取消')
             else:
-                update_job(job, status='failed', error='已取消（无结果）')
+                update_job(job, status='failed', error='已取消（无结果）',
+                           operation_status='cancelled', operation_error='已取消')
             return
 
         err_msg = ('B2: ' + b2_err if b2_err else '') + (' Pro: ' + pro_err if pro_err else '')
         final = compute_final_status(mf, b2j, proj)
-        update_job(job, status=final, b2_path=b2j, pro_path=proj, error=err_msg.strip())
+        update_job(job, status=final, b2_path=b2j, pro_path=proj, error=err_msg.strip(),
+                   operation_status=('done' if final in ('done', 'partial') else 'failed'),
+                   operation_error=err_msg.strip())
         logger.info(f"[API任务] finished job={jid}, status={final}, b2={bool(b2j)}, pro={bool(proj)}")
     except Exception as e:
         logger.exception(f"[API任务] unhandled job={jid}")
-        update_job(job, status='failed', b2_path=b2j, pro_path=proj, error=str(e))
+        update_job(job, status='failed', b2_path=b2j, pro_path=proj, error=str(e),
+                   operation_status='failed', operation_error=str(e))
     finally:
         _cancel_jobs.discard(jid)
         _persist_jobs()
@@ -403,11 +427,13 @@ async def _retry_bg(job: JobRecord):
     need_b2 = (mf in ('b2', 'both')) and not (job.b2_path and os.path.exists(str(job.b2_path)))
     need_pro = (mf in ('pro', 'both')) and not (job.pro_path and os.path.exists(str(job.pro_path)))
     if not (need_b2 or need_pro):
-        update_job(job, status='done')
+        update_job(job, status='done', operation='retry', operation_status='done')
+        _persist_jobs()
         return
     _cancel_jobs.discard(job.job_id)   # 清掉残留取消标记，否则 should_cancel 恒 True
     generation = _cancel_generation[0]
-    update_job(job, status='running', started_at=time.time(), error='', b2_stage='', pro_stage='')
+    update_job(job, status='running', started_at=time.time(), error='', b2_stage='', pro_stage='',
+               operation='retry', operation_status='running', operation_error='')
     try:
         should_cancel = lambda: _is_cancelled(job.job_id, generation)
 
@@ -429,10 +455,13 @@ async def _retry_bg(job: JobRecord):
             if e and '取消' not in e:
                 errs.append(f'{k.upper()}: {e}')
         final = compute_final_status(mf, job.b2_path, job.pro_path)
-        update_job(job, status=final, error=('；'.join(errs)).strip())
+        op_error = ('；'.join(errs)).strip()
+        update_job(job, status=final, error=op_error,
+                   operation_status=('done' if final in ('done', 'partial') else 'failed'),
+                   operation_error=op_error)
     except Exception as e:
         logger.exception(f"[API重试] unhandled job={job.job_id}")
-        update_job(job, status='failed', error=str(e))
+        update_job(job, status='failed', error=str(e), operation_status='failed', operation_error=str(e))
     finally:
         _cancel_jobs.discard(job.job_id)
         _persist_jobs()
@@ -445,10 +474,14 @@ async def _edit_bg(job: JobRecord, *, api_key, instruction, model_id, model_labe
     jid = job.job_id
     generation = _cancel_generation[0]
     src_path = job.pro_path or job.b2_path
+    base_status = compute_final_status(job.model_filter, job.b2_path, job.pro_path)
     if not src_path or not os.path.exists(str(src_path)):
-        update_job(job, status='failed', error='没有可编辑的成图')
+        update_job(job, status=base_status, operation_status='failed',
+                   operation_error='没有可编辑的成图', pro_polishing=False, pro_stage='')
+        _cancel_jobs.discard(jid)
+        _persist_jobs()
         return
-    update_job(job, status='running', started_at=time.time(), pro_polishing=True, pro_stage='')
+    update_job(job, started_at=time.time(), pro_polishing=True, pro_stage='', operation_status='running')
 
     def _on_stage(t):
         try:
@@ -470,7 +503,8 @@ async def _edit_bg(job: JobRecord, *, api_key, instruction, model_id, model_labe
                 call_gemini_edit, api_key, model_id, instruction, b64,
                 image_size, ar, preserve, _on_stage, lambda: _is_cancelled(jid, generation))
         if out is None:
-            update_job(job, status='failed', error=f'编辑失败：{err}')
+            record_usage(job.workflow_mode, model_label, 'google', False, job.operation)
+            update_job(job, status=base_status, operation_status='failed', operation_error=f'编辑失败：{err}')
             return
         if color_match:
             try:
@@ -478,17 +512,23 @@ async def _edit_bg(job: JobRecord, *, api_key, instruction, model_id, model_labe
             except Exception as ex:
                 logger.warning(f"[编辑] 色彩对齐失败(用未对齐图) job={jid}: {ex}")
         ppath = _save_api_result_jpg(out, model_label, job.png_path or src_path)
+        if not ppath:
+            record_usage(job.workflow_mode, model_label, 'google', False, job.operation)
+            update_job(job, status=base_status, operation_status='failed', operation_error='编辑结果保存失败')
+            return
         add_candidate(job, 'pro', ppath)   # 结果并入 Pro 候选，‹n/N› 可切回原图对比
+        record_usage(job.workflow_mode, model_label, 'google', True, job.operation)
         if job.json_path and job.record_id:
             try:
                 await asyncio.to_thread(_api_write_to_record, out, model_label, job.json_path, job.record_id, ppath)
             except Exception as ex:
                 logger.warning(f"[编辑] 写记录失败 job={jid}: {ex}")
-        update_job(job, status='done', pro_path=ppath)
+        update_job(job, status=compute_final_status(job.model_filter, job.b2_path, ppath),
+                   pro_path=ppath, operation_status='done', operation_error='')
         logger.info(f"[API编辑] 完成 job={jid}, label={model_label}, path={ppath}")
     except Exception as e:
         logger.exception(f"[API编辑] 异常 job={jid}")
-        update_job(job, status='failed', error=str(e))
+        update_job(job, status=base_status, operation_status='failed', operation_error=str(e))
     finally:
         update_job(job, pro_polishing=False, pro_stage='')
         _cancel_jobs.discard(jid)
@@ -568,11 +608,11 @@ class PreviewRequest(BaseModel):
 class EditRequest(BaseModel):
     model_config = {'protected_namespaces': ()}
 
-    instruction: str
+    instruction: str = Field(min_length=1, max_length=2000)
     api_key: str = ''
-    image_size: str = '4K'
+    image_size: Literal['2K', '4K'] = '4K'
     preserve_floor_geometry: bool = True
-    model_choice: str = 'Nano Banana Pro'   # GEMINI_MODEL_MAP 的 key
+    model_choice: Literal['Nano Banana 2', 'Nano Banana Pro'] = 'Nano Banana Pro'
 
 
 class RevealRequest(BaseModel):
@@ -586,15 +626,15 @@ class ErrRequest(BaseModel):
 
 
 class ConfigPatch(BaseModel):
-    gemini_api_key: Optional[str] = None
-    fal_api_key: Optional[str] = None
-    image_provider: Optional[str] = None
-    speed_profile: Optional[str] = None
+    gemini_api_key: Optional[str] = Field(default=None, max_length=500)
+    fal_api_key: Optional[str] = Field(default=None, max_length=500)
+    image_provider: Optional[Literal['google', 'fal']] = None
+    speed_profile: Optional[Literal['fast', 'resilient']] = None
     auto_failover: Optional[bool] = None
-    proxy: Optional[str] = None
+    proxy: Optional[str] = Field(default=None, max_length=1000)
     tls_verify: Optional[bool] = None
-    tls_ca_bundle: Optional[str] = None
-    max_concurrent_per_model: Optional[int] = None
+    tls_ca_bundle: Optional[str] = Field(default=None, max_length=2000)
+    max_concurrent_per_model: Optional[int] = Field(default=None, ge=1, le=8)
     deepseek_api_key: Optional[str] = None
     deepseek_base_url: Optional[str] = None
     deepseek_model: Optional[str] = None
@@ -636,23 +676,34 @@ async def lifespan(_app: FastAPI):
     _b2_semaphore = asyncio.Semaphore(lim)
     _pro_semaphore = asyncio.Semaphore(lim)
     _task_prep_lock = asyncio.Lock()
+    migrated = migrate_all_record_storage()
     with _job_lock:
+        _job_history.clear()
         _job_history.extend(load_persisted_jobs())   # 启动恢复；中断态已被修正为 partial/failed
-    logger.info(f"[server_api] 启动完成：恢复 {len(_job_history)} 条历史任务，每模型并发 {lim}")
+    logger.info(f"[server_api] 启动完成：迁移 {migrated} 个记录文件，恢复 {len(_job_history)} 条历史任务，每模型并发 {lim}")
     yield
 
 
 app = FastAPI(title="Floor Engine API", version="step1", lifespan=lifespan)
 
 # CORS：开给前端 dev origin。绑 127.0.0.1，本机自用，不放公网。
+_ALLOWED_ORIGINS = [o.strip() for o in
+                    os.environ.get('FLOOR_API_CORS', 'http://localhost:3000,http://127.0.0.1:3000').split(',')
+                    if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[o.strip() for o in
-                   os.environ.get('FLOOR_API_CORS', 'http://localhost:3000,http://127.0.0.1:3000').split(',')
-                   if o.strip()],
+    allow_origins=_ALLOWED_ORIGINS,
     allow_methods=['*'],
     allow_headers=['*'],
 )
+
+
+@app.middleware('http')
+async def reject_cross_origin_mutations(request: Request, call_next):
+    origin = request.headers.get('origin')
+    if request.method not in ('GET', 'HEAD', 'OPTIONS') and origin and origin not in _ALLOWED_ORIGINS:
+        return Response('Forbidden origin', status_code=403)
+    return await call_next(request)
 
 
 # ── 健康检查 ──
@@ -681,6 +732,30 @@ def _require_record_json_path(json_path: str) -> str:
     return path
 
 
+_IMAGE_EXTS = {'.jpg', '.jpeg', '.png', '.webp'}
+_MAX_UPLOAD_BYTES = 50 * 1024 * 1024
+_MAX_UPLOAD_PIXELS = 80_000_000
+
+
+def _require_upload_image_path(path: Optional[str], label: str, *, required: bool = False) -> Optional[str]:
+    if not path:
+        if required:
+            raise HTTPException(400, f'{label}不存在，请先上传')
+        return None
+    try:
+        base = os.path.realpath(UPLOAD_DIR)
+        resolved = os.path.realpath(path)
+        if os.path.commonpath([base, resolved]) != base:
+            raise HTTPException(400, f'{label}路径无效，请重新上传')
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(400, f'{label}路径无效，请重新上传')
+    if os.path.splitext(resolved)[1].lower() not in _IMAGE_EXTS or not os.path.isfile(resolved):
+        raise HTTPException(400, f'{label}文件已失效，请重新上传')
+    return resolved
+
+
 def _panel_require_second_image(req):
     """墙板模式子行为的第二张图校验：再设计需场景参照图(ref)，替换需原墙板场景图(room)。
     纯原创只需 image_path(已在上游校验)。缺图直接 400，避免静默丢图照常计费。"""
@@ -699,13 +774,9 @@ def _panel_require_second_image(req):
 async def create_job(req: JobSubmitRequest):
     if not ((req.api_key or '').strip() or _load_config().get('gemini_api_key', '').strip()):
         raise HTTPException(400, '缺少 API Key')
-    if not req.image_path or not os.path.exists(req.image_path):
-        raise HTTPException(400, '地板图文件不存在，请先上传')
-    # 房间图/参照图失效必须在提交口拦：引擎侧读不到会静默丢图照常计费，生成结果完全不对
-    if req.room_path and not os.path.exists(req.room_path):
-        raise HTTPException(400, '房间图文件已失效，请重新上传')
-    if req.ref_path and not os.path.exists(req.ref_path):
-        raise HTTPException(400, '参照图文件已失效，请重新上传')
+    req.image_path = _require_upload_image_path(req.image_path, '地板图', required=True)
+    req.room_path = _require_upload_image_path(req.room_path, '房间图')
+    req.ref_path = _require_upload_image_path(req.ref_path, '参照图')
     _panel_require_second_image(req)
     label = {'b2': '[B2]', 'pro': '[Pro]', 'both': '[双模型]'}.get(req.model_filter, '')
     room_disp = req.params.cn_room_type if req.params.cn_mode else req.params.room_type
@@ -749,7 +820,8 @@ async def stream_job(jid: str, request: Request):
                 break
             data = json.dumps(_job_view(job), ensure_ascii=False)
             yield f"data: {data}\n\n"
-            if job.status in ('done', 'partial', 'failed'):
+            if (job.status in ('done', 'partial', 'failed')
+                    and job.operation_status != 'running' and not job.pro_polishing):
                 yield f"event: done\ndata: {data}\n\n"
                 break
             await asyncio.sleep(1.0)
@@ -763,6 +835,8 @@ def cancel_job(jid: str):
     job = _get_job(jid)
     if not job:
         raise HTTPException(404, 'job not found')
+    if job.status not in ('queued', 'running') and job.operation_status != 'running':
+        raise HTTPException(409, '任务当前不在运行')
     _cancel_jobs.add(jid)   # 终态由 worker finally 据「是否已出图」判定（已计费的图保留）
     if not job.error:
         update_job(job, error='已取消（用户停止）')
@@ -775,7 +849,7 @@ def cancel_all():
     n = 0
     with _job_lock:
         for job in _job_history:
-            if job.status in ('queued', 'running'):
+            if job.status in ('queued', 'running') or job.operation_status == 'running':
                 _cancel_jobs.add(job.job_id)
                 n += 1
     return {'stopped': n}
@@ -789,7 +863,7 @@ def clear_completed():
     with _job_lock:
         keep = []
         for job in _job_history:
-            if job.status == 'done':
+            if job.status == 'done' and job.operation_status != 'running' and not job.pro_polishing:
                 _cancel_jobs.discard(job.job_id)
                 removed += 1
             else:
@@ -802,6 +876,11 @@ def clear_completed():
 @app.post('/api/jobs/{jid}/delete')
 def delete_job(jid: str):
     """从队列移除单条任务卡（任意状态；运行中的建议先停止）。仅移除列表项，不动出图/记录。"""
+    job = _get_job(jid)
+    if not job:
+        raise HTTPException(404, 'job not found')
+    if job.status in ('queued', 'running') or job.operation_status == 'running' or job.pro_polishing:
+        raise HTTPException(409, '任务仍在运行，请先停止并等待结束后再清除')
     with _job_lock:
         before = len(_job_history)
         _job_history[:] = [j for j in _job_history if j.job_id != jid]
@@ -821,7 +900,8 @@ async def retry_job(jid: str):
     if job.status not in ('failed', 'partial'):
         return _job_view(job)
     # 回执前预置 active 状态（镜像 _retry_bg 开场），前端据此即刻开 SSE；后台会再设同值，幂等
-    update_job(job, status='running', started_at=time.time(), error='', b2_stage='', pro_stage='')
+    update_job(job, status='running', started_at=time.time(), error='', b2_stage='', pro_stage='',
+               operation='retry', operation_status='running', operation_error='')
     _spawn(_retry_bg(job))
     return _job_view(job)
 
@@ -849,13 +929,14 @@ async def polish_job(jid: str):
         raise HTTPException(404, 'job not found')
     if not job.pro_path or not os.path.exists(str(job.pro_path)):
         raise HTTPException(400, '没有可磨缝的 Pro 图')
-    if job.pro_polishing:
-        return _job_view(job)
+    if job.status in ('queued', 'running') or job.pro_polishing or job.operation_status == 'running':
+        raise HTTPException(409, '任务正在处理，请稍后再试')
     api_key = _load_config().get('gemini_api_key', '').strip()
     if not api_key:
         raise HTTPException(400, '缺少 API Key')
     # 回执前预置 active 状态（镜像 _edit_bg 开场），前端据此即刻开 SSE
-    update_job(job, status='running', started_at=time.time(), pro_polishing=True, pro_stage='')
+    update_job(job, started_at=time.time(), pro_polishing=True, pro_stage='',
+               operation='polish', operation_status='running', operation_error='')
     _spawn(_edit_bg(
         job, api_key=api_key, instruction=FLOOR_DESEAM_INSTRUCTION,
         model_id=GEMINI_MODEL_MAP['Nano Banana Pro'], model_label='Nano Banana Pro_磨缝',
@@ -868,14 +949,15 @@ async def edit_job(jid: str, req: EditRequest):
     job = _get_job(jid)
     if not job:
         raise HTTPException(404, 'job not found')
-    if job.pro_polishing:
-        return _job_view(job)
+    if job.status in ('queued', 'running') or job.pro_polishing or job.operation_status == 'running':
+        raise HTTPException(409, '任务正在处理，请稍后再试')
     api_key = (req.api_key or '').strip() or _load_config().get('gemini_api_key', '').strip()
     if not api_key:
         raise HTTPException(400, '缺少 API Key')
     model_id = GEMINI_MODEL_MAP.get(req.model_choice, GEMINI_MODEL_MAP['Nano Banana Pro'])
     # 回执前预置 active 状态（镜像 _edit_bg 开场），前端据此即刻开 SSE
-    update_job(job, status='running', started_at=time.time(), pro_polishing=True, pro_stage='')
+    update_job(job, started_at=time.time(), pro_polishing=True, pro_stage='',
+               operation='edit', operation_status='running', operation_error='')
     _spawn(_edit_bg(
         job, api_key=api_key, instruction=req.instruction, model_id=model_id,
         model_label=f'{req.model_choice} 二改', preserve=req.preserve_floor_geometry,
@@ -935,8 +1017,13 @@ async def _preview_bg(pid: str, req: 'PreviewRequest'):
             call_gemini_generate, api_key, LITE_PREVIEW_MODEL, cpt, pnp,
             '1K', ar, rp, sref, _on_stage, should_cancel, bevel_ref)
         if img is None:
+            record_usage(p.workflow_mode, 'NB2 Lite', 'google', False, 'preview')
             _set(status='failed', error=err or '预览生成失败', stage=''); return
         path = _save_api_result_jpg(img, 'NB2Lite预览', pnp)
+        if not path:
+            record_usage(p.workflow_mode, 'NB2 Lite', 'google', False, 'preview')
+            _set(status='failed', error='预览结果保存失败', stage=''); return
+        record_usage(p.workflow_mode, 'NB2 Lite', 'google', True, 'preview')
         _set(status='done', stage='', url=_to_url(path), thumb=_result_thumb_url(path))
         logger.info(f"[快速预览] 完成 pid={pid}, path={path}")
     except Exception as e:
@@ -950,12 +1037,9 @@ async def _preview_bg(pid: str, req: 'PreviewRequest'):
 async def create_preview(req: PreviewRequest):
     if not ((req.api_key or '').strip() or _load_config().get('gemini_api_key', '').strip()):
         raise HTTPException(400, '缺少 API Key')
-    if not req.image_path or not os.path.exists(req.image_path):
-        raise HTTPException(400, '地板图文件不存在，请先上传')
-    if req.room_path and not os.path.exists(req.room_path):
-        raise HTTPException(400, '房间图文件已失效，请重新上传')
-    if req.ref_path and not os.path.exists(req.ref_path):
-        raise HTTPException(400, '参照图文件已失效，请重新上传')
+    req.image_path = _require_upload_image_path(req.image_path, '地板图', required=True)
+    req.room_path = _require_upload_image_path(req.room_path, '房间图')
+    req.ref_path = _require_upload_image_path(req.ref_path, '参照图')
     _panel_require_second_image(req)
     pid = f'pv_{uuid.uuid4().hex}'
     with _preview_lock:
@@ -982,12 +1066,45 @@ def cancel_preview(pid: str):
 
 # ── 上传 / 历史小样 ──
 def _save_upload(file: UploadFile, prefix: str) -> dict:
-    data = file.file.read()
     dest = safe_upload_path(file.filename or 'upload.jpg', prefix)
     if not dest:
-        raise HTTPException(400, '不支持的文件类型（仅 jpg/jpeg/png/webp/bmp）')
-    with open(dest, 'wb') as f:
-        f.write(data)
+        raise HTTPException(400, '不支持的文件类型（仅 jpg/jpeg/png/webp）')
+    tmp = f'{dest}.{uuid.uuid4().hex}.upload'
+    total = 0
+    try:
+        with open(tmp, 'xb') as out:
+            while True:
+                chunk = file.file.read(1024 * 1024)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > _MAX_UPLOAD_BYTES:
+                    raise HTTPException(413, '图片超过 50 MiB 上限')
+                out.write(chunk)
+        try:
+            with Image.open(tmp) as image:
+                image.verify()
+            with Image.open(tmp) as image:
+                if (image.format or '').upper() not in {'JPEG', 'PNG', 'WEBP'}:
+                    raise HTTPException(400, '图片真实格式不受支持（仅 JPEG/PNG/WebP）')
+                expected = {'.jpg': 'JPEG', '.jpeg': 'JPEG', '.png': 'PNG', '.webp': 'WEBP'}[
+                    os.path.splitext(dest)[1].lower()
+                ]
+                if (image.format or '').upper() != expected:
+                    raise HTTPException(400, '图片扩展名与真实格式不一致')
+                if image.width * image.height > _MAX_UPLOAD_PIXELS:
+                    raise HTTPException(413, '图片像素超过 8000 万上限')
+        except HTTPException:
+            raise
+        except Exception:
+            raise HTTPException(400, '文件不是有效图片或图片已损坏')
+        if os.path.exists(dest):
+            dest = safe_upload_path(file.filename or 'upload.jpg', prefix)
+        os.replace(tmp, dest)
+    finally:
+        if os.path.exists(tmp):
+            try: os.remove(tmp)
+            except OSError: pass
     return {'path': dest, 'url': _to_url(dest), 'name': os.path.basename(dest), 'thumb': _thumb_url(dest)}
 
 
@@ -1029,6 +1146,8 @@ def load_records(json_path: str):
     recs = _load_records(json_path)
     # 结果图引用改写成 URL；内联 base64(老记录)不回传大 blob，仅标记 has_inline。
     for r in recs:
+        for secret in ('prompt_en', 'prompt_en_pro', '_pe', '_pe_pro', 'sample_image_b64'):
+            r.pop(secret, None)
         for res in r.get('results', []) if isinstance(r, dict) else []:
             rel = res.get('result_image_file')
             if rel:
@@ -1076,37 +1195,19 @@ def get_config():
 
 @app.put('/api/config')
 def put_config(req: ConfigPatch):
-    cfg = _load_config()
-    # save_api_key 同时写 key+proxy：只改其一时用现值补另一个
-    if req.gemini_api_key is not None or req.proxy is not None:
-        save_api_key(req.gemini_api_key if req.gemini_api_key is not None else cfg.get('gemini_api_key', ''),
-                     req.proxy if req.proxy is not None else get_proxy())
-    if req.fal_api_key is not None or req.image_provider is not None:
-        save_provider_settings(fal_api_key_val=req.fal_api_key, image_provider_val=req.image_provider)
-    if req.speed_profile is not None:
-        save_speed_profile(req.speed_profile)
-    if req.auto_failover is not None:
-        save_auto_failover(req.auto_failover)
-    if (req.tls_verify is not None or req.tls_ca_bundle is not None
-            or req.max_concurrent_per_model is not None):
-        cfg2 = _load_config()
-        if req.tls_verify is not None:
-            cfg2['tls_verify'] = bool(req.tls_verify)
-        if req.tls_ca_bundle is not None:
-            cfg2['tls_ca_bundle'] = req.tls_ca_bundle
-        if req.max_concurrent_per_model is not None:
-            cfg2['max_concurrent_per_model'] = max(1, int(req.max_concurrent_per_model))
-        _save_config(cfg2)
-    if (req.deepseek_api_key is not None or req.deepseek_base_url is not None
-            or req.deepseek_model is not None or req.omakase_enabled is not None):
-        save_deepseek_settings(api_key=req.deepseek_api_key, base_url=req.deepseek_base_url,
-                               model=req.deepseek_model, enabled=req.omakase_enabled)
+    patch = req.model_dump(exclude_none=True)
+    for key in ('gemini_api_key', 'fal_api_key', 'proxy', 'tls_ca_bundle',
+                'deepseek_api_key', 'deepseek_base_url', 'deepseek_model'):
+        if key in patch:
+            patch[key] = str(patch[key] or '').strip()
+    if not update_config(patch):
+        raise HTTPException(500, '配置保存失败，请检查程序目录写权限或磁盘空间')
     return _config_view()
 
 
 # ── Omakase：客户自由诉求 → DeepSeek 生成 2-3 段场景散文候选（先填后审，此处不生图）──
 class OmakaseRequest(BaseModel):
-    idea: str = ''
+    idea: str = Field(default='', max_length=2000)
 
 
 @app.post('/api/omakase/scenes')
@@ -1237,7 +1338,8 @@ async def _regen_bg(job: JobRecord, n: int):
     _cancel_jobs.discard(job.job_id)
     mf = job.retry_ctx.get('model_filter', job.model_filter)
     # 整批期间保持 running（不在迭代间置终态）——否则 SSE 见终态即关流，多抽第二张起就断了。
-    update_job(job, status='running', started_at=time.time(), error='')
+    update_job(job, status='running', started_at=time.time(), error='',
+               operation='regen', operation_status='running', operation_error='')
     err = ''
     last_err = ''
     try:
@@ -1252,13 +1354,18 @@ async def _regen_bg(job: JobRecord, n: int):
         logger.exception(f"[API多抽] 异常 job={job.job_id}")
         err = str(e)
     finally:
-        update_job(job, status=compute_final_status(mf, job.b2_path, job.pro_path), error=err or last_err)
+        final = compute_final_status(mf, job.b2_path, job.pro_path)
+        op_error = err or last_err
+        cancelled = _is_cancelled(job.job_id, _cancel_generation[0])
+        update_job(job, status=final, error=op_error,
+                   operation_status=('cancelled' if cancelled else ('failed' if op_error else 'done')),
+                   operation_error=op_error or ('已取消' if cancelled else ''))
         _cancel_jobs.discard(job.job_id)
         _persist_jobs()
 
 
 async def _record_edit_bg(job: JobRecord, *, src_pil, api_key, instruction, model_id, model_label,
-                          image_size, preserve, json_path, record_id, source_index):
+                          image_size, preserve, json_path, record_id, source_ref):
     """记录内二改：对已存记录的某张结果做图生图编辑，结果 append 回该记录（移植 webui._do_edit 去 UI）。"""
     jid = job.job_id
     generation = _cancel_generation[0]
@@ -1282,20 +1389,26 @@ async def _record_edit_bg(job: JobRecord, *, src_pil, api_key, instruction, mode
                 call_gemini_edit, api_key, model_id, instruction, b64,
                 image_size, ar, preserve, _on_stage, lambda: _is_cancelled(jid, generation))
         if out is None:
-            update_job(job, status='failed', error=f'二改失败：{err}')
+            record_usage(job.workflow_mode, model_label, 'google', False, 'record_edit')
+            update_job(job, status='failed', error=f'二改失败：{err}', operation_status='failed', operation_error=str(err or ''))
             return
         ppath = _save_api_result_jpg(out, model_label, job.png_path or os.path.join(MAIN_OUTPUT_DIR, 'edit'))
+        if not ppath:
+            record_usage(job.workflow_mode, model_label, 'google', False, 'record_edit')
+            update_job(job, status='failed', error='二改结果保存失败', operation_status='failed', operation_error='二改结果保存失败')
+            return
         add_candidate(job, 'pro', ppath)
+        record_usage(job.workflow_mode, model_label, 'google', True, 'record_edit')
         try:
             await asyncio.to_thread(append_edited_result_to_record, json_path, record_id,
-                                    source_index, out, instruction, model_label, ppath)
+                                    source_ref, out, instruction, model_label, ppath)
         except Exception as ex:
             logger.warning(f"[记录二改] 写记录失败 job={jid}: {ex}")
-        update_job(job, status='done', pro_path=ppath)
+        update_job(job, status='done', pro_path=ppath, operation_status='done', operation_error='')
         logger.info(f"[记录二改] 完成 job={jid}, record={record_id}, path={ppath}")
     except Exception as e:
         logger.exception(f"[记录二改] 异常 job={jid}")
-        update_job(job, status='failed', error=str(e))
+        update_job(job, status='failed', error=str(e), operation_status='failed', operation_error=str(e))
     finally:
         update_job(job, pro_polishing=False, pro_stage='')
         _cancel_jobs.discard(jid)
@@ -1306,13 +1419,13 @@ async def _record_edit_bg(job: JobRecord, *, src_pil, api_key, instruction, mode
 class ResultRef(BaseModel):
     json_path: str
     record_id: str
-    result_index: int
+    result_id: str = Field(min_length=1, max_length=80)
 
 
 class ResultReviewRequest(ResultRef):
     review_status: str = 'unreviewed'
-    review_tags: List[str] = []
-    review_note: str = ''
+    review_tags: List[str] = Field(default_factory=list, max_length=20)
+    review_note: str = Field(default='', max_length=2000)
     best: bool = False
 
 
@@ -1325,12 +1438,12 @@ class RecordEditRequest(BaseModel):
     model_config = {'protected_namespaces': ()}
     json_path: str
     record_id: str
-    result_index: int
-    instruction: str
+    result_id: str = Field(min_length=1, max_length=80)
+    instruction: str = Field(min_length=1, max_length=2000)
     api_key: str = ''
-    image_size: str = '4K'
+    image_size: Literal['2K', '4K'] = '4K'
     preserve_floor_geometry: bool = True
-    model_choice: str = 'Nano Banana Pro'
+    model_choice: Literal['Nano Banana 2', 'Nano Banana Pro'] = 'Nano Banana Pro'
 
 
 def _serve_export(result_msg: str, out_dir: str, media_type: str):
@@ -1349,16 +1462,17 @@ _PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.prese
 
 # ── 重抽/多抽 ──
 @app.post('/api/jobs/{jid}/regen')
-async def regen_job(jid: str, n: int = 1):
+async def regen_job(jid: str, n: int = Query(default=1, ge=1, le=6)):
     job = _get_job(jid)
     if not job:
         raise HTTPException(404, 'job not found')
     if not job.retry_ctx:
         raise HTTPException(400, '该任务缺少重抽上下文(可能重启后丢失)，请重新提交')
-    if job.status in ('running', 'queued') or job.pro_polishing:
+    if job.status in ('running', 'queued') or job.pro_polishing or job.operation_status == 'running':
         raise HTTPException(409, '任务进行中，请稍后再抽')
     # 回执前预置 active 状态（镜像 _regen_bg 开场），前端据此即刻开 SSE
-    update_job(job, status='running', started_at=time.time(), error='')
+    update_job(job, status='running', started_at=time.time(), error='',
+               operation='regen', operation_status='running', operation_error='')
     _spawn(_regen_bg(job, n))
     return _job_view(job)
 
@@ -1375,9 +1489,9 @@ async def record_edit(req: RecordEditRequest):
     if not rec:
         raise HTTPException(404, '未找到记录')
     results = rec.get('results', [])
-    if not (0 <= req.result_index < len(results)):
-        raise HTTPException(404, '结果索引越界')
-    res = results[req.result_index]
+    res = next((item for item in results if item.get('result_id') == req.result_id), None)
+    if res is None:
+        raise HTTPException(404, '未找到该效果图')
     src_pil = None
     rel = res.get('result_image_file')
     abs_src = _safe_output_path(rel) if rel else None
@@ -1398,6 +1512,8 @@ async def record_edit(req: RecordEditRequest):
     job.json_path = json_path
     job.record_id = req.record_id
     job.png_path = abs_src or os.path.join(MAIN_OUTPUT_DIR, 'edit')
+    job.operation = 'record_edit'
+    job.operation_status = 'running'
     with _job_lock:
         _job_history.insert(0, job)
         _trim_history()   # 收口最旧的终态卡（新建的二改 job 是 queued/in-flight，不会被删）
@@ -1406,7 +1522,7 @@ async def record_edit(req: RecordEditRequest):
         job, src_pil=src_pil, api_key=api_key, instruction=req.instruction, model_id=model_id,
         model_label=f'{req.model_choice} 二改', image_size=req.image_size,
         preserve=req.preserve_floor_geometry, json_path=json_path,
-        record_id=req.record_id, source_index=req.result_index))
+        record_id=req.record_id, source_ref=req.result_id))
     return _job_view(job)
 
 
@@ -1414,7 +1530,7 @@ async def record_edit(req: RecordEditRequest):
 @app.post('/api/records/result/delete')
 def delete_result(req: ResultRef):
     json_path = _require_record_json_path(req.json_path)
-    if not _delete_result_image(json_path, req.record_id, req.result_index):
+    if not _delete_result_image(json_path, req.record_id, req.result_id):
         raise HTTPException(404, '未找到该效果图')
     return {'ok': True}
 
@@ -1422,7 +1538,7 @@ def delete_result(req: ResultRef):
 @app.post('/api/records/result/favorite')
 def favorite_result(req: ResultRef):
     json_path = _require_record_json_path(req.json_path)
-    new = toggle_result_favorite(json_path, req.record_id, req.result_index)
+    new = toggle_result_favorite(json_path, req.record_id, req.result_id)
     if new is None:
         raise HTTPException(404, '未找到该效果图')
     return {'favorite': new}
@@ -1432,7 +1548,7 @@ def favorite_result(req: ResultRef):
 def review_result(req: ResultReviewRequest):
     json_path = _require_record_json_path(req.json_path)
     new = update_result_review(
-        json_path, req.record_id, req.result_index,
+        json_path, req.record_id, req.result_id,
         review_status=req.review_status,
         review_tags=req.review_tags,
         review_note=req.review_note,
@@ -1487,8 +1603,7 @@ def _resolve_recipe(r: dict) -> dict:
 
 @app.get('/api/floor/analyze')
 def floor_analyze(path: str):
-    if not path or not os.path.exists(path):
-        raise HTTPException(400, '图片不存在')
+    path = _require_upload_image_path(path, '地板图', required=True)
     tone, _html = analyze_floor_tone(path)
     matched = next((t for t in FLOOR_TONES if tone and (tone in t or t in tone)), tone or FLOOR_TONES[0])
     return {'tone': matched, 'recipes': [_resolve_recipe(r) for r in recommend_recipes(matched, 6)]}
@@ -1522,7 +1637,7 @@ def failure_rules():
 def serve_upload_thumb(name: str, s: int = 320):
     name = os.path.basename(name)   # 挡路径穿越
     src = os.path.join(UPLOAD_DIR, name)
-    if not os.path.isfile(src):
+    if os.path.splitext(name)[1].lower() not in _IMAGE_EXTS or not os.path.isfile(src):
         return Response(status_code=404)
     s = max(64, min(int(s), 1600))
     try:
@@ -1541,15 +1656,15 @@ def serve_upload_thumb(name: str, s: int = 320):
             im.save(tmp, 'JPEG', quality=82)
             os.replace(tmp, cache)
         except Exception as ex:
-            logger.warning(f"[缩略图] 生成失败，回退原图 {name}: {ex}")
-            return FileResponse(src)
+            logger.warning(f"[缩略图] 生成失败 {name}: {ex}")
+            return Response(status_code=415)
     return FileResponse(cache, media_type='image/jpeg')
 
 
 @app.get('/thumb/outputs/{relpath:path}')
 def serve_output_thumb(relpath: str, s: int = 480):
     src = _safe_output_path(relpath)   # 越界/不存在 → None
-    if not src:
+    if not src or os.path.splitext(src)[1].lower() not in _IMAGE_EXTS:
         return Response(status_code=404)
     s = max(64, min(int(s), 1600))
     try:
@@ -1568,14 +1683,28 @@ def serve_output_thumb(relpath: str, s: int = 480):
             im.save(tmp, 'JPEG', quality=82)
             os.replace(tmp, cache)
         except Exception as ex:
-            logger.warning(f"[结果缩略图] 生成失败，回退原图 {relpath}: {ex}")
-            return FileResponse(src)
+            logger.warning(f"[结果缩略图] 生成失败 {relpath}: {ex}")
+            return Response(status_code=415)
     return FileResponse(cache, media_type='image/jpeg')
 
 
-# 原图静态服务（缩略图路由已在上面注册，优先匹配；这里挂目录服务原图/下载）
-app.mount('/outputs', StaticFiles(directory=MAIN_OUTPUT_DIR), name='outputs')
-app.mount('/uploads', StaticFiles(directory=UPLOAD_DIR), name='uploads')
+@app.get('/outputs/{relpath:path}')
+def serve_output_image(relpath: str):
+    path = _safe_output_path(relpath)
+    if not path or os.path.splitext(path)[1].lower() not in _IMAGE_EXTS:
+        return Response(status_code=404)
+    return FileResponse(path, media_type=mimetypes.guess_type(path)[0] or 'application/octet-stream')
+
+
+@app.get('/uploads/{name}')
+def serve_upload_image(name: str):
+    name = os.path.basename(name)
+    path = os.path.realpath(os.path.join(UPLOAD_DIR, name))
+    if (os.path.splitext(path)[1].lower() not in _IMAGE_EXTS
+            or os.path.commonpath([os.path.realpath(UPLOAD_DIR), path]) != os.path.realpath(UPLOAD_DIR)
+            or not os.path.isfile(path)):
+        return Response(status_code=404)
+    return FileResponse(path, media_type=mimetypes.guess_type(path)[0] or 'application/octet-stream')
 
 
 # ============================================================
@@ -1615,6 +1744,8 @@ else:
 if __name__ == '__main__':
     import uvicorn
     host = os.environ.get('FLOOR_API_HOST', '127.0.0.1')
+    if host not in ('127.0.0.1', 'localhost', '::1'):
+        raise SystemExit('Floor Engine 当前仅支持本机监听，请使用 FLOOR_API_HOST=127.0.0.1')
     port = int(os.environ.get('FLOOR_API_PORT', '7870'))
     # 传 app 对象 = 单进程单 worker（_job_history/信号量是进程内状态，必须单 worker）
     uvicorn.run(app, host=host, port=port)

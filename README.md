@@ -62,7 +62,7 @@
 
 ### 环境要求
 - **Python** 3.10+（推荐 3.12）
-- **Node.js** 18+
+- **Node.js** 20.9+
 - 一个 **Google Gemini API Key**（出图必需；[申请入口](https://aistudio.google.com/apikey)）
 - 若你所在网络无法直连 Google，需准备可用**代理**（见 [配置说明](#️-配置说明)）
 
@@ -78,6 +78,7 @@ cd Floor_engine_server
 python -m venv .venv
 source .venv/bin/activate          # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
+# 开发与测试：pip install -r requirements-dev.txt
 ```
 
 ### 3. 安装前端依赖
@@ -120,8 +121,8 @@ cd Floor_engine_server/web && npm run dev        # → http://localhost:3000
 
 > ⚠️ `engine_config.json` 含密钥，已被 `.gitignore` 排除，**不会进入版本库**。请勿把密钥提交到仓库。
 
-前端可用环境变量：`web/.env.local` 里的 `NEXT_PUBLIC_API_BASE`（默认 `http://127.0.0.1:7870`）指向后端地址。
-后端可用环境变量：`FLOOR_API_PORT`(7870) / `FLOOR_API_HOST`(127.0.0.1) / `FLOOR_API_CORS`（放行的前端源，默认 `http://localhost:3000,http://127.0.0.1:3000`）。
+前端开发默认由 `web/.env.development` 指向 `http://127.0.0.1:7870`；生产静态站由 `web/.env.production` 使用同源 API。
+后端可用环境变量：`FLOOR_API_PORT`(7870) / `FLOOR_API_HOST`(仅支持 127.0.0.1) / `FLOOR_API_CORS`（放行的开发前端源）。本版本是客户本机程序，不提供无认证的局域网或公网部署。
 
 ### 📁 数据目录
 后端会把**配置与运行期数据**写在仓库目录的**上一级**（`config.py` 中 `BASE_DIR = 仓库上级目录`）。因此运行时会在上级目录生成：

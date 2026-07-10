@@ -53,14 +53,14 @@ export default function RecordsPage() {
   const [edit, setEdit] = useState<{
     open: boolean;
     rid: string;
-    idx: number;
+    resultId: string;
     instruction: string;
-  }>({ open: false, rid: "", idx: 0, instruction: "" });
+  }>({ open: false, rid: "", resultId: "", instruction: "" });
 
   const [review, setReview] = useState<{
     open: boolean;
     rid: string;
-    idx: number;
+    resultId: string;
     status: ReviewStatus;
     tags: string[];
     note: string;
@@ -68,7 +68,7 @@ export default function RecordsPage() {
   }>({
     open: false,
     rid: "",
-    idx: 0,
+    resultId: "",
     status: "unreviewed",
     tags: [],
     note: "",
@@ -151,10 +151,10 @@ export default function RecordsPage() {
     window.open(url, "_blank");
   }
 
-  async function doDeleteResult(rid: string, idx: number) {
+  async function doDeleteResult(rid: string, resultId: string) {
     if (!active || !window.confirm("确认删除这张效果图？")) return;
     try {
-      await api.deleteResult(active, rid, idx);
+      await api.deleteResult(active, rid, resultId);
       toast.success("已删除");
       reload();
     } catch (e) {
@@ -162,10 +162,10 @@ export default function RecordsPage() {
     }
   }
 
-  async function doFav(rid: string, idx: number) {
+  async function doFav(rid: string, resultId: string) {
     if (!active) return;
     try {
-      const r = await api.favoriteResult(active, rid, idx);
+      const r = await api.favoriteResult(active, rid, resultId);
       toast.success(r.favorite ? "已收藏" : "已取消收藏");
       reload();
     } catch (e) {
@@ -175,7 +175,7 @@ export default function RecordsPage() {
 
   async function doReview(
     rid: string,
-    idx: number,
+    resultId: string,
     patch: Partial<{
       status: ReviewStatus;
       tags: string[];
@@ -187,12 +187,12 @@ export default function RecordsPage() {
     if (!active) return;
     const src = source || records
       .find((r) => r.id === rid)
-      ?.results?.[idx];
+      ?.results?.find((item) => item.result_id === resultId);
     try {
       await api.reviewResult({
         json_path: active,
         record_id: rid,
-        result_index: idx,
+        result_id: resultId,
         review_status: patch.status ?? src?.review_status ?? "unreviewed",
         review_tags: patch.tags ?? src?.review_tags ?? [],
         review_note: patch.note ?? src?.review_note ?? "",
@@ -205,11 +205,11 @@ export default function RecordsPage() {
     }
   }
 
-  function openReviewDialog(rid: string, idx: number, res: RecordResult) {
+  function openReviewDialog(rid: string, resultId: string, res: RecordResult) {
     setReview({
       open: true,
       rid,
-      idx,
+      resultId,
       status: res.review_status || "unreviewed",
       tags: [...(res.review_tags || [])],
       note: res.review_note || "",
@@ -218,7 +218,7 @@ export default function RecordsPage() {
   }
 
   async function doReviewSubmit() {
-    await doReview(review.rid, review.idx, {
+    await doReview(review.rid, review.resultId, {
       status: review.status,
       tags: review.tags,
       note: review.note,
@@ -256,11 +256,11 @@ export default function RecordsPage() {
       await api.recordEdit({
         json_path: active,
         record_id: edit.rid,
-        result_index: edit.idx,
+        result_id: edit.resultId,
         instruction: t,
       });
       toast.success("已提交二改（在「生成」页可看进度，完成后回此刷新）");
-      setEdit({ open: false, rid: "", idx: 0, instruction: "" });
+      setEdit({ open: false, rid: "", resultId: "", instruction: "" });
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -441,14 +441,14 @@ export default function RecordsPage() {
 
                       <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-[11px]">
                         {(r.results || []).map((res, j) => {
-                          const realIdx = Number(res.__idx ?? j);
+                          const resultId = res.result_id;
                           const url = res.result_url || "";
                           const thumb = res.result_thumb || url;
                           const status = res.review_status || "unreviewed";
                           const statusMeta =
                             REVIEW_STATUS.find((s) => s.value === status) || REVIEW_STATUS[0];
                           return (
-                            <div key={j}>
+                            <div key={resultId || j}>
                               <div className="relative aspect-[4/3] overflow-hidden rounded-[10px] border border-border">
                                 {url ? (
                                   <>
@@ -480,7 +480,7 @@ export default function RecordsPage() {
                                 <span className="flex shrink-0 items-center gap-2.5 text-[12.5px]">
                                   <button
                                     title="收藏"
-                                    onClick={() => doFav(rid, realIdx)}
+                                    onClick={() => doFav(rid, resultId)}
                                     className={
                                       res.favorite
                                         ? "text-primary"
@@ -492,7 +492,7 @@ export default function RecordsPage() {
                                   <button
                                     title="二改"
                                     onClick={() =>
-                                      setEdit({ open: true, rid, idx: realIdx, instruction: "" })
+                                      setEdit({ open: true, rid, resultId, instruction: "" })
                                     }
                                     className="hover:text-[#2a241f]"
                                   >
@@ -509,7 +509,7 @@ export default function RecordsPage() {
                                   )}
                                   <button
                                     title="删除"
-                                    onClick={() => doDeleteResult(rid, realIdx)}
+                                    onClick={() => doDeleteResult(rid, resultId)}
                                     className="hover:text-[#b5503a]"
                                   >
                                     🗑
@@ -523,7 +523,7 @@ export default function RecordsPage() {
                                     onClick={() =>
                                       doReview(
                                         rid,
-                                        realIdx,
+                                        resultId,
                                         { status: status === s.value ? "unreviewed" : s.value },
                                         res,
                                       )
@@ -541,7 +541,7 @@ export default function RecordsPage() {
                                 ))}
                                 <button
                                   onClick={() =>
-                                    doReview(rid, realIdx, { best: !res.best }, res)
+                                    doReview(rid, resultId, { best: !res.best }, res)
                                   }
                                   className={cn(
                                     "h-6 rounded-md border px-2 text-[11px] font-semibold",
@@ -553,7 +553,7 @@ export default function RecordsPage() {
                                   最佳
                                 </button>
                                 <button
-                                  onClick={() => openReviewDialog(rid, realIdx, res)}
+                                  onClick={() => openReviewDialog(rid, resultId, res)}
                                   className="h-6 rounded-md border border-border bg-card px-2 text-[11px] font-semibold text-[#6b6356] hover:bg-[#f2e9e0]"
                                 >
                                   标注

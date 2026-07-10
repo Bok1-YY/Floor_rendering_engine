@@ -157,7 +157,7 @@ def call_gemini_generate(api_key: str, model_id: str, prompt_text: str, image_pa
     logger.info(
         f"[API生成] start model={model_id}, size={image_size}, ar={aspect_ratio}, "
         f"floor={image_path}, room_ref={bool(room_image_path)}, style_ref={bool(style_ref_image_path)}, "
-        f"prompt={_short_text(prompt_text, 240)}"
+        f"prompt_len={len(prompt_text or '')}, prompt_sha256={hashlib.sha256((prompt_text or '').encode()).hexdigest()[:12]}"
     )
     if not os.path.exists(image_path):
         logger.error(f"[API生成] 素材图不存在: {image_path}")
@@ -438,7 +438,7 @@ def call_fal_generate(api_key: str, model_id: str, prompt_text: str, image_path:
     logger.info(
         f"[Fal生成] start model={model_id} -> {endpoint}, size={image_size}, ar={aspect_ratio}, "
         f"floor={image_path}, room_ref={bool(room_image_path)}, style_ref={bool(style_ref_image_path)}, "
-        f"prompt={_short_text(prompt_text, 240)}"
+        f"prompt_len={len(prompt_text or '')}, prompt_sha256={hashlib.sha256((prompt_text or '').encode()).hexdigest()[:12]}"
     )
     if not os.path.exists(image_path):
         logger.error(f"[Fal生成] 素材图不存在: {image_path}")
@@ -655,7 +655,7 @@ def call_gemini_edit(api_key: str, model_id: str, edit_instruction: str, source_
             except Exception: pass
     logger.info(
         f"[API二改] start model={model_id}, size={image_size}, ar={aspect_ratio}, "
-        f"source_b64_len={len(source_image_b64 or '')}, instruction={_short_text(edit_instruction, 300)}"
+        f"source_b64_len={len(source_image_b64 or '')}, instruction_len={len(edit_instruction or '')}"
     )
     if not source_image_b64:
         logger.error("[API二改] 缺少待修改图片")

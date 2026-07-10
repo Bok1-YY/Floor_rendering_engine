@@ -9,6 +9,7 @@ import shutil
 import tempfile
 import threading
 import dataclasses
+import uuid
 from typing import List, Tuple, Optional
 
 from PIL import Image
@@ -58,6 +59,13 @@ def persist_jobs(jobs) -> None:
             ctx = d.get('retry_ctx')
             if isinstance(ctx, dict) and 'api_key' in ctx:
                 ctx = dict(ctx); ctx.pop('api_key', None); d['retry_ctx'] = ctx
+            if isinstance(ctx, dict):
+                ctx = dict(ctx)
+                for key in ('cpt', 'cpt_pro'):
+                    value = ctx.pop(key, '')
+                    if value:
+                        ctx[f'{key}_obf'] = _obfuscate(value)
+                d['retry_ctx'] = ctx
             out.append(d)
         tmp = QUEUE_STATE_FILE + '.tmp'
         with open(tmp, 'w', encoding='utf-8') as f:
@@ -91,6 +99,11 @@ def load_persisted_jobs() -> List[JobRecord]:
             job.status = 'partial' if (job.b2_path or job.pro_path) else 'failed'
             job.error = '程序重启，任务已中断'
         job.b2_stage = ''; job.pro_stage = ''; job.pro_polishing = False
+        if isinstance(job.retry_ctx, dict):
+            for key in ('cpt', 'cpt_pro'):
+                encoded = job.retry_ctx.pop(f'{key}_obf', '')
+                if encoded and not job.retry_ctx.get(key):
+                    job.retry_ctx[key] = _deobfuscate(encoded)
         ensure_candidate_lists(job)  # 老持久化只有 *_path → 回填成单元素候选列表(单张无 nav)，之后重抽即累积
         jobs.append(job)
     if jobs:
@@ -145,10 +158,16 @@ def _load_usage_raw() -> dict:
             with open(_USAGE_STATS_FILE, "r", encoding="utf-8") as f:
                 d = json.load(f)
             if isinstance(d, dict):
-                return d
+                if int(d.get('version', 1) or 1) >= 2:
+                    return d
+                old = d.get('counts') or {}
+                return {'version': 2, 'counts': {
+                    mode: {'generate': models} for mode, models in old.items()
+                    if isinstance(models, dict)
+                }}
     except Exception as ex:
         logger.warning(f"[用量] 读取失败(将重置): {ex}")
-    return {"version": 1, "counts": {}}
+    return {"version": 2, "counts": {}}
 
 def _save_usage_raw(data: dict) -> None:
     tmp = _USAGE_STATS_FILE + ".tmp"
@@ -156,7 +175,7 @@ def _save_usage_raw(data: dict) -> None:
         json.dump(data, f, ensure_ascii=False)
     os.replace(tmp, _USAGE_STATS_FILE)
 
-def record_usage(mode: str, model: str, provider: str, ok: bool) -> None:
+def record_usage(mode: str, model: str, provider: str, ok: bool, operation: str = 'generate') -> None:
     """累加一次出图结果。维度: 模式 × 模型(B2/Pro) × 线路(google/fal)，各计 ok/fail。
     全程吞异常——统计绝不能影响生图。"""
     try:
@@ -168,7 +187,8 @@ def record_usage(mode: str, model: str, provider: str, ok: bool) -> None:
         with _usage_lock:
             data = _load_usage_raw()
             counts = data.setdefault("counts", {})
-            row = counts.setdefault(mkey, {}).setdefault(mdl, {}).setdefault(prov, {"ok": 0, "fail": 0})
+            op = (operation or 'generate').strip().lower()
+            row = counts.setdefault(mkey, {}).setdefault(op, {}).setdefault(mdl, {}).setdefault(prov, {"ok": 0, "fail": 0})
             row["ok" if ok else "fail"] = int(row.get("ok" if ok else "fail", 0)) + 1
             _save_usage_raw(data)
     except Exception as ex:
@@ -180,18 +200,22 @@ def load_usage_summary() -> dict:
     data = _load_usage_raw()
     rows = []
     tot_ok = tot_fail = 0
-    for mode, models in sorted((data.get("counts") or {}).items()):
-        if not isinstance(models, dict):
+    for mode, operations in sorted((data.get("counts") or {}).items()):
+        if not isinstance(operations, dict):
             continue
-        for model, provs in sorted(models.items()):
-            if not isinstance(provs, dict):
+        for operation, models in sorted(operations.items()):
+            if not isinstance(models, dict):
                 continue
-            for prov, c in sorted(provs.items()):
-                if not isinstance(c, dict):
+            for model, provs in sorted(models.items()):
+                if not isinstance(provs, dict):
                     continue
-                ok = int(c.get("ok", 0)); fail = int(c.get("fail", 0))
-                tot_ok += ok; tot_fail += fail
-                rows.append({"mode": mode, "model": model, "provider": prov, "ok": ok, "fail": fail})
+                for prov, c in sorted(provs.items()):
+                    if not isinstance(c, dict):
+                        continue
+                    ok = int(c.get("ok", 0)); fail = int(c.get("fail", 0))
+                    tot_ok += ok; tot_fail += fail
+                    rows.append({"mode": mode, "operation": operation, "model": model,
+                                 "provider": prov, "ok": ok, "fail": fail})
     return {"rows": rows, "totals": {"ok": tot_ok, "fail": tot_fail, "total": tot_ok + tot_fail}}
 
 def _load_records(json_path):
@@ -262,20 +286,43 @@ def _delete_record(json_path, record_id):
     logger.info(f"[记录] 已删除记录 json={json_path}, record={record_id}")
     return True
 
-def _delete_result_image(json_path, record_id, result_index):
-    """删除记录中指定索引的效果图"""
+def _delete_result_image(json_path, record_id, result_ref):
+    """Delete a result reference by stable id (or a legacy integer index)."""
     with record_file_lock(json_path):
         records = _load_records(json_path)
         for r in records:
             if r.get('id') == record_id:
                 results = r.get('results', [])
-                if 0 <= result_index < len(results):
-                    results.pop(result_index)
+                idx = _result_index(results, result_ref)
+                if idx >= 0:
+                    results.pop(idx)
                     _save_records(json_path, records)
-                    logger.info(f"[记录] 已删除效果图 json={json_path}, record={record_id}, index={result_index}")
+                    logger.info(f"[记录] 已删除效果图 json={json_path}, record={record_id}, result={result_ref}")
                     return True
-    logger.warning(f"[记录] 删除效果图失败 json={json_path}, record={record_id}, index={result_index}")
+    logger.warning(f"[记录] 删除效果图失败 json={json_path}, record={record_id}, result={result_ref}")
     return False
+
+
+def _new_result_id() -> str:
+    return f"res_{uuid.uuid4().hex}"
+
+
+def _result_index(results, result_ref) -> int:
+    """Resolve a stable result id; integers remain accepted for internal legacy callers."""
+    if isinstance(result_ref, int):
+        return result_ref if 0 <= result_ref < len(results) else -1
+    return next((i for i, item in enumerate(results)
+                 if item.get('result_id') == str(result_ref)), -1)
+
+
+def _ensure_result_ids(records) -> bool:
+    changed = False
+    for record in records or []:
+        for result in record.get('results', []) if isinstance(record, dict) else []:
+            if not result.get('result_id'):
+                result['result_id'] = _new_result_id()
+                changed = True
+    return changed
 
 def _img_to_b64(img_or_path, max_width: Optional[int] = None) -> str:
     try:
@@ -393,7 +440,7 @@ def export_html_from_json(json_path):
                        f' &nbsp;|&nbsp; {r.get("workflow_mode","")} &nbsp;|&nbsp; {r.get("room_type","")}</p>'
                        f'{sample_tag}'
                        f'<pre style="white-space:pre-wrap;font-size:0.82em;background:#f8f8f8;padding:12px;border-radius:6px;">'
-                       f'{html.escape(r.get("params_summary","") or r.get("prompt_en",""))}</pre>'
+                       f'{html.escape(r.get("params_summary", ""))}</pre>'
                        f'{results_html}</div>')
     full_html = ('<!DOCTYPE html><html><head><meta charset="utf-8"><title>地板效果图记录</title>'
                  '<style>body{font-family:sans-serif;max-width:960px;margin:0 auto;padding:20px;}</style>'
@@ -418,6 +465,7 @@ def append_result_to_log(img1_path, img2_path, json_path, record_id, comment1=""
                             except Exception as ex:
                                 logger.warning(f"[追加] 落盘失败(回退 base64): {ex}")
                             entry = {
+                                'result_id': _new_result_id(),
                                 'result_timestamp': ts,
                                 'comment': str(comment).strip() if comment else '',
                                 'model_label': label,
@@ -467,6 +515,46 @@ def _deobfuscate(encoded: str) -> str:
     try: return bytes([b ^ _PROMPT_KEY[i % len(_PROMPT_KEY)] for i, b in enumerate(b64mod.b64decode(encoded))]).decode("utf-8")
     except Exception: return ""
 
+
+def migrate_record_storage(json_path) -> bool:
+    """Remove plaintext prompts and add stable result ids, keeping one recovery backup."""
+    with record_file_lock(json_path):
+        records = _load_records(json_path)
+        if not isinstance(records, list):
+            return False
+        changed = _ensure_result_ids(records)
+        for record in records:
+            if not isinstance(record, dict):
+                continue
+            prompt = record.pop('prompt_en', '')
+            prompt_pro = record.pop('prompt_en_pro', '')
+            if prompt:
+                record.setdefault('_pe', _obfuscate(prompt))
+                changed = True
+            if prompt_pro:
+                record.setdefault('_pe_pro', _obfuscate(prompt_pro))
+                changed = True
+            if record.get('_schema_version') != 2:
+                record['_schema_version'] = 2
+                changed = True
+        if not changed:
+            return False
+        backup = json_path + '.schema_v1.bak'
+        if not os.path.exists(backup) and os.path.exists(json_path):
+            shutil.copy2(json_path, backup)
+        _save_records(json_path, records)
+        return True
+
+
+def migrate_all_record_storage() -> int:
+    changed = 0
+    for path in scan_json_files():
+        try:
+            changed += int(migrate_record_storage(path))
+        except Exception as ex:
+            logger.error(f"[记录迁移] 失败，已保留原文件 {path}: {ex}")
+    return changed
+
 def reveal_prompt_fn(json_path, record_id, input_password):
     if not input_password: return "🔒 请输入密码"
     if hashlib.sha256(input_password.strip().encode('utf-8')).hexdigest() != _load_reveal_hash(): return "❌ 密码错误"
@@ -489,6 +577,7 @@ def _api_write_to_record(pil_img, model_key: str, json_path_val: str, record_id_
         if not rel:
             rel = _rel_result_path(_save_api_result_jpg(pil_img, model_key, json_path_val.replace('_记录.json', '_优化图.png')))
         entry = {
+            'result_id': _new_result_id(),
             'result_timestamp': time.strftime("%Y-%m-%d %H:%M:%S"),
             'comment': f'API 自动生成 ({pil_img.width}×{pil_img.height})',
             'model_label': model_key,
@@ -514,22 +603,32 @@ def _api_write_to_record(pil_img, model_key: str, json_path_val: str, record_id_
         logger.error(f"❌ 写入记录失败 ({model_key}): {e}")
 
 def _save_api_result_jpg(pil_img, model_key: str, png_path_val: str) -> str:
+    tmp_path = None
     try:
-        ts = time.strftime("%Y%m%d_%H%M%S")
-        safe_key = model_key.replace(" ", "_")
+        ts = time.strftime("%Y%m%d_%H%M%S") + f"_{int(time.time_ns() % 1_000_000_000):09d}"
+        safe_key = ''.join(c if (c.isalnum() or c in '._-') else '_' for c in str(model_key or 'result')).strip('._') or 'result'
         raw_base = os.path.basename(png_path_val or "api")
         orig_name = raw_base.replace('_优化图.png', '').replace('.png', '') or "result"
-        fname = f"{orig_name}_{safe_key}_{ts}.jpg"
+        orig_name = ''.join(c if (c.isalnum() or c in '._-') else '_' for c in orig_name).strip('._') or 'result'
+        fname = f"{orig_name}_{safe_key}_{ts}_{uuid.uuid4().hex[:10]}.jpg"
         fpath = os.path.join(MAIN_OUTPUT_DIR, fname)
         img = pil_img.copy()
         if img.mode != 'RGB': img = img.convert('RGB')
-        img.save(fpath, format='JPEG', quality=95)
+        fd, tmp_path = tempfile.mkstemp(prefix='.result_', suffix='.jpg', dir=MAIN_OUTPUT_DIR)
+        os.close(fd)
+        img.save(tmp_path, format='JPEG', quality=95)
+        os.replace(tmp_path, fpath)
+        tmp_path = None
         return fpath
     except Exception as e:
         logger.error(f"API 结果图片保存失败 ({model_key}): {e}")
         return None
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try: os.remove(tmp_path)
+            except OSError: pass
 
-def append_edited_result_to_record(json_path, record_id, source_index, pil_img, edit_prompt, model_label, image_file=None):
+def append_edited_result_to_record(json_path, record_id, source_ref, pil_img, edit_prompt, model_label, image_file=None):
     if pil_img is None:
         return "❌ 没有可写入的二次修改图片"
     if not json_path or not record_id:
@@ -544,14 +643,15 @@ def append_edited_result_to_record(json_path, record_id, source_index, pil_img, 
                 if r.get('id') == record_id:
                     ts = time.strftime("%Y-%m-%d %H:%M:%S")
                     comment = (
-                        f"二次修改自第 {int(source_index) + 1} 张图 | {model_label}\n"
+                        f"二次修改自结果 {source_ref} | {model_label}\n"
                         f"修改建议：{str(edit_prompt).strip()}"
                     )
                     entry = {
+                        'result_id': _new_result_id(),
                         'result_timestamp': ts,
                         'comment': comment,
                         'model_label': f"{model_label} Edit",
-                        'source_result_index': int(source_index),
+                        'source_result_id': str(source_ref),
                         'edit_prompt': str(edit_prompt).strip(),
                     }
                     if rel:
@@ -561,8 +661,8 @@ def append_edited_result_to_record(json_path, record_id, source_index, pil_img, 
                     r.setdefault('results', []).append(entry)
                     _save_records(json_path, records)
                     logger.info(
-                        f"[二改记录] 已追加 record={record_id}, source_index={source_index}, "
-                        f"model={model_label}, image={pil_img.width}x{pil_img.height}, prompt={_short_text(edit_prompt, 300)}"
+                        f"[二改记录] 已追加 record={record_id}, source={source_ref}, "
+                        f"model={model_label}, image={pil_img.width}x{pil_img.height}, instruction_len={len(str(edit_prompt or ''))}"
                     )
                     return "✅ 二次修改结果已追加到当前记录"
         logger.error(f"[二改记录] 未找到对应记录 json={json_path}, record={record_id}")
@@ -573,27 +673,28 @@ def append_edited_result_to_record(json_path, record_id, source_index, pil_img, 
 
 
 # ── 收藏（给满意的效果图打星）────────────────────────────────────
-def toggle_result_favorite(json_path, record_id, result_index):
+def toggle_result_favorite(json_path, record_id, result_ref):
     """翻转某条结果的收藏标记，返回新状态(True/False)；未找到返回 None。"""
     with record_file_lock(json_path):
         records = _load_records(json_path)
         for r in records:
             if r.get('id') == record_id:
                 results = r.get('results', [])
-                if 0 <= result_index < len(results):
-                    new_state = not bool(results[result_index].get('favorite'))
-                    results[result_index]['favorite'] = new_state
+                idx = _result_index(results, result_ref)
+                if idx >= 0:
+                    new_state = not bool(results[idx].get('favorite'))
+                    results[idx]['favorite'] = new_state
                     _save_records(json_path, records)
-                    logger.info(f"[记录] 收藏切换 json={json_path}, record={record_id}, idx={result_index}, fav={new_state}")
+                    logger.info(f"[记录] 收藏切换 json={json_path}, record={record_id}, result={result_ref}, fav={new_state}")
                     return new_state
-    logger.warning(f"[记录] 收藏切换失败，未找到 json={json_path}, record={record_id}, idx={result_index}")
+    logger.warning(f"[记录] 收藏切换失败，未找到 json={json_path}, record={record_id}, result={result_ref}")
     return None
 
 
 REVIEW_STATUSES = {'unreviewed', 'pass', 'backup', 'rejected'}
 
 
-def update_result_review(json_path, record_id, result_index, *,
+def update_result_review(json_path, record_id, result_ref, *,
                          review_status='unreviewed', review_tags=None,
                          review_note='', best=False):
     """写入单张效果图的人工评审元数据。
@@ -618,12 +719,13 @@ def update_result_review(json_path, record_id, result_index, *,
             if r.get('id') != record_id:
                 continue
             results = r.get('results', [])
-            if not (0 <= result_index < len(results)):
+            idx = _result_index(results, result_ref)
+            if idx < 0:
                 break
             if best:
                 for res in results:
                     res['best'] = False
-            target = results[result_index]
+            target = results[idx]
             target['review_status'] = status
             target['review_tags'] = tags
             target['review_note'] = note
@@ -632,7 +734,7 @@ def update_result_review(json_path, record_id, result_index, *,
             _save_records(json_path, records)
             logger.info(
                 f"[记录] 评审更新 json={json_path}, record={record_id}, "
-                f"idx={result_index}, status={status}, tags={tags}, best={best}"
+                f"result={result_ref}, status={status}, tags={tags}, best={best}"
             )
             return {
                 'review_status': status,
@@ -641,13 +743,13 @@ def update_result_review(json_path, record_id, result_index, *,
                 'best': best,
                 'reviewed_at': target['reviewed_at'],
             }
-    logger.warning(f"[记录] 评审更新失败 json={json_path}, record={record_id}, idx={result_index}")
+    logger.warning(f"[记录] 评审更新失败 json={json_path}, record={record_id}, result={result_ref}")
     return None
 
 
 def collect_favorites():
     """扫描所有记录文件，汇总被收藏(favorite=True)的结果，按出图时间倒序。
-    返回 [{json_path, material, record_id, record, result_index, res}, ...]。"""
+    返回 [{json_path, material, record_id, record, result_id, res}, ...]。"""
     out = []
     for jp in scan_json_files():
         material = os.path.basename(jp).replace('_记录.json', '').replace('.json', '')
@@ -656,12 +758,12 @@ def collect_favorites():
         except Exception:
             continue
         for r in recs:
-            for idx, res in enumerate(r.get('results', [])):
+            for res in r.get('results', []):
                 if res.get('favorite'):
                     out.append({
                         'json_path': jp, 'material': material,
                         'record_id': r.get('id', ''), 'record': r,
-                        'result_index': idx, 'res': res,
+                        'result_id': res.get('result_id', ''), 'res': res,
                     })
     out.sort(key=lambda x: x['res'].get('result_timestamp', ''), reverse=True)
     return out
@@ -860,6 +962,7 @@ __all__ = [
     'append_result_to_log', 'append_edited_result_to_record',
     '_obfuscate', '_deobfuscate', 'reveal_prompt_fn',
     '_api_write_to_record', '_save_api_result_jpg', 'migrate_record_file',
+    'migrate_record_storage', 'migrate_all_record_storage',
     'toggle_result_favorite', 'update_result_review', 'collect_favorites',
     'export_pptx_from_json', 'export_favorites_pptx',
 ]

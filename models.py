@@ -32,6 +32,9 @@ class JobRecord:
     b2_stage: str = ''                       # live status text for B2 (思考标题/渲染中/重试) — worker thread writes, UI timer reads
     pro_stage: str = ''                      # live status text for Pro
     retry_ctx: Optional[dict] = None         # 生成上下文快照，供失败后「重试」按钮重放(只重跑未成图的模型)
+    operation: str = 'generate'              # generate/retry/regen/polish/edit/record_edit
+    operation_status: str = 'idle'           # idle/running/done/failed/cancelled
+    operation_error: str = ''
     favorite: bool = False                   # 队列卡收藏标记（仅内存态，供「⭐仅看收藏」过滤；不持久化）
     # ── 重抽候选累积（同卡内左右切换对比）──
     # 每个图槽保存历次重抽产出的全部候选路径；*_path 始终 = *_paths[*_idx]（当前展示的那张）。

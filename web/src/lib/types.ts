@@ -27,6 +27,9 @@ export interface JobView {
   time_text: string;
   model_status: string;
   pro_polishing: boolean;
+  operation: string;
+  operation_status: "idle" | "running" | "done" | "failed" | "cancelled";
+  operation_error: string;
   has_retry: boolean;
   record_id: string;
   json_path: string;
@@ -214,6 +217,7 @@ export type Recipe = Record<string, unknown> & { label?: string; sub?: string };
 export type ReviewStatus = "unreviewed" | "pass" | "backup" | "rejected";
 
 export interface RecordResult {
+  result_id: string;
   result_url?: string;
   result_thumb?: string;
   has_inline?: boolean;
@@ -233,7 +237,7 @@ export interface RecordResult {
 export interface ResultReviewPatch {
   json_path: string;
   record_id: string;
-  result_index: number;
+  result_id: string;
   review_status: ReviewStatus;
   review_tags: string[];
   review_note: string;
@@ -255,6 +259,7 @@ export interface RecordFile {
 
 export interface UsageRow {
   mode: string;
+  operation: string;
   model: string;
   provider: string;
   ok: number;
@@ -284,7 +289,7 @@ export interface FloorAnalyze {
 export interface RecordEditRequest {
   json_path: string;
   record_id: string;
-  result_index: number;
+  result_id: string;
   instruction: string;
   api_key?: string;
   image_size?: string;

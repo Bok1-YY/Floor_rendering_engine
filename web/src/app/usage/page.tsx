@@ -62,8 +62,9 @@ export default function UsagePage() {
             </div>
 
             <div className="mt-[14px] overflow-hidden rounded-[14px] border border-border bg-card shadow-[0_2px_8px_rgba(120,90,60,.05)]">
-              <div className="grid grid-cols-[1.3fr_1fr_1.2fr_.7fr_.7fr] bg-[#f2e9e0] px-[18px] py-[11px] text-[11.5px] font-bold tracking-wide text-[#a8472a]">
+              <div className="grid grid-cols-[1.2fr_1fr_1fr_1fr_.6fr_.6fr] bg-[#f2e9e0] px-[18px] py-[11px] text-[11.5px] font-bold tracking-wide text-[#a8472a]">
                 <span>模式</span>
+                <span>操作</span>
                 <span>模型</span>
                 <span>线路</span>
                 <span className="text-right">成功</span>
@@ -77,9 +78,10 @@ export default function UsagePage() {
               {data.rows.map((r, i) => (
                 <div
                   key={i}
-                  className="grid grid-cols-[1.3fr_1fr_1.2fr_.7fr_.7fr] items-center border-t border-[#efe9dc] px-[18px] py-3 text-[13px] text-[#2a241f]"
+                  className="grid grid-cols-[1.2fr_1fr_1fr_1fr_.6fr_.6fr] items-center border-t border-[#efe9dc] px-[18px] py-3 text-[13px] text-[#2a241f]"
                 >
                   <span>{r.mode}</span>
+                  <span className="text-[#6b6356]">{r.operation}</span>
                   <span className="text-[#6b6356]">{r.model}</span>
                   <span className="text-[#6b6356]">{r.provider}</span>
                   <span className="text-right font-bold tabular-nums text-[#2e8c7e]">

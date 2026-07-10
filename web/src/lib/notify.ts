@@ -32,6 +32,7 @@ function beep(ok: boolean) {
     g.gain.exponentialRampToValueAtTime(0.0001, c.currentTime + 0.45);
     o.start();
     o.stop(c.currentTime + 0.45);
+    o.addEventListener("ended", () => c.close().catch(() => {}), { once: true });
   } catch {
     /* 忽略 */
   }

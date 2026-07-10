@@ -8,15 +8,12 @@
 # 它原本会间接带来 fastapi/uvicorn，现已显式直列于下；去掉 nicegui 后服务仍可独立跑。
 
 # ── server_api.py(FastAPI 无头服务层)直接依赖 ──
-fastapi                  # 未 pin（原随 nicegui 约束解析）；如需复现版本，按当前 venv 自行 pin
-uvicorn[standard]        # ASGI 服务器：uvicorn Floor_engine_server.server_api:app
-python-multipart         # FastAPI 解析 multipart 上传(UploadFile)所需
+fastapi==0.139.0
+uvicorn[standard]==0.49.0
+python-multipart==0.0.32
 Pillow==12.2.0
 requests==2.34.2
 numpy==2.4.6
 deep-translator==1.11.4
 urllib3==2.7.0
-python-pptx>=0.6.23   # PPTX 导出(客户提案 deck)；纯 python，仅依赖已装的 Pillow + lxml
-
-# ── 开发/测试 (跑 prompt 黄金回归测试用; 不进生产运行依赖) ──
-pytest>=7.0.0
+python-pptx==1.0.2

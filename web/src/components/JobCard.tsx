@@ -41,6 +41,7 @@ export function JobCard({
   const [view, setView] = useState<{ b2?: SlotView; pro?: SlotView }>({});
 
   const prevStatus = useRef(initial.status);
+  const prevOperationStatus = useRef(initial.operation_status);
   const totalsRef = useRef({ b2: initial.b2_total, pro: initial.pro_total });
   // 快照统一入口（SSE / 父级 2.5s 轮询 / 操作回执三路共用）：刷新 job；
   // 仅当候选总数变化(新图落地)才清候选浏览覆盖，避免每秒把用户正在翻的 ‹n/N› 重置回去；
@@ -53,7 +54,19 @@ export function JobCard({
     if (wasActive && nowTerminal) {
       notifyJobEnd(j.status, j.display_name, j.error);
     }
+    if (
+      !wasActive &&
+      prevOperationStatus.current === "running" &&
+      (j.operation_status === "done" || j.operation_status === "failed")
+    ) {
+      notifyJobEnd(
+        j.operation_status === "done" ? "done" : "failed",
+        `${j.display_name} · ${j.operation}`,
+        j.operation_error,
+      );
+    }
     prevStatus.current = j.status;
+    prevOperationStatus.current = j.operation_status;
     if (
       j.b2_total !== totalsRef.current.b2 ||
       j.pro_total !== totalsRef.current.pro
@@ -64,7 +77,10 @@ export function JobCard({
     setJob(j);
   }, []);
   const active =
-    job.status === "queued" || job.status === "running" || job.pro_polishing;
+    job.status === "queued" ||
+    job.status === "running" ||
+    job.pro_polishing ||
+    job.operation_status === "running";
   useJobStream(active ? job.job_id : null, applySnapshot);
   // 轮询兜底：SSE 断流(后端重启/流异常关闭)时，父级轮询的新快照仍能解冻卡片。
   // SSE 与轮询同源同结构，last-writer-wins，1s 周期的 SSE 会覆盖偶尔旧一拍的轮询数据。
@@ -142,7 +158,8 @@ export function JobCard({
       .join(" · ") || "处理中…";
 
   const terminal =
-    job.status === "done" || job.status === "partial" || job.status === "failed";
+    !active &&
+    (job.status === "done" || job.status === "partial" || job.status === "failed");
 
   return (
     <div className="animate-scfade rounded-[14px] border border-border bg-card p-[13px] shadow-[0_2px_8px_rgba(120,90,60,.05)]">
@@ -187,12 +204,12 @@ export function JobCard({
         </div>
       )}
 
-      {job.error && (
+      {(job.operation_error || job.error) && (
         <div className="mt-2.5 rounded-[9px] bg-[#f9e7e2] px-[11px] py-[9px] text-[11.5px] leading-relaxed text-[#9a3b29]">
           {job.error_kb ? (
             <span className="font-semibold">{job.error_kb.title} · </span>
           ) : null}
-          {job.error}
+          {job.operation_error || job.error}
         </div>
       )}
 

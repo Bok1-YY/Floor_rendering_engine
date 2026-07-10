@@ -8,9 +8,18 @@ Computes BASE_DIR independently to avoid circular imports with config.py.
 
 import os
 import logging
+import sys
 
-# 项目根目录（floor_engine 的上级目录）
-_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+# Keep this independent from config.py to avoid a circular import, but use the same frozen-aware rules.
+_IS_FROZEN = getattr(sys, 'frozen', False) or ('__compiled__' in globals())
+if _IS_FROZEN:
+    _exe = (os.environ.get('NUITKA_ONEFILE_BINARY')
+            or os.environ.get('NUITKA_ORIGINAL_ARGV0')
+            or sys.argv[0]
+            or sys.executable)
+    _BASE_DIR = os.path.dirname(os.path.abspath(_exe))
+else:
+    _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 logging.basicConfig(
     level=logging.INFO,

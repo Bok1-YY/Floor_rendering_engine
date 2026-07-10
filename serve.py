@@ -43,9 +43,10 @@ def _open_browser_later(url: str):
 def main():
     import uvicorn
     host = os.environ.get('FLOOR_API_HOST', '127.0.0.1')
+    if host not in ('127.0.0.1', 'localhost', '::1'):
+        raise SystemExit('Floor Engine 当前仅支持本机监听，请使用 FLOOR_API_HOST=127.0.0.1')
     port = int(os.environ.get('FLOOR_API_PORT', '7870'))
-    # 面向本机访问时用 127.0.0.1 打开浏览器；若绑 0.0.0.0 则仍开 127.0.0.1 本机页
-    open_host = '127.0.0.1' if host in ('0.0.0.0', '::') else host
+    open_host = '127.0.0.1' if host == '::1' else host
     _open_browser_later(f'http://{open_host}:{port}/')
     print(f'[Floor engine] 服务启动中 → http://{open_host}:{port}/  （Ctrl+C 退出）')
     # 传 app 对象 = 单进程单 worker（_job_history/信号量是进程内状态，必须单 worker）。

@@ -5,8 +5,7 @@ REM  Output: dist\FloorEngine.exe  (onefile, native code, bundled web UI)
 REM
 REM  Requirements:
 REM    1) Python 3.10-3.12 installed and on PATH
-REM    2) Floor_engine_server\web\out already exists (prebuilt static UI,
-REM       platform-independent, copied over with the folder)
+REM    2) Node.js 20.9+ and npm installed and on PATH
 REM    3) Internet for the first build (Nuitka downloads MinGW64)
 REM
 REM  This file is pure ASCII on purpose: cmd parses .bat with the system
@@ -30,15 +29,15 @@ set "PKG=Floor_engine_server"
 
 echo.
 echo ============================================================
-echo  [1/4] Checking prebuilt web UI: %PKG%\web\out
+echo  [1/4] Building web UI
 echo ============================================================
-if not exist "%PKG%\web\out\index.html" (
-  echo   [ERROR] %PKG%\web\out\index.html not found.
-  echo           Build the frontend first on a dev machine:
-  echo               cd web  ^&^&  npx next build
-  echo           then copy the whole folder here (with web\out).
-  goto :fail
-)
+where node >nul 2>nul || (echo   [ERROR] Node.js 20.9+ is required. & goto :fail)
+where npm >nul 2>nul || (echo   [ERROR] npm is required. & goto :fail)
+pushd "%PKG%\web" || goto :fail
+call npm ci || (popd & goto :fail)
+call npm run build || (popd & goto :fail)
+popd
+if not exist "%PKG%\web\out\index.html" goto :fail
 echo   OK
 
 echo.
@@ -50,7 +49,8 @@ if not exist ".buildenv\Scripts\python.exe" (
 )
 call ".buildenv\Scripts\activate.bat" || goto :fail
 python -m pip install --upgrade pip
-python -m pip install nuitka zstandard ordered-set fastapi uvicorn h11 python-multipart Pillow==12.2.0 requests==2.34.2 numpy==2.4.6 deep-translator==1.11.4 urllib3==2.7.0 "python-pptx>=0.6.23"
+python -m pip install nuitka zstandard ordered-set
+python -m pip install -r "%PKG%\requirements.txt"
 if errorlevel 1 goto :fail
 
 echo.

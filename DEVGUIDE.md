@@ -36,8 +36,8 @@ npm run dev                                        # → http://localhost:3000
 ### 0.3 首次准备（只做一次）
 ```bash
 # 引擎/后端 Python 依赖（建议先建虚拟环境后再装）
-pip install -r Floor_engine_server/requirements.txt
-# 前端 Node 依赖（需 Node 18+）
+pip install -r Floor_engine_server/requirements-dev.txt
+# 前端 Node 依赖（需 Node 20.9+）
 cd Floor_engine_server/web && npm install
 ```
 然后在前端「**设置**」页填 Gemini API Key（或直接写 `test/engine_config.json`）。没有 key 也能开界面，但出图会失败。
@@ -149,7 +149,7 @@ Floor_engine_server/
 
 ### 4.1 运行约束
 - **必须单 worker**：`_job_history`、并发信号量都是**进程内**状态，多 worker 不共享。直接 `uvicorn.run(app, ...)`（不传 workers）即单进程。
-- 端口/host 可用环境变量覆盖：`FLOOR_API_PORT`(默认 7870)、`FLOOR_API_HOST`(默认 127.0.0.1)。
+- 端口可用 `FLOOR_API_PORT` 覆盖；host 仅支持本机 `127.0.0.1`，本版本不提供远程认证。
 - **CORS**：`FLOOR_API_CORS` 默认放行 `http://localhost:3000,http://127.0.0.1:3000`。**换前端端口必须改这个环境变量**，否则浏览器跨域被拦（后端能 200，但 JS fetch 拿不到）。
 
 ### 4.2 作业生命周期
@@ -199,7 +199,7 @@ web/src/
 │   ├── dc-ui.tsx         设计基元：SectionHeader(点头标)·Segmented(分段)·Pill(胶囊)
 │   └── ui/               shadcn 基础组件（button/select/dialog/switch/input…，令牌驱动）
 ├── lib/
-│   ├── api.ts            ★ typed 客户端，base = NEXT_PUBLIC_API_BASE（.env.local，默认 7870）
+│   ├── api.ts            ★ typed 客户端，开发指向 7870、生产走同源
 │   ├── types.ts          JobView/GenParams/OptionsView/ConfigView/UsageSummary/RecordEntry… 类型
 │   └── notify.ts         完成通知（浏览器 Notification + Web Audio 提示音）
 └── hooks/useJobStream.ts EventSource 封装（终态 close，防自动重连风暴）
@@ -222,7 +222,7 @@ web/src/
 2. **后端单 worker**（同 §4.1）。
 3. **CORS 只放 3000**（同 §4.1）；本地用别的端口调试要设 `FLOOR_API_CORS`。
 4. **（Windows 专属）`.bat` 必须纯 ASCII + CRLF**（同 §0.5；`.sh` 无此限制）。
-5. **`.env.local`** 控制前端的 `NEXT_PUBLIC_API_BASE`（构建期内联，改了要重 build/重启 dev）。
+5. **环境文件**：`.env.development` 默认指向后端 7870，`.env.production` 留空以使用同源 API。
 6. **无头截图自检法**（验证视觉时用；实测）：dev 服务器在无头浏览器里因 HMR 握手失败**不 hydrate**，截不到数据态；要截带数据的页面需 **prod build + 隔离后端(改 `FLOOR_API_CORS` 放行测试端口) + Node（v22+，内置 WebSocket）走 CDP 真等几秒再 captureScreenshot**。隔离后端与正式实例共享 `.queue_state.json`，测试时**只读、别触发清除/删除**，免得误删真实任务。
 7. **设计稿落地**：照 mockup 的**实际视觉**还原（配色/胶囊/卡片/分段），别只搬报告文字；落地后无头截图比对设计稿。
 8. **`webui.py` 已退役删除**：UI 只有 `web/` 一套，新功能只加 `server_api.py` + `web/`。

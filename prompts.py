@@ -1,6 +1,7 @@
 import os
 import re
 import time
+import uuid
 
 from PIL import Image
 
@@ -981,7 +982,7 @@ Professional photorealistic interior architectural photography. {en_property}, {
     # ── 写入 JSON 记录 ────────────────────────────────────────────────
     # 附毫秒后缀防撞：批量并发(同款地板的多个场景在同一秒落记录)时，秒级 record_id 会重复，
     # 导致 _api_write_to_record 按 id 匹配到同一条、出图串记录。id 仅做相等匹配+文件名前缀，加后缀向后兼容。
-    record_id = time.strftime("%Y%m%d_%H%M%S") + f"_{int(time.time() * 1000) % 1000:03d}"
+    record_id = time.strftime("%Y%m%d_%H%M%S") + f"_{uuid.uuid4().hex[:12]}"
     _loc = (city if city and city not in ("通用", "") else
             country if country and country not in ("通用", "") else continent)
     params_summary = " · ".join(filter(None, [
@@ -1003,9 +1004,9 @@ Professional photorealistic interior architectural photography. {en_property}, {
         "location": _loc,
         "seam": seam_type or "",
         "params_summary": params_summary,
-        "prompt_en": final_prompt_en,
-        "prompt_en_pro": final_prompt_en_pro,
         "_pe": _obfuscate(final_prompt_en),
+        "_pe_pro": _obfuscate(final_prompt_en_pro),
+        "_schema_version": 2,
         "sample_image_b64": _img_to_b64(processed_img, max_width=400),
         "results": []
     }

@@ -1,8 +1,9 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { cn } from "@/lib/utils";
+import { api } from "@/lib/api";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 
 type NavItem = {
@@ -67,7 +68,16 @@ function isActive(href: string, path: string) {
 export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const [helpOpen, setHelpOpen] = useState(false);
+  const [online, setOnline] = useState<boolean | null>(null);
   const [title, sub] = TITLES[path] ?? TITLES["/"];
+
+  useEffect(() => {
+    let alive = true;
+    const check = () => api.health().then(() => alive && setOnline(true)).catch(() => alive && setOnline(false));
+    check();
+    const timer = window.setInterval(check, 30_000);
+    return () => { alive = false; window.clearInterval(timer); };
+  }, []);
 
   return (
     <div className="flex h-full w-full overflow-hidden text-[14px] text-foreground">
@@ -120,7 +130,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
           <div className="min-w-0 leading-tight">
             <div className="text-[12.5px] font-bold">运营工作台</div>
-            <div className="text-[10.5px] text-[#9a9082]">额度充足 · 在线</div>
+            <div className="text-[10.5px] text-[#9a9082]">
+              {online === null ? "正在检查服务" : online ? "本机服务在线" : "本机服务离线"}
+            </div>
           </div>
         </div>
       </aside>
