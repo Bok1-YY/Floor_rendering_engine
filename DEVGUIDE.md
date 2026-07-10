@@ -102,12 +102,12 @@ Floor_engine_server/
 ├── __init__.py          包说明 / 公共导出指引
 │
 │   ── 引擎模块（全部 headless，import 不会拉起 nicegui，新旧共用）──
-├── config.py            路径/配置中心：BASE_DIR、目录常量、engine_config.json 读写、key/proxy/provider/速度档/failover/TLS
+├── config.py            路径/配置中心：BASE_DIR、目录常量、engine_config.json 读写、key/proxy/provider/速度档/failover/TLS/Omakase
 ├── models.py            纯数据：JobRecord(作业)、TaskParams(参数)、compute_final_status、候选图导航(add/nav_candidate)
 ├── prompt_data.py       海量选项表（STYLES/LIGHTINGS/ANGLES/FLOOR_TONES/ROOM_TYPES/CN_*…）+ 识色 analyze_floor_tone + 中英翻译
 ├── prompts.py           提示词组装：save_task_files_html(35+ 参数 → 英文 prompt + 落 JSON/PNG)，4 种工作流各一个 builder
 ├── recipes.py           智能配方：recommend_recipes(按色调推荐) + pick_option_key(关键词→具体选项)
-├── api.py               模型调用：call_image_generate(Google→可选转Fal) / call_gemini_generate / call_fal_generate / call_gemini_edit(磨缝二改) / test_connection
+├── api.py               模型调用：Google/Fal 生图、Gemini→DeepSeek Omakase 主备路由、磨缝二改、连通性自检
 ├── records.py           持久化：队列 persist/load、记录 JSON 读写、收藏/删除/人工评审、解密 reveal、用量 load_usage_summary、导出 HTML/PPTX
 ├── failure_kb.py        失败知识库：FAILURE_RULES + classify_failure(错误串→{title,cause,action})
 ├── themes.py            旧 UI 主题 CSS 生成（曾供 NiceGUI；webui 退役后已无运行期消费者，留待后续清理）

@@ -40,12 +40,13 @@ from .config import (
     get_tls_verify, get_tls_ca_bundle, get_proxy, get_speed_profile_params,
     safe_upload_path, extract_clean_prompt, get_bevel_ref_image, LITE_PREVIEW_MODEL,
     get_deepseek_api_key, get_deepseek_base_url, get_deepseek_model, get_omakase_enabled,
+    get_omakase_gemini_model,
     save_deepseek_settings,
     update_config,
 )
 from .api import (
     call_image_generate, call_gemini_generate, call_gemini_edit, test_connection, analyze_style_image,
-    call_deepseek_scenes,
+    call_omakase_scenes,
     FLOOR_DESEAM_INSTRUCTION, _infer_aspect_ratio_from_b64, _match_color_to_reference,
 )
 from .prompts import save_task_files_html
@@ -638,6 +639,7 @@ class ConfigPatch(BaseModel):
     deepseek_api_key: Optional[str] = None
     deepseek_base_url: Optional[str] = None
     deepseek_model: Optional[str] = None
+    omakase_gemini_model: Optional[str] = Field(default=None, max_length=200)
     omakase_enabled: Optional[bool] = None
 
 
@@ -654,9 +656,10 @@ def _config_view() -> dict:
         'proxy': get_proxy(),
         'max_concurrent_per_model': int(cfg.get('max_concurrent_per_model', 1) or 1),
         'speed_params': get_speed_profile_params(cfg),
-        # Omakase / DeepSeek：只回是否已配置，绝不回明文 key
+        # Omakase：Gemini 复用主 Key，DeepSeek 只回是否已配置，绝不回明文 key
         'has_deepseek_key': bool((cfg.get('deepseek_api_key') or '').strip()),
         'omakase_enabled': get_omakase_enabled(),
+        'omakase_gemini_model': get_omakase_gemini_model(),
         'deepseek_model': get_deepseek_model(),
         'deepseek_base_url': get_deepseek_base_url(),
     }
@@ -1197,7 +1200,8 @@ def get_config():
 def put_config(req: ConfigPatch):
     patch = req.model_dump(exclude_none=True)
     for key in ('gemini_api_key', 'fal_api_key', 'proxy', 'tls_ca_bundle',
-                'deepseek_api_key', 'deepseek_base_url', 'deepseek_model'):
+                'deepseek_api_key', 'deepseek_base_url', 'deepseek_model',
+                'omakase_gemini_model'):
         if key in patch:
             patch[key] = str(patch[key] or '').strip()
     if not update_config(patch):
@@ -1205,7 +1209,7 @@ def put_config(req: ConfigPatch):
     return _config_view()
 
 
-# ── Omakase：客户自由诉求 → DeepSeek 生成 2-3 段场景散文候选（先填后审，此处不生图）──
+# ── Omakase：Gemini 主线路生成场景，DeepSeek 配置后自动备用（此处不生图）──
 class OmakaseRequest(BaseModel):
     idea: str = Field(default='', max_length=2000)
 
@@ -1213,21 +1217,37 @@ class OmakaseRequest(BaseModel):
 @app.post('/api/omakase/scenes')
 async def omakase_scenes(req: OmakaseRequest):
     if not get_omakase_enabled():
-        raise HTTPException(400, 'Omakase 模式未启用（请在设置里开启并填写 DeepSeek API Key）')
-    api_key = get_deepseek_api_key()
-    if not api_key:
-        raise HTTPException(400, '缺少 DeepSeek API Key，请在设置里配置')
+        raise HTTPException(400, 'Omakase 模式未启用，请先在设置里开启')
     idea = (req.idea or '').strip()
     if not idea:
         raise HTTPException(400, '请先描述你想要的画面/氛围')
-    options, err = await asyncio.to_thread(
-        call_deepseek_scenes, idea,
-        api_key=api_key, base_url=get_deepseek_base_url(), model=get_deepseek_model())
+    cfg = _load_config()
+    gemini_key = (cfg.get('gemini_api_key') or '').strip()
+    deepseek_key = get_deepseek_api_key()
+    if not gemini_key and not deepseek_key:
+        raise HTTPException(400, '缺少 Gemini API Key，且未配置 DeepSeek 备用 Key')
+    options, err, provider, fallback_used = await asyncio.to_thread(
+        call_omakase_scenes, idea,
+        gemini_api_key=gemini_key,
+        gemini_model=get_omakase_gemini_model(),
+        deepseek_api_key=deepseek_key,
+        deepseek_base_url=get_deepseek_base_url(),
+        deepseek_model=get_deepseek_model())
     if err:
         info = classify_failure(err)
         detail = f"{info.get('title', 'Omakase 生成失败')}：{info.get('action', '')}".rstrip('：')
         raise HTTPException(502, detail)
-    return {'options': options}
+    notice = ''
+    if fallback_used:
+        notice = ('Gemini 暂不可用，已自动使用 DeepSeek 备用线路生成。'
+                  if gemini_key else
+                  '未配置 Gemini API Key，已使用 DeepSeek 备用线路生成。')
+    return {
+        'options': options,
+        'provider': provider,
+        'fallback_used': fallback_used,
+        'notice': notice,
+    }
 
 
 @app.get('/api/models')

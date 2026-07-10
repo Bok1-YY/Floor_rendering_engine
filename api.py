@@ -912,9 +912,8 @@ def analyze_style_image(api_key: str, image_path: str) -> Tuple[str, Optional[st
     return "", f"所有备选模型均不可用，请检查 API Key 和网络（最后错误: {last_err}）"
 
 
-# ── Omakase 模式：DeepSeek 把客户自由诉求 → 2-3 段可拍的场景散文（供客户选/改）────
+# ── Omakase 模式：Gemini 主线路 + DeepSeek 备用线路────
 # 只产候选、不写最终提示词；地板技术层永远由 prompts.py 焊接(见 save_task_files_html 的 scene_override)。
-# 配管镜像 analyze_style_image：_req.post + proxies + _verify_arg + (结果,错误)元组 + _redact_api_key。
 _OMAKASE_TIMEOUT = (10, 40)  # (连接, 读取) 秒；纯文本调用短平快，比生图/风格分析更快
 
 _OMAKASE_SYSTEM_PROMPT = (
@@ -929,6 +928,88 @@ _OMAKASE_SYSTEM_PROMPT = (
     "只返回 JSON，格式：{\"options\":[{\"text\":\"场景散文\",\"why\":\"一句话说明为什么这么拍能体现客户诉求\",\"recommended\":true}]}。"
     "恰好把最稳妥的一段标 recommended:true、其余为 false。不要输出 JSON 以外的任何内容。"
 )
+
+
+_OMAKASE_RESPONSE_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "options": {
+            "type": "ARRAY",
+            "minItems": 2,
+            "maxItems": 3,
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "text": {"type": "STRING"},
+                    "why": {"type": "STRING"},
+                    "recommended": {"type": "BOOLEAN"},
+                },
+                "required": ["text", "why", "recommended"],
+            },
+        },
+    },
+    "required": ["options"],
+}
+
+
+def _clean_omakase_options(options):
+    """Normalize provider output and enforce exactly one recommended option."""
+    clean = []
+    for option in options or []:
+        if isinstance(option, dict) and (option.get("text") or "").strip():
+            clean.append({
+                "text": str(option.get("text")).strip(),
+                "why": str(option.get("why") or "").strip(),
+                "recommended": bool(option.get("recommended", False)),
+            })
+            if len(clean) == 3:
+                break
+    if not clean:
+        return []
+    recommended_index = next((i for i, option in enumerate(clean) if option["recommended"]), 0)
+    for i, option in enumerate(clean):
+        option["recommended"] = i == recommended_index
+    return clean
+
+
+def call_gemini_scenes(idea, *, api_key, model):
+    """Generate Omakase scene candidates with the existing Gemini API key."""
+    idea = (idea or "").strip()
+    if not idea:
+        return [], "场景诉求为空"
+    if not api_key:
+        return [], "未配置 Gemini API Key"
+    cfg = _load_config()
+    proxy = cfg.get("proxy", "").strip()
+    proxies = {"http": proxy, "https": proxy} if proxy else None
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+    payload = {
+        "systemInstruction": {"parts": [{"text": _OMAKASE_SYSTEM_PROMPT}]},
+        "contents": [{"role": "user", "parts": [{"text": idea}]}],
+        "generationConfig": {
+            "temperature": 0.7,
+            "maxOutputTokens": 2500,
+            "responseMimeType": "application/json",
+            "responseSchema": _OMAKASE_RESPONSE_SCHEMA,
+        },
+    }
+    headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
+    try:
+        resp = _req.post(url, headers=headers, json=payload, timeout=_OMAKASE_TIMEOUT,
+                         proxies=proxies, verify=_verify_arg(cfg))
+    except Exception as e:
+        return [], f"Omakase Gemini 请求异常: {_redact_api_key(e)}"
+    if resp.status_code != 200:
+        body = _short_text(getattr(resp, "text", ""), 200)
+        return [], f"Omakase Gemini HTTP {resp.status_code}: {body}"
+    try:
+        content = resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+        options = _clean_omakase_options((json.loads(content) or {}).get("options"))
+    except Exception as e:
+        return [], f"Omakase Gemini 返回解析失败: {_redact_api_key(e)}"
+    if not options:
+        return [], "Omakase Gemini 未返回可用场景"
+    return options, None
 
 
 def call_deepseek_scenes(idea, *, api_key, base_url, model):
@@ -970,20 +1051,40 @@ def call_deepseek_scenes(idea, *, api_key, base_url, model):
         options = (json.loads(content) or {}).get("options") or []
     except Exception as e:
         return [], f"DeepSeek 返回解析失败: {_redact_api_key(e)}"
-    # 清洗 + 保底：只留有 text 的项；若无任何 recommended，则把第一段设为推荐(你帮我定的默认)
-    clean = []
-    for o in options:
-        if isinstance(o, dict) and (o.get("text") or "").strip():
-            clean.append({
-                "text": str(o.get("text")).strip(),
-                "why": str(o.get("why") or "").strip(),
-                "recommended": bool(o.get("recommended", False)),
-            })
+    clean = _clean_omakase_options(options)
     if not clean:
         return [], "DeepSeek 未返回可用场景"
-    if not any(o["recommended"] for o in clean):
-        clean[0]["recommended"] = True
     return clean, None
+
+
+def call_omakase_scenes(idea, *, gemini_api_key, gemini_model,
+                        deepseek_api_key="", deepseek_base_url="https://api.deepseek.com",
+                        deepseek_model="deepseek-chat"):
+    """Route Omakase through Gemini first, then DeepSeek when configured."""
+    gemini_error = None
+    if (gemini_api_key or "").strip():
+        options, gemini_error = call_gemini_scenes(
+            idea, api_key=gemini_api_key, model=gemini_model)
+        if not gemini_error:
+            return options, None, "gemini", False
+
+    if (deepseek_api_key or "").strip():
+        if gemini_error:
+            logger.warning(f"[Omakase] Gemini 主线路失败，自动转 DeepSeek: "
+                           f"{_short_text(gemini_error, 300)}")
+        options, deepseek_error = call_deepseek_scenes(
+            idea, api_key=deepseek_api_key, base_url=deepseek_base_url,
+            model=deepseek_model)
+        if not deepseek_error:
+            return options, None, "deepseek", True
+        if gemini_error:
+            return ([], f"Omakase Gemini 主线路失败: {gemini_error}; "
+                    f"DeepSeek 备用线路失败: {deepseek_error}", "deepseek", True)
+        return [], deepseek_error, "deepseek", True
+
+    if gemini_error:
+        return [], gemini_error, "gemini", False
+    return [], "Omakase 未配置 Gemini 或 DeepSeek API Key", "", False
 
 
 def _match_color_to_reference(src_img, ref_img, strength=1.0):
@@ -1109,6 +1210,7 @@ def test_connection(gemini_api_key: str, fal_api_key: str = "", proxy: str = "")
 __all__ = [
     'call_gemini_generate', 'call_fal_generate', 'call_image_generate',
     'call_gemini_edit', 'analyze_style_image', 'test_connection',
+    'call_gemini_scenes', 'call_deepseek_scenes', 'call_omakase_scenes',
     'FLOOR_DESEAM_INSTRUCTION',
     '_match_color_to_reference', '_infer_aspect_ratio_from_b64',
 ]

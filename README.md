@@ -13,7 +13,7 @@
 - **地板小样识色**：上传地板图，自动分析主色调，驱动后续提示词与配方。
 - **智能配方推荐**：按色调/风格自动推荐场景搭配，一键套用。
 - **35+ 参数化提示词**：风格、灯光、机位、房型、地区市场等多维选项，组装为高质量英文提示词。
-- **多工作流**：纯出图 / 参照图 / 替换 / 宠物友好 / Omakase / 墙板模式等多种生成工作流。
+- **多工作流**：纯出图 / 参照图 / 替换 / 宠物友好 / Omakase / 墙板模式等多种生成工作流；Omakase 复用 Gemini Key 生成场景，可配 DeepSeek 自动备用。
 - **双模型双档位**：B2 快出预览 + Pro 精修成图；可选 Google Gemini 或 Fal 提供方，支持失败自动切换（failover）。
 - **4K 出图**：面向商用提案的高分辨率输出。
 - **磨缝 / 二次编辑**：对已出图做局部修整与再生成，支持多候选切换。
@@ -114,6 +114,9 @@ cd Floor_engine_server/web && npm run dev        # → http://localhost:3000
 |---|---|
 | `gemini_api_key` | Google Gemini 密钥（出图必需） |
 | `fal_api_key` | Fal 密钥（选用 Fal 提供方时需要） |
+| `deepseek_api_key` | 可选：Omakase 的 DeepSeek 备用线路 Key |
+| `omakase_enabled` | 是否启用 AI 场景代笔（Gemini 主线路） |
+| `omakase_gemini_model` | Omakase 文本模型，默认 `gemini-2.5-flash` |
 | `image_provider` | `google`（默认）或 `fal` |
 | `proxy` | HTTP 代理，如 `http://127.0.0.1:7897/`；网络无法直连 Google 时填写 |
 | `speed_profile` | `fast`（快速失败）/ `resilient`（死磕重试） |

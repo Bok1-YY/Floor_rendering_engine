@@ -169,7 +169,7 @@ export default function SettingsPage() {
 
               <div className="mb-[15px] flex flex-col gap-[7px]">
                 <span className={fieldLabel}>
-                  DeepSeek API Key（Omakase 场景代笔）
+                  DeepSeek API Key（Omakase 可选备用）
                   {cfg.has_deepseek_key && (
                     <span className="text-[#2e8c7e]">（已配置，留空不改）</span>
                   )}
@@ -178,7 +178,7 @@ export default function SettingsPage() {
                   type="password"
                   value={deepseekKey}
                   onChange={(e) => setDeepseekKey(e.target.value)}
-                  placeholder={cfg.has_deepseek_key ? "•••••••• 已配置，留空不改" : "未配置（用户自己的 key）"}
+                  placeholder={cfg.has_deepseek_key ? "•••••••• 已配置，留空不改" : "可选：Gemini 失败时自动使用"}
                   className={fieldInput}
                 />
               </div>
@@ -187,7 +187,7 @@ export default function SettingsPage() {
                 <div className="leading-snug">
                   <div className="text-[13px] font-bold text-[#2a241f]">启用 Omakase 模式</div>
                   <div className="mt-px text-[11px] text-[#9a9082]">
-                    开启「Omakase (AI 代笔场景)」工作流的 AI 场景生成（DeepSeek）；关闭后该工作流仍可选，仅「✨ 生成场景」不可用，需手写场景定稿
+                    开启 AI 场景生成：默认复用 Gemini Key，失败时自动使用已配置的 DeepSeek 备用线路；关闭后仍可手写场景定稿
                   </div>
                 </div>
                 <Switch checked={omakaseEnabled} onCheckedChange={setOmakaseEnabled} />

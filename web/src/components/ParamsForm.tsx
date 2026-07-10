@@ -209,6 +209,7 @@ export function ParamsForm({
     try {
       const r = await api.omakaseScenes(idea);
       setOmaOptions(r.options || []);
+      if (r.fallback_used && r.notice) toast.warning(r.notice);
       if (!r.options?.length) toast.error("没生成到候选，换个说法再试");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Omakase 生成失败");

@@ -18,7 +18,7 @@ import type {
   RecordEditRequest,
   PreviewRequest,
   PreviewView,
-  OmakaseOption,
+  OmakaseScenesResponse,
 } from "./types";
 
 // dev（next dev 在 :3000）用 .env.local 里的 NEXT_PUBLIC_API_BASE 指到后端 :7870；
@@ -117,9 +117,9 @@ export const api = {
     jsend<FailureKB>(`/api/failure/classify`, "POST", { err }),
   connectionTest: () => jget<{ result: string }>(`/api/connection/test`),
 
-  // ── Omakase：客户诉求 → DeepSeek 生成场景散文候选（先填后审，不在此生图）──
+  // ── Omakase：Gemini 主线路生成场景，DeepSeek 配置后自动备用 ──
   omakaseScenes: (idea: string) =>
-    jsend<{ options: OmakaseOption[] }>(`/api/omakase/scenes`, "POST", { idea }),
+    jsend<OmakaseScenesResponse>(`/api/omakase/scenes`, "POST", { idea }),
 
   getConfig: () => jget<ConfigView>(`/api/config`),
   putConfig: (patch: ConfigPatch) =>

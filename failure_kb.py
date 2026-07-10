@@ -122,8 +122,22 @@ FAILURE_RULES = [
         'action': '微调提示词或更换素材/参照图后重试。',
         'subs': ['安全拦截'],
     },
-    # ── Omakase / DeepSeek（文本模型）专属：必须排在 overload/network 之前，
-    #    否则 "DeepSeek HTTP 429/5xx" 会被通用 overload 正则抢走、给出转 Fal 之类的错误建议 ──
+    # ── Omakase 文本模型专属：必须排在 overload/network 之前，
+    #    否则文本线路的 429/5xx 会被误导向生图 Fal 线路 ──
+    {
+        'key': 'omakase_both_failed',
+        'title': '⚠ Omakase 主备线路都失败',
+        'cause': 'Gemini 场景主线路失败后，DeepSeek 备用线路也未能返回可用候选。',
+        'action': '检查网络、Gemini Key 和 DeepSeek Key；也可直接在场景定稿框中手写后继续生图。',
+        'subs': ['Omakase Gemini 主线路失败'],
+    },
+    {
+        'key': 'omakase_gemini_error',
+        'title': '❌ Gemini 场景生成失败',
+        'cause': 'Omakase 的 Gemini 文本请求失败或未返回可用的结构化候选。',
+        'action': '检查 Gemini Key 和网络；配置 DeepSeek Key 后可自动走备用线路，也可直接手写场景定稿。',
+        'subs': ['Omakase Gemini', '未配置 Gemini API Key'],
+    },
     {
         'key': 'deepseek_auth',
         'title': '🔑 DeepSeek 认证/余额问题',

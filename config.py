@@ -325,11 +325,11 @@ def save_auto_failover(enabled) -> None:
     _save_config(cfg)
 
 
-# ── Omakase 模式 / DeepSeek 文本模型（自由场景层散文生成用）───────────────
-# DeepSeek OpenAI 兼容：base_url 可配(将来可换端点/自托管)。key 是用户自己的钱(同 Fal)。
-# omakase_enabled 默认关(照 auto_failover 现式)：关或无 key 时前端不出 ✨ 按钮，退化为手写场景框。
+# ── Omakase 模式：Gemini 主线路 + DeepSeek 可选备用────────
+# DeepSeek 保留 OpenAI 兼容配置；base_url 可指向官方端点或自托管服务。
+# omakase_enabled 默认关；关闭时仍可手写场景定稿。
 def get_deepseek_api_key() -> str:
-    """读取 DeepSeek API Key；为空表示未配置(Omakase 不可用)。"""
+    """读取 DeepSeek 备用 API Key；为空时 Omakase 仍可走 Gemini。"""
     return (_load_config().get("deepseek_api_key") or "").strip()
 
 
@@ -346,6 +346,12 @@ def get_deepseek_model() -> str:
 def get_omakase_enabled() -> bool:
     """Omakase 模式开关；缺省关闭。"""
     return bool(_load_config().get("omakase_enabled", False))
+
+
+def get_omakase_gemini_model() -> str:
+    """Omakase 主线路使用的稳定 Gemini 文本模型。"""
+    return ((_load_config().get("omakase_gemini_model") or "gemini-2.5-flash").strip()
+            or "gemini-2.5-flash")
 
 
 def save_deepseek_settings(api_key=None, base_url=None, model=None, enabled=None) -> None:

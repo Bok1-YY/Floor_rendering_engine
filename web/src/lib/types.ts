@@ -142,6 +142,7 @@ export interface ConfigView {
   speed_params: Record<string, unknown>;
   has_deepseek_key?: boolean;
   omakase_enabled?: boolean;
+  omakase_gemini_model?: string;
   deepseek_model?: string;
   deepseek_base_url?: string;
 }
@@ -159,14 +160,22 @@ export interface ConfigPatch {
   deepseek_api_key?: string;
   deepseek_base_url?: string;
   deepseek_model?: string;
+  omakase_gemini_model?: string;
   omakase_enabled?: boolean;
 }
 
-/** Omakase：DeepSeek 返回的单个场景散文候选 */
+/** Omakase 文本模型返回的单个场景散文候选 */
 export interface OmakaseOption {
   text: string;
   why: string;
   recommended: boolean;
+}
+
+export interface OmakaseScenesResponse {
+  options: OmakaseOption[];
+  provider: "gemini" | "deepseek";
+  fallback_used: boolean;
+  notice: string;
 }
 
 export interface ModelsView {

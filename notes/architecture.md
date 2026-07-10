@@ -94,11 +94,11 @@
 | `themes` | 旧 UI 主题 CSS（webui 退役后无运行期消费者，待清理） | `THEMES`, `build_theme_css` |
 | `models` | 纯数据：作业 / 参数 / 状态 / 候选导航 | `JobRecord`, `TaskParams`, `new_job`, `compute_final_status`, `add_candidate/nav_candidate/ensure_candidate_lists`, `task_params_to_kwargs` |
 | `failure_kb` | 失败知识库：错误串 → {title, cause, action} | `classify_failure`, `FAILURE_RULES` |
-| `config` | 路径/配置中心：`BASE_DIR`、engine_config.json 读写、key/proxy/provider/速度档/failover/TLS/DeepSeek | `BASE_DIR`, `_load_config/_save_config`, `get_*` getter 群, `safe_upload_path` |
+| `config` | 路径/配置中心：`BASE_DIR`、engine_config.json 读写、key/proxy/provider/速度档/failover/TLS/Omakase | `BASE_DIR`, `_load_config/_save_config`, `get_*` getter 群, `safe_upload_path` |
 | `prompt_data` | 海量选项表 + 识色 + 中英翻译 + 提示词层构建 | `translate_zh_to_en`, `analyze_floor_tone`, `build_overseas_realism_layer`, `STYLES/FLOOR_TONES/TECH_DICT/CN_*…` |
 | `records` | 持久化：队列 persist/load、记录读写、收藏/删除、人工评审/最佳图、解密、用量、导出 HTML/PPTX | `persist_jobs/load_persisted_jobs`, `update_result_review`, `export_*`, `record_usage/load_usage_summary`, `record_file_lock` |
 | `recipes` | 智能配方：按色调推荐 + 关键词→选项键 | `recommend_recipes`, `pick_option_key`, `FLOOR_RECIPES` |
-| `api` | 模型调用：Google/Fal 生图、二改、参照分析、DeepSeek、连通测试 | `call_image_generate`, `call_gemini_generate/call_fal_generate`, `call_gemini_edit`, `analyze_style_image`, `call_deepseek_scenes`, `test_connection` |
+| `api` | 模型调用：Google/Fal 生图、二改、参照分析、Omakase 文本主备路由、连通测试 | `call_image_generate`, `call_gemini_generate/call_fal_generate`, `call_gemini_edit`, `analyze_style_image`, `call_omakase_scenes`, `test_connection` |
 | `prompts` | 提示词组装：35+ 参数 → 英文 prompt + 落 JSON/PNG（多工作流：地板、Omakase、墙板） | `save_task_files_html` |
 | `server_api` | FastAPI 无头层：端点 + 作业队列 + SSE + 静态/缩略图 + 进程内编排 | `app` |
 | `serve` | 启动入口：uvicorn 单进程单 worker | `main()` |
@@ -130,7 +130,7 @@ POST /api/jobs
 - **二改/磨缝**：`/api/jobs/{id}/edit`、`/polish` → `call_gemini_edit` (api) → 落盘；记录页 `/api/records/edit` → `append_edited_result_to_record` (records)。
 - **快速预览**：`POST /api/preview` → `save_task_files_html(persist=False)` → 直连 `call_gemini_generate(LITE_PREVIEW_MODEL)`（**绕过 provider 路由**）。见 [[mental-model|Lite 预览通道]]。
 - **识色→配方**：`GET /api/floor/analyze` → `analyze_floor_tone` (prompt_data) → `recommend_recipes` (recipes)。
-- **Omakase 场景**：`POST /api/omakase/scenes` → `call_deepseek_scenes` (api)；失败经 `classify_failure` (failure_kb)。
+- **Omakase 场景**：`POST /api/omakase/scenes` → `call_omakase_scenes` (api)，Gemini 主线路失败时自动转已配置的 DeepSeek；失败经 `classify_failure` (failure_kb)。
 - **人工评审**：`POST /api/records/result/review` → `update_result_review` (records) → 原子写回记录 JSON；`best=True` 时同记录内其它结果自动取消最佳。
 - **导出**：`/api/records/export/{html,pptx,favorites-pptx}` → `export_*` (records) → FileResponse。
 
