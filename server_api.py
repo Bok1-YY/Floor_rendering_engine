@@ -15,6 +15,7 @@ import os
 import io
 import time
 import json
+import math
 import uuid
 import base64
 import asyncio
@@ -42,12 +43,13 @@ from .config import (
     get_deepseek_api_key, get_deepseek_base_url, get_deepseek_model, get_omakase_enabled,
     get_omakase_gemini_model,
     save_deepseek_settings,
-    update_config,
+    update_config, get_usage_prices, get_pptx_branding,
 )
 from .api import (
     call_image_generate, call_gemini_generate, call_gemini_edit, test_connection, analyze_style_image,
     call_omakase_scenes,
     FLOOR_DESEAM_INSTRUCTION, _infer_aspect_ratio_from_b64, _match_color_to_reference,
+    match_color_region,
 )
 from .prompts import save_task_files_html
 from .records import (
@@ -57,6 +59,7 @@ from .records import (
     reveal_prompt_fn, _list_recent_floor_swatches, _b64_to_pil,
     _delete_record, _delete_result_image, toggle_result_favorite,
     update_result_review, append_edited_result_to_record, load_usage_summary,
+    attach_generation_context, load_review_summary, collect_review_gallery,
     export_html_from_json, export_pptx_from_json, export_favorites_pptx,
     migrate_all_record_storage,
 )
@@ -67,6 +70,9 @@ from .models import (
 )
 from .failure_kb import classify_failure, FAILURE_RULES
 from .recipes import recommend_recipes, FLOOR_RECIPES, pick_option_key
+from .custom_recipes import (
+    list_custom_recipes, add_custom_recipe, update_custom_recipe, delete_custom_recipe,
+)
 from .prompt_data import (
     ROOM_TYPES, CN_ROOM_TYPES, FLOOR_TONES, CONTINENTS, PROPERTY_TYPES,
     VIEWS, STYLES, LOCATION_MAP, PET_TYPES, PET_ACTIONS, PET_FOCUS_OPTIONS,
@@ -220,6 +226,11 @@ def _job_view(job: JobRecord) -> dict:
         'has_retry': bool(job.retry_ctx),
         'record_id': job.record_id,
         'json_path': job.json_path,
+        # 房间原图 URL（替换类工作流才有 rp）：供前端「前后对比」滑块
+        'room_url': _to_url((job.retry_ctx or {}).get('rp')),
+        # 地板小样（优化图，png_path 随队列持久化）：供前端「手动校色」参照
+        'floor_url': _to_url(job.png_path),
+        'floor_path': job.png_path or '',
         # 结果图：原图走 /outputs，缩略图走 /thumb/outputs（4K 原图大，列表用小图）
         'b2_url': _to_url(job.b2_path),
         'b2_thumb': _result_thumb_url(job.b2_path),
@@ -361,6 +372,14 @@ async def _run_job_bg(job: JobRecord, req: 'JobSubmitRequest'):
                              ims=ims, ar=ar, rp=rp, sref=sref, bevel_ref=bevel_ref,
                              jpt=jpt, rid=rid, model_filter=mf)
         update_job(job, json_path=jpt, record_id=rid, png_path=pnp)
+
+        # gen_context 快照：完整入参落记录 JSON，供「复用参数」「前后对比」。绝不含 api_key。
+        try:
+            await asyncio.to_thread(attach_generation_context, jpt, rid, dict(
+                image_path=req.image_path, room_path=req.room_path or '',
+                ref_path=req.ref_path or '', model_filter=mf, params=p.model_dump()))
+        except Exception as ex:
+            logger.warning(f"[API任务] gen_context 写入失败 job={jid}: {ex}")
 
         if _is_cancelled(jid, generation):
             update_job(job, status='failed', error='已取消（用户停止）')
@@ -614,6 +633,8 @@ class EditRequest(BaseModel):
     image_size: Literal['2K', '4K'] = '4K'
     preserve_floor_geometry: bool = True
     model_choice: Literal['Nano Banana 2', 'Nano Banana Pro'] = 'Nano Banana Pro'
+    # 保持原图色彩（防偏色）：二改后把整体色温/饱和度拉回原图。默认开=对齐旧 NiceGUI 语义
+    color_match: bool = True
 
 
 class RevealRequest(BaseModel):
@@ -641,10 +662,16 @@ class ConfigPatch(BaseModel):
     deepseek_model: Optional[str] = None
     omakase_gemini_model: Optional[str] = Field(default=None, max_length=200)
     omakase_enabled: Optional[bool] = None
+    # 成本估算单价：{'B2': 0.1, 'Pro': 0.5, 'B2:fal': 0.12,...}（元/张成功图）；负数拒绝
+    usage_prices: Optional[dict] = None
+    # PPTX 导出品牌（logo 走 POST /api/uploads/logo，不在此 patch）
+    pptx_company: Optional[str] = Field(default=None, max_length=200)
+    pptx_contact: Optional[str] = Field(default=None, max_length=200)
 
 
 def _config_view() -> dict:
     cfg = _load_config()
+    brand = get_pptx_branding()
     return {
         'has_gemini_key': bool((cfg.get('gemini_api_key') or '').strip()),
         'has_fal_key': bool((cfg.get('fal_api_key') or '').strip()),
@@ -662,6 +689,10 @@ def _config_view() -> dict:
         'omakase_gemini_model': get_omakase_gemini_model(),
         'deepseek_model': get_deepseek_model(),
         'deepseek_base_url': get_deepseek_base_url(),
+        'usage_prices': get_usage_prices(),
+        'pptx_company': brand['company'],
+        'pptx_contact': brand['contact'],
+        'pptx_logo_url': _to_url(brand['logo_path']),
     }
 
 
@@ -704,8 +735,12 @@ app.add_middleware(
 @app.middleware('http')
 async def reject_cross_origin_mutations(request: Request, call_next):
     origin = request.headers.get('origin')
-    if request.method not in ('GET', 'HEAD', 'OPTIONS') and origin and origin not in _ALLOWED_ORIGINS:
-        return Response('Forbidden origin', status_code=403)
+    if request.method not in ('GET', 'HEAD', 'OPTIONS') and origin:
+        # 同源豁免：浏览器对一切 POST 都带 Origin 头。生产静态站由本后端同源托管，
+        # 同源 mutation 不是跨域攻击面；不豁免会把同源部署的所有写操作全部 403。
+        same_origin = origin == f'{request.url.scheme}://{request.url.netloc}'
+        if not same_origin and origin not in _ALLOWED_ORIGINS:
+            return Response('Forbidden origin', status_code=403)
     return await call_next(request)
 
 
@@ -964,7 +999,7 @@ async def edit_job(jid: str, req: EditRequest):
     _spawn(_edit_bg(
         job, api_key=api_key, instruction=req.instruction, model_id=model_id,
         model_label=f'{req.model_choice} 二改', preserve=req.preserve_floor_geometry,
-        image_size=req.image_size, color_match=False))
+        image_size=req.image_size, color_match=req.color_match))
     return _job_view(job)
 
 
@@ -1126,6 +1161,44 @@ def upload_ref(file: UploadFile = File(...)):
     return _save_upload(file, 'ref_')
 
 
+def _remove_managed_logo(path: str) -> None:
+    """Best-effort cleanup for logo uploads owned by this app; never delete arbitrary paths."""
+    if not path:
+        return
+    try:
+        rp = os.path.realpath(path)
+        base = os.path.realpath(UPLOAD_DIR)
+        if (os.path.commonpath([rp, base]) == base
+                and os.path.basename(rp).startswith('logo_')
+                and os.path.isfile(rp)):
+            os.remove(rp)
+    except Exception as ex:
+        logger.warning(f"[品牌] 清理旧 logo 失败(忽略): {ex}")
+
+
+@app.post('/api/uploads/logo')
+def upload_logo(file: UploadFile = File(...)):
+    """PPTX 品牌 logo：存上传目录（logo_ 前缀已加入小样扫描排除名单）并写入配置。"""
+    old_path = get_pptx_branding()['logo_path']
+    out = _save_upload(file, 'logo_')
+    if not update_config({'pptx_logo_path': out['path']}):
+        _remove_managed_logo(out['path'])
+        raise HTTPException(500, 'logo 已上传但配置保存失败，请检查写权限')
+    if old_path and os.path.realpath(old_path) != os.path.realpath(out['path']):
+        _remove_managed_logo(old_path)
+    return out
+
+
+@app.post('/api/uploads/logo/clear')
+def clear_logo():
+    """清除 PPTX logo 配置，并回收本程序管理的旧 logo 文件。"""
+    old_path = get_pptx_branding()['logo_path']
+    if not update_config({'pptx_logo_path': ''}):
+        raise HTTPException(500, 'logo 配置清除失败，请检查写权限')
+    _remove_managed_logo(old_path)
+    return {'ok': True}
+
+
 @app.get('/api/swatches/recent')
 def recent_swatches(limit: int = 24):
     out = []
@@ -1151,6 +1224,12 @@ def load_records(json_path: str):
     for r in recs:
         for secret in ('prompt_en', 'prompt_en_pro', '_pe', '_pe_pro', 'sample_image_b64'):
             r.pop(secret, None)
+        gc = r.get('gen_context')
+        if isinstance(gc, dict):
+            if gc.get('room_path'):
+                gc['room_url'] = _to_url(gc['room_path'])
+            if gc.get('image_path'):
+                gc['image_url'] = _to_url(gc['image_path'])
         for res in r.get('results', []) if isinstance(r, dict) else []:
             rel = res.get('result_image_file')
             if rel:
@@ -1177,6 +1256,42 @@ def recipes(tone: str = '', limit: int = 6):
     return FLOOR_RECIPES[:limit] if limit else FLOOR_RECIPES
 
 
+# ── 自定义配方（我的配方）：CRUD，沿项目 POST-mutation 惯例 ──
+class CustomRecipeCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=40)
+    params: dict
+
+
+class CustomRecipeUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=40)
+    params: Optional[dict] = None
+
+
+@app.get('/api/recipes/custom')
+def custom_recipes_list():
+    return list_custom_recipes()
+
+
+@app.post('/api/recipes/custom')
+def custom_recipes_add(req: CustomRecipeCreate):
+    return add_custom_recipe(req.name, req.params)
+
+
+@app.post('/api/recipes/custom/{rid}/update')
+def custom_recipes_update(rid: str, req: CustomRecipeUpdate):
+    r = update_custom_recipe(rid, name=req.name, params=req.params)
+    if r is None:
+        raise HTTPException(404, '配方不存在')
+    return r
+
+
+@app.post('/api/recipes/custom/{rid}/delete')
+def custom_recipes_delete(rid: str):
+    if not delete_custom_recipe(rid):
+        raise HTTPException(404, '配方不存在')
+    return {'ok': True}
+
+
 @app.post('/api/failure/classify')
 def classify(req: ErrRequest):
     return classify_failure(req.err)
@@ -1201,9 +1316,23 @@ def put_config(req: ConfigPatch):
     patch = req.model_dump(exclude_none=True)
     for key in ('gemini_api_key', 'fal_api_key', 'proxy', 'tls_ca_bundle',
                 'deepseek_api_key', 'deepseek_base_url', 'deepseek_model',
-                'omakase_gemini_model'):
+                'omakase_gemini_model', 'pptx_company', 'pptx_contact'):
         if key in patch:
             patch[key] = str(patch[key] or '').strip()
+    if 'usage_prices' in patch:
+        clean = {}
+        for k, v in (patch['usage_prices'] or {}).items():
+            try:
+                f = float(v)
+            except (TypeError, ValueError):
+                raise HTTPException(400, f'单价必须是数字：{k}')
+            if not math.isfinite(f):
+                raise HTTPException(400, f'单价必须是有限数字：{k}')
+            if f < 0:
+                raise HTTPException(400, f'单价不能为负：{k}')
+            if str(k).strip():
+                clean[str(k).strip()] = f
+        patch['usage_prices'] = clean
     if not update_config(patch):
         raise HTTPException(500, '配置保存失败，请检查程序目录写权限或磁盘空间')
     return _config_view()
@@ -1385,8 +1514,9 @@ async def _regen_bg(job: JobRecord, n: int):
 
 
 async def _record_edit_bg(job: JobRecord, *, src_pil, api_key, instruction, model_id, model_label,
-                          image_size, preserve, json_path, record_id, source_ref):
-    """记录内二改：对已存记录的某张结果做图生图编辑，结果 append 回该记录（移植 webui._do_edit 去 UI）。"""
+                          image_size, preserve, json_path, record_id, source_ref, color_match=False):
+    """记录内二改：对已存记录的某张结果做图生图编辑，结果 append 回该记录（移植 webui._do_edit 去 UI）。
+    color_match=True 时把结果色彩对齐回原图（镜像 _edit_bg 的防偏色分支）。"""
     jid = job.job_id
     generation = _cancel_generation[0]
     update_job(job, status='running', started_at=time.time(), pro_polishing=True)
@@ -1412,6 +1542,12 @@ async def _record_edit_bg(job: JobRecord, *, src_pil, api_key, instruction, mode
             record_usage(job.workflow_mode, model_label, 'google', False, 'record_edit')
             update_job(job, status='failed', error=f'二改失败：{err}', operation_status='failed', operation_error=str(err or ''))
             return
+        if color_match:
+            try:
+                # ref 强制 RGB：老记录 b64 源图可能是 RGBA/P，Pillow LAB 只支持从 RGB 转换
+                out = await asyncio.to_thread(_match_color_to_reference, out, src_pil.convert('RGB'))
+            except Exception as ex:
+                logger.warning(f"[记录二改] 色彩对齐失败(用未对齐图) job={jid}: {ex}")
         ppath = _save_api_result_jpg(out, model_label, job.png_path or os.path.join(MAIN_OUTPUT_DIR, 'edit'))
         if not ppath:
             record_usage(job.workflow_mode, model_label, 'google', False, 'record_edit')
@@ -1464,6 +1600,8 @@ class RecordEditRequest(BaseModel):
     image_size: Literal['2K', '4K'] = '4K'
     preserve_floor_geometry: bool = True
     model_choice: Literal['Nano Banana 2', 'Nano Banana Pro'] = 'Nano Banana Pro'
+    # 保持原图色彩（防偏色）：同 EditRequest.color_match
+    color_match: bool = True
 
 
 def _serve_export(result_msg: str, out_dir: str, media_type: str):
@@ -1542,7 +1680,7 @@ async def record_edit(req: RecordEditRequest):
         job, src_pil=src_pil, api_key=api_key, instruction=req.instruction, model_id=model_id,
         model_label=f'{req.model_choice} 二改', image_size=req.image_size,
         preserve=req.preserve_floor_geometry, json_path=json_path,
-        record_id=req.record_id, source_ref=req.result_id))
+        record_id=req.record_id, source_ref=req.result_id, color_match=req.color_match))
     return _job_view(job)
 
 
@@ -1629,10 +1767,204 @@ def floor_analyze(path: str):
     return {'tone': matched, 'recipes': [_resolve_recipe(r) for r in recommend_recipes(matched, 6)]}
 
 
-# ── 用量统计 ──
+# ── 用量统计（cost=按配置单价 × 成功张数的估算，未配单价的行为 None）──
 @app.get('/api/usage')
 def usage():
-    return load_usage_summary()
+    return load_usage_summary(get_usage_prices())
+
+
+# ── 评审复盘：聚合统计 + 好图样本库（均只读，不碰 _job_history）──
+@app.get('/api/review/summary')
+def review_summary():
+    return load_review_summary()
+
+
+@app.get('/api/review/gallery')
+def review_gallery(filter: str = 'pass', limit: int = 60):
+    if filter not in ('pass', 'best'):
+        raise HTTPException(400, "filter 仅支持 pass / best")
+    out = []
+    for it in collect_review_gallery(filter, limit):
+        res = it['res']
+        rel = res.get('result_image_file')
+        ap = _safe_output_path(rel) if rel else ''
+        out.append({
+            'json_path': it['json_path'],
+            'material': it['material'],
+            'record_id': it['record_id'],
+            'result_id': it['result_id'],
+            'style': it['style'],
+            'room_type': it['room_type'],
+            'workflow_mode': it['workflow_mode'],
+            'model_label': res.get('model_label', ''),
+            'result_timestamp': res.get('result_timestamp', ''),
+            'review_status': res.get('review_status', 'unreviewed'),
+            'review_tags': res.get('review_tags') or [],
+            'review_note': res.get('review_note', ''),
+            'best': bool(res.get('best')),
+            'result_url': _to_url(ap) if ap else '',
+            'result_thumb': _result_thumb_url(ap) if ap else '',
+        })
+    return out
+
+
+# ============================================================
+# 手动校色（区域化 Reinhard）：纯本地 numpy、同步秒级、零 API 费用。
+# 预览先行（缩图 + data URL），人眼确认后才全分辨率提交为新候选。
+# ============================================================
+def _require_output_image_rel(rel: str) -> str:
+    """成图相对路径 → outputs 内绝对路径；越界/不存在 → 400。"""
+    ap = _safe_output_path(rel or '')
+    if not ap or not os.path.isfile(ap):
+        raise HTTPException(400, '成图路径无效')
+    return ap
+
+
+def _require_ref_image_path(path: str) -> str:
+    """参照图绝对路径：realpath 后须落在上传目录或输出目录内（仿 _to_url 反逃逸）。"""
+    try:
+        rp = os.path.realpath(str(path or ''))
+    except Exception:
+        raise HTTPException(400, '参照图路径无效')
+    for base in (UPLOAD_DIR, MAIN_OUTPUT_DIR):
+        try:
+            rbase = os.path.realpath(base)
+            if os.path.commonpath([rp, rbase]) == rbase and os.path.isfile(rp):
+                return rp
+        except Exception:
+            continue
+    raise HTTPException(400, '参照图必须是已上传的小样或本程序的输出图')
+
+
+class ColorMatchRect(BaseModel):
+    x: float = Field(ge=0, le=1)
+    y: float = Field(ge=0, le=1)
+    w: float = Field(gt=0, le=1)
+    h: float = Field(gt=0, le=1)
+
+
+class ColorMatchPreviewRequest(BaseModel):
+    image_rel: str = Field(min_length=1)   # 成图相对 /outputs 路径
+    ref_path: str = Field(min_length=1)    # 参照小样绝对路径
+    rect: ColorMatchRect
+    strength: float = Field(default=0.8, ge=0, le=1)
+    feather: float = Field(default=0.05, ge=0, le=0.3)
+
+
+_PREVIEW_MAX_SIDE = 1600
+
+
+def _run_color_match(abs_src: str, ref_path: str, rect: ColorMatchRect,
+                     strength: float, feather: float, max_side: int = 0):
+    """读图 → （可选缩到 max_side 长边）→ match_color_region。羽化按短边比例定义，
+    预览与全分辨率提交走同一代码路径，视觉一致。"""
+    src = Image.open(abs_src)
+    src.load()
+    if max_side:
+        src.thumbnail((max_side, max_side), Image.LANCZOS)
+    ref = Image.open(ref_path)
+    ref.load()
+    return match_color_region(src, ref, (rect.x, rect.y, rect.w, rect.h),
+                              strength=strength, feather=feather)
+
+
+@app.post('/api/color-match/preview')
+def color_match_preview(req: ColorMatchPreviewRequest):
+    """预览：缩图处理，返回 data URL（1280 长边 JPEG，无临时文件、无状态）。
+    同步 def → FastAPI 线程池执行，numpy 不堵事件循环。"""
+    abs_src = _require_output_image_rel(req.image_rel)
+    ref = _require_ref_image_path(req.ref_path)
+    out = _run_color_match(abs_src, ref, req.rect, req.strength, req.feather,
+                           max_side=_PREVIEW_MAX_SIDE)
+    buf = io.BytesIO()
+    out.save(buf, format='JPEG', quality=85)
+    b64 = base64.b64encode(buf.getvalue()).decode()
+    return {'preview': f'data:image/jpeg;base64,{b64}',
+            'width': out.size[0], 'height': out.size[1]}
+
+
+class JobColorMatchRequest(ColorMatchPreviewRequest):
+    ref_path: str = ''                       # 空 → 回退本任务地板小样(job.png_path)
+    stage: Literal['b2', 'pro'] = 'pro'
+
+
+@app.post('/api/jobs/{jid}/color-match')
+async def job_color_match(jid: str, req: JobColorMatchRequest):
+    """提交（任务侧）：全分辨率处理 → 落盘 → 并入该 stage 候选（‹n/N› 可切回原图）→ 写记录。"""
+    job = _get_job(jid)
+    if not job:
+        raise HTTPException(404, 'job not found')
+    if job.status in ('running', 'queued') or job.pro_polishing or job.operation_status == 'running':
+        raise HTTPException(409, '任务进行中，请稍后校色')
+    abs_src = _require_output_image_rel(req.image_rel)
+    ensure_candidate_lists(job)
+    # 归属校验：必须是该任务对应 stage 的候选之一（防跨任务写入 + 免候选下标竞态）
+    cand = {os.path.realpath(str(p)) for p in getattr(job, f'{req.stage}_paths', []) if p}
+    if os.path.realpath(abs_src) not in cand:
+        raise HTTPException(400, '该图不属于此任务的候选')
+    ref = _require_ref_image_path(req.ref_path or job.png_path or '')
+    out = await asyncio.to_thread(_run_color_match, abs_src, ref, req.rect,
+                                  req.strength, req.feather)
+    ppath = await asyncio.to_thread(_save_api_result_jpg, out, '手动校色',
+                                    job.png_path or abs_src)
+    if not ppath:
+        raise HTTPException(500, '校色结果保存失败')
+    add_candidate(job, req.stage, ppath)
+    update_job(job, status=compute_final_status(job.model_filter, job.b2_path, job.pro_path))
+    if job.json_path and job.record_id:
+        try:
+            await asyncio.to_thread(_api_write_to_record, out, '手动校色',
+                                    job.json_path, job.record_id, ppath)
+        except Exception as ex:
+            logger.warning(f"[校色] 写记录失败 job={jid}: {ex}")
+    _persist_jobs()   # 锁外调（内部自取锁）
+    logger.info(f"[校色] 完成 job={jid}, stage={req.stage}, strength={req.strength}, path={ppath}")
+    return _job_view(job)
+
+
+class RecordColorMatchRequest(BaseModel):
+    json_path: str
+    record_id: str
+    result_id: str = Field(min_length=1, max_length=80)
+    ref_path: str = ''                       # 空 → 回退该记录 gen_context.image_path
+    rect: ColorMatchRect
+    strength: float = Field(default=0.8, ge=0, le=1)
+    feather: float = Field(default=0.05, ge=0, le=0.3)
+
+
+@app.post('/api/records/color-match')
+def record_color_match(req: RecordColorMatchRequest):
+    """提交（记录侧）：全分辨率处理 → 结果 append 回该记录。不碰 _job_history。"""
+    json_path = _require_record_json_path(req.json_path)
+    recs = _load_records(json_path)
+    rec = next((r for r in recs if r.get('id') == req.record_id), None)
+    if not rec:
+        raise HTTPException(404, '未找到记录')
+    res = next((item for item in rec.get('results', [])
+                if item.get('result_id') == req.result_id), None)
+    if res is None:
+        raise HTTPException(404, '未找到该效果图')
+    rel = res.get('result_image_file')
+    abs_src = _safe_output_path(rel) if rel else None
+    if not abs_src or not os.path.isfile(abs_src):
+        raise HTTPException(404, '该结果无落盘图片，无法校色')
+    ref_path = (req.ref_path or '').strip()
+    if not ref_path:
+        gc = rec.get('gen_context') or {}
+        ref_path = str(gc.get('image_path') or '')
+    if not ref_path:
+        raise HTTPException(400, '该记录没有参照小样，请在弹窗中上传参照图')
+    ref = _require_ref_image_path(ref_path)
+    out = _run_color_match(abs_src, ref, req.rect, req.strength, req.feather)
+    ppath = _save_api_result_jpg(out, '手动校色', json_path.replace('_记录.json', '_优化图.png'))
+    if not ppath:
+        raise HTTPException(500, '校色结果保存失败')
+    label = f'强度{req.strength:.2f}'
+    msg = append_edited_result_to_record(json_path, req.record_id, req.result_id,
+                                         out, label, '手动校色', ppath)
+    if not str(msg).startswith('✅'):
+        raise HTTPException(500, str(msg))
+    return {'ok': True, 'result_url': _to_url(ppath)}
 
 
 # ── 失败知识库：常见失败参考 ──

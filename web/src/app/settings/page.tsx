@@ -9,8 +9,8 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 const fieldInput =
-  "h-10 w-full rounded-[10px] border-border bg-[#faf7f0] text-[13px] text-[#2a241f]";
-const fieldLabel = "text-[12px] font-semibold text-[#857c6e]";
+  "h-10 w-full rounded-[10px] border-border bg-panel text-[13px] text-foreground";
+const fieldLabel = "text-[12px] font-semibold text-muted-foreground";
 
 export default function SettingsPage() {
   const [cfg, setCfg] = useState<ConfigView | null>(null);
@@ -30,6 +30,14 @@ export default function SettingsPage() {
   const [showGemini, setShowGemini] = useState(false);
   const [deepseekKey, setDeepseekKey] = useState("");
   const [omakaseEnabled, setOmakaseEnabled] = useState(false);
+  // 成本单价（元/张成功图）：字符串态便于清空；保存时空串=删除该项
+  const [priceB2, setPriceB2] = useState("");
+  const [pricePro, setPricePro] = useState("");
+  const [priceLite, setPriceLite] = useState("");
+  // PPTX 品牌导出
+  const [pptxCompany, setPptxCompany] = useState("");
+  const [pptxContact, setPptxContact] = useState("");
+  const [logoUploading, setLogoUploading] = useState(false);
 
   function load() {
     api
@@ -43,6 +51,11 @@ export default function SettingsPage() {
         setTlsVerify(c.tls_verify);
         setConc(c.max_concurrent_per_model);
         setOmakaseEnabled(!!c.omakase_enabled);
+        setPriceB2(c.usage_prices?.B2 != null ? String(c.usage_prices.B2) : "");
+        setPricePro(c.usage_prices?.Pro != null ? String(c.usage_prices.Pro) : "");
+        setPriceLite(c.usage_prices?.Lite != null ? String(c.usage_prices.Lite) : "");
+        setPptxCompany(c.pptx_company || "");
+        setPptxContact(c.pptx_contact || "");
       })
       .catch((e) => toast.error((e as Error).message));
   }
@@ -65,6 +78,29 @@ export default function SettingsPage() {
       if (falKey.trim()) patch.fal_api_key = falKey.trim();
       if (deepseekKey.trim()) patch.deepseek_api_key = deepseekKey.trim();
       patch.omakase_enabled = omakaseEnabled;
+      // 单价：以已存配置为底（保留 'B2:fal' 等细分 key），B2/Pro 按输入覆盖，空串=删除
+      const prices: Record<string, number> = { ...(cfg?.usage_prices || {}) };
+      for (const [key, raw] of [
+        ["B2", priceB2],
+        ["Pro", pricePro],
+        ["Lite", priceLite],
+      ] as const) {
+        const t = raw.trim();
+        if (!t) {
+          delete prices[key];
+          continue;
+        }
+        const n = Number(t);
+        if (!Number.isFinite(n) || n < 0) {
+          toast.error(`${key} 单价必须是非负数字`);
+          setSaving(false);
+          return;
+        }
+        prices[key] = n;
+      }
+      patch.usage_prices = prices;
+      patch.pptx_company = pptxCompany.trim();
+      patch.pptx_contact = pptxContact.trim();
       const c = await api.putConfig(patch);
       setCfg(c);
       setGeminiKey("");
@@ -97,12 +133,42 @@ export default function SettingsPage() {
       api.getFailureRules().then(setRules).catch(() => {});
   }
 
+  async function pickLogo(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    setLogoUploading(true);
+    try {
+      await api.uploadLogo(f);
+      toast.success("logo 已上传并保存");
+      load(); // 重取配置里的 pptx_logo_url 刷新预览
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setLogoUploading(false);
+    }
+  }
+
+  async function clearLogo() {
+    if (!cfg?.pptx_logo_url || !window.confirm("移除当前 PPTX 品牌 logo？")) return;
+    setLogoUploading(true);
+    try {
+      await api.clearLogo();
+      toast.success("logo 已移除");
+      load();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setLogoUploading(false);
+    }
+  }
+
   const provBtn = (active: boolean) =>
     cn(
       "h-[38px] flex-1 rounded-[9px] border text-[13px] font-semibold transition-colors",
       active
-        ? "border-primary bg-[#fbf3ee] text-[#a8472a]"
-        : "border-border bg-card text-[#6b6356] hover:bg-[#f2e9e0]",
+        ? "border-primary bg-primary-soft text-accent-foreground"
+        : "border-border bg-card text-secondary-foreground hover:bg-accent",
     );
 
   return (
@@ -112,7 +178,7 @@ export default function SettingsPage() {
           <div className="text-[17px] font-extrabold tracking-tight">设置</div>
           <button
             onClick={openRules}
-            className="h-[34px] rounded-[9px] px-3 text-[12.5px] font-semibold text-[#6b6356] hover:bg-[#f2e9e0]"
+            className="h-[34px] rounded-[9px] px-3 text-[12.5px] font-semibold text-secondary-foreground hover:bg-accent"
           >
             ❓ 常见失败参考
           </button>
@@ -122,7 +188,7 @@ export default function SettingsPage() {
           <div className="space-y-[14px]">
             {/* 密钥卡 */}
             <div className="rounded-[14px] border border-border bg-card p-[20px] shadow-[0_2px_8px_rgba(120,90,60,.05)]">
-              <div className="mb-[14px] text-[11px] font-extrabold tracking-[0.1em] text-[#a8472a]">
+              <div className="mb-[14px] text-[11px] font-extrabold tracking-[0.1em] text-accent-foreground">
                 密钥 / KEYS
               </div>
 
@@ -130,7 +196,7 @@ export default function SettingsPage() {
                 <span className={fieldLabel}>
                   Gemini API Key
                   {cfg.has_gemini_key && (
-                    <span className="text-[#2e8c7e]">（已配置，留空不改）</span>
+                    <span className="text-success">（已配置，留空不改）</span>
                   )}
                 </span>
                 <div className="relative">
@@ -144,7 +210,7 @@ export default function SettingsPage() {
                   <button
                     type="button"
                     onClick={() => setShowGemini((v) => !v)}
-                    className="absolute right-1.5 top-1.5 h-7 rounded-md px-2.5 text-[11.5px] font-semibold text-[#9a9082] hover:text-[#6b6356]"
+                    className="absolute right-1.5 top-1.5 h-7 rounded-md px-2.5 text-[11.5px] font-semibold text-muted-foreground hover:text-secondary-foreground"
                   >
                     {showGemini ? "隐藏" : "显示"}
                   </button>
@@ -155,7 +221,7 @@ export default function SettingsPage() {
                 <span className={fieldLabel}>
                   Fal API Key
                   {cfg.has_fal_key && (
-                    <span className="text-[#2e8c7e]">（已配置，留空不改）</span>
+                    <span className="text-success">（已配置，留空不改）</span>
                   )}
                 </span>
                 <Input
@@ -171,7 +237,7 @@ export default function SettingsPage() {
                 <span className={fieldLabel}>
                   DeepSeek API Key（Omakase 可选备用）
                   {cfg.has_deepseek_key && (
-                    <span className="text-[#2e8c7e]">（已配置，留空不改）</span>
+                    <span className="text-success">（已配置，留空不改）</span>
                   )}
                 </span>
                 <Input
@@ -183,10 +249,10 @@ export default function SettingsPage() {
                 />
               </div>
 
-              <div className="mb-[15px] flex items-center justify-between rounded-[10px] border border-border bg-[#faf7f0] p-[13px]">
+              <div className="mb-[15px] flex items-center justify-between rounded-[10px] border border-border bg-panel p-[13px]">
                 <div className="leading-snug">
-                  <div className="text-[13px] font-bold text-[#2a241f]">启用 Omakase 模式</div>
-                  <div className="mt-px text-[11px] text-[#9a9082]">
+                  <div className="text-[13px] font-bold text-foreground">启用 Omakase 模式</div>
+                  <div className="mt-px text-[11px] text-muted-foreground">
                     开启 AI 场景生成：默认复用 Gemini Key，失败时自动使用已配置的 DeepSeek 备用线路；关闭后仍可手写场景定稿
                   </div>
                 </div>
@@ -206,11 +272,11 @@ export default function SettingsPage() {
 
             {/* 线路与网络卡 */}
             <div className="rounded-[14px] border border-border bg-card p-[20px] shadow-[0_2px_8px_rgba(120,90,60,.05)]">
-              <div className="mb-[14px] text-[11px] font-extrabold tracking-[0.1em] text-[#a8472a]">
+              <div className="mb-[14px] text-[11px] font-extrabold tracking-[0.1em] text-accent-foreground">
                 线路与网络 / NETWORK
               </div>
 
-              <div className="grid grid-cols-2 gap-[14px]">
+              <div className="grid grid-cols-3 gap-[14px]">
                 <div>
                   <span className={cn(fieldLabel, "mb-[7px] block")}>生图线路</span>
                   <div className="flex gap-2">
@@ -247,19 +313,19 @@ export default function SettingsPage() {
                     className={fieldInput}
                   />
                 </div>
-                <div className="mt-[26px] flex items-center justify-between rounded-[10px] border border-border bg-[#faf7f0] px-[13px]">
+                <div className="mt-[26px] flex items-center justify-between rounded-[10px] border border-border bg-panel px-[13px]">
                   <div className="leading-tight">
-                    <div className="text-[12.5px] font-bold text-[#2a241f]">HTTPS 证书校验</div>
-                    <div className="text-[10.5px] text-[#9a9082]">坏网络可临时关</div>
+                    <div className="text-[12.5px] font-bold text-foreground">HTTPS 证书校验</div>
+                    <div className="text-[10.5px] text-muted-foreground">坏网络可临时关</div>
                   </div>
                   <Switch checked={tlsVerify} onCheckedChange={setTlsVerify} />
                 </div>
               </div>
 
-              <div className="mt-[14px] flex items-center justify-between rounded-[10px] border border-border bg-[#faf7f0] p-[13px]">
+              <div className="mt-[14px] flex items-center justify-between rounded-[10px] border border-border bg-panel p-[13px]">
                 <div className="leading-snug">
-                  <div className="text-[13px] font-bold text-[#2a241f]">直连失败自动转 Fal</div>
-                  <div className="mt-px text-[11px] text-[#9a9082]">
+                  <div className="text-[13px] font-bold text-foreground">直连失败自动转 Fal</div>
+                  <div className="mt-px text-[11px] text-muted-foreground">
                     仅网络类失败触发 · Fal 走你自己的额度
                   </div>
                 </div>
@@ -267,36 +333,149 @@ export default function SettingsPage() {
               </div>
             </div>
 
+            {/* 成本单价卡 */}
+            <div className="rounded-[14px] border border-border bg-card p-[20px] shadow-[0_2px_8px_rgba(120,90,60,.05)]">
+              <div className="mb-[14px] text-[11px] font-extrabold tracking-[0.1em] text-accent-foreground">
+                成本单价 / PRICING
+              </div>
+              <div className="grid grid-cols-2 gap-[14px]">
+                <div className="flex flex-col gap-[7px]">
+                  <span className={fieldLabel}>B2 每张成功图（元）</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={priceB2}
+                    onChange={(e) => setPriceB2(e.target.value)}
+                    placeholder="留空不估算"
+                    className={fieldInput}
+                  />
+                </div>
+                <div className="flex flex-col gap-[7px]">
+                  <span className={fieldLabel}>Pro 每张成功图（元）</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={pricePro}
+                    onChange={(e) => setPricePro(e.target.value)}
+                    placeholder="留空不估算"
+                    className={fieldInput}
+                  />
+                </div>
+                <div className="flex flex-col gap-[7px]">
+                  <span className={fieldLabel}>Lite 预览每张（元）</span>
+                  <Input
+                    type="number"
+                    min={0}
+                    step="0.01"
+                    value={priceLite}
+                    onChange={(e) => setPriceLite(e.target.value)}
+                    placeholder="留空不估算"
+                    className={fieldInput}
+                  />
+                </div>
+              </div>
+              <div className="mt-[10px] text-[11px] leading-relaxed text-muted-foreground">
+                用于「用量」页的成本估算（成功张数 × 单价，失败不计）。留空则对应行显示 —。
+              </div>
+            </div>
+
+            {/* 品牌导出卡 */}
+            <div className="rounded-[14px] border border-border bg-card p-[20px] shadow-[0_2px_8px_rgba(120,90,60,.05)]">
+              <div className="mb-[14px] text-[11px] font-extrabold tracking-[0.1em] text-accent-foreground">
+                品牌导出 / BRANDING
+              </div>
+              <div className="grid grid-cols-2 gap-[14px]">
+                <div className="flex flex-col gap-[7px]">
+                  <span className={fieldLabel}>公司名（PPTX 封面副标题 + 每页页脚）</span>
+                  <Input
+                    value={pptxCompany}
+                    onChange={(e) => setPptxCompany(e.target.value)}
+                    maxLength={200}
+                    placeholder="留空不显示"
+                    className={fieldInput}
+                  />
+                </div>
+                <div className="flex flex-col gap-[7px]">
+                  <span className={fieldLabel}>联系方式（PPTX 封面底部）</span>
+                  <Input
+                    value={pptxContact}
+                    onChange={(e) => setPptxContact(e.target.value)}
+                    maxLength={200}
+                    placeholder="电话 / 微信 / 邮箱，留空不显示"
+                    className={fieldInput}
+                  />
+                </div>
+              </div>
+              <div className="mt-[14px] flex items-center gap-[14px]">
+                <div className="flex h-[54px] w-[110px] flex-none items-center justify-center overflow-hidden rounded-[10px] border border-border bg-panel">
+                  {cfg.pptx_logo_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={api.imgUrl(cfg.pptx_logo_url)}
+                      alt="logo"
+                      className="max-h-full max-w-full object-contain"
+                    />
+                  ) : (
+                    <span className="text-[11px] text-muted-foreground">无 logo</span>
+                  )}
+                </div>
+                <label
+                  className={cn(
+                    "flex h-9 cursor-pointer items-center rounded-[9px] border border-border bg-card px-[14px] text-[12.5px] font-semibold text-secondary-foreground hover:bg-accent",
+                    logoUploading && "pointer-events-none opacity-50",
+                  )}
+                >
+                  {logoUploading ? "上传中…" : "上传 logo"}
+                  <input type="file" accept="image/*" className="hidden" onChange={pickLogo} />
+                </label>
+                {cfg.pptx_logo_url && (
+                  <button
+                    type="button"
+                    onClick={clearLogo}
+                    disabled={logoUploading}
+                    className="h-9 rounded-[9px] border border-border bg-card px-[14px] text-[12.5px] font-semibold text-destructive hover:bg-destructive-soft disabled:opacity-50"
+                  >
+                    移除 logo
+                  </button>
+                )}
+                <span className="text-[11px] leading-relaxed text-muted-foreground">
+                  上传即生效（无需点保存）；显示在 PPTX 封面顶部。公司名/联系方式需点下方「保存」。
+                </span>
+              </div>
+            </div>
+
             <div className="flex items-center gap-2.5">
               <button
                 onClick={save}
                 disabled={saving}
-                className="h-[42px] rounded-[11px] bg-primary px-[22px] text-[13.5px] font-bold text-primary-foreground shadow-[0_5px_14px_rgba(193,95,60,.28)] hover:bg-[#a8472a] disabled:opacity-50"
+                className="h-[42px] rounded-[11px] bg-primary px-[22px] text-[13.5px] font-bold text-primary-foreground shadow-[0_5px_14px_rgba(193,95,60,.28)] hover:bg-primary-hover disabled:opacity-50"
               >
                 {saving ? "保存中…" : "保存"}
               </button>
               <button
                 onClick={test}
                 disabled={testing}
-                className="h-[42px] rounded-[11px] border border-border bg-card px-[18px] text-[13.5px] font-bold text-[#6b6356] hover:bg-[#f2e9e0] disabled:opacity-50"
+                className="h-[42px] rounded-[11px] border border-border bg-card px-[18px] text-[13.5px] font-bold text-secondary-foreground hover:bg-accent disabled:opacity-50"
               >
                 {testing ? "检测中…" : "连通性自检"}
               </button>
               <button
                 onClick={load}
-                className="h-[42px] rounded-[11px] px-[14px] text-[13.5px] font-semibold text-[#9a9082] hover:bg-[#f2e9e0]"
+                className="h-[42px] rounded-[11px] px-[14px] text-[13.5px] font-semibold text-muted-foreground hover:bg-accent"
               >
                 重载
               </button>
             </div>
 
             {testResult && (
-              <pre className="whitespace-pre-wrap rounded-[11px] bg-[#f2e9e0] p-[14px] font-mono text-[12.5px] leading-relaxed text-[#2a241f]">
+              <pre className="whitespace-pre-wrap rounded-[11px] bg-accent p-[14px] font-mono text-[12.5px] leading-relaxed text-foreground">
                 {testResult}
               </pre>
             )}
 
-            <div className="text-[11.5px] text-[#9a9082]">
+            <div className="text-[11.5px] text-muted-foreground">
               每模型并发改动需重启后端生效（信号量在启动时建）。
             </div>
           </div>
@@ -311,9 +490,9 @@ export default function SettingsPage() {
               )}
               {rules.map((r) => (
                 <div key={r.key} className="rounded-[10px] border border-border p-[11px] text-[12.5px]">
-                  <div className="font-bold text-[#2a241f]">{r.title}</div>
-                  {r.cause && <div className="mt-1 text-[#857c6e]">{r.cause}</div>}
-                  {r.action && <div className="mt-1 text-[#a8472a]">➡ {r.action}</div>}
+                  <div className="font-bold text-foreground">{r.title}</div>
+                  {r.cause && <div className="mt-1 text-muted-foreground">{r.cause}</div>}
+                  {r.action && <div className="mt-1 text-accent-foreground">➡ {r.action}</div>}
                 </div>
               ))}
             </div>

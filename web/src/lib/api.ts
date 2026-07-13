@@ -19,6 +19,14 @@ import type {
   PreviewRequest,
   PreviewView,
   OmakaseScenesResponse,
+  CustomRecipe,
+  GenParams,
+  ReviewSummary,
+  ReviewGalleryItem,
+  ColorMatchPreviewRequest,
+  ColorMatchPreviewView,
+  JobColorMatchRequest,
+  RecordColorMatchRequest,
 } from "./types";
 
 // dev（next dev 在 :3000）用 .env.local 里的 NEXT_PUBLIC_API_BASE 指到后端 :7870；
@@ -113,6 +121,15 @@ export const api = {
     jget<Recipe[]>(
       `/api/recipes?tone=${encodeURIComponent(tone)}&limit=${limit}`,
     ),
+
+  // ── 自定义配方（我的配方）──
+  listCustomRecipes: () => jget<CustomRecipe[]>(`/api/recipes/custom`),
+  addCustomRecipe: (name: string, params: GenParams) =>
+    jsend<CustomRecipe>(`/api/recipes/custom`, "POST", { name, params }),
+  updateCustomRecipe: (rid: string, patch: { name?: string; params?: GenParams }) =>
+    jsend<CustomRecipe>(`/api/recipes/custom/${rid}/update`, "POST", patch),
+  deleteCustomRecipe: (rid: string) =>
+    jsend<{ ok: boolean }>(`/api/recipes/custom/${rid}/delete`, "POST"),
   classifyFailure: (err: string) =>
     jsend<FailureKB>(`/api/failure/classify`, "POST", { err }),
   connectionTest: () => jget<{ result: string }>(`/api/connection/test`),
@@ -166,4 +183,21 @@ export const api = {
     jget<FloorAnalyze>(`/api/floor/analyze?path=${encodeURIComponent(path)}`),
   getUsage: () => jget<UsageSummary>(`/api/usage`),
   getFailureRules: () => jget<FailureKB[]>(`/api/failure/rules`),
+
+  // ── 评审复盘 ──
+  getReviewSummary: () => jget<ReviewSummary>(`/api/review/summary`),
+  getReviewGallery: (filter: "pass" | "best" = "pass", limit = 60) =>
+    jget<ReviewGalleryItem[]>(`/api/review/gallery?filter=${filter}&limit=${limit}`),
+
+  // ── PPTX 品牌 logo ──
+  uploadLogo: (f: File) => upload("/api/uploads/logo", f),
+  clearLogo: () => jsend<{ ok: boolean }>("/api/uploads/logo/clear", "POST"),
+
+  // ── 手动校色（区域化 Reinhard）──
+  colorMatchPreview: (b: ColorMatchPreviewRequest) =>
+    jsend<ColorMatchPreviewView>(`/api/color-match/preview`, "POST", b),
+  jobColorMatch: (id: string, b: JobColorMatchRequest) =>
+    jsend<JobView>(`/api/jobs/${id}/color-match`, "POST", b),
+  recordColorMatch: (b: RecordColorMatchRequest) =>
+    jsend<{ ok: boolean; result_url: string }>(`/api/records/color-match`, "POST", b),
 };

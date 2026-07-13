@@ -33,6 +33,10 @@ export interface JobView {
   has_retry: boolean;
   record_id: string;
   json_path: string;
+  room_url: string; // 房间原图 URL（替换类工作流才非空），供前后对比
+  floor_url: string; // 地板小样（优化图）URL，供手动校色参照
+  floor_path: string;
+
   b2_url: string;
   b2_thumb: string;
   b2_idx: number;
@@ -101,6 +105,7 @@ export interface EditRequest {
   image_size?: string;
   preserve_floor_geometry?: boolean;
   model_choice?: string;
+  color_match?: boolean; // 保持原图色彩（防偏色），后端默认 true
 }
 
 /** 快速预览（Nano Banana 2 Lite · 1K）请求；字段同 JobSubmit 但无 model_filter。 */
@@ -145,6 +150,10 @@ export interface ConfigView {
   omakase_gemini_model?: string;
   deepseek_model?: string;
   deepseek_base_url?: string;
+  usage_prices?: Record<string, number>;
+  pptx_company?: string;
+  pptx_contact?: string;
+  pptx_logo_url?: string;
 }
 
 export interface ConfigPatch {
@@ -162,6 +171,9 @@ export interface ConfigPatch {
   deepseek_model?: string;
   omakase_gemini_model?: string;
   omakase_enabled?: boolean;
+  usage_prices?: Record<string, number>;
+  pptx_company?: string;
+  pptx_contact?: string;
 }
 
 /** Omakase 文本模型返回的单个场景散文候选 */
@@ -223,6 +235,15 @@ export interface OptionsView {
 
 export type Recipe = Record<string, unknown> & { label?: string; sub?: string };
 
+/** 自定义配方（/api/recipes/custom；params=存入时的 GenParams 快照） */
+export interface CustomRecipe {
+  id: string;
+  name: string;
+  created_at: string;
+  updated_at: string;
+  params: GenParams;
+}
+
 export type ReviewStatus = "unreviewed" | "pass" | "backup" | "rejected";
 
 export interface RecordResult {
@@ -253,11 +274,23 @@ export interface ResultReviewPatch {
   best: boolean;
 }
 
+/** 生成入参快照（记录 JSON 的 gen_context 字段；老记录无此字段） */
+export interface GenContext {
+  image_path?: string;
+  room_path?: string;
+  ref_path?: string;
+  room_url?: string;       // 后端 load 时由 room_path 换算，供前后对比直接用
+  image_url?: string;      // 后端 load 时由 image_path 换算，供手动校色参照展示
+  model_filter?: ModelFilter;
+  params?: GenParams;
+}
+
 export interface RecordEntry {
   id?: string;
   room_type?: string;
   workflow_mode?: string;
   results?: RecordResult[];
+  gen_context?: GenContext;
   [k: string]: unknown;
 }
 
@@ -273,10 +306,62 @@ export interface UsageRow {
   provider: string;
   ok: number;
   fail: number;
+  cost?: number | null; // 估算成本（元）；未配单价时为 null
 }
 export interface UsageSummary {
   rows: UsageRow[];
-  totals: { ok: number; fail: number; total: number };
+  totals: {
+    ok: number;
+    fail: number;
+    total: number;
+    cost?: number | null;
+    unpriced_ok: number;
+    cost_complete: boolean;
+  };
+}
+
+/** 评审复盘（/api/review/summary） */
+export interface ReviewDimRow {
+  key: string;
+  pass: number;
+  backup: number;
+  rejected: number;
+  unreviewed: number;
+  total: number;
+  pass_rate: number | null; // pass / 已评审数；行无已评审时 null
+}
+export interface ReviewSummary {
+  overview: {
+    total: number;
+    reviewed: number;
+    coverage: number | null;
+    pass: number;
+    backup: number;
+    rejected: number;
+    pass_rate: number | null;
+    best: number;
+  };
+  dimensions: Record<string, ReviewDimRow[]>;
+  tags: { tag: string; count: number }[];
+}
+
+/** 好图样本库条目（/api/review/gallery） */
+export interface ReviewGalleryItem {
+  json_path: string;
+  material: string;
+  record_id: string;
+  result_id: string;
+  style: string;
+  room_type: string;
+  workflow_mode: string;
+  model_label: string;
+  result_timestamp: string;
+  review_status: ReviewStatus;
+  review_tags: string[];
+  review_note: string;
+  best: boolean;
+  result_url: string;
+  result_thumb: string;
 }
 
 export interface ResolvedRecipe {
@@ -295,6 +380,38 @@ export interface FloorAnalyze {
   recipes: ResolvedRecipe[];
 }
 
+/** 手动校色（区域化 Reinhard，/api/color-match/*） */
+export interface ColorMatchRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+export interface ColorMatchPreviewRequest {
+  image_rel: string; // 成图相对 /outputs 路径
+  ref_path: string;
+  rect: ColorMatchRect;
+  strength?: number; // 默认 0.8
+  feather?: number; // 默认 0.05
+}
+export interface ColorMatchPreviewView {
+  preview: string; // data URL
+  width: number;
+  height: number;
+}
+export interface JobColorMatchRequest extends ColorMatchPreviewRequest {
+  stage: "b2" | "pro";
+}
+export interface RecordColorMatchRequest {
+  json_path: string;
+  record_id: string;
+  result_id: string;
+  ref_path?: string; // 空 → 后端回退 gen_context.image_path
+  rect: ColorMatchRect;
+  strength?: number;
+  feather?: number;
+}
+
 export interface RecordEditRequest {
   json_path: string;
   record_id: string;
@@ -304,4 +421,5 @@ export interface RecordEditRequest {
   image_size?: string;
   preserve_floor_geometry?: boolean;
   model_choice?: string;
+  color_match?: boolean; // 保持原图色彩（防偏色），后端默认 true
 }

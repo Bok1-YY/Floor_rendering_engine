@@ -40,6 +40,17 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  /* Floor AI 扩展语义令牌（供 text-success / bg-warn-soft / border-border-strong 等类使用） */
+  --color-success: var(--success);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-destructive-soft: var(--destructive-soft);
+  --color-destructive-ink: var(--destructive-ink);
+  --color-primary-hover: var(--primary-hover);
+  --color-primary-soft: var(--primary-soft);
+  --color-primary-2: var(--primary-2);
+  --color-border-strong: var(--border-strong);
+  --color-glass: var(--glass);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -62,7 +73,8 @@
   --primary: #c15f3c;
   --primary-foreground: #ffffff;
   --secondary: #efe9dc;
-  --secondary-foreground: #2a241f;
+  /* 全站「次级文字」实际用的是中棕 #6b6356（令牌化前的 text-[#6b6356]），对齐之 */
+  --secondary-foreground: #6b6356;
   --muted: #efe9dc;
   --muted-foreground: #857c6e;
   --accent: #f2e9e0;
@@ -84,40 +96,68 @@
   --sidebar-accent-foreground: #a8472a;
   --sidebar-border: #e3ded1;
   --sidebar-ring: #c15f3c;
+  /* Floor AI 扩展语义令牌 */
+  --success: #2e8c7e;
+  --warn: #8a6d2e;
+  --warn-soft: #f3e4c4;
+  --destructive-soft: #f9e7e2;
+  --destructive-ink: #9a3b29;
+  --primary-hover: #a8472a;
+  --primary-soft: #fbf3ee;
+  --primary-2: #c8785a;
+  --border-strong: #d3c8b3;
+  --glass: rgba(255, 253, 249, 0.72);
+  --scroll-thumb: #d9d0bf;
+  --scroll-thumb-hover: #c7bca6;
 }
 
+/* ── 深色主题：暖炭褐系（保持珊瑚陶土 primary 品牌色不变）── */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: #171412;
+  --panel: #1d1916;
+  --foreground: #ece5da;
+  --card: #221d18;
+  --card-foreground: #ece5da;
+  --popover: #26201a;
+  --popover-foreground: #ece5da;
+  --primary: #c15f3c;
+  --primary-foreground: #ffffff;
+  --secondary: #2e2721;
+  --secondary-foreground: #b3a897;
+  --muted: #2b241e;
+  --muted-foreground: #9a8f80;
+  --accent: #2e2721;
+  --accent-foreground: #e0865f;
+  --destructive: #e06a4f;
+  --border: #383028;
+  --input: #383028;
+  --ring: #c15f3c;
+  --chart-1: #c15f3c;
+  --chart-2: #3fb3a2;
+  --chart-3: #6fb37f;
+  --chart-4: #d4915a;
+  --chart-5: #e0865f;
+  --sidebar: #1d1916;
+  --sidebar-foreground: #ece5da;
+  --sidebar-primary: #c15f3c;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #2e2721;
+  --sidebar-accent-foreground: #e0865f;
+  --sidebar-border: #383028;
+  --sidebar-ring: #c15f3c;
+  /* Floor AI 扩展语义令牌（暗色变体） */
+  --success: #3fb3a2;
+  --warn: #d4b355;
+  --warn-soft: #3a3220;
+  --destructive-soft: #42221c;
+  --destructive-ink: #f0a08e;
+  --primary-hover: #d4714c;
+  --primary-soft: #33241d;
+  --primary-2: #d68a6b;
+  --border-strong: #4a4136;
+  --glass: rgba(23, 20, 18, 0.72);
+  --scroll-thumb: #3d372f;
+  --scroll-thumb-hover: #4d463c;
 }
 
 @layer base {
@@ -142,13 +182,13 @@
   height: 10px;
 }
 ::-webkit-scrollbar-thumb {
-  background: #d9d0bf;
+  background: var(--scroll-thumb);
   border-radius: 8px;
   border: 2px solid transparent;
   background-clip: content-box;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #c7bca6;
+  background: var(--scroll-thumb-hover);
   background-clip: content-box;
 }
 

@@ -9,19 +9,21 @@ import { toast } from "sonner";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ImageZoom } from "@/components/ImageZoom";
+import { CompareSlider } from "@/components/CompareSlider";
+import { ColorMatchDialog } from "@/components/ColorMatchDialog";
 import { cn } from "@/lib/utils";
 
 const BADGE: Record<string, { label: string; color: string; bg: string }> = {
-  queued: { label: "排队", color: "#857c6e", bg: "#efe9dc" },
-  running: { label: "生成中", color: "#fff", bg: "#c15f3c" },
-  done: { label: "完成", color: "#fff", bg: "#2e8c7e" },
-  partial: { label: "部分完成", color: "#8a6d2e", bg: "#f3e4c4" },
-  failed: { label: "失败", color: "#fff", bg: "#b5503a" },
+  queued: { label: "排队", color: "var(--muted-foreground)", bg: "var(--muted)" },
+  running: { label: "生成中", color: "var(--primary-foreground)", bg: "var(--primary)" },
+  done: { label: "完成", color: "#fff", bg: "var(--success)" },
+  partial: { label: "部分完成", color: "var(--warn)", bg: "var(--warn-soft)" },
+  failed: { label: "失败", color: "#fff", bg: "var(--destructive)" },
 };
 
 const REGEN_NS = [1, 2, 4, 6];
 const actBtn =
-  "h-[28px] rounded-lg border border-border bg-card px-[11px] text-[11.5px] font-semibold text-[#6b6356] transition-colors hover:bg-[#f2e9e0]";
+  "h-[28px] rounded-lg border border-border bg-card px-[11px] text-[11.5px] font-semibold text-secondary-foreground transition-colors hover:bg-accent";
 
 type SlotView = { idx: number; url: string; thumb: string };
 
@@ -36,6 +38,14 @@ export function JobCard({
   const [zoom, setZoom] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [editText, setEditText] = useState("");
+  const [editColorMatch, setEditColorMatch] = useState(true);
+  const [compareOpen, setCompareOpen] = useState(false);
+  // 手动校色：记录点的是哪个图槽（B2/Pro 各自的当前浏览候选）
+  const [colorMatch, setColorMatch] = useState<{
+    stage: "b2" | "pro";
+    srcUrl: string;
+    imageRel: string;
+  } | null>(null);
   const [regenN, setRegenN] = useState(1);
   // 候选切换的本地覆盖（不影响后端"当前下标"，仅前端浏览）
   const [view, setView] = useState<{ b2?: SlotView; pro?: SlotView }>({});
@@ -161,14 +171,18 @@ export function JobCard({
     !active &&
     (job.status === "done" || job.status === "partial" || job.status === "failed");
 
+  // 前后对比：仅替换类工作流有房间原图（room_url）；效果图优先取当前浏览中的 Pro 候选，无 Pro 用 B2
+  const compareAfter =
+    (slots.find((s) => s.key === "pro") ?? slots.find((s) => s.key === "b2"))?.url || "";
+
   return (
     <div className="animate-scfade rounded-[14px] border border-border bg-card p-[13px] shadow-[0_2px_8px_rgba(120,90,60,.05)]">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="truncate text-[13.5px] font-bold text-[#2a241f]">
+          <div className="truncate text-[13.5px] font-bold text-foreground">
             {job.display_name}
           </div>
-          <div className="mt-0.5 text-[11px] text-[#9a9082]">
+          <div className="mt-0.5 text-[11px] text-muted-foreground">
             {job.ts}
             {job.time_text ? ` · ${job.time_text}` : ""}
           </div>
@@ -198,14 +212,14 @@ export function JobCard({
             </svg>
             {stageLine}
           </div>
-          <div className="h-[5px] w-full overflow-hidden rounded-md bg-[#efe9dc]">
+          <div className="h-[5px] w-full overflow-hidden rounded-md bg-muted">
             <div className="h-full w-2/5 animate-pulse rounded-md bg-primary" />
           </div>
         </div>
       )}
 
       {(job.operation_error || job.error) && (
-        <div className="mt-2.5 rounded-[9px] bg-[#f9e7e2] px-[11px] py-[9px] text-[11.5px] leading-relaxed text-[#9a3b29]">
+        <div className="mt-2.5 rounded-[9px] bg-destructive-soft px-[11px] py-[9px] text-[11.5px] leading-relaxed text-destructive-ink">
           {job.error_kb ? (
             <span className="font-semibold">{job.error_kb.title} · </span>
           ) : null}
@@ -228,7 +242,7 @@ export function JobCard({
                   {m.name}
                 </span>
               </div>
-              <div className="mt-[5px] flex items-center justify-between text-[11px] text-[#9a9082]">
+              <div className="mt-[5px] flex items-center justify-between text-[11px] text-muted-foreground">
                 <span className="flex items-center gap-1">
                   {m.name}
                   {m.total > 1 && (
@@ -236,7 +250,7 @@ export function JobCard({
                       <button
                         onClick={() => nav(m.key, -1)}
                         disabled={m.idx <= 0}
-                        className="rounded px-1 hover:bg-[#f2e9e0] disabled:opacity-30"
+                        className="rounded px-1 hover:bg-accent disabled:opacity-30"
                       >
                         ‹
                       </button>
@@ -246,21 +260,38 @@ export function JobCard({
                       <button
                         onClick={() => nav(m.key, 1)}
                         disabled={m.idx >= m.total - 1}
-                        className="rounded px-1 hover:bg-[#f2e9e0] disabled:opacity-30"
+                        className="rounded px-1 hover:bg-accent disabled:opacity-30"
                       >
                         ›
                       </button>
                     </>
                   )}
                 </span>
-                <a
-                  href={api.imgUrl(m.url)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="hover:text-[#2a241f]"
-                >
-                  ↗ 原图
-                </a>
+                <span className="flex items-center gap-2">
+                  {terminal && job.floor_url && m.url.startsWith("/outputs/") && (
+                    <button
+                      title={`对这张 ${m.name} 图做手动校色（以地板小样为参照）`}
+                      onClick={() =>
+                        setColorMatch({
+                          stage: m.key,
+                          srcUrl: m.url,
+                          imageRel: m.url.slice("/outputs/".length),
+                        })
+                      }
+                      className="hover:text-foreground"
+                    >
+                      🎯 校色
+                    </button>
+                  )}
+                  <a
+                    href={api.imgUrl(m.url)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="hover:text-foreground"
+                  >
+                    ↗ 原图
+                  </a>
+                </span>
               </div>
             </div>
           ))}
@@ -305,6 +336,11 @@ export function JobCard({
             ✏️ 二改
           </button>
         )}
+        {terminal && job.room_url && compareAfter && (
+          <button className={actBtn} onClick={() => setCompareOpen(true)}>
+            ⇔ 对比
+          </button>
+        )}
 
         {/* 重抽 / 多抽 */}
         {terminal && job.has_retry && (
@@ -317,14 +353,14 @@ export function JobCard({
                   "rounded px-1.5 text-[11.5px] font-semibold",
                   regenN === n
                     ? "bg-primary text-primary-foreground"
-                    : "text-[#857c6e] hover:bg-[#f2e9e0]",
+                    : "text-muted-foreground hover:bg-accent",
                 )}
               >
                 ×{n}
               </button>
             ))}
             <button
-              className="ml-0.5 h-[24px] rounded-md border border-border bg-card px-2 text-[11.5px] font-semibold text-[#6b6356] hover:bg-[#f2e9e0]"
+              className="ml-0.5 h-[24px] rounded-md border border-border bg-card px-2 text-[11.5px] font-semibold text-secondary-foreground hover:bg-accent"
               onClick={() =>
                 act(() => api.regenJob(job.job_id, regenN), `已开始重抽 ×${regenN}`)
               }
@@ -338,7 +374,7 @@ export function JobCard({
           <button
             className={cn(
               actBtn,
-              "hover:border-[#e7c7bf] hover:bg-[#f9e7e2] hover:text-[#b5503a]",
+              "hover:border-destructive/30 hover:bg-destructive-soft hover:text-destructive",
             )}
             onClick={remove}
             title="从队列移除此卡（不影响出图与记录）"
@@ -350,6 +386,45 @@ export function JobCard({
 
       <ImageZoom url={zoom} onClose={() => setZoom(null)} />
 
+      {/* 手动校色（区域化 Reinhard，结果并入所点图槽的候选） */}
+      {colorMatch && (
+        <ColorMatchDialog
+          open={!!colorMatch}
+          onOpenChange={(o) => !o && setColorMatch(null)}
+          srcUrl={colorMatch.srcUrl}
+          imageRel={colorMatch.imageRel}
+          refUrl={job.floor_url}
+          refPath={job.floor_path}
+          target={{ kind: "job", jobId: job.job_id, stage: colorMatch.stage }}
+          onDone={(jv) => {
+            if (jv) {
+              applySnapshot(jv);
+              setView({});
+            }
+          }}
+        />
+      )}
+
+      {/* 前后对比（原房间图 vs 出图，拖动滑块） */}
+      <Dialog open={compareOpen} onOpenChange={setCompareOpen}>
+        <DialogContent className="max-w-[96vw] sm:max-w-[min(92vw,1100px)]">
+          <div className="space-y-3">
+            <div>
+              <div className="text-[15.5px] font-bold">前后对比</div>
+              <div className="mt-0.5 text-[12px] text-muted-foreground">
+                拖动中缝滑块对比原图与效果图 · 切换 ‹n/N› 候选后重开可对比其他张
+              </div>
+            </div>
+            {compareOpen && (
+              <CompareSlider
+                before={api.imgUrl(job.room_url)}
+                after={api.imgUrl(compareAfter)}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent>
           <div className="space-y-3">
@@ -358,12 +433,26 @@ export function JobCard({
               value={editText}
               onChange={(e) => setEditText(e.target.value)}
               placeholder="编辑指令，例如：把墙换成米白色"
-              className="h-10 rounded-[10px] bg-[#faf7f0]"
+              className="h-10 rounded-[10px] bg-panel"
             />
+            <label className="flex cursor-pointer items-start gap-2 text-[12.5px]">
+              <input
+                type="checkbox"
+                checked={editColorMatch}
+                onChange={(e) => setEditColorMatch(e.target.checked)}
+                className="mt-[3px] accent-[var(--primary)]"
+              />
+              <span>
+                <span className="font-semibold text-foreground">保持原图色彩（防偏色）</span>
+                <span className="mt-0.5 block leading-snug text-muted-foreground">
+                  二改后自动把整体色温/饱和度拉回原图，消除偏色。若本次就是想改颜色，请取消勾选。
+                </span>
+              </span>
+            </label>
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setEditOpen(false)}
-                className="h-9 rounded-[9px] border border-border bg-card px-4 text-[13px] font-semibold text-[#6b6356] hover:bg-[#f2e9e0]"
+                className="h-9 rounded-[9px] border border-border bg-card px-4 text-[13px] font-semibold text-secondary-foreground hover:bg-accent"
               >
                 取消
               </button>
@@ -371,11 +460,18 @@ export function JobCard({
                 onClick={() => {
                   const t = editText.trim();
                   if (!t) return;
-                  act(() => api.editJob(job.job_id, { instruction: t }), "已提交二改");
+                  act(
+                    () =>
+                      api.editJob(job.job_id, {
+                        instruction: t,
+                        color_match: editColorMatch,
+                      }),
+                    "已提交二改",
+                  );
                   setEditOpen(false);
                   setEditText("");
                 }}
-                className="h-9 rounded-[9px] bg-primary px-4 text-[13px] font-bold text-primary-foreground hover:bg-[#a8472a]"
+                className="h-9 rounded-[9px] bg-primary px-4 text-[13px] font-bold text-primary-foreground hover:bg-primary-hover"
               >
                 提交
               </button>

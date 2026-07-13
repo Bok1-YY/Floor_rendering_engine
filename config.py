@@ -11,6 +11,7 @@ Logging setup     → logging_setup.py
 import os
 import sys
 import json
+import math
 import re
 import time
 import logging
@@ -316,6 +317,33 @@ def save_speed_profile(profile_val: str) -> None:
 def get_auto_failover() -> bool:
     """读取『直连失败自动转 Fal』开关；缺省关闭。"""
     return bool(_load_config().get("auto_failover", False))
+
+
+def get_pptx_branding() -> dict:
+    """PPTX 导出品牌配置：公司名/联系方式/logo 路径。全部可空（空=保持无品牌旧样式）。"""
+    cfg = _load_config()
+    return {
+        'company': (str(cfg.get('pptx_company') or '')).strip(),
+        'contact': (str(cfg.get('pptx_contact') or '')).strip(),
+        'logo_path': (str(cfg.get('pptx_logo_path') or '')).strip(),
+    }
+
+
+def get_usage_prices() -> dict:
+    """每张成功图的估算单价（元）。key=模型短标签（'B2'/'Pro'/'Lite'，可带线路后缀如 'B2:fal'），
+    value=非负数字。缺省空 dict（用量页成本列显示 —）。脏值（非数字/负数）静默丢弃。"""
+    raw = _load_config().get("usage_prices")
+    if not isinstance(raw, dict):
+        return {}
+    out = {}
+    for k, v in raw.items():
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(f) and f >= 0 and str(k).strip():
+            out[str(k).strip()] = f
+    return out
 
 
 def save_auto_failover(enabled) -> None:

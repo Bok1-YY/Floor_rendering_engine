@@ -68,16 +68,16 @@ export function FloorUploader({
             const f = e.dataTransfer.files?.[0];
             if (f) handleFile(f);
           }}
-          className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[13px] border-2 border-dashed border-[#d3c8b3] bg-card px-4 py-[26px] text-center transition hover:border-primary hover:bg-[#fbf6ee]"
+          className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[13px] border-2 border-dashed border-border-strong bg-card px-4 py-[26px] text-center transition hover:border-primary hover:bg-primary-soft"
         >
-          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#c15f3c" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 15v3a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3v-3" />
             <path d="M12 3v13M7.5 7.5L12 3l4.5 4.5" />
           </svg>
-          <div className="text-[13.5px] font-bold text-[#2a241f]">
+          <div className="text-[13.5px] font-bold text-foreground">
             {busy ? "上传中…" : "点击或拖拽上传地板小样"}
           </div>
-          <div className="text-[11.5px] text-[#9a9082]">
+          <div className="text-[11.5px] text-muted-foreground">
             支持 JPG / PNG · 上传后自动识别色调并推荐配方
           </div>
         </div>
@@ -89,16 +89,16 @@ export function FloorUploader({
             className="h-12 w-16 flex-none rounded-[9px] border border-border object-cover"
           />
           <div className="min-w-0 flex-1 leading-tight">
-            <div className="truncate text-[13px] font-bold text-[#2a241f]">
+            <div className="truncate text-[13px] font-bold text-foreground">
               {value.name}
             </div>
-            <div className="mt-[3px] inline-flex items-center gap-1.5 rounded-full bg-[#f2e9e0] px-2 py-0.5 text-[11px] font-semibold text-[#a8472a]">
+            <div className="mt-[3px] inline-flex items-center gap-1.5 rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-accent-foreground">
               已选地板
             </div>
           </div>
           <button
             onClick={() => inputRef.current?.click()}
-            className="h-[30px] flex-none rounded-lg border border-border bg-card px-[11px] text-[12px] font-semibold text-[#6b6356] hover:bg-[#f2e9e0]"
+            className="h-[30px] flex-none rounded-lg border border-border bg-card px-[11px] text-[12px] font-semibold text-secondary-foreground hover:bg-accent"
           >
             重新上传
           </button>
@@ -108,10 +108,10 @@ export function FloorUploader({
       {recent.length > 0 && (
         <div className="mt-2.5">
           <div className="mb-1.5 flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-[#9a9082]">最近小样</span>
+            <span className="text-[11px] font-semibold text-muted-foreground">最近小样</span>
             <button
               onClick={openMore}
-              className="text-[11px] text-[#9a9082] hover:text-foreground"
+              className="text-[11px] text-muted-foreground hover:text-foreground"
             >
               更多历史 →
             </button>

@@ -16,7 +16,7 @@ from PIL import Image
 
 from .config import (
     BASE_DIR, MAIN_OUTPUT_DIR, CONFIG_FILE, UPLOAD_DIR,
-    logger, _short_text, _load_config, _save_config,
+    logger, _short_text, _load_config, _save_config, get_pptx_branding,
 )
 from .models import JobRecord, ensure_candidate_lists
 
@@ -114,7 +114,7 @@ def load_persisted_jobs() -> List[JobRecord]:
 # ── 历史地板小样扫描（_ng_uploads 里的原始上传，供 webui 历史小样 picker）─────
 _FLOOR_SWATCH_EXTS = ('.jpg', '.jpeg', '.png', '.webp')
 # 历史小样里要排除的非地板上传：房间图/参照图/记录管理上传/测试临时图/匿名兜底名
-_FLOOR_SWATCH_SKIP_PREFIX = ('room_', 'ref_', 'mgr_a_', 'mgr_b_', 'ZZ', 'upload_')
+_FLOOR_SWATCH_SKIP_PREFIX = ('room_', 'ref_', 'mgr_a_', 'mgr_b_', 'ZZ', 'upload_', 'logo_')
 
 def _list_recent_floor_swatches(limit: int = 24):
     """扫 _ng_uploads 里的历史地板小样(原始上传)，按最近修改时间倒序返回绝对路径列表。
@@ -148,18 +148,43 @@ def _short_mode_label(mode: str) -> str:
 
 def _short_model_label(model: str) -> str:
     m = model or ""
+    if "Lite" in m: return "Lite"
     if "Pro" in m: return "Pro"
     if "B2" in m or " 2" in m or m.endswith("2"): return "B2"
     return m.strip() or "未知"
 
 def _load_usage_raw() -> dict:
+    def _normalize_preview_model(data: dict) -> dict:
+        """旧版把 NB2 Lite 归并成 B2；按 operation=preview 可无歧义迁回 Lite。"""
+        for operations in (data.get('counts') or {}).values():
+            if not isinstance(operations, dict):
+                continue
+            preview = operations.get('preview')
+            if not isinstance(preview, dict) or 'B2' not in preview:
+                continue
+            old = preview.get('B2')
+            if not isinstance(old, dict):
+                continue
+            lite = preview.get('Lite')
+            if not isinstance(lite, dict):
+                lite = {}
+                preview['Lite'] = lite
+            preview.pop('B2', None)
+            for provider, counts in old.items():
+                if not isinstance(counts, dict):
+                    continue
+                row = lite.setdefault(provider, {'ok': 0, 'fail': 0})
+                row['ok'] = int(row.get('ok', 0)) + int(counts.get('ok', 0))
+                row['fail'] = int(row.get('fail', 0)) + int(counts.get('fail', 0))
+        return data
+
     try:
         if os.path.exists(_USAGE_STATS_FILE):
             with open(_USAGE_STATS_FILE, "r", encoding="utf-8") as f:
                 d = json.load(f)
             if isinstance(d, dict):
                 if int(d.get('version', 1) or 1) >= 2:
-                    return d
+                    return _normalize_preview_model(d)
                 old = d.get('counts') or {}
                 return {'version': 2, 'counts': {
                     mode: {'generate': models} for mode, models in old.items()
@@ -194,12 +219,18 @@ def record_usage(mode: str, model: str, provider: str, ok: bool, operation: str 
     except Exception as ex:
         logger.debug(f"[用量] record_usage 忽略: {ex}")
 
-def load_usage_summary() -> dict:
+def load_usage_summary(prices: Optional[dict] = None) -> dict:
     """结构化汇总，供 UI 渲染：
-    {'rows': [{mode, model, provider, ok, fail}...(已排序)], 'totals': {'ok','fail','total'}}"""
+    {'rows': [{mode, model, provider, ok, fail, cost?}...(已排序)], 'totals': {'ok','fail','total','cost'}}
+    prices: 可选单价表 {'B2': 0.1, 'Pro': 0.5, 'Lite': 0.03, 'B2:fal': 0.12,...}（元/张成功图）。
+    行单价先查 '模型:线路' 再回落 '模型'；查无单价的行 cost=None（UI 显示 —），估算口径=只按成功计。"""
     data = _load_usage_raw()
+    prices = prices or {}
     rows = []
     tot_ok = tot_fail = 0
+    tot_cost = 0.0
+    has_cost = False
+    unpriced_ok = 0
     for mode, operations in sorted((data.get("counts") or {}).items()):
         if not isinstance(operations, dict):
             continue
@@ -214,9 +245,20 @@ def load_usage_summary() -> dict:
                         continue
                     ok = int(c.get("ok", 0)); fail = int(c.get("fail", 0))
                     tot_ok += ok; tot_fail += fail
+                    price = prices.get(f"{model}:{prov}", prices.get(model))
+                    cost = round(ok * price, 2) if price is not None else None
+                    if cost is not None:
+                        tot_cost += cost
+                        has_cost = True
+                    else:
+                        unpriced_ok += ok
                     rows.append({"mode": mode, "operation": operation, "model": model,
-                                 "provider": prov, "ok": ok, "fail": fail})
-    return {"rows": rows, "totals": {"ok": tot_ok, "fail": tot_fail, "total": tot_ok + tot_fail}}
+                                 "provider": prov, "ok": ok, "fail": fail, "cost": cost})
+    return {"rows": rows,
+            "totals": {"ok": tot_ok, "fail": tot_fail, "total": tot_ok + tot_fail,
+                       "cost": round(tot_cost, 2) if has_cost else None,
+                       "unpriced_ok": unpriced_ok,
+                       "cost_complete": unpriced_ok == 0}}
 
 def _load_records(json_path):
     try:
@@ -691,6 +733,20 @@ def toggle_result_favorite(json_path, record_id, result_ref):
     return None
 
 
+def attach_generation_context(json_path, record_id, ctx: dict) -> bool:
+    """把一次生成的完整入参快照挂到记录上（gen_context），供「复用参数」「前后对比」使用。
+    ctx 由调用方保证不含密钥。找不到记录返回 False。"""
+    with record_file_lock(json_path):
+        records = _load_records(json_path)
+        for r in records:
+            if r.get('id') == record_id:
+                r['gen_context'] = ctx
+                _save_records(json_path, records)
+                return True
+    logger.warning(f"[记录] 生成上下文写入失败，未找到 json={json_path}, record={record_id}")
+    return False
+
+
 REVIEW_STATUSES = {'unreviewed', 'pass', 'backup', 'rejected'}
 
 
@@ -769,6 +825,106 @@ def collect_favorites():
     return out
 
 
+# ── 评审复盘：人工评审标签的聚合统计与好图样本库 ─────────────────────
+_REVIEW_DIM_FIELDS = ('workflow_mode', 'style', 'room_type', 'seam')
+
+
+def load_review_summary() -> dict:
+    """扫描全部记录，按维度聚合人工评审结果，供复盘面板渲染。
+    通过率口径 = pass / 已评审数(pass+backup+rejected)，未评审不摊薄；行无已评审时 pass_rate=None。
+    返回 {'overview': {...}, 'dimensions': {dim: [行...]}, 'tags': [{'tag','count'}...]}。"""
+    dims = {d: {} for d in _REVIEW_DIM_FIELDS}
+    tag_counter = {}
+    total = passed = backup = rejected = best_count = 0
+    for jp in scan_json_files():
+        for r in _load_records(jp):
+            if not isinstance(r, dict):
+                continue
+            keys = {
+                'workflow_mode': _short_mode_label(r.get('workflow_mode', '')),
+                'style': (str(r.get('style') or '')).strip() or '未知',
+                'room_type': (str(r.get('room_type') or '')).strip() or '未知',
+                'seam': (str(r.get('seam') or '')).strip() or '未知',
+            }
+            for res in r.get('results', []):
+                if not isinstance(res, dict):
+                    continue
+                status = (res.get('review_status') or 'unreviewed')
+                if status not in REVIEW_STATUSES:
+                    status = 'unreviewed'
+                total += 1
+                if status == 'pass':
+                    passed += 1
+                elif status == 'backup':
+                    backup += 1
+                elif status == 'rejected':
+                    rejected += 1
+                if res.get('best'):
+                    best_count += 1
+                for t in res.get('review_tags') or []:
+                    t = str(t or '').strip()
+                    if t:
+                        tag_counter[t] = tag_counter.get(t, 0) + 1
+                for dim, key in keys.items():
+                    row = dims[dim].setdefault(
+                        key, {'pass': 0, 'backup': 0, 'rejected': 0, 'unreviewed': 0, 'total': 0})
+                    row[status] += 1
+                    row['total'] += 1
+
+    def _rate(p, b, rj):
+        done = p + b + rj
+        return round(p / done, 3) if done else None
+
+    dimensions = {}
+    for dim, rows in dims.items():
+        out_rows = []
+        for key, c in rows.items():
+            out_rows.append({'key': key, **c,
+                             'pass_rate': _rate(c['pass'], c['backup'], c['rejected'])})
+        out_rows.sort(key=lambda x: x['total'], reverse=True)
+        dimensions[dim] = out_rows
+
+    reviewed = passed + backup + rejected
+    return {
+        'overview': {
+            'total': total, 'reviewed': reviewed,
+            'coverage': round(reviewed / total, 3) if total else None,
+            'pass': passed, 'backup': backup, 'rejected': rejected,
+            'pass_rate': _rate(passed, backup, rejected),
+            'best': best_count,
+        },
+        'dimensions': dimensions,
+        'tags': sorted(({'tag': t, 'count': n} for t, n in tag_counter.items()),
+                       key=lambda x: x['count'], reverse=True),
+    }
+
+
+def collect_review_gallery(filter_key: str = 'pass', limit: int = 60):
+    """好图样本库：filter_key='pass'(评审通过) 或 'best'(最佳图)，按出图时间倒序取 limit 条。
+    返回 [{json_path, material, record_id, result_id, res, style, room_type, workflow_mode}, ...]。"""
+    out = []
+    for jp in scan_json_files():
+        material = os.path.basename(jp).replace('_记录.json', '').replace('.json', '')
+        for r in _load_records(jp):
+            if not isinstance(r, dict):
+                continue
+            for res in r.get('results', []):
+                if not isinstance(res, dict):
+                    continue
+                hit = res.get('best') if filter_key == 'best' else (
+                    res.get('review_status') == 'pass')
+                if hit:
+                    out.append({
+                        'json_path': jp, 'material': material,
+                        'record_id': r.get('id', ''), 'result_id': res.get('result_id', ''),
+                        'res': res,
+                        'style': r.get('style', ''), 'room_type': r.get('room_type', ''),
+                        'workflow_mode': _short_mode_label(r.get('workflow_mode', '')),
+                    })
+    out.sort(key=lambda x: x['res'].get('result_timestamp', ''), reverse=True)
+    return out[:max(1, int(limit or 60))]
+
+
 # ── PPTX 导出（客户提案 deck）──────────────────────────────────────
 def _result_image_source(res):
     """结果图供 PPTX 用的来源：优先成图文件绝对路径，回退 base64 解成 BytesIO；无图返回 None。"""
@@ -784,9 +940,11 @@ def _result_image_source(res):
     return None
 
 
-def _build_pptx(items, out_path, title):
+def _build_pptx(items, out_path, title, branding=None):
     """items: [{'source': 路径或BytesIO, 'caption': 文本}]。16:9 PPTX：标题页 + 每项一页(图+说明)。
-    python-pptx 只存字体名(微软雅黑)，PowerPoint 用系统字体渲染中文，无需嵌字体。"""
+    python-pptx 只存字体名(微软雅黑)，PowerPoint 用系统字体渲染中文，无需嵌字体。
+    branding: 可选 {'company','contact','logo_path'}（config.get_pptx_branding()）——
+    标题页加 logo/公司名/联系方式，内容页右下角加公司名页脚；配置坏/图打不开一律静默降级。"""
     try:
         from pptx import Presentation
         from pptx.util import Inches, Pt, Emu
@@ -795,6 +953,11 @@ def _build_pptx(items, out_path, title):
     except Exception:
         return "❌ 未安装 python-pptx，请先运行: pip install python-pptx"
     from PIL import Image as _PILImage
+
+    branding = branding or {}
+    company = str(branding.get('company') or '').strip()
+    contact = str(branding.get('contact') or '').strip()
+    logo_path = str(branding.get('logo_path') or '').strip()
 
     prs = Presentation()
     prs.slide_width = Inches(13.333); prs.slide_height = Inches(7.5)  # 16:9
@@ -808,11 +971,33 @@ def _build_pptx(items, out_path, title):
         run.font.size = Pt(size); run.font.bold = bold
         run.font.name = '微软雅黑'; run.font.color.rgb = color
 
-    # 标题页
+    # 标题页（logo 置顶居中 → 主标题 → 公司名副标题 → 联系方式底部小字）
     s0 = prs.slides.add_slide(blank)
+    if logo_path and os.path.isfile(logo_path):
+        try:
+            with _PILImage.open(logo_path) as im:
+                lw, lh = im.size
+            # Pillow 给的是像素，python-pptx 使用 EMU。这里的 scale 单位是
+            # EMU/像素，不能再限制为 <= 1，否则普通 1000px logo 只会得到
+            # 1000 EMU（约 0.001 英寸），在封面上几乎不可见。
+            max_w, max_h = int(Inches(2.4)), int(Inches(1.2))
+            scale = min(max_w / max(1, lw), max_h / max(1, lh))
+            pw, ph = int(lw * scale), int(lh * scale)
+            s0.shapes.add_picture(logo_path, int((SW - pw) / 2), int(Inches(1.2)),
+                                  width=pw, height=ph)
+        except Exception as e:
+            logger.warning(f"[PPTX] logo 插入失败(忽略): {e}")
     tb = s0.shapes.add_textbox(Inches(0.8), Inches(2.8), SW - Inches(1.6), Inches(1.8))
     tb.text_frame.word_wrap = True
     _set_text(tb.text_frame, title, 40, True, RGBColor(0x2b, 0x24, 0x1a), PP_ALIGN.CENTER)
+    if company:
+        sb = s0.shapes.add_textbox(Inches(0.8), Inches(4.4), SW - Inches(1.6), Inches(0.7))
+        sb.text_frame.word_wrap = True
+        _set_text(sb.text_frame, company, 18, False, RGBColor(0x6b, 0x63, 0x56), PP_ALIGN.CENTER)
+    if contact:
+        cb = s0.shapes.add_textbox(Inches(0.8), SH - Inches(1.0), SW - Inches(1.6), Inches(0.6))
+        cb.text_frame.word_wrap = True
+        _set_text(cb.text_frame, contact, 12, False, RGBColor(0x9a, 0x90, 0x82), PP_ALIGN.CENTER)
 
     area_w = SW - int(Inches(1.0)); area_h = SH - int(Inches(2.0))
     top0 = int(Inches(0.4))
@@ -838,6 +1023,10 @@ def _build_pptx(items, out_path, title):
         cap = slide.shapes.add_textbox(Inches(0.5), SH - Inches(1.4), SW - Inches(1.0), Inches(1.2))
         cap.text_frame.word_wrap = True
         _set_text(cap.text_frame, it.get('caption', ''), 12, False, RGBColor(0x55, 0x55, 0x55))
+        if company:
+            ft = slide.shapes.add_textbox(SW - Inches(3.2), SH - Inches(0.42),
+                                          Inches(3.0), Inches(0.35))
+            _set_text(ft.text_frame, company, 9, False, RGBColor(0xb0, 0xa8, 0x9a), PP_ALIGN.RIGHT)
 
     try:
         prs.save(out_path)
@@ -886,7 +1075,7 @@ def export_pptx_from_json(json_path):
     if not items:
         return "❌ 该文件没有可导出的效果图"
     out_path = json_path.replace('_记录.json', '_导出.pptx')
-    return _build_pptx(items, out_path, f"{material} · 地板效果图")
+    return _build_pptx(items, out_path, f"{material} · 地板效果图", branding=get_pptx_branding())
 
 
 def export_favorites_pptx():
@@ -902,7 +1091,7 @@ def export_favorites_pptx():
     if not items:
         return "❌ 收藏的效果图都没有可用图片数据"
     out_path = os.path.join(MAIN_OUTPUT_DIR, f"收藏夹提案_{time.strftime('%Y%m%d_%H%M%S')}.pptx")
-    return _build_pptx(items, out_path, "地板效果图 · 收藏提案")
+    return _build_pptx(items, out_path, "地板效果图 · 收藏提案", branding=get_pptx_branding())
 
 
 def migrate_record_file(json_path) -> bool:
@@ -964,5 +1153,6 @@ __all__ = [
     '_api_write_to_record', '_save_api_result_jpg', 'migrate_record_file',
     'migrate_record_storage', 'migrate_all_record_storage',
     'toggle_result_favorite', 'update_result_review', 'collect_favorites',
+    'attach_generation_context', 'load_review_summary', 'collect_review_gallery',
     'export_pptx_from_json', 'export_favorites_pptx',
 ]

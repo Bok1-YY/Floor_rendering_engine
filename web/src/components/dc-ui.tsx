@@ -12,7 +12,7 @@ export function SectionHeader({
   return (
     <div
       className={cn(
-        "flex items-center gap-[7px] text-[11px] font-extrabold tracking-[0.1em] text-[#a8472a]",
+        "flex items-center gap-[7px] text-[11px] font-extrabold tracking-[0.1em] text-accent-foreground",
         className,
       )}
     >
@@ -35,7 +35,7 @@ export function Segmented<T extends string>({
   className?: string;
 }) {
   return (
-    <div className={cn("flex rounded-[10px] bg-[#efe9dc] p-[3px]", className)}>
+    <div className={cn("flex rounded-[10px] bg-muted p-[3px]", className)}>
       {options.map((o) => {
         const active = o.value === value;
         return (
@@ -46,8 +46,8 @@ export function Segmented<T extends string>({
             className={cn(
               "h-[34px] flex-1 rounded-lg text-[12.5px] font-bold transition-colors",
               active
-                ? "bg-card text-[#a8472a] shadow-[0_1px_3px_rgba(120,90,60,.12)]"
-                : "text-[#857c6e] hover:text-[#6b6356]",
+                ? "bg-card text-accent-foreground shadow-[0_1px_3px_rgba(120,90,60,.12)]"
+                : "text-muted-foreground hover:text-secondary-foreground",
             )}
           >
             {o.label}
@@ -78,7 +78,7 @@ export function Pill({
         "rounded-full border px-3 py-[5px] text-[12px] font-semibold transition-colors",
         active
           ? "border-primary bg-primary text-white"
-          : "border-border bg-card text-[#6b6356] hover:bg-[#f2e9e0]",
+          : "border-border bg-card text-secondary-foreground hover:bg-accent",
         className,
       )}
     >

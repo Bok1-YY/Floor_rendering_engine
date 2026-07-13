@@ -1125,6 +1125,98 @@ def _match_color_to_reference(src_img, ref_img, strength=1.0):
     return transferred
 
 
+def match_color_region(src_img, ref_img, rect, strength=1.0, feather=0.05):
+    """区域化 Reinhard + 颜色相似度掩膜：只对归一化矩形 rect=(x,y,w,h)∈[0,1] 内
+    「像地板」的像素做 LAB 色彩迁移，边缘线性羽化回原图。
+
+    「手动校色」引擎：以地板小样为 ref，把成图中框选的地板区域拉回小样色彩。
+    两层保护，防止选区内的非地板物体（绿植/家具/地毯）被统计外推成极端色：
+    1. robust 统计——先按全选区估 LAB 均值/方差，剔除离群像素后重估，
+       迁移统计只来自「地板本体」像素，不被绿植等离群色污染；
+    2. 相似度掩膜——每像素到地板统计的归一化距离 d，d≤D0 全变换、d≥D1 不变换、
+       中间线性过渡；离群物体自然豁免。
+    feather 按 src 短边比例定义（非固定像素），保证预览(降采样)与全分辨率提交视觉一致。
+
+    Args:
+        src_img: 成图 PIL Image（任意模式，内部转 RGB）
+        ref_img: 颜色参照 PIL Image（任意模式，内部转 RGB）
+        rect: (x, y, w, h) 归一化选区
+        strength: 0.0~1.0 迁移强度（折进 mask，0=恒等返回原图副本）
+        feather: 羽化宽度 / src 短边，0=硬边
+    Returns:
+        RGB PIL Image（始终新对象，不改 src_img）
+    """
+    import numpy as np
+    src = src_img.convert('RGB')
+    W, H = src.size
+    x, y, w, h = rect
+    # 归一化 → 像素坐标，钳到图内
+    x0 = max(0, min(W - 1, int(round(x * W))))
+    y0 = max(0, min(H - 1, int(round(y * H))))
+    x1 = max(x0, min(W, int(round((x + w) * W))))
+    y1 = max(y0, min(H, int(round((y + h) * H))))
+    # 无效/过小选区或零强度 → 恒等（返回副本，调用方可放心持有）
+    if strength <= 0 or (x1 - x0) < max(2, int(0.02 * W)) or (y1 - y0) < max(2, int(0.02 * H)):
+        return src
+
+    feather_px = max(0, int(round(feather * min(W, H))))
+    # 外扩羽化带得 crop 框（羽化发生在选区外侧，选区内部保持全强度）
+    bx0, by0 = max(0, x0 - feather_px), max(0, y0 - feather_px)
+    bx1, by1 = min(W, x1 + feather_px), min(H, y1 + feather_px)
+    crop = src.crop((bx0, by0, bx1, by1))
+
+    s = np.array(crop.convert('LAB'), dtype=np.float32)      # (ch, cw, 3)
+    r = np.asarray(ref_img.convert('RGB').convert('LAB'), dtype=np.uint8)
+
+    # ── robust 地板统计：全选区初估 → 剔离群 → 重估 ──
+    _SIGMA_FLOOR = 2.0     # 方差下限：均匀纹理时避免除零/距离爆炸
+    flat = s.reshape(-1, 3)
+    mu = flat.mean(axis=0)
+    sd = np.maximum(flat.std(axis=0), _SIGMA_FLOOR)
+    d = np.sqrt((((flat - mu) / sd) ** 2).mean(axis=1))      # 每像素归一化距离
+    inlier = d <= 2.5
+    if inlier.sum() >= max(64, int(0.05 * flat.shape[0])):   # 剩得太少就退回全量统计
+        mu = flat[inlier].mean(axis=0)
+        sd = np.maximum(flat[inlier].std(axis=0), _SIGMA_FLOOR)
+        d = np.sqrt((((flat - mu) / sd) ** 2).mean(axis=1))
+
+    # ── 相似度权重：d≤D0 全变换，d≥D1 不变换，线性过渡 ──
+    _D0, _D1 = 2.0, 3.2
+    w_sim = np.clip((_D1 - d) / (_D1 - _D0), 0.0, 1.0).reshape(s.shape[0], s.shape[1])
+
+    # ── Reinhard 迁移：inlier(地板本体)统计 → ref 全图统计（逐通道均值/方差）──
+    # 方差比钳制：校色的目标是对齐整体色调(均值)，不是移植小样的纹理对比度。
+    # 不钳制时，地板 a/b 通道方差窄、小样方差宽 → 比值放大把细微色彩波动放大成可见斑块。
+    _RATIO_MIN, _RATIO_MAX = 0.7, 1.3
+    for c in range(3):
+        r_mean, r_std = float(r[..., c].mean()), float(r[..., c].std())
+        s_mean, s_std = float(mu[c]), float(sd[c])
+        ratio = 1.0 if s_std < 1e-5 else min(max(r_std / s_std, _RATIO_MIN), _RATIO_MAX)
+        s[..., c] = (s[..., c] - s_mean) * ratio + r_mean
+    np.clip(s, 0, 255, out=s)
+    transferred = Image.fromarray(s.astype(np.uint8), mode='LAB').convert('RGB')
+    del s, r, flat, d
+
+    ch, cw = by1 - by0, bx1 - bx0
+    # 两条 1-D 线性 ramp（边缘 0→内部 1，跨 feather_px）广播取 min → 羽化 mask，仅 crop 大小
+    def _ramp(n, lo_pad, hi_pad):
+        ramp = np.ones(n, dtype=np.float32)
+        if lo_pad > 0:
+            ramp[:lo_pad] = np.linspace(0.0, 1.0, lo_pad, endpoint=False, dtype=np.float32)
+        if hi_pad > 0:
+            ramp[n - hi_pad:] = np.linspace(0.0, 1.0, hi_pad, endpoint=False, dtype=np.float32)[::-1]
+        return ramp
+
+    ry = _ramp(ch, y0 - by0, by1 - y1)
+    rx = _ramp(cw, x0 - bx0, bx1 - x1)
+    mask_f = np.minimum(ry[:, None], rx[None, :]) * w_sim
+    mask = (mask_f * (255.0 * float(strength))).astype(np.uint8)
+    del mask_f, w_sim
+    out = src.copy()
+    out.paste(transferred, (bx0, by0), Image.fromarray(mask, mode='L'))
+    return out
+
+
 def _infer_aspect_ratio_from_b64(b64_str: str) -> str:
     img = _b64_to_pil(b64_str)
     if img is None or not img.width or not img.height:
@@ -1212,5 +1304,5 @@ __all__ = [
     'call_gemini_edit', 'analyze_style_image', 'test_connection',
     'call_gemini_scenes', 'call_deepseek_scenes', 'call_omakase_scenes',
     'FLOOR_DESEAM_INSTRUCTION',
-    '_match_color_to_reference', '_infer_aspect_ratio_from_b64',
+    '_match_color_to_reference', 'match_color_region', '_infer_aspect_ratio_from_b64',
 ]

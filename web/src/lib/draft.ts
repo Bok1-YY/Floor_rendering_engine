@@ -47,3 +47,37 @@ export function clearDraft(): void {
     /* 忽略 */
   }
 }
+
+// ── 复用参数：记录页 → 生成页的一次性传递（独立 key，绝不覆写上面的作业草稿）──
+const REUSE_KEY = "floor-engine:reuse-request:v1";
+
+/** 记录页「复用参数」发起的一次性回填请求。 */
+export interface ReuseRequest {
+  params: GenParams;
+  modelFilter?: ModelFilter;
+  floorPath?: string;
+  roomPath?: string;
+  refPath?: string;
+}
+
+export function saveReuseRequest(r: ReuseRequest): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(REUSE_KEY, JSON.stringify(r));
+  } catch {
+    /* 忽略 */
+  }
+}
+
+/** 取出并删除复用请求（读后即删：只消费一次，刷新后不再重复回填）。 */
+export function takeReuseRequest(): ReuseRequest | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(REUSE_KEY);
+    if (!raw) return null;
+    window.localStorage.removeItem(REUSE_KEY);
+    return JSON.parse(raw) as ReuseRequest;
+  } catch {
+    return null;
+  }
+}

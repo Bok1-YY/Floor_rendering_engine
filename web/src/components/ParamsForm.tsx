@@ -48,9 +48,9 @@ function Field({
 }) {
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
-      <span className="text-[11.5px] font-semibold text-[#857c6e]">{label}</span>
+      <span className="text-[11.5px] font-semibold text-muted-foreground">{label}</span>
       <Select value={value} onValueChange={(v) => onChange(v ?? "")}>
-        <SelectTrigger className="h-10 w-full rounded-[10px] bg-card text-[13px] text-[#2a241f]">
+        <SelectTrigger className="h-10 w-full rounded-[10px] bg-card text-[13px] text-foreground">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
@@ -80,7 +80,7 @@ function Chips({
 }) {
   return (
     <div>
-      <span className={cn("text-[11.5px] font-semibold text-[#857c6e]", labelClassName)}>
+      <span className={cn("text-[11.5px] font-semibold text-muted-foreground", labelClassName)}>
         {label}
       </span>
       <div className="mt-[7px] flex flex-wrap gap-1.5">
@@ -95,7 +95,7 @@ function Chips({
                 "rounded-full border px-3 py-[5px] text-[12px] font-semibold transition-colors",
                 on
                   ? "border-primary bg-primary text-white"
-                  : "border-border bg-card text-[#6b6356] hover:bg-[#f2e9e0]",
+                  : "border-border bg-card text-secondary-foreground hover:bg-accent",
               )}
             >
               {o}
@@ -138,7 +138,7 @@ function ImageUpload({
       <button
         type="button"
         onClick={() => ref.current?.click()}
-        className="h-9 rounded-[9px] border border-border bg-card px-3 text-[12.5px] font-semibold text-[#6b6356] hover:bg-[#f2e9e0]"
+        className="h-9 rounded-[9px] border border-border bg-card px-3 text-[12.5px] font-semibold text-secondary-foreground hover:bg-accent"
       >
         {busy ? "上传中…" : value ? "重新上传" : buttonLabel}
       </button>
@@ -263,7 +263,7 @@ export function ParamsForm({
               className={cn(
                 "rounded-xl border p-[12px] text-left transition",
                 active
-                  ? "border-primary bg-[#fbf3ee] ring-[3px] ring-[rgba(193,95,60,.1)]"
+                  ? "border-primary bg-primary-soft ring-[3px] ring-[rgba(193,95,60,.1)]"
                   : "border-border bg-card",
               )}
             >
@@ -271,13 +271,13 @@ export function ParamsForm({
                 <span
                   className={cn(
                     "text-[13px] font-bold",
-                    active ? "text-[#a8472a]" : "text-[#2a241f]",
+                    active ? "text-accent-foreground" : "text-foreground",
                   )}
                 >
                   {name}
                 </span>
                 {active && (
-                  <span className="text-[#a8472a]">
+                  <span className="text-accent-foreground">
                     <Check />
                   </span>
                 )}
@@ -285,7 +285,7 @@ export function ParamsForm({
               <div
                 className={cn(
                   "mt-[5px] text-[11px] leading-snug",
-                  active ? "text-[#bd7a5b]" : "text-[#9a9082]",
+                  active ? "text-primary-2" : "text-muted-foreground",
                 )}
               >
                 {WF_SUB[name] ?? ""}
@@ -297,10 +297,10 @@ export function ParamsForm({
 
       {/* ── 源图上传：随工作流出现（地板替换=房间原图 / 参照模式=参照图）── */}
       {(isReplace || isRef) && (
-        <div className="mt-[13px] space-y-2.5 rounded-xl border border-primary/40 bg-[#fbf3ee] p-[13px]">
+        <div className="mt-[13px] space-y-2.5 rounded-xl border border-primary/40 bg-primary-soft p-[13px]">
           {isReplace && (
             <div className="flex flex-col gap-1.5">
-              <span className="text-[11.5px] font-semibold text-[#a8472a]">
+              <span className="text-[11.5px] font-semibold text-accent-foreground">
                 待替换图 · 房间原图（地板替换必传）
               </span>
               <ImageUpload
@@ -310,7 +310,7 @@ export function ParamsForm({
                 buttonLabel="上传房间原图"
                 okMsg="房间原图已上传"
               />
-              <span className="text-[11px] text-[#9a9082]">
+              <span className="text-[11px] text-muted-foreground">
                 保留原图的空间、家具与采光，仅把原地面替换为所选地板
               </span>
             </div>
@@ -318,7 +318,7 @@ export function ParamsForm({
           {isRef && (
             <>
               <div className="flex flex-col gap-1.5">
-                <span className="text-[11.5px] font-semibold text-[#a8472a]">
+                <span className="text-[11.5px] font-semibold text-accent-foreground">
                   参照风格图（参照模式必传）
                 </span>
                 <ImageUpload
@@ -330,7 +330,7 @@ export function ParamsForm({
                 />
               </div>
               <div className="flex flex-col gap-1.5">
-                <span className="text-[11.5px] font-semibold text-[#857c6e]">
+                <span className="text-[11.5px] font-semibold text-muted-foreground">
                   参照修正（可选，纠正风格提取偏差）
                 </span>
                 <Input
@@ -349,9 +349,9 @@ export function ParamsForm({
 
       {/* ── 墙板模式：子行为切换 + 按需第二张图（上方的地板小样此时即墙板木纹样图）── */}
       {isPanel && (
-        <div className="mt-[13px] space-y-2.5 rounded-xl border border-primary/40 bg-[#fbf3ee] p-[13px]">
+        <div className="mt-[13px] space-y-2.5 rounded-xl border border-primary/40 bg-primary-soft p-[13px]">
           <div className="flex flex-col gap-1.5">
-            <span className="text-[11.5px] font-semibold text-[#a8472a]">墙板子模式</span>
+            <span className="text-[11.5px] font-semibold text-accent-foreground">墙板子模式</span>
             <Segmented
               value={panelSub}
               options={[
@@ -361,13 +361,13 @@ export function ParamsForm({
               ]}
               onChange={(v) => onParams({ panel_submode: v })}
             />
-            <span className="text-[11px] text-[#9a9082]">
+            <span className="text-[11px] text-muted-foreground">
               上方上传的小样即「墙板木纹样图」。再设计=按场景参照图生新图；替换=保留原场景仅换木纹；纯原创=仅凭木纹样图原创场景。
             </span>
           </div>
           {panelSub.includes("再设计") && (
             <div className="flex flex-col gap-1.5">
-              <span className="text-[11.5px] font-semibold text-[#a8472a]">
+              <span className="text-[11.5px] font-semibold text-accent-foreground">
                 场景参照图（再设计必传）
               </span>
               <ImageUpload
@@ -387,7 +387,7 @@ export function ParamsForm({
           )}
           {panelSub.includes("替换") && (
             <div className="flex flex-col gap-1.5">
-              <span className="text-[11.5px] font-semibold text-[#a8472a]">
+              <span className="text-[11.5px] font-semibold text-accent-foreground">
                 原墙板场景图（替换必传）
               </span>
               <ImageUpload
@@ -397,7 +397,7 @@ export function ParamsForm({
                 buttonLabel="上传原墙板场景图"
                 okMsg="原墙板场景图已上传"
               />
-              <span className="text-[11px] text-[#9a9082]">
+              <span className="text-[11px] text-muted-foreground">
                 保留原图的结构、比例、收口条与光影，仅把墙板木纹替换为所选样图
               </span>
             </div>
@@ -407,7 +407,7 @@ export function ParamsForm({
 
       {/* ── 墙板场景（再设计/纯原创）：空间类型 + 墙板尺寸（预设下拉 + 自定义）── */}
       {isPanelScene && (
-        <div className="mt-[13px] grid grid-cols-2 gap-[11px] rounded-xl bg-[#f2e9e0] p-[11px]">
+        <div className="mt-[13px] grid grid-cols-2 gap-[11px] rounded-xl bg-accent p-[11px]">
           <Field
             label="空间类型"
             value={params.room_type || options.room_types[0]}
@@ -425,7 +425,7 @@ export function ParamsForm({
             options={options.panel_sizes}
           />
           <div className="col-span-2 flex flex-col gap-1.5">
-            <span className="text-[11.5px] font-semibold text-[#857c6e]">自定义墙板尺寸（可选）</span>
+            <span className="text-[11.5px] font-semibold text-muted-foreground">自定义墙板尺寸（可选）</span>
             <Input
               value={
                 options.panel_sizes.includes(params.panel_size || "")
@@ -444,7 +444,7 @@ export function ParamsForm({
       <div className="mt-[18px] flex gap-4">
         {!isOmakase && !isPanel && (
         <div className="w-40 flex-none">
-          <div className="mb-[7px] text-[11.5px] font-semibold text-[#857c6e]">市场</div>
+          <div className="mb-[7px] text-[11.5px] font-semibold text-muted-foreground">市场</div>
           <Segmented
             value={cnMode ? "cn" : "overseas"}
             options={[
@@ -456,7 +456,7 @@ export function ParamsForm({
         </div>
         )}
         <div className="flex-1">
-          <div className="mb-[7px] text-[11.5px] font-semibold text-[#857c6e]">模型线路</div>
+          <div className="mb-[7px] text-[11.5px] font-semibold text-muted-foreground">模型线路</div>
           <Segmented<ModelFilter>
             value={modelFilter}
             options={options.model_filters.map((m) => ({
@@ -505,7 +505,7 @@ export function ParamsForm({
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <span className="text-[11.5px] font-semibold text-[#857c6e]">小区/地段（可选）</span>
+            <span className="text-[11.5px] font-semibold text-muted-foreground">小区/地段（可选）</span>
             <Input
               value={params.neighborhood || ""}
               onChange={(e) => onParams({ neighborhood: e.target.value })}
@@ -618,22 +618,22 @@ export function ParamsForm({
             ✨ OMAKASE · 场景代笔（必填）
           </SectionHeader>
           <div className="space-y-2.5 rounded-xl border border-border bg-card p-[13px]">
-            <p className="text-[11px] leading-relaxed text-[#9a9082]">
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
               一句话描述想要的画面/氛围（可以很抽象），AI 会写几段「怎么拍」的场景供你选或改。选定后将
-              <b className="text-[#c8785a]">接管风格·光线·镜头等场景描述</b>；地板与物理规格仍由下方设置控制。场景定稿为必填——未选或未填写场景时无法提交生成。
+              <b className="text-primary-2">接管风格·光线·镜头等场景描述</b>；地板与物理规格仍由下方设置控制。场景定稿为必填——未选或未填写场景时无法提交生成。
             </p>
             <Textarea
               rows={2}
               value={omaIdea}
               onChange={(e) => setOmaIdea(e.target.value)}
               placeholder="例：荷兰普通人家，一个女人和孩子在玩耍；或：体现耐刮耐磨；或：温馨时光…"
-              className="rounded-[9px] bg-[#faf7f0]"
+              className="rounded-[9px] bg-panel"
             />
             <button
               type="button"
               disabled={omaLoading}
               onClick={runOmakase}
-              className="w-full rounded-[9px] bg-[#c8785a] px-[13px] py-[9px] text-[12.5px] font-bold text-white transition hover:brightness-105 disabled:opacity-60"
+              className="w-full rounded-[9px] bg-primary-2 px-[13px] py-[9px] text-[12.5px] font-bold text-white transition hover:brightness-105 disabled:opacity-60"
             >
               {omaLoading ? "生成中…" : "✨ Omakase 生成场景"}
             </button>
@@ -649,29 +649,29 @@ export function ParamsForm({
                       className={cn(
                         "block w-full rounded-[9px] border p-[11px] text-left transition",
                         chosen
-                          ? "border-[#c8785a] bg-[#faf1ec]"
-                          : "border-border bg-[#faf7f0] hover:bg-[#f2e9e0]",
+                          ? "border-primary-2 bg-primary-soft"
+                          : "border-border bg-panel hover:bg-accent",
                       )}
                     >
                       <div className="mb-1 flex items-center gap-1.5">
                         {o.recommended && (
-                          <span className="rounded bg-[#c8785a] px-1.5 py-0.5 text-[10px] font-bold text-white">
+                          <span className="rounded bg-primary-2 px-1.5 py-0.5 text-[10px] font-bold text-white">
                             推荐
                           </span>
                         )}
                         {chosen && (
-                          <span className="text-[11px] font-bold text-[#c8785a]">✓ 已选</span>
+                          <span className="text-[11px] font-bold text-primary-2">✓ 已选</span>
                         )}
                       </div>
-                      <p className="text-[12px] leading-relaxed text-[#5c5346]">{o.text}</p>
-                      {o.why && <p className="mt-1 text-[10.5px] text-[#9a9082]">💡 {o.why}</p>}
+                      <p className="text-[12px] leading-relaxed text-secondary-foreground">{o.text}</p>
+                      {o.why && <p className="mt-1 text-[10.5px] text-muted-foreground">💡 {o.why}</p>}
                     </button>
                   );
                 })}
               </div>
             )}
             <div className="flex flex-col gap-1.5">
-              <span className="text-[11.5px] font-semibold text-[#857c6e]">
+              <span className="text-[11.5px] font-semibold text-muted-foreground">
                 场景定稿（必填，可直接编辑）
               </span>
               <Textarea
@@ -679,7 +679,7 @@ export function ParamsForm({
                 value={params.scene_override || ""}
                 onChange={(e) => onParams({ scene_override: e.target.value })}
                 placeholder="选一段候选会填到这里，可直接改；也可完全手写。必填。"
-                className="rounded-[9px] bg-[#faf7f0]"
+                className="rounded-[9px] bg-panel"
               />
             </div>
           </div>
@@ -715,7 +715,7 @@ export function ParamsForm({
 
       {/* ── 宠物友好 ── */}
       {isPet && (
-        <div className="mt-[13px] grid grid-cols-3 gap-[9px] rounded-xl bg-[#f2e9e0] p-[11px]">
+        <div className="mt-[13px] grid grid-cols-3 gap-[9px] rounded-xl bg-accent p-[11px]">
           <Field
             label="种类"
             value={params.pet_type || options.pet_types[0]}
@@ -761,12 +761,12 @@ export function ParamsForm({
       <button
         type="button"
         onClick={() => setAdvOpen((v) => !v)}
-        className="mt-[18px] flex w-full items-center justify-between rounded-xl border border-border bg-card px-[13px] py-[11px] transition hover:bg-[#f2e9e0]"
+        className="mt-[18px] flex w-full items-center justify-between rounded-xl border border-border bg-card px-[13px] py-[11px] transition hover:bg-accent"
       >
-        <span className="text-[12.5px] font-bold text-[#6b6356]">
+        <span className="text-[12.5px] font-bold text-secondary-foreground">
           ⚙ 高级 · 回避清单 / 自定义补充
         </span>
-        <span className="text-[11px] text-[#9a9082]">{advOpen ? "收起 ▲" : "展开 ▼"}</span>
+        <span className="text-[11px] text-muted-foreground">{advOpen ? "收起 ▲" : "展开 ▼"}</span>
       </button>
       {advOpen && (
         <div className="mt-2.5 space-y-3 rounded-xl border border-border bg-card p-[13px]">
@@ -777,13 +777,13 @@ export function ParamsForm({
             onToggle={(v) => toggle("avoid_items", v)}
           />
           <div className="flex flex-col gap-1.5">
-            <span className="text-[11.5px] font-semibold text-[#857c6e]">自定义补充（可选）</span>
+            <span className="text-[11.5px] font-semibold text-muted-foreground">自定义补充（可选）</span>
             <Textarea
               rows={2}
               value={params.custom_addition || ""}
               onChange={(e) => onParams({ custom_addition: e.target.value })}
               placeholder="可追加任何中/英文补充说明…"
-              className="rounded-[9px] bg-[#faf7f0]"
+              className="rounded-[9px] bg-panel"
             />
           </div>
         </div>

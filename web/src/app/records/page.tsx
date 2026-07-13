@@ -1,16 +1,20 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import type { RecordEntry, RecordFile, RecordResult, ReviewStatus } from "@/lib/types";
+import { saveReuseRequest } from "@/lib/draft";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { ImageZoom } from "@/components/ImageZoom";
+import { CompareSlider } from "@/components/CompareSlider";
+import { ColorMatchDialog } from "@/components/ColorMatchDialog";
 import { cn } from "@/lib/utils";
 
 const toolBtn =
-  "h-8 rounded-lg border border-border bg-card px-[13px] text-[12.5px] font-semibold text-[#6b6356] hover:bg-[#f2e9e0]";
+  "h-8 rounded-lg border border-border bg-card px-[13px] text-[12.5px] font-semibold text-secondary-foreground hover:bg-accent";
 
 const REVIEW_TAGS = [
   "色偏",
@@ -25,13 +29,14 @@ const REVIEW_TAGS = [
 ];
 
 const REVIEW_STATUS: { value: ReviewStatus; label: string; color: string }[] = [
-  { value: "unreviewed", label: "未评", color: "#857c6e" },
-  { value: "pass", label: "通过", color: "#2e8c7e" },
-  { value: "backup", label: "备选", color: "#8a6d2e" },
-  { value: "rejected", label: "淘汰", color: "#b5503a" },
+  { value: "unreviewed", label: "未评", color: "var(--muted-foreground)" },
+  { value: "pass", label: "通过", color: "var(--success)" },
+  { value: "backup", label: "备选", color: "var(--warn)" },
+  { value: "rejected", label: "淘汰", color: "var(--destructive)" },
 ];
 
 export default function RecordsPage() {
+  const router = useRouter();
   const [files, setFiles] = useState<RecordFile[]>([]);
   const [search, setSearch] = useState("");
   const [active, setActive] = useState<string | null>(null);
@@ -40,6 +45,18 @@ export default function RecordsPage() {
   const [reviewFilter, setReviewFilter] = useState<"__all__" | ReviewStatus | "__best__">("__all__");
   const [loading, setLoading] = useState(false);
   const [zoom, setZoom] = useState<string | null>(null);
+  // 前后对比（替换类工作流的记录才有 gen_context.room_url）
+  const [compare, setCompare] = useState<{ before: string; after: string } | null>(null);
+  // 手动校色（有 gen_context.image_url 的记录才显示入口）
+  const [colorMatch, setColorMatch] = useState<{
+    open: boolean;
+    srcUrl: string;
+    imageRel: string;
+    refUrl: string;
+    refPath: string;
+    recordId: string;
+    resultId: string;
+  } | null>(null);
 
   // 解密弹窗
   const [reveal, setReveal] = useState<{
@@ -55,7 +72,8 @@ export default function RecordsPage() {
     rid: string;
     resultId: string;
     instruction: string;
-  }>({ open: false, rid: "", resultId: "", instruction: "" });
+    colorMatch: boolean;
+  }>({ open: false, rid: "", resultId: "", instruction: "", colorMatch: true });
 
   const [review, setReview] = useState<{
     open: boolean;
@@ -227,6 +245,33 @@ export default function RecordsPage() {
     setReview((s) => ({ ...s, open: false }));
   }
 
+  // 替换类工作流（地板替换 / 墙板·替换）且有房间原图 → 结果图可做前后对比
+  function compareBeforeUrl(r: RecordEntry): string {
+    const gc = r.gen_context;
+    if (!gc?.room_url || !gc.params) return "";
+    const wf = gc.params.workflow_mode || "";
+    const isReplace =
+      wf.includes("地板替换") ||
+      (wf.includes("墙板") && (gc.params.panel_submode || "").includes("替换"));
+    return isReplace ? gc.room_url : "";
+  }
+
+  // 复用参数：把这条记录的 gen_context 快照写进一次性回填请求，跳到生成页。
+  // 老记录（无 gen_context）不显示入口。floor_tone 沿用快照值，不重新识色。
+  function doReuse(r: RecordEntry) {
+    const gc = r.gen_context;
+    if (!gc?.params) return;
+    saveReuseRequest({
+      params: gc.params,
+      modelFilter: gc.model_filter,
+      floorPath: gc.image_path,
+      roomPath: gc.room_path || undefined,
+      refPath: gc.ref_path || undefined,
+    });
+    toast.success("参数已载入生成页");
+    router.push("/");
+  }
+
   async function doDeleteRecord(rid: string) {
     if (!active || !window.confirm("确认删除整条记录（含其所有效果图引用）？")) return;
     try {
@@ -258,9 +303,10 @@ export default function RecordsPage() {
         record_id: edit.rid,
         result_id: edit.resultId,
         instruction: t,
+        color_match: edit.colorMatch,
       });
       toast.success("已提交二改（在「生成」页可看进度，完成后回此刷新）");
-      setEdit({ open: false, rid: "", resultId: "", instruction: "" });
+      setEdit({ open: false, rid: "", resultId: "", instruction: "", colorMatch: true });
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -270,16 +316,16 @@ export default function RecordsPage() {
     cn(
       "rounded-lg border px-[13px] py-1.5 text-[12.5px] font-semibold transition-colors",
       active_
-        ? "border-primary bg-[#fbf3ee] text-[#a8472a]"
-        : "border-border bg-card text-[#6b6356] hover:bg-[#f2e9e0]",
+        ? "border-primary bg-primary-soft text-accent-foreground"
+        : "border-border bg-card text-secondary-foreground hover:bg-accent",
     );
 
   const reviewChip = (active_: boolean) =>
     cn(
       "rounded-lg border px-[11px] py-1.5 text-[12px] font-semibold transition-colors",
       active_
-        ? "border-primary bg-[#fbf3ee] text-[#a8472a]"
-        : "border-border bg-card text-[#6b6356] hover:bg-[#f2e9e0]",
+        ? "border-primary bg-primary-soft text-accent-foreground"
+        : "border-border bg-card text-secondary-foreground hover:bg-accent",
     );
 
   return (
@@ -287,7 +333,7 @@ export default function RecordsPage() {
       {/* 左栏：文件列表 + 搜索 + 导出收藏夹 */}
       <aside className="flex w-[280px] flex-none flex-col border-r border-border bg-panel px-[14px] py-[16px]">
         <div className="relative mb-[9px]">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9a9082" strokeWidth="2" strokeLinecap="round" className="absolute left-[11px] top-[11px]">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="absolute left-[11px] top-[11px] text-muted-foreground">
             <circle cx="11" cy="11" r="7" />
             <path d="M21 21l-4-4" />
           </svg>
@@ -300,16 +346,16 @@ export default function RecordsPage() {
         </div>
         <button
           onClick={() => download(api.exportFavoritesUrl())}
-          className="mb-[11px] flex h-9 w-full items-center justify-center gap-1.5 rounded-[9px] border border-border bg-card text-[12.5px] font-bold text-[#a8472a] hover:bg-[#f2e9e0]"
+          className="mb-[11px] flex h-9 w-full items-center justify-center gap-1.5 rounded-[9px] border border-border bg-card text-[12.5px] font-bold text-accent-foreground hover:bg-accent"
         >
           ⭐ 导出收藏夹 PPTX
         </button>
-        <div className="px-1 pb-1.5 text-[11px] font-semibold text-[#9a9082]">
+        <div className="px-1 pb-1.5 text-[11px] font-semibold text-muted-foreground">
           材料记录
         </div>
         <div className="flex flex-1 flex-col gap-0.5 overflow-y-auto">
           {visibleFiles.length === 0 && (
-            <div className="px-2 py-1 text-xs text-[#9a9082]">无记录</div>
+            <div className="px-2 py-1 text-xs text-muted-foreground">无记录</div>
           )}
           {visibleFiles.map((f) => {
             const on = active === f.json_path;
@@ -321,12 +367,12 @@ export default function RecordsPage() {
                 className={cn(
                   "block w-full whitespace-normal break-words rounded-lg px-[10px] py-2 text-left text-[12.5px] leading-snug",
                   on
-                    ? "bg-[#f2e9e0] font-bold text-[#a8472a]"
-                    : "font-medium text-[#6b6356] hover:bg-[#f2e9e0]",
+                    ? "bg-accent font-bold text-accent-foreground"
+                    : "font-medium text-secondary-foreground hover:bg-accent",
                 )}
               >
                 {f.json_path.split(/[\\/]/).pop()?.replace("_记录.json", "")}{" "}
-                <span className="text-[#9a9082]">({f.labels.length})</span>
+                <span className="text-muted-foreground">({f.labels.length})</span>
               </button>
             );
           })}
@@ -337,8 +383,8 @@ export default function RecordsPage() {
       <section className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background">
         {!active ? (
           <div className="flex flex-1 items-center justify-center">
-            <div className="text-center text-[#9a9082]">
-              <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="#d3c8b3" strokeWidth="1.4" className="mx-auto mb-3">
+            <div className="text-center text-muted-foreground">
+              <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" className="mx-auto mb-3 text-border-strong">
                 <rect x="3" y="4" width="18" height="6" rx="1.6" />
                 <rect x="3" y="14" width="18" height="6" rx="1.6" />
               </svg>
@@ -406,7 +452,7 @@ export default function RecordsPage() {
             </div>
 
             <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-[22px] py-[18px]">
-              {loading && <div className="text-sm text-[#9a9082]">加载中…</div>}
+              {loading && <div className="text-sm text-muted-foreground">加载中…</div>}
               {!loading &&
                 shownRecords.map((r, i) => {
                   const rid = r.id || "";
@@ -416,23 +462,32 @@ export default function RecordsPage() {
                       className="rounded-[14px] border border-border bg-card p-[15px] shadow-[0_2px_8px_rgba(120,90,60,.05)]"
                     >
                       <div className="mb-3 flex items-start justify-between gap-2">
-                        <span className="min-w-0 flex-1 break-words text-[13.5px] font-bold leading-snug text-[#2a241f]">
+                        <span className="min-w-0 flex-1 break-words text-[13.5px] font-bold leading-snug text-foreground">
                           {rid || `记录 ${i + 1}`}
                           {r.room_type ? ` · ${r.room_type}` : ""}
                           {r.workflow_mode ? ` · ${String(r.workflow_mode)}` : ""}
                         </span>
-                        <div className="flex flex-none gap-2.5 text-[14px] text-[#bcae97]">
+                        <div className="flex flex-none gap-2.5 text-[14px] text-muted-foreground">
+                          {r.gen_context?.params && (
+                            <button
+                              title="用这套参数再生成"
+                              onClick={() => doReuse(r)}
+                              className="hover:text-accent-foreground"
+                            >
+                              ⟳
+                            </button>
+                          )}
                           <button
                             title="解密提示词"
                             onClick={() => setReveal({ open: true, rid, pw: "", text: "" })}
-                            className="hover:text-[#2a241f]"
+                            className="hover:text-foreground"
                           >
                             🔑
                           </button>
                           <button
                             title="删除记录"
                             onClick={() => doDeleteRecord(rid)}
-                            className="hover:text-[#b5503a]"
+                            className="hover:text-destructive"
                           >
                             🗑
                           </button>
@@ -470,12 +525,12 @@ export default function RecordsPage() {
                                     )}
                                   </>
                                 ) : (
-                                  <div className="flex h-full items-center justify-center bg-muted text-[11px] text-[#9a9082]">
+                                  <div className="flex h-full items-center justify-center bg-muted text-[11px] text-muted-foreground">
                                     {res.has_inline ? "内联图(旧)" : "无图"}
                                   </div>
                                 )}
                               </div>
-                              <div className="mt-1.5 flex items-center justify-between text-[11px] text-[#9a9082]">
+                              <div className="mt-1.5 flex items-center justify-between text-[11px] text-muted-foreground">
                                 <span className="truncate">{res.model_label || ""}</span>
                                 <span className="flex shrink-0 items-center gap-2.5 text-[12.5px]">
                                   <button
@@ -484,7 +539,7 @@ export default function RecordsPage() {
                                     className={
                                       res.favorite
                                         ? "text-primary"
-                                        : "text-[#bcae97] hover:text-[#2a241f]"
+                                        : "text-muted-foreground hover:text-foreground"
                                     }
                                   >
                                     {res.favorite ? "★" : "☆"}
@@ -492,17 +547,50 @@ export default function RecordsPage() {
                                   <button
                                     title="二改"
                                     onClick={() =>
-                                      setEdit({ open: true, rid, resultId, instruction: "" })
+                                      setEdit({ open: true, rid, resultId, instruction: "", colorMatch: true })
                                     }
-                                    className="hover:text-[#2a241f]"
+                                    className="hover:text-foreground"
                                   >
                                     ✎
                                   </button>
+                                  {url && r.gen_context?.image_url && url.startsWith("/outputs/") && (
+                                    <button
+                                      title="手动校色（以地板小样为参照，框选地板区域）"
+                                      onClick={() =>
+                                        setColorMatch({
+                                          open: true,
+                                          srcUrl: url,
+                                          imageRel: url.slice("/outputs/".length),
+                                          refUrl: r.gen_context?.image_url || "",
+                                          refPath: r.gen_context?.image_path || "",
+                                          recordId: rid,
+                                          resultId,
+                                        })
+                                      }
+                                      className="hover:text-foreground"
+                                    >
+                                      🎯
+                                    </button>
+                                  )}
+                                  {url && compareBeforeUrl(r) && (
+                                    <button
+                                      title="前后对比"
+                                      onClick={() =>
+                                        setCompare({
+                                          before: compareBeforeUrl(r),
+                                          after: url,
+                                        })
+                                      }
+                                      className="hover:text-foreground"
+                                    >
+                                      ⇔
+                                    </button>
+                                  )}
                                   {url && (
                                     <button
                                       title="下载"
                                       onClick={() => download(api.imgUrl(url))}
-                                      className="hover:text-[#2a241f]"
+                                      className="hover:text-foreground"
                                     >
                                       ↓
                                     </button>
@@ -510,7 +598,7 @@ export default function RecordsPage() {
                                   <button
                                     title="删除"
                                     onClick={() => doDeleteResult(rid, resultId)}
-                                    className="hover:text-[#b5503a]"
+                                    className="hover:text-destructive"
                                   >
                                     🗑
                                   </button>
@@ -532,7 +620,7 @@ export default function RecordsPage() {
                                       "h-6 rounded-md border px-2 text-[11px] font-semibold",
                                       status === s.value
                                         ? "border-transparent text-white"
-                                        : "border-border bg-card text-[#6b6356] hover:bg-[#f2e9e0]",
+                                        : "border-border bg-card text-secondary-foreground hover:bg-accent",
                                     )}
                                     style={status === s.value ? { background: s.color } : undefined}
                                   >
@@ -547,14 +635,14 @@ export default function RecordsPage() {
                                     "h-6 rounded-md border px-2 text-[11px] font-semibold",
                                     res.best
                                       ? "border-primary bg-primary text-white"
-                                      : "border-border bg-card text-[#6b6356] hover:bg-[#f2e9e0]",
+                                      : "border-border bg-card text-secondary-foreground hover:bg-accent",
                                   )}
                                 >
                                   最佳
                                 </button>
                                 <button
                                   onClick={() => openReviewDialog(rid, resultId, res)}
-                                  className="h-6 rounded-md border border-border bg-card px-2 text-[11px] font-semibold text-[#6b6356] hover:bg-[#f2e9e0]"
+                                  className="h-6 rounded-md border border-border bg-card px-2 text-[11px] font-semibold text-secondary-foreground hover:bg-accent"
                                 >
                                   标注
                                 </button>
@@ -564,18 +652,18 @@ export default function RecordsPage() {
                                   {statusMeta.label}
                                 </span>
                                 {(res.review_tags || []).length > 0 && (
-                                  <span className="truncate text-[#857c6e]">
+                                  <span className="truncate text-muted-foreground">
                                     {(res.review_tags || []).join("、")}
                                   </span>
                                 )}
                               </div>
                               {res.review_note ? (
-                                <div className="mt-1 text-[11px] leading-snug text-[#2e6f63]">
+                                <div className="mt-1 text-[11px] leading-snug text-success">
                                   评审：{res.review_note}
                                 </div>
                               ) : null}
                               {res.comment ? (
-                                <div className="mt-1 text-[11px] leading-snug text-[#857c6e]">
+                                <div className="mt-1 text-[11px] leading-snug text-muted-foreground">
                                   💬 {res.comment}
                                 </div>
                               ) : null}
@@ -594,6 +682,45 @@ export default function RecordsPage() {
       {/* 放大 */}
       <ImageZoom url={zoom} onClose={() => setZoom(null)} />
 
+      {/* 手动校色 */}
+      {colorMatch && active && (
+        <ColorMatchDialog
+          open={colorMatch.open}
+          onOpenChange={(o) => !o && setColorMatch(null)}
+          srcUrl={colorMatch.srcUrl}
+          imageRel={colorMatch.imageRel}
+          refUrl={colorMatch.refUrl}
+          refPath={colorMatch.refPath}
+          target={{
+            kind: "record",
+            jsonPath: active,
+            recordId: colorMatch.recordId,
+            resultId: colorMatch.resultId,
+          }}
+          onDone={() => reload()}
+        />
+      )}
+
+      {/* 前后对比 */}
+      <Dialog open={!!compare} onOpenChange={(o) => !o && setCompare(null)}>
+        <DialogContent className="max-w-[96vw] sm:max-w-[min(92vw,1100px)]">
+          <div className="space-y-3">
+            <div>
+              <div className="text-[15px] font-bold">前后对比</div>
+              <div className="mt-0.5 text-[12px] text-muted-foreground">
+                拖动中缝滑块对比原图与效果图
+              </div>
+            </div>
+            {compare && (
+              <CompareSlider
+                before={api.imgUrl(compare.before)}
+                after={api.imgUrl(compare.after)}
+              />
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* 解密 */}
       <Dialog
         open={reveal.open}
@@ -607,18 +734,18 @@ export default function RecordsPage() {
               value={reveal.pw}
               onChange={(e) => setReveal((s) => ({ ...s, pw: e.target.value }))}
               placeholder="输入密码"
-              className="h-10 rounded-[10px] bg-[#faf7f0]"
+              className="h-10 rounded-[10px] bg-panel"
             />
             <div className="flex justify-end">
               <button
                 onClick={doReveal}
-                className="h-9 rounded-[9px] bg-primary px-4 text-[13px] font-bold text-primary-foreground hover:bg-[#a8472a]"
+                className="h-9 rounded-[9px] bg-primary px-4 text-[13px] font-bold text-primary-foreground hover:bg-primary-hover"
               >
                 🔓 解密
               </button>
             </div>
             {reveal.text && (
-              <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-[10px] bg-[#f2e9e0] p-3 text-xs text-[#2a241f]">
+              <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-[10px] bg-accent p-3 text-xs text-foreground">
                 {reveal.text}
               </pre>
             )}
@@ -643,7 +770,7 @@ export default function RecordsPage() {
                     "h-8 rounded-lg border px-3 text-[12.5px] font-semibold",
                     review.status === s.value
                       ? "border-transparent text-white"
-                      : "border-border bg-card text-[#6b6356] hover:bg-[#f2e9e0]",
+                      : "border-border bg-card text-secondary-foreground hover:bg-accent",
                   )}
                   style={review.status === s.value ? { background: s.color } : undefined}
                 >
@@ -656,14 +783,14 @@ export default function RecordsPage() {
                   "h-8 rounded-lg border px-3 text-[12.5px] font-semibold",
                   review.best
                     ? "border-primary bg-primary text-white"
-                    : "border-border bg-card text-[#6b6356] hover:bg-[#f2e9e0]",
+                    : "border-border bg-card text-secondary-foreground hover:bg-accent",
                 )}
               >
                 最佳图
               </button>
             </div>
             <div>
-              <div className="mb-1.5 text-[12px] font-semibold text-[#857c6e]">
+              <div className="mb-1.5 text-[12px] font-semibold text-muted-foreground">
                 问题标签
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -684,7 +811,7 @@ export default function RecordsPage() {
                         "rounded-full border px-3 py-[5px] text-[12px] font-semibold",
                         on
                           ? "border-primary bg-primary text-white"
-                          : "border-border bg-card text-[#6b6356] hover:bg-[#f2e9e0]",
+                          : "border-border bg-card text-secondary-foreground hover:bg-accent",
                       )}
                     >
                       {tag}
@@ -697,18 +824,18 @@ export default function RecordsPage() {
               value={review.note}
               onChange={(e) => setReview((s) => ({ ...s, note: e.target.value }))}
               placeholder="人工备注，例如：颜色准但空间略假，适合做备选"
-              className="min-h-[90px] w-full resize-none rounded-[10px] border border-border bg-[#faf7f0] px-3 py-2 text-[13px] outline-none focus:ring-2 focus:ring-primary/20"
+              className="min-h-[90px] w-full resize-none rounded-[10px] border border-border bg-panel px-3 py-2 text-[13px] outline-none focus:ring-2 focus:ring-primary/20"
             />
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setReview((s) => ({ ...s, open: false }))}
-                className="h-9 rounded-[9px] border border-border bg-card px-4 text-[13px] font-semibold text-[#6b6356] hover:bg-[#f2e9e0]"
+                className="h-9 rounded-[9px] border border-border bg-card px-4 text-[13px] font-semibold text-secondary-foreground hover:bg-accent"
               >
                 取消
               </button>
               <button
                 onClick={doReviewSubmit}
-                className="h-9 rounded-[9px] bg-primary px-4 text-[13px] font-bold text-primary-foreground hover:bg-[#a8472a]"
+                className="h-9 rounded-[9px] bg-primary px-4 text-[13px] font-bold text-primary-foreground hover:bg-primary-hover"
               >
                 保存
               </button>
@@ -731,18 +858,34 @@ export default function RecordsPage() {
                 setEdit((s) => ({ ...s, instruction: e.target.value }))
               }
               placeholder="编辑指令，例如：把沙发换成米白色布艺"
-              className="h-10 rounded-[10px] bg-[#faf7f0]"
+              className="h-10 rounded-[10px] bg-panel"
             />
+            <label className="flex cursor-pointer items-start gap-2 text-[12.5px]">
+              <input
+                type="checkbox"
+                checked={edit.colorMatch}
+                onChange={(e) =>
+                  setEdit((s) => ({ ...s, colorMatch: e.target.checked }))
+                }
+                className="mt-[3px] accent-[var(--primary)]"
+              />
+              <span>
+                <span className="font-semibold text-foreground">保持原图色彩（防偏色）</span>
+                <span className="mt-0.5 block leading-snug text-muted-foreground">
+                  二改后自动把整体色温/饱和度拉回原图，消除偏色。若本次就是想改颜色，请取消勾选。
+                </span>
+              </span>
+            </label>
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setEdit((s) => ({ ...s, open: false }))}
-                className="h-9 rounded-[9px] border border-border bg-card px-4 text-[13px] font-semibold text-[#6b6356] hover:bg-[#f2e9e0]"
+                className="h-9 rounded-[9px] border border-border bg-card px-4 text-[13px] font-semibold text-secondary-foreground hover:bg-accent"
               >
                 取消
               </button>
               <button
                 onClick={doEditSubmit}
-                className="h-9 rounded-[9px] bg-primary px-4 text-[13px] font-bold text-primary-foreground hover:bg-[#a8472a]"
+                className="h-9 rounded-[9px] bg-primary px-4 text-[13px] font-bold text-primary-foreground hover:bg-primary-hover"
               >
                 提交
               </button>
