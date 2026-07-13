@@ -2,7 +2,7 @@
 
 > 地板行业**效果图生成**引擎的商业版。上传地板小样 → 自动识色/智能配方 → 配参数 → 调 Gemini/Fal 出图（B2 快出 + Pro 精修，支持 4K）。
 > 本仓库 `Floor_engine_server/` 是从原型 `test/floor_engine/` fork 出来的**商业主线**：把界面从 NiceGUI 迁到「FastAPI 无头后端 + Next.js 真前端」，引擎逻辑原样复用。
-> 本手册按当前真实代码（2026-06）重写，**开头就是启动**。读完「零」即可跑起来；要改代码再往下看。
+> 本手册按当前真实代码（2026-07）维护，**开头就是启动**。读完「零」即可跑起来；要改代码再往下看。
 
 ---
 
@@ -76,7 +76,7 @@ cd Floor_engine_server/web && npm install
                  ┌─────────────────────────────────────────────┐
                  │  引擎模块（headless，新旧版共用）             │
                  │  config·models·prompt_data·prompts·recipes   │
-                 │  ·api·records·failure_kb·themes·logging_setup │
+                 │  ·api·records·custom_recipes·failure_kb       │
                  └─────────────────────────────────────────────┘
                                            ▲ 同样复用
                  ┌─────────────────────────────────────────────┐
@@ -85,7 +85,7 @@ cd Floor_engine_server/web && npm install
 ```
 
 三条铁律：
-1. **引擎零改**：所有重逻辑（提示词组装、模型调用、记录持久化、识色、配方、导出…）都在引擎模块里，新旧 UI 都只是「调引擎」。改业务逻辑优先落引擎模块（新仓库这份）。
+1. **引擎保持 headless**：所有重逻辑（提示词组装、模型调用、记录持久化、识色、配方、校色、导出…）都在无 UI 的引擎模块里。改业务逻辑优先落引擎模块（新仓库这份）。
 2. **新功能只往 `server_api.py` + `web/` 加**。旧 `webui.py` 已于 2026-06-29 退役删除，不再有第二套 UI 需要维护。
 3. **长请求改异步作业**：出 4K 图很慢、还会被公司软路由 reset 长连接。新设计是 `POST /api/jobs` **秒回 `job_id`** → `GET /api/jobs/{id}/stream`（SSE）看进度。触发请求立刻返回，根治 reset。
 
@@ -107,14 +107,15 @@ Floor_engine_server/
 ├── prompt_data.py       海量选项表（STYLES/LIGHTINGS/ANGLES/FLOOR_TONES/ROOM_TYPES/CN_*…）+ 识色 analyze_floor_tone + 中英翻译
 ├── prompts.py           提示词组装：save_task_files_html(35+ 参数 → 英文 prompt + 落 JSON/PNG)，4 种工作流各一个 builder
 ├── recipes.py           智能配方：recommend_recipes(按色调推荐) + pick_option_key(关键词→具体选项)
-├── api.py               模型调用：Google/Fal 生图、Gemini→DeepSeek Omakase 主备路由、磨缝二改、连通性自检
-├── records.py           持久化：队列 persist/load、记录 JSON 读写、收藏/删除/人工评审、解密 reveal、用量 load_usage_summary、导出 HTML/PPTX
+├── custom_recipes.py    “我的配方”：运行期 JSON 存储及增删改查
+├── api.py               模型调用：Google/Fal 生图、Gemini→DeepSeek Omakase 主备路由、磨缝二改、本地颜色处理、连通性自检
+├── records.py           持久化：队列、记录、生成上下文、收藏/评审、复盘聚合、用量成本、HTML/PPTX 导出
 ├── failure_kb.py        失败知识库：FAILURE_RULES + classify_failure(错误串→{title,cause,action})
 ├── themes.py            旧 UI 主题 CSS 生成（曾供 NiceGUI；webui 退役后已无运行期消费者，留待后续清理）
 ├── logging_setup.py     logger（输出到 test/app_local_save.log）
 │
 ├── web/                 ★ Next.js 前端（见 §六）
-├── tests/               pytest：golden 提示词回归 + 安全硬化（路径逃逸/TLS/failover）
+├── tests/               pytest：golden 提示词、安全硬化、校色与非校色新功能回归
 ├── assets/              bevel_ref*.jpg（倒角参考图）、logo.svg —— 入库
 ├── requirements.txt     Python 依赖
 ├── 开发日志.md          每次会话改了啥、为什么（最新在最上，接手前先读）
@@ -135,13 +136,15 @@ Floor_engine_server/
 | `output_files/` | 出图、每个素材的 `*_记录.json`、优化图、磨缝候选 |
 | `output_files/.queue_state.json` | 任务队列持久化（最多 60 条，重启恢复） |
 | `engine_config.json` | **密钥**(gemini/fal)、proxy、provider、speed_profile、auto_failover、tls_verify/ca、并发等。**含敏感信息，已 gitignore，且在 `test/` 不在本仓库** |
+| `custom_recipes.json` | 用户保存的“我的配方”（位于仓库上级，不进入本仓库） |
+| `_ng_uploads/logo_*` | PPTX 提案使用的品牌 Logo（由程序上传和清理） |
 | `_ng_uploads/` | 上传的小样/参照图 |
 | `_ng_thumbs/` | 懒生成缩略图缓存（可随时重建，gitignore） |
 | `app_local_save.log` | 运行日志（gitignore） |
 
 - **新旧版共享同一份数据**：旧 NiceGUI(7869) 和新后端(7870) 同时跑也互不冲突，看到的是同一批历史与配置。
 - **将来迁出 `test/`**：把本仓库挪到别处，`BASE_DIR` 自动指向新位置 → 自动获得**独立**数据目录，无需改一行代码。`.gitignore` 已提前忽略这些运行期产物，防止迁出后误入库。
-- engine_config.json 关键字段：`gemini_api_key`/`proxy`/`fal_api_key`/`image_provider`(google|fal)/`speed_profile`(fast|resilient)/`auto_failover`/`tls_verify`/`tls_ca_bundle`/`max_concurrent_per_model`。前端「设置」页就是读写这些（经 `GET/PUT /api/config`，返回时密钥脱敏）。
+- engine_config.json 关键字段：`gemini_api_key`/`proxy`/`fal_api_key`/`image_provider`(google|fal)/`speed_profile`(fast|resilient)/`auto_failover`/`tls_verify`/`tls_ca_bundle`/`max_concurrent_per_model`，以及成本估算 `usage_prices`、PPTX 品牌字段 `pptx_company`/`pptx_contact`。前端「设置」页读写这些（经 `GET/PUT /api/config`，返回时密钥脱敏）；品牌 Logo 走独立上传端点。
 
 ---
 
@@ -162,10 +165,14 @@ POST /api/jobs ──秒回 job_id──▶ 后台 asyncio task(_run_job_bg)
 ```
 进程内状态（都在 `_job_lock` 下读写）：`_job_history`(列表，新在前)、`_b2_semaphore`/`_pro_semaphore`(并发，lifespan 里按配置建)、`_cancel_jobs`(单作业取消集合)、`_cancel_generation`(全局取消计数器)。终态：`done`/`partial`/`failed`；`compute_final_status` 据 model_filter + 出图情况判定。
 
-### 4.3 端点目录（40+ API 路由）
+### 4.3 端点目录（50+ API 路由）
 - **作业** `/api/jobs`：`POST`建 · `GET`列 · `GET {id}` · `GET {id}/stream`(SSE) · `POST {id}/cancel` · `POST cancel-all` · `POST clear-completed`(清完成) · `POST {id}/delete`(删单条) · `POST {id}/retry` · `GET {id}/result?model=&idx=`(候选切换) · `POST {id}/polish`(磨缝) · `POST {id}/edit`(二改) · `POST {id}/regen?n=`(重抽/多抽)。
+- **预览** `/api/preview`：`POST` 创建轻量预览 · `GET {pid}` 查询 · `POST {pid}/cancel` 取消。
 - **记录** `/api/records`：`GET`列文件 · `GET load` · `POST reveal`(解密) · `POST edit`(记录内二改) · `POST result/delete` · `POST result/favorite` · `POST result/review`(人工评审：通过/备选/淘汰、标签、备注、最佳图) · `POST delete`(删整条) · `GET export/{html,pptx,favorites-pptx}`(FileResponse 下载)。
-- **上传** `POST /api/uploads/{floor,room,ref}`；**小样** `GET /api/swatches/recent`；**配方** `GET /api/recipes`；**识色** `GET /api/floor/analyze`。
+- **上传** `POST /api/uploads/{floor,room,ref}`；品牌 Logo 为 `POST /api/uploads/logo` 与 `POST /api/uploads/logo/clear`。
+- **小样与配方**：`GET /api/swatches/recent` · `GET /api/recipes` · `/api/recipes/custom` 列表/新增/更新/删除。
+- **识色与校色**：`GET /api/floor/analyze`；`POST /api/color-match/preview` 生成本地缩图预览，`POST /api/jobs/{id}/color-match` 或 `/api/records/color-match` 全分辨率落为新候选。
+- **评审复盘**：`GET /api/review/summary` 聚合维度统计 · `GET /api/review/gallery?filter=pass|best` 好图样本库。
 - **失败** `POST /api/failure/classify` · `GET /api/failure/rules`；**连通** `GET /api/connection/test`。
 - **配置** `GET/PUT /api/config`；**模型** `GET /api/models`；**选项** `GET /api/options`(前端下拉真源)；**用量** `GET /api/usage`；**健康** `GET /api/healthz`。
 - **静态/缩略图**：`GET /thumb/{uploads,outputs}`(懒生成 JPEG)；`/outputs`、`/uploads` 挂目录服原图。
@@ -184,32 +191,37 @@ Next.js **16.2.9**（App Router + Turbopack）· React **19.2** · Tailwind **v4
 ```
 web/src/
 ├── app/
-│   ├── layout.tsx        根布局：引 Hanken Grotesk 字体 + 全高 body + <AppShell> 包壳 + <Toaster>
-│   ├── globals.css       ★ 设计令牌(珊瑚陶土 #c15f3c + 奶油米色) + 滚动条 + keyframes —— 改主题改这里
+│   ├── layout.tsx        根布局：字体 + ThemeProvider + <AppShell> + <Toaster>
+│   ├── globals.css       ★ 浅色/深色设计令牌 + 滚动条 + keyframes —— 改主题改这里
 │   ├── page.tsx          生成页（左 600px 参数列 + 右任务队列，两栏全高）
 │   ├── records/page.tsx  记录页（左 280px 文件列表 + 右记录卡；房间/评审筛选、收藏、最佳图、人工标注）
-│   ├── usage/page.tsx    用量页（stat 卡 + 成功率条 + 明细表）
-│   └── settings/page.tsx 设置页（密钥卡 + 线路/网络卡）
+│   ├── review/page.tsx   评审复盘（覆盖率/通过率、维度统计、问题标签、好图样本库）
+│   ├── usage/page.tsx    用量页（stat 卡 + 成功率 + 估算成本 + 明细表）
+│   └── settings/page.tsx 设置页（密钥、线路网络、模型单价、PPTX 品牌）
 ├── components/
 │   ├── AppShell.tsx      ★ 应用外壳：奶油侧边栏(236) + 顶栏(56,路由映射标题) + 内容槽
 │   ├── ParamsForm.tsx    参数表单（工作流 2×2 卡 / 市场·模型 segmented / 字段 Select / 胶囊 / 高级折叠）
 │   ├── JobCard.tsx       任务卡（SSE 实时 / 状态徽章 / 候选‹n/N› / 停止·重试·磨缝·二改·重抽·清除）
 │   ├── FloorUploader.tsx 地板上传 + 最近小样网格 + 历史弹窗
+│   ├── CompareSlider.tsx 前后图拖动对比
+│   ├── ColorMatchDialog.tsx 手动校色区域、强度、羽化与预览/提交
+│   ├── ThemeProvider.tsx next-themes 接线（浅色/深色/跟随系统）
 │   ├── ImageZoom.tsx     全屏无边框看图（滚轮缩放/拖动/双击复位/Esc）
 │   ├── dc-ui.tsx         设计基元：SectionHeader(点头标)·Segmented(分段)·Pill(胶囊)
 │   └── ui/               shadcn 基础组件（button/select/dialog/switch/input…，令牌驱动）
 ├── lib/
 │   ├── api.ts            ★ typed 客户端，开发指向 7870、生产走同源
 │   ├── types.ts          JobView/GenParams/OptionsView/ConfigView/UsageSummary/RecordEntry… 类型
+│   ├── draft.ts          表单草稿及记录参数一次性复用请求
 │   └── notify.ts         完成通知（浏览器 Notification + Web Audio 提示音）
 └── hooks/useJobStream.ts EventSource 封装（终态 close，防自动重连风暴）
 ```
 
 ### 5.3 设计系统
-全站颜色/圆角/卡片底色等是 **Tailwind v4 设计令牌**，集中在 `globals.css` 的 `:root`（`--primary #c15f3c`、`--background #f7f3ec`、`--card #fffdf9`、`--panel #faf7f0`、`--border #e3ded1`…）。shadcn 组件全部引用这些令牌——**改一处令牌即整站换肤**，不用动组件。重复的视觉模式抽进了 `dc-ui.tsx`。
+全站颜色/圆角/卡片底色等是 **Tailwind v4 设计令牌**，集中在 `globals.css` 的 `:root` 与 `.dark`。`ThemeProvider` 通过 `next-themes` 切换浅色、深色或跟随系统；shadcn 组件统一引用令牌。重复的视觉模式抽进了 `dc-ui.tsx`。
 
 ### 5.4 数据流
-页面 `useEffect` 调 `api.*` 取数；活动作业用 `useJobStream`(EventSource) 看 SSE 实时进度；生成页另有 2.5s 轮询 `listJobs` 做队列聚合进度。`api.imgUrl()` 把后端相对图 URL 拼成绝对地址。
+页面 `useEffect` 调 `api.*` 取数；活动作业用 `useJobStream`(EventSource) 看 SSE 实时进度；生成页另有 2.5s 轮询 `listJobs` 做队列聚合进度。每次生成把不含密钥的 `gen_context` 写入记录，记录页通过 `draft.ts` 将参数一次性回填到生成页。`api.imgUrl()` 把后端相对图 URL 拼成绝对地址。
 
 ---
 
@@ -240,7 +252,7 @@ web/src/
 6. 在 **`开发日志.md` 顶部追加一条**（改了啥、为什么）。
 7. 提交（见 §九）。
 
-**测试**：`cd Floor_engine_server && python -m pytest`（引擎层 golden 提示词回归 + 安全硬化 + 人工评审元数据回归；当前 43 项）。本机若系统 `python` 无 pytest，可用项目虚拟环境：`.venv/bin/python -m pytest`。`tests/golden/` 基准入库，缓存不入。
+**测试**：`cd Floor_engine_server && python -m pytest`（引擎层 golden 提示词、安全硬化、人工评审元数据、手动校色和非校色新功能回归；当前 77 项）。本机若系统 `python` 无 pytest，可用项目虚拟环境：`.venv/bin/python -m pytest`。`tests/golden/` 基准入库，缓存不入。
 
 ---
 
@@ -262,4 +274,4 @@ web/src/
 
 ## 十、一句话回顾
 
-**改业务** → 引擎模块（headless，新仓库这份）；**改接口** → `server_api.py`；**改界面** → `web/`；**换主题** → `web/.../globals.css`。旧 `webui.py` 已退役，UI 只有 `web/` 一套。启动就一句：跑 `test/` 下的一键启动脚本（Windows `.bat` / Linux·macOS `.sh`）。
+**改业务** → 引擎模块（headless，新仓库这份）；**改接口** → `server_api.py`；**改界面** → `web/`；**换主题** → `web/.../globals.css` + `ThemeProvider.tsx`。旧 `webui.py` 已退役，UI 只有 `web/` 一套。启动就一句：跑 `test/` 下的一键启动脚本（Windows `.bat` / Linux·macOS `.sh`）。
