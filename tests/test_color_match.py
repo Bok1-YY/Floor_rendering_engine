@@ -10,7 +10,7 @@ from fastapi import HTTPException
 from PIL import Image
 
 from Floor_engine_server import records, server_api
-from Floor_engine_server.api import match_color_region
+from Floor_engine_server.api import _apply_color_adjustments, match_color_region
 from Floor_engine_server.models import new_job
 
 
@@ -115,6 +115,125 @@ def test_src_not_mutated():
     assert np.array_equal(np.asarray(src), before)
 
 
+# ── 高级微调 ─────────────────────────────────────────────────────
+def _mean_lab(img):
+    return np.asarray(img.convert('LAB'), dtype=np.float32).reshape(-1, 3).mean(axis=0)
+
+
+def _mean_luma(img):
+    rgb = np.asarray(img.convert('RGB'), dtype=np.float32) / 255.0
+    return float((rgb[..., 0] * 0.2126 + rgb[..., 1] * 0.7152 + rgb[..., 2] * 0.0722).mean())
+
+
+def test_adjustment_defaults_are_pixel_identical():
+    src = _split_lr(120, 80, (40, 90, 150), (210, 170, 80))
+    out = _apply_color_adjustments(src, {})
+    assert np.array_equal(np.asarray(out), np.asarray(src))
+
+
+def test_temperature_and_tint_follow_lab_directions():
+    src = _solid(40, 40, (128, 128, 128))
+    base = _mean_lab(src)
+    warm = _mean_lab(_apply_color_adjustments(src, {'temperature': 50}))
+    magenta = _mean_lab(_apply_color_adjustments(src, {'tint': 50}))
+    assert warm[2] > base[2] + 8
+    assert magenta[1] > base[1] + 8
+
+
+def test_exposure_and_saturation_controls():
+    src = _solid(40, 40, (80, 120, 160))
+    brighter = _apply_color_adjustments(src, {'exposure': 1})
+    gray = np.asarray(_apply_color_adjustments(src, {'saturation': -100}), dtype=np.int16)
+    assert _mean_luma(brighter) > _mean_luma(src) * 1.25
+    assert np.abs(gray[..., 0] - gray[..., 1]).max() <= 1
+    assert np.abs(gray[..., 1] - gray[..., 2]).max() <= 1
+
+
+def test_tonal_controls_target_expected_bands():
+    src = Image.new('RGB', (3, 1))
+    src.putdata([(32, 32, 32), (128, 128, 128), (220, 220, 220)])
+    whites = np.asarray(_apply_color_adjustments(src, {'whites': 60}), dtype=np.int16)[0, :, 0]
+    shadows = np.asarray(_apply_color_adjustments(src, {'shadows': 60}), dtype=np.int16)[0, :, 0]
+    midtones = np.asarray(_apply_color_adjustments(src, {'midtones': 60}), dtype=np.int16)[0, :, 0]
+    base = np.array([32, 128, 220])
+    assert (whites - base)[2] > (whites - base)[0]
+    assert (shadows - base)[0] > (shadows - base)[2]
+    assert (midtones - base)[1] > max((midtones - base)[0], (midtones - base)[2])
+
+
+def test_advanced_adjustment_respects_region_and_master_strength():
+    src = _solid(200, 120, (90, 100, 110))
+    ref = _solid(40, 40, (140, 120, 90))
+    rect = (0.5, 0.0, 0.5, 1.0)
+    adjustments = {'exposure': 0.8, 'temperature': 30, 'saturation': 25}
+    full = match_color_region(src, ref, rect, strength=1.0, feather=0,
+                              adjustments=adjustments)
+    half = match_color_region(src, ref, rect, strength=0.5, feather=0,
+                              adjustments=adjustments)
+    a_src = np.asarray(src, dtype=np.int16)
+    a_full = np.asarray(full, dtype=np.int16)
+    a_half = np.asarray(half, dtype=np.int16)
+    assert np.array_equal(a_full[:, :100], a_src[:, :100])
+    expected = np.rint((a_src[:, 150] + a_full[:, 150]) / 2).astype(np.int16)
+    assert np.abs(a_half[:, 150] - expected).max() <= 1
+
+
+def test_adjustment_request_defaults_and_bounds():
+    req = server_api.ColorMatchPreviewRequest(
+        image_rel='result.jpg', ref_path='ref.jpg', rect=_rect())
+    assert not any(req.adjustments.model_dump().values())
+    with pytest.raises(ValueError):
+        server_api.ColorMatchAdjustments(exposure=2.1)
+    with pytest.raises(ValueError):
+        server_api.ColorMatchAdjustments(temperature=-101)
+
+
+def test_auto_profile_is_relative_to_source_and_bounded():
+    src = _solid(120, 80, (80, 100, 150))
+    ref = _solid(40, 40, (180, 140, 70))
+    _, profile = match_color_region(
+        src, ref, (0, 0, 1, 1), adjustment_mode='auto',
+        return_auto_adjustments=True)
+    assert profile['temperature'] > 0
+    assert profile['exposure'] > 0
+    assert all(-100 <= profile[key] <= 100 for key in (
+        'temperature', 'tint', 'contrast', 'highlights', 'shadows',
+        'whites', 'blacks', 'midtones', 'saturation'))
+    assert -2 <= profile['exposure'] <= 2
+
+
+def test_manual_mode_uses_gemini_source_as_zero_point():
+    src = _solid(160, 100, (70, 90, 120))
+    ref = _solid(40, 40, (210, 160, 60))
+    rect = (0, 0, 1, 1)
+    original = match_color_region(
+        src, ref, rect, strength=0.24, adjustment_mode='manual',
+        adjustments={})
+    brighter = match_color_region(
+        src, ref, rect, strength=0.24, adjustment_mode='manual',
+        adjustments={'exposure': 1})
+    assert np.array_equal(np.asarray(original), np.asarray(src))
+    assert _mean_luma(brighter) > _mean_luma(src)
+
+
+def test_auto_mode_ignores_manual_values_and_preserves_legacy_auto():
+    src = _solid(160, 100, (70, 90, 120))
+    ref = _solid(40, 40, (170, 130, 80))
+    rect = (0, 0, 1, 1)
+    legacy = match_color_region(src, ref, rect, strength=0.4)
+    auto = match_color_region(
+        src, ref, rect, strength=0.4, adjustment_mode='auto',
+        adjustments={'exposure': 2, 'temperature': -100})
+    assert np.array_equal(np.asarray(auto), np.asarray(legacy))
+
+
+def test_adjustment_mode_validation():
+    with pytest.raises(ValueError):
+        server_api.ColorMatchPreviewRequest(
+            image_rel='result.jpg', ref_path='ref.jpg', rect=_rect(),
+            adjustment_mode='invalid')
+
+
 # ── 端点硬化 ─────────────────────────────────────────────────────
 @pytest.fixture()
 def dirs(tmp_path, monkeypatch):
@@ -152,6 +271,23 @@ def test_ref_path_inside_upload_dir_ok(dirs):
     ref = up_dir / "swatch.jpg"
     _solid(8, 8, (1, 2, 3)).save(ref)
     assert server_api._require_ref_image_path(str(ref)) == os.path.realpath(str(ref))
+
+
+def test_preview_returns_original_based_auto_profile(dirs):
+    out_dir, up_dir = dirs
+    src = out_dir / "result.jpg"
+    ref = up_dir / "swatch.jpg"
+    _solid(80, 60, (70, 90, 140)).save(src)
+    _solid(30, 30, (180, 140, 70)).save(ref)
+    req = server_api.ColorMatchPreviewRequest(
+        image_rel="result.jpg", ref_path=str(ref), rect=_rect(),
+        adjustment_mode="auto")
+    result = server_api.color_match_preview(req)
+    assert result['preview'].startswith('data:image/jpeg;base64,')
+    assert result['auto_adjustments']['temperature'] > 0
+    assert set(result['auto_adjustments']) == {
+        'temperature', 'tint', 'exposure', 'contrast', 'highlights',
+        'shadows', 'whites', 'blacks', 'midtones', 'saturation'}
 
 
 def test_job_color_match_rejects_foreign_candidate(dirs, monkeypatch):

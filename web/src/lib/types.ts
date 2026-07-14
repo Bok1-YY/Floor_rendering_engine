@@ -387,17 +387,32 @@ export interface ColorMatchRect {
   w: number;
   h: number;
 }
+export interface ColorMatchAdjustments {
+  temperature: number;
+  tint: number;
+  exposure: number;
+  contrast: number;
+  highlights: number;
+  shadows: number;
+  whites: number;
+  blacks: number;
+  midtones: number;
+  saturation: number;
+}
 export interface ColorMatchPreviewRequest {
   image_rel: string; // 成图相对 /outputs 路径
   ref_path: string;
   rect: ColorMatchRect;
   strength?: number; // 默认 0.8
   feather?: number; // 默认 0.05
+  adjustments?: ColorMatchAdjustments;
+  adjustment_mode?: "auto" | "manual"; // auto=自动校准；manual=以 Gemini 原图为零点
 }
 export interface ColorMatchPreviewView {
   preview: string; // data URL
   width: number;
   height: number;
+  auto_adjustments: ColorMatchAdjustments; // 满强度自动校准对应的原图基准滑杆值
 }
 export interface JobColorMatchRequest extends ColorMatchPreviewRequest {
   stage: "b2" | "pro";
@@ -410,6 +425,8 @@ export interface RecordColorMatchRequest {
   rect: ColorMatchRect;
   strength?: number;
   feather?: number;
+  adjustments?: ColorMatchAdjustments;
+  adjustment_mode?: "auto" | "manual";
 }
 
 export interface RecordEditRequest {

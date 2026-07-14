@@ -114,7 +114,7 @@ Floor_engine_server/
 ├── themes.py            旧 UI 主题 CSS 生成（曾供 NiceGUI；webui 退役后已无运行期消费者，留待后续清理）
 ├── logging_setup.py     logger（输出到 test/app_local_save.log）
 │
-├── web/                 ★ Next.js 前端（见 §六）
+├── web/                 ★ Next.js 前端（见 §五）
 ├── tests/               pytest：golden 提示词、安全硬化、校色与非校色新功能回归
 ├── assets/              bevel_ref*.jpg（倒角参考图）、logo.svg —— 入库
 ├── requirements.txt     Python 依赖
@@ -171,7 +171,7 @@ POST /api/jobs ──秒回 job_id──▶ 后台 asyncio task(_run_job_bg)
 - **记录** `/api/records`：`GET`列文件 · `GET load` · `POST reveal`(解密) · `POST edit`(记录内二改) · `POST result/delete` · `POST result/favorite` · `POST result/review`(人工评审：通过/备选/淘汰、标签、备注、最佳图) · `POST delete`(删整条) · `GET export/{html,pptx,favorites-pptx}`(FileResponse 下载)。
 - **上传** `POST /api/uploads/{floor,room,ref}`；品牌 Logo 为 `POST /api/uploads/logo` 与 `POST /api/uploads/logo/clear`。
 - **小样与配方**：`GET /api/swatches/recent` · `GET /api/recipes` · `/api/recipes/custom` 列表/新增/更新/删除。
-- **识色与校色**：`GET /api/floor/analyze`；`POST /api/color-match/preview` 生成本地缩图预览，`POST /api/jobs/{id}/color-match` 或 `/api/records/color-match` 全分辨率落为新候选。
+- **识色与校色**：`GET /api/floor/analyze`；`POST /api/color-match/preview` 生成本地缩图预览并返回满强度 `auto_adjustments`；`POST /api/jobs/{id}/color-match` 或 `/api/records/color-match` 全分辨率落为新候选。三条校色请求共用 `adjustments` 与 `adjustment_mode=auto|manual`：自动模式保留区域 Reinhard，手动模式以 Gemini 原图为零点应用绝对高级参数。
 - **评审复盘**：`GET /api/review/summary` 聚合维度统计 · `GET /api/review/gallery?filter=pass|best` 好图样本库。
 - **失败** `POST /api/failure/classify` · `GET /api/failure/rules`；**连通** `GET /api/connection/test`。
 - **配置** `GET/PUT /api/config`；**模型** `GET /api/models`；**选项** `GET /api/options`(前端下拉真源)；**用量** `GET /api/usage`；**健康** `GET /api/healthz`。
@@ -185,7 +185,7 @@ POST /api/jobs ──秒回 job_id──▶ 后台 asyncio task(_run_job_bg)
 ## 五、前端：`web/`
 
 ### 5.1 技术栈
-Next.js **16.2.9**（App Router + Turbopack）· React **19.2** · Tailwind **v4** · shadcn/ui（基于 `@base-ui/react`）· sonner（toast）· lucide（图标）。脚本：`npm run dev`(3000) / `npm run build` / `npm run start`。
+Next.js **16.2.9**（App Router + Turbopack）· React **19.2** · Tailwind **v4** · shadcn/ui（基于 `@base-ui/react`）· sonner（toast）· lucide（图标）。常用脚本：`npm run dev`(3000) / `npm run lint` / `npm run build`；生产输出是 `web/out` 静态站，不运行 `next start`。
 
 ### 5.2 结构
 ```
@@ -204,9 +204,9 @@ web/src/
 │   ├── JobCard.tsx       任务卡（SSE 实时 / 状态徽章 / 候选‹n/N› / 停止·重试·磨缝·二改·重抽·清除）
 │   ├── FloorUploader.tsx 地板上传 + 最近小样网格 + 历史弹窗
 │   ├── CompareSlider.tsx 前后图拖动对比
-│   ├── ColorMatchDialog.tsx 手动校色区域、强度、羽化与预览/提交
+│   ├── ColorMatchDialog.tsx 手动校色区域、1% 自动强度、原图基准高级参数、双重置与竞态安全预览
 │   ├── ThemeProvider.tsx next-themes 接线（浅色/深色/跟随系统）
-│   ├── ImageZoom.tsx     全屏无边框看图（滚轮缩放/拖动/双击复位/Esc）
+│   ├── ImageZoom.tsx     全屏看图；支持原图+结果透明图层，滚轮缩放/拖动/双击复位/Esc
 │   ├── dc-ui.tsx         设计基元：SectionHeader(点头标)·Segmented(分段)·Pill(胶囊)
 │   └── ui/               shadcn 基础组件（button/select/dialog/switch/input…，令牌驱动）
 ├── lib/
@@ -218,10 +218,16 @@ web/src/
 ```
 
 ### 5.3 设计系统
-全站颜色/圆角/卡片底色等是 **Tailwind v4 设计令牌**，集中在 `globals.css` 的 `:root` 与 `.dark`。`ThemeProvider` 通过 `next-themes` 切换浅色、深色或跟随系统；shadcn 组件统一引用令牌。重复的视觉模式抽进了 `dc-ui.tsx`。
+全站颜色/圆角/卡片底色等是 **Tailwind v4 设计令牌**，集中在 `globals.css` 的 `:root` 与 `.dark`。`ThemeProvider` 通过 `next-themes` 切换浅色、深色或跟随系统；shadcn 组件统一引用令牌。重复的视觉模式抽进了 `dc-ui.tsx`。完整视觉规范以仓库上级 `test/DESIGN.md` 为准；其中旧 NiceGUI 路径已经废弃，真实实现源是 `web/src/app/globals.css`、`AppShell.tsx` 与 `dc-ui.tsx`。
 
 ### 5.4 数据流
 页面 `useEffect` 调 `api.*` 取数；活动作业用 `useJobStream`(EventSource) 看 SSE 实时进度；生成页另有 2.5s 轮询 `listJobs` 做队列聚合进度。每次生成把不含密钥的 `gen_context` 写入记录，记录页通过 `draft.ts` 将参数一次性回填到生成页。`api.imgUrl()` 把后端相对图 URL 拼成绝对地址。
+
+### 5.5 手动校色数据流
+1. 弹窗按框选区域与参照小样请求 `/api/color-match/preview`；服务端返回满强度自动结果和相对 Gemini 原图推导的 `auto_adjustments`。
+2. 自动校准滑杆只改变原图/满强度结果的混合比例，因此 `0%~100%`、`1%` 步进可在 Canvas 即时重绘；高级滑杆同步显示该比例下的原图基准值。
+3. 拖动高级参数后切换 `manual`：后端从 Gemini 原图应用绝对色温/曝光/亮度区间等参数，再复用地板相似度掩膜与羽化。高级请求 180ms 防抖，旧响应按序号丢弃。
+4. 「恢复自动校准」切回精确的区域 Reinhard 自动结果；「恢复 Gemini 原图」使用手动全零。保存按钮只在预览与当前参数一致时可用。
 
 ---
 
@@ -238,6 +244,7 @@ web/src/
 6. **无头截图自检法**（验证视觉时用；实测）：dev 服务器在无头浏览器里因 HMR 握手失败**不 hydrate**，截不到数据态；要截带数据的页面需 **prod build + 隔离后端(改 `FLOOR_API_CORS` 放行测试端口) + Node（v22+，内置 WebSocket）走 CDP 真等几秒再 captureScreenshot**。隔离后端与正式实例共享 `.queue_state.json`，测试时**只读、别触发清除/删除**，免得误删真实任务。
 7. **设计稿落地**：照 mockup 的**实际视觉**还原（配色/胶囊/卡片/分段），别只搬报告文字；落地后无头截图比对设计稿。
 8. **`webui.py` 已退役删除**：UI 只有 `web/` 一套，新功能只加 `server_api.py` + `web/`。
+9. **Canvas 跨源污染**：开发前端 `:3000` 画入后端 `:7870` 图片后，Canvas 可能能显示却不能 `toDataURL()`/`getImageData()`；结果放大必须复用 `ImageZoom` 的原图+结果图层，不要重新引入 Canvas 导出。生产同源也要保持这条，避免 `file://` 调试再次崩溃。
 
 ---
 
@@ -248,11 +255,11 @@ web/src/
 2. `server_api.py` 加端点（复用引擎；改队列持锁、`_persist_jobs` 在锁外）。
 3. `web/src/lib/api.ts` 加封装 + `types.ts` 加类型。
 4. 在对应页面/组件接 UI（沿用 `dc-ui` 基元与 `globals.css` 令牌）。
-5. **验证**：`cd web && npx tsc --noEmit`(0 错) + `npm run build`(过)；后端 `python -c "import Floor_engine_server.server_api"` 不报错、不拉 nicegui；必要时无头截图比对（§六.6）。
+5. **验证**：`cd web && npm run lint && npm run build`；后端 `.venv/bin/python -m pytest`；必要时再做 `python -c "import Floor_engine_server.server_api"` 冒烟与无头截图比对（§六.6）。注意 `next build` 不替你跑 ESLint。
 6. 在 **`开发日志.md` 顶部追加一条**（改了啥、为什么）。
 7. 提交（见 §九）。
 
-**测试**：`cd Floor_engine_server && python -m pytest`（引擎层 golden 提示词、安全硬化、人工评审元数据、手动校色和非校色新功能回归；当前 77 项）。本机若系统 `python` 无 pytest，可用项目虚拟环境：`.venv/bin/python -m pytest`。`tests/golden/` 基准入库，缓存不入。
+**测试**：`cd Floor_engine_server && python -m pytest`（引擎层 golden 提示词、安全硬化、人工评审元数据、自动/手动校色和非校色新功能回归；当前 **88 项**）。本机若系统 `python` 无 pytest，可用项目虚拟环境：`.venv/bin/python -m pytest`。`tests/golden/` 基准入库，缓存不入。
 
 ---
 
@@ -266,8 +273,9 @@ web/src/
 
 ## 九、构建 / 打包 / Git
 
-- **前端生产模式**：`cd web && npm run build && npm run start`（dev 模式未优化，prod 更快）。
-- **打包 exe**（Windows 专属）：`test/build.bat`（由用户自己跑；Claude 只改打包文件 + 给命令，不替跑构建）。
+- **前端生产静态站**：`cd web && npm run build` 生成 `web/out/`；本项目配置了 `output: "export"`，不使用 `next start`。从 `test/` 运行 `python Floor_engine_server/serve.py`，FastAPI 会把 `web/out` 挂到 `/`，前后端同源跑在 7870。
+- **当前商业主线 exe**（Windows 专属）：运行 `Floor_engine_server/build_windows.bat`。脚本先 `npm ci && npm run build`，再用独立 `.buildenv` 安装依赖并以 Nuitka `--onefile` 编译 `serve.py`，产物为 `test/dist/FloorEngine.exe`。完整说明见上级 `test/PACKAGING.md` 与仓库内 `打包说明.md`。
+- **不要误用旧脚本**：上级 `test/build.bat`、`floor_engine.spec`、`run_app.py` 是冻结 NiceGUI 原型 `floor_engine/` 的 PyInstaller/pywebview 打包链，不包含当前 Next.js 商业前端和最新功能。
 - **Git**：本仓库是独立 git 仓（分支 `main`，提交后 push 到远程 `origin`）。运行期产物与密钥已被 `.gitignore` + `web/.gitignore`（node_modules/.next）排除；`engine_config.json` 在 `test/` 不入库。提交信息沿用 `feat/fix/docs(scope): 说明` 风格，并保持「改完追加 `开发日志.md`」的习惯。
 
 ---

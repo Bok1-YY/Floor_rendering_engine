@@ -1125,7 +1125,141 @@ def _match_color_to_reference(src_img, ref_img, strength=1.0):
     return transferred
 
 
-def match_color_region(src_img, ref_img, rect, strength=1.0, feather=0.05):
+_COLOR_ADJUSTMENT_DEFAULTS = {
+    'temperature': 0.0,
+    'tint': 0.0,
+    'exposure': 0.0,
+    'contrast': 0.0,
+    'highlights': 0.0,
+    'shadows': 0.0,
+    'whites': 0.0,
+    'blacks': 0.0,
+    'midtones': 0.0,
+    'saturation': 0.0,
+}
+
+
+def _normalize_color_adjustments(adjustments=None):
+    """Return a complete, float-only adjustment mapping for the color engine."""
+    raw = adjustments or {}
+    if hasattr(raw, 'model_dump'):
+        raw = raw.model_dump()
+    return {key: float(raw.get(key, default)) for key, default in _COLOR_ADJUSTMENT_DEFAULTS.items()}
+
+
+def _estimate_auto_color_adjustments(src_mean, src_std, ref_mean, ref_std):
+    """Approximate Reinhard's LAB transform as familiar editor controls.
+
+    The profile is relative to the unmodified Gemini image. It is used to move
+    the advanced sliders to a useful automatic baseline; the exact legacy auto
+    render remains available separately.
+    """
+    import math
+
+    def clamp(value, lo, hi):
+        return float(min(max(value, lo), hi))
+
+    src_chroma_std = max(1e-5, (float(src_std[1]) + float(src_std[2])) / 2.0)
+    ref_chroma_std = (float(ref_std[1]) + float(ref_std[2])) / 2.0
+    luminance_ratio = clamp(float(ref_std[0]) / max(1e-5, float(src_std[0])), 0.7, 1.3)
+    chroma_ratio = clamp(ref_chroma_std / src_chroma_std, 0.7, 1.3)
+    return {
+        'temperature': clamp((float(ref_mean[2]) - float(src_mean[2])) / 0.24, -100, 100),
+        'tint': clamp((float(ref_mean[1]) - float(src_mean[1])) / 0.24, -100, 100),
+        'exposure': clamp((float(ref_mean[0]) - float(src_mean[0])) / 50.0, -2, 2),
+        'contrast': clamp(100.0 * math.log2(luminance_ratio), -100, 100),
+        'highlights': 0.0,
+        'shadows': 0.0,
+        'whites': 0.0,
+        'blacks': 0.0,
+        'midtones': 0.0,
+        'saturation': clamp((chroma_ratio - 1.0) * 100.0, -100, 100),
+    }
+
+
+def _apply_color_adjustments(img, adjustments=None):
+    """Apply deterministic photo-editor controls to an RGB image.
+
+    Temperature/tint operate in LAB chroma, exposure in linear RGB, tonal
+    controls in LAB luminance, and saturation around Rec.709 luma. Validation
+    of public ranges lives in server_api; this helper remains reusable by tests
+    and other local callers.
+    """
+    import numpy as np
+
+    adj = _normalize_color_adjustments(adjustments)
+    out = img.convert('RGB')
+
+    temperature = adj['temperature']
+    tint = adj['tint']
+    if temperature or tint:
+        lab = np.array(out.convert('LAB'), dtype=np.float32)
+        # Pillow LAB stores a/b as signed bytes encoded in uint8 (e.g. 226=-30).
+        # Decode before shifting, then encode again; direct uint8 arithmetic
+        # would wrap cool/green colors across the neutral point.
+        for channel, offset in ((2, temperature * 0.24), (1, tint * 0.24)):
+            chroma = np.where(lab[..., channel] > 127,
+                              lab[..., channel] - 256, lab[..., channel])
+            chroma = np.clip(chroma + offset, -128, 127)
+            lab[..., channel] = np.where(chroma < 0, chroma + 256, chroma)
+        out = Image.fromarray(np.rint(lab).astype(np.uint8), mode='LAB').convert('RGB')
+        del lab
+
+    exposure = adj['exposure']
+    if exposure:
+        srgb = np.asarray(out, dtype=np.float32) / 255.0
+        linear = np.where(srgb <= 0.04045, srgb / 12.92,
+                          ((srgb + 0.055) / 1.055) ** 2.4)
+        linear *= 2.0 ** exposure
+        np.clip(linear, 0.0, 1.0, out=linear)
+        srgb = np.where(linear <= 0.0031308, linear * 12.92,
+                        1.055 * (linear ** (1.0 / 2.4)) - 0.055)
+        out = Image.fromarray(np.rint(np.clip(srgb, 0.0, 1.0) * 255.0).astype(np.uint8), mode='RGB')
+        del srgb, linear
+
+    tonal_keys = ('contrast', 'highlights', 'shadows', 'whites', 'blacks', 'midtones')
+    if any(adj[key] for key in tonal_keys):
+        lab = np.array(out.convert('LAB'), dtype=np.float32)
+        lum = lab[..., 0] / 255.0
+
+        contrast_factor = 2.0 ** (adj['contrast'] / 100.0)
+        lum = 0.5 + (lum - 0.5) * contrast_factor
+        np.clip(lum, 0.0, 1.0, out=lum)
+
+        def _smoothstep(edge0, edge1, values):
+            t = np.clip((values - edge0) / (edge1 - edge0), 0.0, 1.0)
+            return t * t * (3.0 - 2.0 * t)
+
+        black_w = 1.0 - _smoothstep(0.0, 0.25, lum)
+        shadow_w = 1.0 - _smoothstep(0.15, 0.55, lum)
+        midtone_w = np.clip(1.0 - np.abs(lum - 0.5) / 0.3, 0.0, 1.0)
+        highlight_w = _smoothstep(0.45, 0.85, lum)
+        white_w = _smoothstep(0.75, 1.0, lum)
+        delta = 0.25 * (
+            (adj['blacks'] / 100.0) * black_w
+            + (adj['shadows'] / 100.0) * shadow_w
+            + (adj['midtones'] / 100.0) * midtone_w
+            + (adj['highlights'] / 100.0) * highlight_w
+            + (adj['whites'] / 100.0) * white_w
+        )
+        lab[..., 0] = np.clip(lum + delta, 0.0, 1.0) * 255.0
+        out = Image.fromarray(np.rint(lab).astype(np.uint8), mode='LAB').convert('RGB')
+        del lab, lum, delta, black_w, shadow_w, midtone_w, highlight_w, white_w
+
+    saturation = adj['saturation']
+    if saturation:
+        rgb = np.asarray(out, dtype=np.float32) / 255.0
+        luma = (rgb[..., 0] * 0.2126 + rgb[..., 1] * 0.7152 + rgb[..., 2] * 0.0722)[..., None]
+        rgb = luma + (1.0 + saturation / 100.0) * (rgb - luma)
+        out = Image.fromarray(np.rint(np.clip(rgb, 0.0, 1.0) * 255.0).astype(np.uint8), mode='RGB')
+        del rgb, luma
+
+    return out
+
+
+def match_color_region(src_img, ref_img, rect, strength=1.0, feather=0.05,
+                       adjustments=None, adjustment_mode='relative',
+                       return_auto_adjustments=False):
     """区域化 Reinhard + 颜色相似度掩膜：只对归一化矩形 rect=(x,y,w,h)∈[0,1] 内
     「像地板」的像素做 LAB 色彩迁移，边缘线性羽化回原图。
 
@@ -1143,6 +1277,10 @@ def match_color_region(src_img, ref_img, rect, strength=1.0, feather=0.05):
         rect: (x, y, w, h) 归一化选区
         strength: 0.0~1.0 迁移强度（折进 mask，0=恒等返回原图副本）
         feather: 羽化宽度 / src 短边，0=硬边
+        adjustments: 高级微调参数
+        adjustment_mode: relative=自动结果后微调（兼容旧调用）；auto=仅自动；
+                         manual=以 Gemini 原图为零点应用绝对参数
+        return_auto_adjustments: 同时返回相对原图估算的自动滑杆基准
     Returns:
         RGB PIL Image（始终新对象，不改 src_img）
     """
@@ -1156,7 +1294,10 @@ def match_color_region(src_img, ref_img, rect, strength=1.0, feather=0.05):
     x1 = max(x0, min(W, int(round((x + w) * W))))
     y1 = max(y0, min(H, int(round((y + h) * H))))
     # 无效/过小选区或零强度 → 恒等（返回副本，调用方可放心持有）
-    if strength <= 0 or (x1 - x0) < max(2, int(0.02 * W)) or (y1 - y0) < max(2, int(0.02 * H)):
+    if (adjustment_mode != 'manual' and strength <= 0) or \
+            (x1 - x0) < max(2, int(0.02 * W)) or (y1 - y0) < max(2, int(0.02 * H)):
+        if return_auto_adjustments:
+            return src, dict(_COLOR_ADJUSTMENT_DEFAULTS)
         return src
 
     feather_px = max(0, int(round(feather * min(W, H))))
@@ -1188,14 +1329,53 @@ def match_color_region(src_img, ref_img, rect, strength=1.0, feather=0.05):
     # 方差比钳制：校色的目标是对齐整体色调(均值)，不是移植小样的纹理对比度。
     # 不钳制时，地板 a/b 通道方差窄、小样方差宽 → 比值放大把细微色彩波动放大成可见斑块。
     _RATIO_MIN, _RATIO_MAX = 0.7, 1.3
+    r_flat = r.reshape(-1, 3)
+    r_mean_all = r_flat.mean(axis=0)
+    r_std_all = r_flat.std(axis=0)
+    r_profile_flat = r_flat.astype(np.float32)
+
+    # 高级滑杆以 Gemini 原图为零点，a/b 必须按 Pillow 的有符号 LAB 编码统计。
+    profile_src = flat[inlier] if inlier.sum() >= max(64, int(0.05 * flat.shape[0])) else flat
+    src_profile_mean = np.array([
+        profile_src[:, 0].mean(),
+        np.where(profile_src[:, 1] > 127, profile_src[:, 1] - 256, profile_src[:, 1]).mean(),
+        np.where(profile_src[:, 2] > 127, profile_src[:, 2] - 256, profile_src[:, 2]).mean(),
+    ], dtype=np.float32)
+    src_profile_std = np.array([
+        profile_src[:, 0].std(),
+        np.where(profile_src[:, 1] > 127, profile_src[:, 1] - 256, profile_src[:, 1]).std(),
+        np.where(profile_src[:, 2] > 127, profile_src[:, 2] - 256, profile_src[:, 2]).std(),
+    ], dtype=np.float32)
+    ref_profile_mean = np.array([
+        r_profile_flat[:, 0].mean(),
+        np.where(r_profile_flat[:, 1] > 127, r_profile_flat[:, 1] - 256, r_profile_flat[:, 1]).mean(),
+        np.where(r_profile_flat[:, 2] > 127, r_profile_flat[:, 2] - 256, r_profile_flat[:, 2]).mean(),
+    ], dtype=np.float32)
+    ref_profile_std = np.array([
+        r_profile_flat[:, 0].std(),
+        np.where(r_profile_flat[:, 1] > 127, r_profile_flat[:, 1] - 256, r_profile_flat[:, 1]).std(),
+        np.where(r_profile_flat[:, 2] > 127, r_profile_flat[:, 2] - 256, r_profile_flat[:, 2]).std(),
+    ], dtype=np.float32)
+    auto_adjustments = _estimate_auto_color_adjustments(
+        src_profile_mean, src_profile_std, ref_profile_mean, ref_profile_std)
     for c in range(3):
-        r_mean, r_std = float(r[..., c].mean()), float(r[..., c].std())
+        r_mean, r_std = float(r_mean_all[c]), float(r_std_all[c])
         s_mean, s_std = float(mu[c]), float(sd[c])
         ratio = 1.0 if s_std < 1e-5 else min(max(r_std / s_std, _RATIO_MIN), _RATIO_MAX)
         s[..., c] = (s[..., c] - s_mean) * ratio + r_mean
     np.clip(s, 0, 255, out=s)
-    transferred = Image.fromarray(s.astype(np.uint8), mode='LAB').convert('RGB')
+    auto_transferred = Image.fromarray(s.astype(np.uint8), mode='LAB').convert('RGB')
     del s, r, flat, d
+
+    normalized_adjustments = _normalize_color_adjustments(adjustments)
+    if adjustment_mode == 'manual':
+        transferred = _apply_color_adjustments(crop, normalized_adjustments)
+        mask_strength = 1.0
+    else:
+        transferred = auto_transferred
+        if adjustment_mode == 'relative' and any(normalized_adjustments.values()):
+            transferred = _apply_color_adjustments(transferred, normalized_adjustments)
+        mask_strength = float(strength)
 
     ch, cw = by1 - by0, bx1 - bx0
     # 两条 1-D 线性 ramp（边缘 0→内部 1，跨 feather_px）广播取 min → 羽化 mask，仅 crop 大小
@@ -1210,10 +1390,12 @@ def match_color_region(src_img, ref_img, rect, strength=1.0, feather=0.05):
     ry = _ramp(ch, y0 - by0, by1 - y1)
     rx = _ramp(cw, x0 - bx0, bx1 - x1)
     mask_f = np.minimum(ry[:, None], rx[None, :]) * w_sim
-    mask = (mask_f * (255.0 * float(strength))).astype(np.uint8)
+    mask = (mask_f * (255.0 * mask_strength)).astype(np.uint8)
     del mask_f, w_sim
     out = src.copy()
     out.paste(transferred, (bx0, by0), Image.fromarray(mask, mode='L'))
+    if return_auto_adjustments:
+        return out, auto_adjustments
     return out
 
 

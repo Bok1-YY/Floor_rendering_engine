@@ -1843,19 +1843,38 @@ class ColorMatchRect(BaseModel):
     h: float = Field(gt=0, le=1)
 
 
+class ColorMatchAdjustments(BaseModel):
+    """自动校色后的专业微调；全零时保持旧版输出。"""
+    temperature: float = Field(default=0, ge=-100, le=100)
+    tint: float = Field(default=0, ge=-100, le=100)
+    exposure: float = Field(default=0, ge=-2, le=2)
+    contrast: float = Field(default=0, ge=-100, le=100)
+    highlights: float = Field(default=0, ge=-100, le=100)
+    shadows: float = Field(default=0, ge=-100, le=100)
+    whites: float = Field(default=0, ge=-100, le=100)
+    blacks: float = Field(default=0, ge=-100, le=100)
+    midtones: float = Field(default=0, ge=-100, le=100)
+    saturation: float = Field(default=0, ge=-100, le=100)
+
+
 class ColorMatchPreviewRequest(BaseModel):
     image_rel: str = Field(min_length=1)   # 成图相对 /outputs 路径
     ref_path: str = Field(min_length=1)    # 参照小样绝对路径
     rect: ColorMatchRect
     strength: float = Field(default=0.8, ge=0, le=1)
     feather: float = Field(default=0.05, ge=0, le=0.3)
+    adjustments: ColorMatchAdjustments = Field(default_factory=ColorMatchAdjustments)
+    adjustment_mode: Literal['auto', 'manual'] = 'auto'
 
 
 _PREVIEW_MAX_SIDE = 1600
 
 
 def _run_color_match(abs_src: str, ref_path: str, rect: ColorMatchRect,
-                     strength: float, feather: float, max_side: int = 0):
+                     strength: float, feather: float, max_side: int = 0,
+                     adjustments: Optional[ColorMatchAdjustments] = None,
+                     adjustment_mode: Literal['auto', 'manual'] = 'auto',
+                     return_auto_adjustments: bool = False):
     """读图 → （可选缩到 max_side 长边）→ match_color_region。羽化按短边比例定义，
     预览与全分辨率提交走同一代码路径，视觉一致。"""
     src = Image.open(abs_src)
@@ -1865,7 +1884,10 @@ def _run_color_match(abs_src: str, ref_path: str, rect: ColorMatchRect,
     ref = Image.open(ref_path)
     ref.load()
     return match_color_region(src, ref, (rect.x, rect.y, rect.w, rect.h),
-                              strength=strength, feather=feather)
+                              strength=strength, feather=feather,
+                              adjustments=(adjustments.model_dump() if adjustments else None),
+                              adjustment_mode=adjustment_mode,
+                              return_auto_adjustments=return_auto_adjustments)
 
 
 @app.post('/api/color-match/preview')
@@ -1874,13 +1896,16 @@ def color_match_preview(req: ColorMatchPreviewRequest):
     同步 def → FastAPI 线程池执行，numpy 不堵事件循环。"""
     abs_src = _require_output_image_rel(req.image_rel)
     ref = _require_ref_image_path(req.ref_path)
-    out = _run_color_match(abs_src, ref, req.rect, req.strength, req.feather,
-                           max_side=_PREVIEW_MAX_SIDE)
+    out, auto_adjustments = _run_color_match(
+        abs_src, ref, req.rect, req.strength, req.feather,
+        max_side=_PREVIEW_MAX_SIDE, adjustments=req.adjustments,
+        adjustment_mode=req.adjustment_mode, return_auto_adjustments=True)
     buf = io.BytesIO()
     out.save(buf, format='JPEG', quality=85)
     b64 = base64.b64encode(buf.getvalue()).decode()
     return {'preview': f'data:image/jpeg;base64,{b64}',
-            'width': out.size[0], 'height': out.size[1]}
+            'width': out.size[0], 'height': out.size[1],
+            'auto_adjustments': auto_adjustments}
 
 
 class JobColorMatchRequest(ColorMatchPreviewRequest):
@@ -1904,7 +1929,9 @@ async def job_color_match(jid: str, req: JobColorMatchRequest):
         raise HTTPException(400, '该图不属于此任务的候选')
     ref = _require_ref_image_path(req.ref_path or job.png_path or '')
     out = await asyncio.to_thread(_run_color_match, abs_src, ref, req.rect,
-                                  req.strength, req.feather)
+                                  req.strength, req.feather,
+                                  adjustments=req.adjustments,
+                                  adjustment_mode=req.adjustment_mode)
     ppath = await asyncio.to_thread(_save_api_result_jpg, out, '手动校色',
                                     job.png_path or abs_src)
     if not ppath:
@@ -1930,6 +1957,8 @@ class RecordColorMatchRequest(BaseModel):
     rect: ColorMatchRect
     strength: float = Field(default=0.8, ge=0, le=1)
     feather: float = Field(default=0.05, ge=0, le=0.3)
+    adjustments: ColorMatchAdjustments = Field(default_factory=ColorMatchAdjustments)
+    adjustment_mode: Literal['auto', 'manual'] = 'auto'
 
 
 @app.post('/api/records/color-match')
@@ -1955,11 +1984,17 @@ def record_color_match(req: RecordColorMatchRequest):
     if not ref_path:
         raise HTTPException(400, '该记录没有参照小样，请在弹窗中上传参照图')
     ref = _require_ref_image_path(ref_path)
-    out = _run_color_match(abs_src, ref, req.rect, req.strength, req.feather)
+    out = _run_color_match(abs_src, ref, req.rect, req.strength, req.feather,
+                           adjustments=req.adjustments,
+                           adjustment_mode=req.adjustment_mode)
     ppath = _save_api_result_jpg(out, '手动校色', json_path.replace('_记录.json', '_优化图.png'))
     if not ppath:
         raise HTTPException(500, '校色结果保存失败')
-    label = f'强度{req.strength:.2f}'
+    if req.adjustment_mode == 'auto':
+        label = f'自动强度{req.strength:.2f}'
+    else:
+        label = ('原图基准 · 手动微调' if any(req.adjustments.model_dump().values())
+                 else 'Gemini 原图')
     msg = append_edited_result_to_record(json_path, req.record_id, req.result_id,
                                          out, label, '手动校色', ppath)
     if not str(msg).startswith('✅'):

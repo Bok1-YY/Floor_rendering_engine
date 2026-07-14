@@ -5,21 +5,37 @@ import { useEffect, useRef, useState } from "react";
 /** 全屏无边框看图：滚轮缩放 · 拖动平移 · 双击复位 · Esc/点背景/✕ 关闭。props 不变。 */
 export function ImageZoom({
   url,
+  baseUrl,
+  overlayOpacity = 1,
   onClose,
 }: {
   url: string | null;
+  baseUrl?: string;
+  overlayOpacity?: number;
   onClose: () => void;
 }) {
   if (!url) return null;
 
-  return <ImageZoomSurface key={url} url={url} onClose={onClose} />;
+  return (
+    <ImageZoomSurface
+      key={`${url}:${baseUrl || ""}:${overlayOpacity}`}
+      url={url}
+      baseUrl={baseUrl}
+      overlayOpacity={overlayOpacity}
+      onClose={onClose}
+    />
+  );
 }
 
 function ImageZoomSurface({
   url,
+  baseUrl,
+  overlayOpacity,
   onClose,
 }: {
   url: string;
+  baseUrl?: string;
+  overlayOpacity: number;
   onClose: () => void;
 }) {
   const [scale, setScale] = useState(1);
@@ -85,17 +101,39 @@ function ImageZoomSurface({
         if (e.target === e.currentTarget && !moved.current) onClose();
       }}
     >
-      <img
-        src={url}
-        alt="zoom"
-        draggable={false}
-        className="max-h-[96vh] max-w-[96vw] object-contain"
+      <div
+        className="relative max-h-[96vh] max-w-[96vw]"
         style={{
           transform: `translate(${pos.x}px, ${pos.y}px) scale(${scale})`,
           cursor: scale > 1 ? "grab" : "default",
           transition: dragging ? "none" : "transform 0.05s",
         }}
-      />
+      >
+        {baseUrl ? (
+          <>
+            <img
+              src={baseUrl}
+              alt="zoom base"
+              draggable={false}
+              className="block max-h-[96vh] max-w-[96vw] object-contain"
+            />
+            <img
+              src={url}
+              alt="zoom result"
+              draggable={false}
+              className="pointer-events-none absolute inset-0 h-full w-full object-contain"
+              style={{ opacity: overlayOpacity }}
+            />
+          </>
+        ) : (
+          <img
+            src={url}
+            alt="zoom"
+            draggable={false}
+            className="block max-h-[96vh] max-w-[96vw] object-contain"
+          />
+        )}
+      </div>
 
       <button
         onClick={onClose}

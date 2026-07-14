@@ -52,11 +52,12 @@ async function handle<T>(r: Response): Promise<T> {
 
 const jget = <T>(p: string) => fetch(API + p).then((r) => handle<T>(r));
 
-const jsend = <T>(p: string, method: "POST" | "PUT", body?: unknown) =>
+const jsend = <T>(p: string, method: "POST" | "PUT", body?: unknown, signal?: AbortSignal) =>
   fetch(API + p, {
     method,
     headers: { "Content-Type": "application/json" },
     body: body !== undefined ? JSON.stringify(body) : undefined,
+    signal,
   }).then((r) => handle<T>(r));
 
 async function upload(path: string, file: File): Promise<Swatch> {
@@ -194,8 +195,8 @@ export const api = {
   clearLogo: () => jsend<{ ok: boolean }>("/api/uploads/logo/clear", "POST"),
 
   // ── 手动校色（区域化 Reinhard）──
-  colorMatchPreview: (b: ColorMatchPreviewRequest) =>
-    jsend<ColorMatchPreviewView>(`/api/color-match/preview`, "POST", b),
+  colorMatchPreview: (b: ColorMatchPreviewRequest, signal?: AbortSignal) =>
+    jsend<ColorMatchPreviewView>(`/api/color-match/preview`, "POST", b, signal),
   jobColorMatch: (id: string, b: JobColorMatchRequest) =>
     jsend<JobView>(`/api/jobs/${id}/color-match`, "POST", b),
   recordColorMatch: (b: RecordColorMatchRequest) =>
