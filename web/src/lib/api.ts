@@ -27,6 +27,11 @@ import type {
   ColorMatchPreviewView,
   JobColorMatchRequest,
   RecordColorMatchRequest,
+  ModelKey,
+  GenericInpaintRequest,
+  InpaintStatusView,
+  InpaintApplyResponse,
+  ComfyUIPingView,
 } from "./types";
 
 // dev（next dev 在 :3000）用 .env.local 里的 NEXT_PUBLIC_API_BASE 指到后端 :7870；
@@ -88,7 +93,9 @@ export const api = {
   deleteJob: (id: string) =>
     jsend<{ deleted: number }>(`/api/jobs/${id}/delete`, "POST"),
   retryJob: (id: string) => jsend<JobView>(`/api/jobs/${id}/retry`, "POST"),
-  jobResult: (id: string, model: "b2" | "pro", idx: number) =>
+  retrySdUpscale: (id: string) =>
+    jsend<JobView>(`/api/jobs/${id}/sd-upscale`, "POST"),
+  jobResult: (id: string, model: ModelKey, idx: number) =>
     jget<{ model: string; idx: number; total: number; url: string; thumb: string }>(
       `/api/jobs/${id}/result?model=${model}&idx=${idx}`,
     ),
@@ -201,4 +208,15 @@ export const api = {
     jsend<JobView>(`/api/jobs/${id}/color-match`, "POST", b),
   recordColorMatch: (b: RecordColorMatchRequest) =>
     jsend<{ ok: boolean; result_url: string }>(`/api/records/color-match`, "POST", b),
+
+  // ── 生成式修补（画笔选区 → 并发 n 候选抽卡 → 挑选提交；引擎可切换）──
+  submitInpaint: (b: GenericInpaintRequest) =>
+    jsend<{ inpaint_id: string }>(`/api/inpaint`, "POST", b),
+  inpaintStatus: (iid: string) => jget<InpaintStatusView>(`/api/inpaint/${iid}`),
+  applyInpaint: (iid: string, index: number) =>
+    jsend<InpaintApplyResponse>(`/api/inpaint/${iid}/apply`, "POST", { index }),
+  cancelInpaint: (iid: string) =>
+    jsend<{ cancelled: boolean }>(`/api/inpaint/${iid}/cancel`, "POST"),
+  comfyuiPing: (url = "") =>
+    jget<ComfyUIPingView>(`/api/inpaint/comfyui/ping${url ? `?url=${encodeURIComponent(url)}` : ""}`),
 };

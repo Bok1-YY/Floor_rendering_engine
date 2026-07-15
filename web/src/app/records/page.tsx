@@ -11,6 +11,7 @@ import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { ImageZoom } from "@/components/ImageZoom";
 import { CompareSlider } from "@/components/CompareSlider";
 import { ColorMatchDialog } from "@/components/ColorMatchDialog";
+import { InpaintDialog } from "@/components/InpaintDialog";
 import { cn } from "@/lib/utils";
 
 const toolBtn =
@@ -54,6 +55,14 @@ export default function RecordsPage() {
     imageRel: string;
     refUrl: string;
     refPath: string;
+    recordId: string;
+    resultId: string;
+  } | null>(null);
+
+  // 生成式修补（画笔涂抹选区，结果追加回记录）
+  const [inpaint, setInpaint] = useState<{
+    open: boolean;
+    srcUrl: string;
     recordId: string;
     resultId: string;
   } | null>(null);
@@ -264,6 +273,8 @@ export default function RecordsPage() {
     saveReuseRequest({
       params: gc.params,
       modelFilter: gc.model_filter,
+      modelTargets: gc.model_targets,
+      sdOptions: gc.sd_options,
       floorPath: gc.image_path,
       roomPath: gc.room_path || undefined,
       refPath: gc.ref_path || undefined,
@@ -553,6 +564,17 @@ export default function RecordsPage() {
                                   >
                                     ✎
                                   </button>
+                                  {url && url.startsWith("/outputs/") && (
+                                    <button
+                                      title="生成式修补（画笔涂抹移除/添加物体）"
+                                      onClick={() =>
+                                        setInpaint({ open: true, srcUrl: url, recordId: rid, resultId })
+                                      }
+                                      className="hover:text-foreground"
+                                    >
+                                      🖌️
+                                    </button>
+                                  )}
                                   {url && r.gen_context?.image_url && url.startsWith("/outputs/") && (
                                     <button
                                       title="手动校色（以地板小样为参照，框选地板区域）"
@@ -681,6 +703,22 @@ export default function RecordsPage() {
 
       {/* 放大 */}
       <ImageZoom url={zoom} onClose={() => setZoom(null)} />
+
+      {/* 生成式修补 */}
+      {inpaint && active && (
+        <InpaintDialog
+          open={inpaint.open}
+          onOpenChange={(o) => !o && setInpaint(null)}
+          srcUrl={inpaint.srcUrl}
+          target={{
+            kind: "record",
+            jsonPath: active,
+            recordId: inpaint.recordId,
+            resultId: inpaint.resultId,
+          }}
+          onDone={() => reload()}
+        />
+      )}
 
       {/* 手动校色 */}
       {colorMatch && active && (

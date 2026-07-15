@@ -1,7 +1,34 @@
 // 后端 server_api.py 返回结构的 TS 镜像（手动对齐；后端改字段时同步这里）
 
 export type JobStatus = "queued" | "running" | "done" | "partial" | "failed";
-export type ModelFilter = "b2" | "pro" | "both";
+export type ModelFilter = "b2" | "pro" | "both" | "sd35" | "custom";
+export type ModelKey = "b2" | "pro" | "sd35";
+
+export interface SDOptions {
+  seed?: number | null;
+  steps: number;
+  guidance_scale: number;
+  reference_strength: number;
+  positive_addition: string;
+  negative_addition: string;
+}
+
+export interface ModelRunView {
+  key: ModelKey;
+  label: string;
+  status: JobStatus | "idle";
+  stage: string;
+  seconds: number | null;
+  error: string;
+  url: string;
+  thumb: string;
+  idx: number;
+  total: number;
+  base_url: string;
+  delivery_status: string;
+  seed: number | null;
+  settings: Record<string, unknown>;
+}
 
 export interface FailureKB {
   key: string;
@@ -17,6 +44,8 @@ export interface JobView {
   ts: string;
   status: JobStatus;
   model_filter: ModelFilter;
+  model_targets: ModelKey[];
+  model_runs: Partial<Record<ModelKey, ModelRunView>>;
   workflow_mode: string;
   error: string;
   error_kb: FailureKB | null;
@@ -92,7 +121,9 @@ export interface GenParams {
 
 export interface JobSubmit {
   image_path: string;
-  model_filter: ModelFilter;
+  model_filter: "b2" | "pro" | "both";
+  model_targets?: ModelKey[];
+  sd_options?: SDOptions;
   api_key?: string;
   room_path?: string | null;
   ref_path?: string | null;
@@ -143,10 +174,12 @@ export interface ConfigView {
   tls_verify: boolean;
   tls_ca_bundle: string;
   proxy: string;
+  fal_queue_proxy?: string;
   max_concurrent_per_model: number;
   speed_params: Record<string, unknown>;
   has_deepseek_key?: boolean;
   omakase_enabled?: boolean;
+  sd_enabled?: boolean;
   omakase_gemini_model?: string;
   deepseek_model?: string;
   deepseek_base_url?: string;
@@ -154,6 +187,13 @@ export interface ConfigView {
   pptx_company?: string;
   pptx_contact?: string;
   pptx_logo_url?: string;
+  inpaint_provider?: string;
+  inpaint_remove_model?: string;
+  inpaint_add_model?: string;
+  comfyui_base_url?: string;
+  comfyui_workflow_path?: string;
+  comfyui_timeout?: number;
+  inpaint_remove_prompt?: string;
 }
 
 export interface ConfigPatch {
@@ -163,6 +203,7 @@ export interface ConfigPatch {
   speed_profile?: string;
   auto_failover?: boolean;
   proxy?: string;
+  fal_queue_proxy?: string;
   tls_verify?: boolean;
   tls_ca_bundle?: string;
   max_concurrent_per_model?: number;
@@ -171,9 +212,17 @@ export interface ConfigPatch {
   deepseek_model?: string;
   omakase_gemini_model?: string;
   omakase_enabled?: boolean;
+  sd_enabled?: boolean;
   usage_prices?: Record<string, number>;
   pptx_company?: string;
   pptx_contact?: string;
+  inpaint_provider?: string;
+  inpaint_remove_model?: string;
+  inpaint_add_model?: string;
+  comfyui_base_url?: string;
+  comfyui_workflow_path?: string;
+  comfyui_timeout?: number;
+  inpaint_remove_prompt?: string;
 }
 
 /** Omakase 文本模型返回的单个场景散文候选 */
@@ -198,7 +247,7 @@ export interface ModelsView {
 
 export interface OptionsView {
   workflow_modes: string[];
-  model_filters: { value: ModelFilter; label: string }[];
+  model_filters: { value: "b2" | "pro" | "both"; label: string }[];
   resolutions: string[];
   aspect_ratios: string[];
   seam_types: string[];
@@ -282,6 +331,8 @@ export interface GenContext {
   room_url?: string;       // 后端 load 时由 room_path 换算，供前后对比直接用
   image_url?: string;      // 后端 load 时由 image_path 换算，供手动校色参照展示
   model_filter?: ModelFilter;
+  model_targets?: ModelKey[];
+  sd_options?: SDOptions;
   params?: GenParams;
 }
 
@@ -415,7 +466,7 @@ export interface ColorMatchPreviewView {
   auto_adjustments: ColorMatchAdjustments; // 满强度自动校准对应的原图基准滑杆值
 }
 export interface JobColorMatchRequest extends ColorMatchPreviewRequest {
-  stage: "b2" | "pro";
+  stage: ModelKey;
 }
 export interface RecordColorMatchRequest {
   json_path: string;
@@ -439,4 +490,53 @@ export interface RecordEditRequest {
   preserve_floor_geometry?: boolean;
   model_choice?: string;
   color_match?: boolean; // 保持原图色彩（防偏色），后端默认 true
+}
+
+// ── 生成式修补（inpaint：画笔涂抹选区 → 候选抽卡 → 挑选提交）──
+export interface InpaintPayload {
+  mask_b64: string; // 纯 base64 PNG（无 data: 前缀），白=重绘区
+  prompt?: string; // add 模式必填
+  mode: "remove" | "add";
+  grow?: number; // mask 最小外扩 px（后端随选区尺寸自适应放大）
+  feather?: number; // 羽化 / 短边比例，默认 0.01
+  seed?: number;
+  n?: number; // 候选数 1-3（Lightroom 式抽卡；n 张记 n 次费用）
+}
+export interface InpaintTargetPayload {
+  kind: "job" | "record" | "room";
+  jid?: string;
+  stage?: ModelKey;
+  image_rel?: string;
+  json_path?: string;
+  record_id?: string;
+  result_id?: string;
+  room_path?: string;
+}
+export interface GenericInpaintRequest extends InpaintPayload {
+  target: InpaintTargetPayload;
+}
+export interface InpaintCandidate {
+  url: string;
+  thumb: string;
+}
+export interface InpaintStatusView {
+  inpaint_id: string;
+  status: "running" | "done" | "failed";
+  stage: string;
+  error: string;
+  candidates: InpaintCandidate[];
+}
+export interface InpaintApplyResponse {
+  ok: boolean;
+  job?: JobView; // target=job：写回后的任务快照
+  result_url?: string; // target=record
+  path?: string; // target=room：新上传文件
+  url?: string;
+  thumb?: string;
+}
+export interface ComfyUIPingView {
+  ok: boolean;
+  version?: string;
+  devices?: string[];
+  error?: string;
 }

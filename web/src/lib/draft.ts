@@ -2,7 +2,7 @@
 // 生成页草稿持久化：把「作业中」的配置存到 localStorage，避免切到记录页再回来时被清空。
 // 只在 effect 里读写（不在渲染期），故不会引发 SSR / 水合不一致。
 
-import type { GenParams, ModelFilter, ResolvedRecipe, Swatch } from "./types";
+import type { GenParams, ModelFilter, ModelKey, ResolvedRecipe, SDOptions, Swatch } from "./types";
 
 // 版本化 key：将来草稿结构不兼容时改 v2，旧草稿自然作废（loadDraft 读不到新 key → 回落默认）。
 const KEY = "floor-engine:generate-draft:v1";
@@ -11,6 +11,8 @@ const KEY = "floor-engine:generate-draft:v1";
 export interface GenerateDraft {
   params: GenParams;
   modelFilter: ModelFilter;
+  modelTargets: ModelKey[];
+  sdOptions: SDOptions;
   floor: Swatch | null;
   refImg: Swatch | null;
   roomImg: Swatch | null;
@@ -55,6 +57,8 @@ const REUSE_KEY = "floor-engine:reuse-request:v1";
 export interface ReuseRequest {
   params: GenParams;
   modelFilter?: ModelFilter;
+  modelTargets?: ModelKey[];
+  sdOptions?: SDOptions;
   floorPath?: string;
   roomPath?: string;
   refPath?: string;

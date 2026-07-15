@@ -7,6 +7,8 @@ import base64
 import hashlib
 import io as _io_mod
 import re
+import math
+import uuid
 from typing import Optional, Tuple
 
 from PIL import Image
@@ -26,6 +28,8 @@ from .config import (
     logger, _short_text, _load_config, _save_config,
     get_speed_profile_params,
     get_text_models, get_gen_sampling,
+    get_inpaint_provider, get_comfyui_settings, get_inpaint_remove_prompt,
+    get_inpaint_models,
 )
 from .records import (
     _img_to_b64, _b64_to_pil, _save_api_result_jpg, _api_write_to_record,
@@ -398,6 +402,12 @@ def call_gemini_generate(api_key: str, model_id: str, prompt_text: str, image_pa
 # ── Fal 路由 ────────────────────────────────────────────────────────────────
 _FAL_RESOLUTIONS = {"1K", "2K", "4K"}
 _FAL_ASPECT_RATIOS = {"auto", "21:9", "16:9", "3:2", "4:3", "5:4", "1:1", "4:5", "3:4", "2:3", "9:16"}
+SD35_ENDPOINT = "fal-ai/stable-diffusion-v35-large"
+SD35_IP_ADAPTER_PATH = "InstantX/SD3.5-Large-IP-Adapter"
+# InstantX 当前主分支提供的是官方推理示例使用的 ip-adapter.bin；历史 safetensors 已删除。
+SD35_IP_ADAPTER_WEIGHT = "ip-adapter.bin"
+SD35_IMAGE_ENCODER = "google/siglip-so400m-patch14-384"
+AURA_SR_ENDPOINT = "fal-ai/aura-sr"
 
 
 def _file_to_data_uri(path: str) -> Optional[str]:
@@ -406,6 +416,711 @@ def _file_to_data_uri(path: str) -> Optional[str]:
     if b64 is None:
         return None
     return f"data:{mime};base64,{b64}"
+
+
+def _pil_to_data_uri(image, fmt: str = "PNG", quality: int = 95) -> str:
+    buf = _io_mod.BytesIO()
+    if fmt.upper() == "PNG":
+        image.convert("RGB").save(buf, format="PNG")
+        mime = "image/png"
+    else:
+        image.convert("RGB").save(buf, format="JPEG", quality=quality)
+        mime = "image/jpeg"
+    return f"data:{mime};base64,{base64.b64encode(buf.getvalue()).decode()}"
+
+
+def sd35_base_size(aspect_ratio: str) -> dict:
+    """约 1MP、64 对齐的 SD3.5 基础画布；避免直接高分辨率扩散。"""
+    try:
+        a, b = (float(x) for x in str(aspect_ratio or "4:3").split(":", 1))
+        ratio = a / b if a > 0 and b > 0 else 4 / 3
+    except Exception:
+        ratio = 4 / 3
+    pixels = 1024 * 1024
+    width = int(round(math.sqrt(pixels * ratio) / 64) * 64)
+    height = int(round(math.sqrt(pixels / ratio) / 64) * 64)
+    width = max(512, min(1536, width))
+    height = max(512, min(1536, height))
+    return {"width": width, "height": height}
+
+
+def _call_fal_json(api_key: str, endpoint: str, payload: dict, *, on_stage=None,
+                   should_cancel=None) -> Tuple[Optional[dict], Optional[str]]:
+    """Fal 同步 JSON 端点薄封装；沿用本项目代理/TLS/有限重试语义。"""
+    cfg = _load_config()
+    proxy = cfg.get("proxy", "").strip()
+    proxies = {"http": proxy, "https": proxy} if proxy else None
+    headers = {"Authorization": f"Key {api_key}", "Content-Type": "application/json"}
+    max_attempts, backoffs = _retry_plan()
+    try:
+        max_attempts = max(1, min(max_attempts, int(cfg.get("fal_retry_attempts", 3))))
+    except Exception:
+        max_attempts = min(max_attempts, 3)
+    last_err = ""
+    for attempt in range(max_attempts):
+        if should_cancel and should_cancel():
+            return None, "已取消"
+        if on_stage:
+            try:
+                on_stage("📡 连接中…" if attempt == 0 else f"🔁 网络重试 {attempt}/{max_attempts - 1}")
+            except Exception:
+                pass
+        try:
+            response = _req.post(
+                f"https://fal.run/{endpoint}", json=payload, headers=headers,
+                timeout=(30, 600), proxies=proxies, verify=_verify_arg(cfg),
+            )
+            if response.status_code == 200:
+                return response.json(), None
+            try:
+                detail = response.json()
+                if isinstance(detail, dict):
+                    detail = detail.get("detail") or detail.get("error") or detail.get("message") or detail
+            except Exception:
+                detail = response.text[:600]
+            last_err = f"HTTP {response.status_code}: {_short_text(detail, 600)}"
+            if response.status_code not in (408, 409, 425, 429, 500, 502, 503, 504):
+                return None, last_err
+        except (_req.exceptions.Timeout, _req.exceptions.ConnectionError,
+                _req.exceptions.ChunkedEncodingError, _ProtocolError) as ex:
+            last_err = f"网络错误: {_redact_api_key(ex)}"
+        except Exception as ex:
+            logger.exception(f"[Fal] 未预期错误 endpoint={endpoint}")
+            return None, f"网络错误: {_redact_api_key(ex)}"
+        if attempt < max_attempts - 1:
+            end = time.time() + backoffs[min(attempt, len(backoffs) - 1)] + random.uniform(0, 1.5)
+            while time.time() < end:
+                if should_cancel and should_cancel():
+                    return None, "已取消"
+                time.sleep(0.5)
+    return None, last_err or "Fal 请求失败"
+
+
+def _call_fal_queue_json(api_key: str, endpoint: str, payload: dict, *, on_stage=None,
+                         should_cancel=None) -> Tuple[Optional[dict], Optional[str]]:
+    """Fal 持久队列：只提交一次，随后轮询同一 request_id，避免长连接断线后重复计费。"""
+    cfg = _load_config()
+    # Google 代理常会破坏 FAL 的大 POST/长轮询；SD 队列默认直连，确有需要再单配 fal_queue_proxy。
+    proxy = str(cfg.get("fal_queue_proxy") or "").strip()
+    session = _req.Session()
+    if proxy:
+        session.proxies.update({"http": proxy, "https": proxy})
+    else:
+        session.trust_env = False
+    headers = {"Authorization": f"Key {api_key}", "Content-Type": "application/json"}
+    verify = _verify_arg(cfg)
+
+    def _detail(response) -> str:
+        try:
+            value = response.json()
+            if isinstance(value, dict):
+                value = value.get("detail") or value.get("error") or value.get("message") or value
+            return _short_text(value, 600)
+        except Exception:
+            return _short_text(response.text, 600)
+
+    try:
+        # 提交响应丢失时无法判断服务器是否已接单，因此绝不自动重交；由用户显式重试。
+        response = session.post(
+            f"https://queue.fal.run/{endpoint}", json=payload, headers=headers,
+            timeout=(30, 120), verify=verify,
+        )
+        if response.status_code not in (200, 201, 202):
+            return None, f"队列提交 HTTP {response.status_code}: {_detail(response)}"
+        queued = response.json()
+    except Exception as ex:
+        return None, f"队列提交网络错误（未自动重交）: {_redact_api_key(ex)}"
+
+    status_url = str(queued.get("status_url") or "")
+    response_url = str(queued.get("response_url") or "")
+    cancel_url = str(queued.get("cancel_url") or "")
+    if not status_url.startswith("https://queue.fal.run/") or not response_url.startswith("https://queue.fal.run/"):
+        return None, "Fal 队列响应缺少有效状态地址"
+    try:
+        deadline = time.time() + max(60, min(3600, int(cfg.get("fal_queue_timeout", 900))))
+    except Exception:
+        deadline = time.time() + 900
+    last_status = ""
+    poll_errors = 0
+    while time.time() < deadline:
+        if should_cancel and should_cancel():
+            if cancel_url.startswith("https://queue.fal.run/"):
+                try:
+                    session.post(cancel_url, headers=headers, timeout=(10, 30), verify=verify)
+                except Exception:
+                    pass
+            return None, "已取消"
+        try:
+            status_response = session.get(
+                status_url, params={"logs": 1}, headers=headers,
+                timeout=(15, 45), verify=verify,
+            )
+            # 排队/推理中 REST 状态接口使用 202；完成后使用 200。
+            if status_response.status_code not in (200, 202):
+                return None, f"队列状态 HTTP {status_response.status_code}: {_detail(status_response)}"
+            status_data = status_response.json()
+            status = str(status_data.get("status") or "").upper()
+            poll_errors = 0
+            if status != last_status and on_stage:
+                label = {"IN_QUEUE": "⏳ Fal 排队中…", "IN_PROGRESS": "🎨 Fal 推理中…"}.get(status)
+                if label:
+                    try: on_stage(label)
+                    except Exception: pass
+            last_status = status
+            if status == "COMPLETED":
+                result_response = session.get(
+                    response_url, headers=headers, timeout=(30, 180), verify=verify,
+                )
+                if result_response.status_code != 200:
+                    return None, f"队列取结果 HTTP {result_response.status_code}: {_detail(result_response)}"
+                return result_response.json(), None
+            if status in ("FAILED", "CANCELLED"):
+                return None, f"Fal 队列任务{status}: {_short_text(status_data, 600)}"
+        except Exception as ex:
+            poll_errors += 1
+            if poll_errors >= 5:
+                return None, f"队列状态网络错误: {_redact_api_key(ex)}"
+        time.sleep(1.5)
+    return None, "Fal 队列等待超时；任务可能仍在服务端运行，请稍后按原任务重试"
+
+
+def _fal_image_from_result(data: dict, *, plural: bool = True, direct: bool = False):
+    item = ((data.get("images") or [None])[0] if plural else data.get("image")) if isinstance(data, dict) else None
+    url = item.get("url") if isinstance(item, dict) else None
+    if not url:
+        return None, "API 未返回图片"
+    try:
+        if url.startswith("data:"):
+            raw = base64.b64decode(url.split(",", 1)[1])
+        else:
+            cfg = _load_config()
+            raw_proxy = cfg.get("fal_queue_proxy") if direct else cfg.get("proxy")
+            proxy = str(raw_proxy or "").strip()
+            session = _req.Session()
+            if proxy:
+                session.proxies.update({"http": proxy, "https": proxy})
+            elif direct:
+                session.trust_env = False
+            resp = session.get(url, timeout=(30, 300), verify=_verify_arg(cfg))
+            resp.raise_for_status()
+            raw = resp.content
+        image = Image.open(_io_mod.BytesIO(raw)); image.load()
+        return image, None
+    except Exception as ex:
+        return None, f"解码失败: {_redact_api_key(ex)}"
+
+
+def call_fal_sd35_generate(api_key: str, positive_prompt: str, negative_prompt: str,
+                           floor_image_path: str, aspect_ratio: str = "4:3", *,
+                           seed=None, steps: int = 28, guidance_scale: float = 3.5,
+                           reference_strength: float = 0.5, on_stage=None,
+                           should_cancel=None):
+    """Fal SD3.5 Large + InstantX IP-Adapter。返回 (PIL, error, seed)。"""
+    ref_uri = _file_to_data_uri(floor_image_path)
+    if not ref_uri:
+        return None, "地板小样不存在或无法读取", seed
+    payload = {
+        "prompt": positive_prompt,
+        "negative_prompt": negative_prompt,
+        "image_size": sd35_base_size(aspect_ratio),
+        "num_inference_steps": max(10, min(50, int(steps))),
+        "guidance_scale": max(1.0, min(10.0, float(guidance_scale))),
+        "num_images": 1,
+        "enable_safety_checker": True,
+        "output_format": "png",
+        "ip_adapter": {
+            "path": SD35_IP_ADAPTER_PATH,
+            "weight_name": SD35_IP_ADAPTER_WEIGHT,
+            "image_encoder_path": SD35_IMAGE_ENCODER,
+            "image_url": ref_uri,
+            "scale": max(0.1, min(1.0, float(reference_strength))),
+        },
+    }
+    if seed is not None:
+        payload["seed"] = int(seed)
+    if on_stage:
+        try: on_stage("🎨 SD 3.5 生成中…")
+        except Exception: pass
+    data, err = _call_fal_queue_json(api_key, SD35_ENDPOINT, payload, on_stage=on_stage, should_cancel=should_cancel)
+    if err:
+        return None, err, seed
+    image, decode_err = _fal_image_from_result(data, plural=True, direct=True)
+    return image, decode_err, data.get("seed", seed) if data else seed
+
+
+def call_fal_aura_upscale(api_key: str, image, *, on_stage=None, should_cancel=None):
+    """AuraSR 4× 保守超分。返回 (PIL, error)。"""
+    if on_stage:
+        try: on_stage("🔎 4K 超分中…")
+        except Exception: pass
+    payload = {
+        "image_url": _pil_to_data_uri(image),
+        "upscale_factor": 4,
+        "overlapping_tiles": True,
+        "checkpoint": "v2",
+    }
+    data, err = _call_fal_queue_json(api_key, AURA_SR_ENDPOINT, payload, on_stage=on_stage, should_cancel=should_cancel)
+    if err:
+        return None, err
+    return _fal_image_from_result(data, plural=False, direct=True)
+
+
+# ── 生成式修补（inpaint：画笔选区内移除/添加）──────────────────────────────
+FLUX_FILL_ENDPOINT = "fal-ai/flux-pro/v1/fill"
+# FLUX Fill 的 prompt 为必填；『生成式移除』留空时注入这句“延续周边背景”的替补描述
+DEFAULT_INPAINT_REMOVE_PROMPT = (
+    "empty clean interior surface, seamless continuation of the surrounding "
+    "floor, wall and background, nothing here, no shadow, no reflection, "
+    "photorealistic interior photo"
+)
+
+# ── 裁剪回贴（Lightroom 式"选区级处理"，对 4K 图是清晰度的决定性提升）────────
+# 云端生成模型的有效工作分辨率普遍 ≤2K：整图送入会让选区内细节被压缩摧毁。
+# 做法：围绕选区裁一个含上下文的窗口送引擎 → 结果缩回窗口尺寸贴回原图 →
+# 再走羽化 mask 合成（选区外像素严格不变的语义不变）。
+_INPAINT_CROP_MAX_SIDE = 2048
+
+
+def _crop_inpaint_context(image, mask, *, max_side: int = _INPAINT_CROP_MAX_SIDE):
+    """围绕 mask bbox 裁上下文窗口。返回 (crop_img, crop_mask, box)。
+
+    上下文外扩 = max(bbox 长边 × 0.75, 256px)，给引擎足够的纹理/透视参照；
+    裁剪区长边 > max_side 时等比缩小（引擎侧工作分辨率），贴回时由
+    _stitch_inpaint_result 缩回。mask 全空时退化为整图（调用方已校验非空）。
+    """
+    w, h = image.size
+    bbox = mask.convert("L").point(lambda v: 255 if v >= 8 else 0).getbbox()
+    if not bbox:
+        return image, mask, (0, 0, w, h)
+    bl, bt, br, bb = bbox
+    pad = max(int(max(br - bl, bb - bt) * 0.75), 256)
+    box = (max(0, bl - pad), max(0, bt - pad), min(w, br + pad), min(h, bb + pad))
+    crop_img = image.crop(box)
+    crop_mask = mask.crop(box)
+    cw, ch = crop_img.size
+    if max(cw, ch) > max_side:
+        scale = max_side / max(cw, ch)
+        work = (max(8, round(cw * scale)), max(8, round(ch * scale)))
+        crop_img = crop_img.resize(work, Image.LANCZOS)
+        crop_mask = crop_mask.resize(work, Image.LANCZOS)
+    return crop_img, crop_mask, box
+
+
+def _stitch_inpaint_result(original, result_crop, box):
+    """引擎输出缩回裁剪区像素尺寸后贴回原图副本，返回全尺寸图。"""
+    left, top, right, bottom = box
+    target = (right - left, bottom - top)
+    res = result_crop.convert("RGB")
+    if res.size != target:
+        res = res.resize(target, Image.LANCZOS)
+    out = original.convert("RGB").copy()
+    out.paste(res, (left, top))
+    return out
+# 专职移除模型（无 prompt/seed，涂哪擦哪并重建背景）：FLUX Fill 做移除会脑补新物体，
+# Lightroom 式移除要用这类 eraser。三个模型共用 call_fal_mask_eraser 薄封装。
+BRIA_ERASER_ENDPOINT = "fal-ai/bria/eraser"           # $0.04/次，输出单数 image
+FINEGRAIN_ERASER_ENDPOINT = "fal-ai/finegrain-eraser/mask"  # 连阴影/反射一起移除
+LAMA_ENDPOINT = "fal-ai/lama"                          # 传统修复，廉价备选
+# model_key → (endpoint, mask 字段名, 额外 payload)
+_FAL_ERASER_MODELS = {
+    "bria-eraser": (BRIA_ERASER_ENDPOINT, "mask_url", {"mask_type": "manual"}),
+    "finegrain-eraser": (FINEGRAIN_ERASER_ENDPOINT, "mask_url", {"mode": "express"}),
+    "lama": (LAMA_ENDPOINT, "mask_image_url", {}),
+}
+# 指令语义模型：mask 语义是"编辑此处"而非"往洞里填东西"，移除时不易脑补新物体
+QWEN_INPAINT_ENDPOINT = "fal-ai/qwen-image-edit/inpaint"
+_INPAINT_USAGE_LABELS = {
+    "bria-eraser": "BriaEraser",
+    "finegrain-eraser": "FinegrainEraser",
+    "lama": "LaMa",
+    "flux-fill": "FluxFill",
+    "qwen-inpaint": "QwenInpaint",
+    "gemini-mark": "GeminiMark",
+    "comfyui": "ComfyUI",
+}
+
+
+def resolve_inpaint_engine(mode: str):
+    """按 (inpaint_provider, mode) 解析实际引擎。返回 (provider, model_key, usage_label)。
+    api 与 server_api 共用，保证调用与记账一致。comfyui@fal 扩展位见 config.get_inpaint_provider。
+    gemini-mark 走 Google 直连（用 gemini_api_key），其余云模型走 Fal。"""
+    provider = get_inpaint_provider()
+    if provider == "comfyui":
+        return "comfyui", "comfyui", _INPAINT_USAGE_LABELS["comfyui"]
+    model_key = get_inpaint_models()["remove" if mode == "remove" else "add"]
+    engine_provider = "google" if model_key == "gemini-mark" else "fal"
+    return engine_provider, model_key, _INPAINT_USAGE_LABELS.get(model_key, "FluxFill")
+
+
+DEFAULT_QWEN_REMOVE_INSTRUCTION = (
+    "Remove the masked objects completely, together with their shadows and reflections. "
+    "Seamlessly continue the surrounding floor, wall and background textures. "
+    "Do not add any new object, person, text or watermark."
+)
+
+
+def call_fal_qwen_inpaint(api_key: str, image, mask, prompt: str, *, mode: str = "remove",
+                          seed=None, on_stage=None, should_cancel=None):
+    """Qwen-Image-Edit inpaint（指令式，木纹等写实纹理保留好）。返回 (PIL, error, seed)。
+
+    schema 已经 OpenAPI 核实：prompt/image_url/mask_url 必填，输出复数 images[]。
+    remove 模式注入移除指令（用户 prompt 作补充说明拼在后面）。
+    """
+    if on_stage:
+        try: on_stage("🖌️ Qwen 修补中…")
+        except Exception: pass
+    text = (prompt or "").strip()
+    if mode == "remove":
+        text = DEFAULT_QWEN_REMOVE_INSTRUCTION + (f" Additional guidance: {text}" if text else "")
+    binary_mask = mask.convert("L").point(lambda v: 255 if v >= 128 else 0)
+    payload = {
+        "prompt": text,
+        "image_url": _pil_to_data_uri(image, fmt="JPEG"),
+        "mask_url": _pil_to_data_uri(binary_mask, fmt="PNG"),
+        "num_images": 1,
+        "output_format": "png",
+    }
+    if seed is not None:
+        payload["seed"] = int(seed)
+    data, err = _call_fal_queue_json(api_key, QWEN_INPAINT_ENDPOINT, payload,
+                                     on_stage=on_stage, should_cancel=should_cancel)
+    if err:
+        return None, err, seed
+    image_out, decode_err = _fal_image_from_result(data, plural=True, direct=True)
+    return image_out, decode_err, data.get("seed", seed) if data else seed
+
+
+def call_gemini_mark_inpaint(api_key: str, image, mask, prompt: str, *, mode: str = "remove",
+                             on_stage=None, should_cancel=None):
+    """Gemini『红色标记引导』局部编辑：mask 区域叠半透明红标发给 Nano Banana Pro + 指令。
+
+    红框/红色标记法是 Nano Banana 社区验证的精确局部编辑玩法（Google 官方 Markup 同理）。
+    输出是整图重生成——选区外漂移由调度器的羽化合成回贴消除，两者恰好互补。
+    复用 call_gemini_edit 的完整重试/取消机制。返回 (PIL, error)。
+    """
+    if on_stage:
+        try: on_stage("🖌️ Gemini 标记修补中…")
+        except Exception: pass
+    # 标记图：mask≥128 处叠 α≈0.45 的红色
+    overlay = Image.new("RGB", image.size, (255, 40, 40))
+    alpha = mask.convert("L").point(lambda v: 115 if v >= 128 else 0)
+    marked = Image.composite(overlay, image.convert("RGB"), alpha)
+    buf = _io_mod.BytesIO()
+    marked.save(buf, format="JPEG", quality=95)
+    b64 = base64.b64encode(buf.getvalue()).decode()
+    ar = _infer_aspect_ratio_from_b64(b64)
+
+    extra = (prompt or "").strip()
+    if mode == "remove":
+        instruction = (
+            "Some areas in this photo are covered with a translucent red marking. "
+            "Completely remove the objects under the red marking, together with their shadows and reflections. "
+            "Reconstruct the floor, wall and background behind them so the scene looks naturally empty there. "
+            + (f"Additional guidance: {extra}. " if extra else "")
+            + "Do not add any new objects. The red marking itself must not appear in the output."
+        )
+    else:
+        instruction = (
+            f"Replace the area covered by the translucent red marking with: {extra}. "
+            "Blend it naturally with the scene's lighting, perspective and scale. "
+            "The red marking itself must not appear in the output."
+        )
+    model_id = GEMINI_MODEL_MAP.get("Nano Banana Pro") or next(iter(GEMINI_MODEL_MAP.values()))
+    # 裁剪窗口 ≤2048，2K 输出足够且比 4K 档便宜一半
+    return call_gemini_edit(api_key, model_id, instruction, b64, "2K", ar, True,
+                            on_stage, should_cancel)
+
+
+def call_fal_mask_eraser(api_key: str, image, mask, *, model_key: str = "bria-eraser",
+                         on_stage=None, should_cancel=None):
+    """专职移除模型薄封装（BRIA / Finegrain / LaMa 共用）。返回 (PIL, error)。
+
+    这些模型没有 prompt/seed；mask 语义白=移除区。BRIA 硬性要求二值 mask（255/0），
+    这里统一 point 二值化（阈值 128 恰是羽化坡中点，与 grow 语义一致）——
+    羽化灰度 mask 只用于本地合成回贴，不发给 eraser。
+    """
+    endpoint, mask_field, extra = _FAL_ERASER_MODELS.get(model_key, _FAL_ERASER_MODELS["bria-eraser"])
+    if on_stage:
+        try: on_stage("🧹 生成式移除中…")
+        except Exception: pass
+    binary_mask = mask.convert("L").point(lambda v: 255 if v >= 128 else 0)
+    payload = {
+        "image_url": _pil_to_data_uri(image, fmt="JPEG"),
+        mask_field: _pil_to_data_uri(binary_mask, fmt="PNG"),
+        **extra,
+    }
+    data, err = _call_fal_queue_json(api_key, endpoint, payload,
+                                     on_stage=on_stage, should_cancel=should_cancel)
+    if err:
+        return None, err
+    return _fal_image_from_result(data, plural=False, direct=True)
+
+
+def call_fal_inpaint(api_key: str, image, mask, prompt: str, *, seed=None,
+                     guidance_scale: float = 3.5, on_stage=None, should_cancel=None):
+    """FLUX Fill 真 inpainting：mask 白=重绘区，选区外由调度层合成兜底。返回 (PIL, error, seed)。
+
+    image/mask 均为 PIL 且尺寸一致（FLUX Fill 硬性要求，由调用方 _prepare_inpaint_mask 保证）。
+    image 走 JPEG q95 data URI 控制 POST 体积（4K PNG data URI 太大）；mask 黑白 PNG 压缩后极小。
+    """
+    if on_stage:
+        try: on_stage("🖌️ 生成式修补中…")
+        except Exception: pass
+    payload = {
+        "prompt": prompt,
+        "image_url": _pil_to_data_uri(image, fmt="JPEG"),
+        "mask_url": _pil_to_data_uri(mask, fmt="PNG"),
+        "num_images": 1,
+        "output_format": "png",
+        "safety_tolerance": "2",
+        "guidance_scale": max(1.0, min(10.0, float(guidance_scale))),
+    }
+    if seed is not None:
+        payload["seed"] = int(seed)
+    data, err = _call_fal_queue_json(api_key, FLUX_FILL_ENDPOINT, payload,
+                                     on_stage=on_stage, should_cancel=should_cancel)
+    if err:
+        return None, err, seed
+    image_out, decode_err = _fal_image_from_result(data, plural=True, direct=True)
+    return image_out, decode_err, data.get("seed", seed) if data else seed
+
+
+# ComfyUI workflow 模板占位符：引擎只做字符串替换、不关心节点拓扑，
+# 用户可在设置里指定任意自定义 workflow(API 格式)——只要写上这些占位符即可。
+_COMFY_PLACEHOLDER_IMAGE = "__INPAINT_IMAGE__"
+_COMFY_PLACEHOLDER_MASK = "__INPAINT_MASK__"
+_COMFY_PLACEHOLDER_PROMPT = "__INPAINT_PROMPT__"
+_COMFY_PLACEHOLDER_NEGATIVE = "__INPAINT_NEGATIVE__"
+_COMFY_PLACEHOLDER_SEED = "__INPAINT_SEED__"
+_COMFY_DEFAULT_WORKFLOW = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "assets", "comfy_workflows", "inpaint_default.json")
+
+
+def _comfy_fill_workflow(node, replacements: dict):
+    """深遍历 workflow JSON，替换占位符。字符串值精确等于占位符时用原始类型替换
+    （seed 要求 int），否则做子串替换（prompt 可嵌进模板自带的修饰词里）。"""
+    if isinstance(node, dict):
+        return {k: _comfy_fill_workflow(v, replacements) for k, v in node.items()}
+    if isinstance(node, list):
+        return [_comfy_fill_workflow(v, replacements) for v in node]
+    if isinstance(node, str):
+        if node in replacements:
+            return replacements[node]
+        out = node
+        for key, val in replacements.items():
+            if key in out:
+                out = out.replace(key, str(val))
+        return out
+    return node
+
+
+def call_comfyui_inpaint(base_url: str, image, mask, prompt: str, *, negative_prompt: str = "",
+                         seed=None, workflow_path: str = "", timeout: int = 600,
+                         on_stage=None, should_cancel=None):
+    """经外部 ComfyUI 实例做 inpaint：上传图/mask → 注入 workflow → /prompt → 轮询 /history。
+
+    返回 (PIL, error, seed)。base_url 是可信内网地址(ComfyUI 无鉴权)；
+    session.trust_env=False 防内网请求被系统代理劫持（同 Fal 队列的处理）。
+    """
+    def _stage(txt):
+        if on_stage:
+            try: on_stage(txt)
+            except Exception: pass
+
+    base = (base_url or "").strip().rstrip("/")
+    if not base:
+        return None, "未配置 ComfyUI 地址(请在设置里填写，如 http://127.0.0.1:8188)", seed
+    session = _req.Session()
+    session.trust_env = False
+
+    # 1) 读 workflow 模板（自定义路径优先，空/失败给引导性错误）
+    wf_path = (workflow_path or "").strip() or _COMFY_DEFAULT_WORKFLOW
+    try:
+        with open(wf_path, "r", encoding="utf-8") as f:
+            template = json.load(f)
+    except FileNotFoundError:
+        return None, f"ComfyUI workflow 模板不存在: {wf_path}", seed
+    except Exception as ex:
+        return None, f"ComfyUI workflow 模板解析失败({wf_path}): {ex}", seed
+
+    # 2) 上传 image / mask（uuid 前缀防撞名；overwrite 兜底）
+    _stage("📤 上传到 ComfyUI…")
+    uploaded = {}
+    for tag, pil_img, pil_mode in (("image", image, "RGB"), ("mask", mask, "L")):
+        buf = _io_mod.BytesIO()
+        pil_img.convert(pil_mode).save(buf, format="PNG")
+        name = f"floor_inpaint_{uuid.uuid4().hex[:12]}_{tag}.png"
+        try:
+            resp = session.post(
+                f"{base}/upload/image",
+                files={"image": (name, buf.getvalue(), "image/png")},
+                data={"type": "input", "overwrite": "true"},
+                timeout=(15, 120),
+            )
+            if resp.status_code != 200:
+                return None, f"ComfyUI 上传失败 HTTP {resp.status_code}: {_short_text(resp.text, 300)}", seed
+            info = resp.json()
+            sub = (info.get("subfolder") or "").strip()
+            uploaded[tag] = f"{sub}/{info.get('name', name)}" if sub else info.get("name", name)
+        except Exception as ex:
+            return None, f"ComfyUI 连接失败({base}): {_redact_api_key(ex)}", seed
+
+    # 3) 注入占位符并提交
+    the_seed = int(seed) if seed is not None else random.randint(0, 2**31 - 1)
+    workflow = _comfy_fill_workflow(template, {
+        _COMFY_PLACEHOLDER_IMAGE: uploaded["image"],
+        _COMFY_PLACEHOLDER_MASK: uploaded["mask"],
+        _COMFY_PLACEHOLDER_PROMPT: prompt,
+        _COMFY_PLACEHOLDER_NEGATIVE: negative_prompt or "",
+        _COMFY_PLACEHOLDER_SEED: the_seed,
+    })
+    client_id = uuid.uuid4().hex
+    try:
+        resp = session.post(f"{base}/prompt", json={"prompt": workflow, "client_id": client_id},
+                            timeout=(15, 60))
+    except Exception as ex:
+        return None, f"ComfyUI 提交失败: {_redact_api_key(ex)}", the_seed
+    if resp.status_code != 200:
+        try:
+            detail = resp.json()
+            node_errors = detail.get("node_errors") or {}
+            if node_errors:
+                first = next(iter(node_errors.values()))
+                errs = first.get("errors") or []
+                msg = errs[0].get("message") if errs else str(first)
+                return None, f"ComfyUI workflow 校验失败: {_short_text(msg, 300)}（常见原因：模板里的 checkpoint 在 ComfyUI 里不存在，请改模板或换自定义 workflow）", the_seed
+            detail = detail.get("error") or detail
+        except Exception:
+            detail = resp.text[:300]
+        return None, f"ComfyUI 提交 HTTP {resp.status_code}: {_short_text(detail, 300)}", the_seed
+    prompt_id = str(resp.json().get("prompt_id") or "")
+    if not prompt_id:
+        return None, "ComfyUI 未返回 prompt_id", the_seed
+
+    # 4) 轮询 /history（节奏与容错对齐 _call_fal_queue_json：1.5s、连续 5 次网络错误才报错）
+    deadline = time.time() + max(60, min(3600, int(timeout)))
+    poll_errors = 0
+    last_stage = ""
+    while time.time() < deadline:
+        if should_cancel and should_cancel():
+            try:
+                session.post(f"{base}/interrupt", timeout=(10, 30))
+                session.post(f"{base}/queue", json={"delete": [prompt_id]}, timeout=(10, 30))
+            except Exception:
+                pass
+            return None, "已取消", the_seed
+        try:
+            hist = session.get(f"{base}/history/{prompt_id}", timeout=(15, 45))
+            hist.raise_for_status()
+            entry = (hist.json() or {}).get(prompt_id)
+            poll_errors = 0
+            if entry:
+                status = entry.get("status") or {}
+                if str(status.get("status_str") or "").lower() == "error":
+                    msgs = status.get("messages") or []
+                    detail = next((m[1].get("exception_message") for m in msgs
+                                   if isinstance(m, (list, tuple)) and len(m) > 1
+                                   and isinstance(m[1], dict) and m[1].get("exception_message")), "")
+                    return None, f"ComfyUI 执行失败: {_short_text(detail or status, 300)}", the_seed
+                for node_output in (entry.get("outputs") or {}).values():
+                    images = node_output.get("images") or []
+                    if images:
+                        img_info = images[0]
+                        view = session.get(f"{base}/view", params={
+                            "filename": img_info.get("filename", ""),
+                            "subfolder": img_info.get("subfolder", ""),
+                            "type": img_info.get("type", "output"),
+                        }, timeout=(30, 180))
+                        view.raise_for_status()
+                        out = Image.open(_io_mod.BytesIO(view.content)); out.load()
+                        return out, None, the_seed
+                return None, "ComfyUI 执行完成但未产出图片(请检查 workflow 是否含 SaveImage 节点)", the_seed
+            # 尚未进 history → 区分排队/推理中
+            try:
+                queue = session.get(f"{base}/queue", timeout=(10, 30)).json()
+                running = any(item[1] == prompt_id for item in (queue.get("queue_running") or []) if len(item) > 1)
+                stage = "🎨 ComfyUI 推理中…" if running else "⏳ ComfyUI 排队中…"
+                if stage != last_stage:
+                    _stage(stage); last_stage = stage
+            except Exception:
+                pass
+        except Exception as ex:
+            poll_errors += 1
+            if poll_errors >= 5:
+                return None, f"ComfyUI 状态轮询网络错误: {_redact_api_key(ex)}", the_seed
+        time.sleep(1.5)
+    return None, "ComfyUI 等待超时；任务可能仍在执行，可稍后重试或调大超时", the_seed
+
+
+def _composite_inpaint_result(original, result, mask):
+    """Lightroom 语义兜底：引擎整图 VAE 往返会让选区外像素轻微漂移，
+    这里用羽化 mask 把结果贴回原图——选区外严格保持原像素。"""
+    try:
+        res = result.convert("RGB")
+        base_img = original.convert("RGB")
+        if res.size != base_img.size:
+            res = res.resize(base_img.size, Image.LANCZOS)
+        m = mask.convert("L")
+        if m.size != base_img.size:
+            m = m.resize(base_img.size, Image.LANCZOS)
+        return Image.composite(res, base_img, m)
+    except Exception:
+        logger.exception("[生成式修补] 合成回贴失败，退回引擎原始输出")
+        return result
+
+
+def call_image_inpaint(image, mask, prompt: str, *, mode: str = "remove", seed=None,
+                       on_stage=None, should_cancel=None) -> Tuple[Optional[object], Optional[str], str, str]:
+    """生成式修补调度器：按 (inpaint_provider, mode) 分派。
+
+    返回 (PIL|None, 错误|None, provider, usage_label)——供用量归账（模型标签 + 线路）。
+    - comfyui：remove/add 都走本地实例（模型由 workflow 模板自带）
+    - fal + remove：专职 eraser（BRIA/Finegrain/LaMa，无 prompt/seed）；配成 flux-fill 时走旧路径
+    - fal + add：FLUX Fill（prompt 必填由上游校验）
+    不做自动 failover：各引擎出图风格差异大，静默切换会困惑用户。
+    成功后用羽化 mask 把结果合成回原图，保证选区外像素严格不变。
+    """
+    provider, model_key, usage_label = resolve_inpaint_engine(mode)
+    text = (prompt or "").strip()
+    # Lightroom 式选区级处理：所有引擎都只看围绕选区的上下文窗口（等效原生分辨率）
+    crop_img, crop_mask, box = _crop_inpaint_context(image, mask)
+    logger.info(f"[生成式修补] start provider={provider} model={model_key} mode={mode} "
+                f"size={getattr(image, 'size', '?')} crop={crop_img.size}@{box} prompt_len={len(text)}")
+    if provider == "comfyui":
+        if mode == "remove" and not text:
+            text = get_inpaint_remove_prompt() or DEFAULT_INPAINT_REMOVE_PROMPT
+        comfy = get_comfyui_settings()
+        img, err, _ = call_comfyui_inpaint(
+            comfy["base_url"], crop_img, crop_mask, text,
+            negative_prompt=comfy["negative_prompt"], seed=seed,
+            workflow_path=comfy["workflow_path"], timeout=comfy["timeout"],
+            on_stage=on_stage, should_cancel=should_cancel)
+    elif model_key == "gemini-mark":
+        gemini_key = (_load_config().get("gemini_api_key") or "").strip()
+        if not gemini_key:
+            return None, "未配置 Gemini API Key(Gemini 标记法需要它；或在设置里换一个修补模型)", provider, usage_label
+        img, err = call_gemini_mark_inpaint(gemini_key, crop_img, crop_mask, text, mode=mode,
+                                            on_stage=on_stage, should_cancel=should_cancel)
+    else:
+        fal_key = (_load_config().get("fal_api_key") or "").strip()
+        if not fal_key:
+            return None, "未配置 Fal API Key(请在设置里填写，或把修补引擎切到 ComfyUI)", provider, usage_label
+        if model_key == "qwen-inpaint":
+            img, err, _ = call_fal_qwen_inpaint(fal_key, crop_img, crop_mask, text, mode=mode,
+                                                seed=seed, on_stage=on_stage, should_cancel=should_cancel)
+        elif model_key in _FAL_ERASER_MODELS:
+            # 专职移除模型：无 prompt/seed，用户输入的描述在此路径被忽略
+            img, err = call_fal_mask_eraser(fal_key, crop_img, crop_mask, model_key=model_key,
+                                            on_stage=on_stage, should_cancel=should_cancel)
+        else:
+            if mode == "remove" and not text:
+                text = get_inpaint_remove_prompt() or DEFAULT_INPAINT_REMOVE_PROMPT
+            img, err, _ = call_fal_inpaint(fal_key, crop_img, crop_mask, text, seed=seed,
+                                           on_stage=on_stage, should_cancel=should_cancel)
+    if img is not None:
+        full = _stitch_inpaint_result(image, img, box)
+        img = _composite_inpaint_result(image, full, mask)
+    return img, err, provider, usage_label
 
 
 def call_fal_generate(api_key: str, model_id: str, prompt_text: str, image_path: str,

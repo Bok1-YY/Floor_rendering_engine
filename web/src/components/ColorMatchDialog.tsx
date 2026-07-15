@@ -2,7 +2,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
-import type { ColorMatchAdjustments, ColorMatchRect, JobView } from "@/lib/types";
+import type { ColorMatchAdjustments, ColorMatchRect, JobView, ModelKey } from "@/lib/types";
 import { toast } from "sonner";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Slider } from "@/components/ui/slider";
@@ -10,7 +10,7 @@ import { ImageZoom } from "@/components/ImageZoom";
 
 /** 校色目标：任务候选（并入该 stage 候选列表）或记录结果（append 回记录）。 */
 export type ColorMatchTarget =
-  | { kind: "job"; jobId: string; stage: "b2" | "pro" }
+  | { kind: "job"; jobId: string; stage: ModelKey }
   | { kind: "record"; jsonPath: string; recordId: string; resultId: string };
 
 const DEFAULT_RECT: ColorMatchRect = { x: 0.05, y: 0.45, w: 0.9, h: 0.5 };

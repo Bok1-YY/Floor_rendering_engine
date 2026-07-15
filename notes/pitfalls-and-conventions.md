@@ -25,6 +25,9 @@
 ### 400 一般不转线，但 geo-block 例外
 `_is_network_class_error` 原只认 429/5xx + 网络关键词，HTTP 400 一律不转 Fal。但 `User location is not supported`（[[mental-model|地区封锁]]）本质是线路落地问题，**破例**纳入自动转 Fal。
 
+### FAL 长模型必须走持久队列
+SD 3.5 冷启动叠加 1.6GB IP-Adapter，直接 `fal.run` 长连接会被代理/TLS 中间层截断。使用 `queue.fal.run`：提交一次后轮询同一 request_id；状态 HTTP 202 是正常排队/推理。**提交响应未知时不要自动重交**，否则可能创建重复计费任务。InstantX 当前权重名是 `ip-adapter.bin`，历史 `ip-adapter.safetensors` 已删除。
+
 ### 整包必须纯 headless（不引 nicegui）
 webui 退役后无任何业务文件 import nicegui。改引擎时维持这一点，自检：
 ```
@@ -37,6 +40,9 @@ python -c "import sys,Floor_engine_server.server_api; print('nicegui' in sys.mod
 
 ### 改 `prompts.py` 必跑 golden + 字节比对
 `tests/golden/*.txt` 锁核心工作流输出（含 Omakase、无缝拼法专项、墙板模式）。凡「应一致」的路径必须逐字节相等，「应改变」的人工核对 diff 后再 `UPDATE_GOLDEN=1` 刷新。这是保真的唯一自动护栏。→ [[mental-model|Golden 护栏]]。
+
+### SD prompt 与 Gemini prompt 永久隔离
+Gemini prompt 中的冲突与反复强调是长期对抗预训练偏差的实测资产，不能为了“统一提示词”清洗。SD 只从 `TaskParams` 语义字段经 `sd_prompts.py` 编译独立正/负提示词；两边只共享业务参数，不共享最终文本。
 
 ### 测试导入必须指向本仓库包
 历史坑：`tests/` 曾全部 `from floor_engine.*`（旧同级包）= **对本仓库零覆盖**、「N passed」是假保护。现已重指 `Floor_engine_server.*`，勿再指回。→ [[mental-model|假保护]]。

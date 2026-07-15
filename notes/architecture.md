@@ -46,7 +46,7 @@
         │        │
         │        ├──────────────┐
         ▼        ▼              ▼
-     recipes   api          prompts                    ← 业务逻辑层
+     recipes   api       prompts · sd_prompts          ← 业务逻辑层
    (惰性import  (→config,     (→config,
     prompt_data) records)     prompt_data, records)
         │        │              │
@@ -72,7 +72,8 @@
 | `recipes` | `prompt_data`（**惰性**：函数体内 import，规避加载顺序） |
 | `api` | `config`, `records` |
 | `prompts` | `config`, `prompt_data`, `records` |
-| `server_api` | `config`, `api`, `prompts`, `records`, `models`, `failure_kb`, `recipes`, `prompt_data` |
+| `sd_prompts` | `models`, `prompt_data` |
+| `server_api` | `config`, `api`, `prompts`, `sd_prompts`, `records`, `models`, `failure_kb`, `recipes`, `prompt_data` |
 | `serve` | `server_api`（绝对包名，单一 exe 编译入口） |
 
 > **分层清晰、无循环依赖。** `logging_setup` 注释明说独立计算 `BASE_DIR` 就是为打破与 `config` 的环；`recipes → prompt_data` 用惰性 import 规避加载顺序问题。
@@ -100,6 +101,7 @@
 | `recipes` | 智能配方：按色调推荐 + 关键词→选项键 | `recommend_recipes`, `pick_option_key`, `FLOOR_RECIPES` |
 | `api` | 模型调用：Google/Fal 生图、二改、参照分析、Omakase 文本主备路由、连通测试 | `call_image_generate`, `call_gemini_generate/call_fal_generate`, `call_gemini_edit`, `analyze_style_image`, `call_omakase_scenes`, `test_connection` |
 | `prompts` | 提示词组装：35+ 参数 → 英文 prompt + 落 JSON/PNG（多工作流：地板、Omakase、墙板） | `save_task_files_html` |
+| `sd_prompts` | SD 3.5 独立正/负提示词编译；与 Gemini 对抗式提示词隔离 | `compile_sd35_prompt` |
 | `server_api` | FastAPI 无头层：端点 + 作业队列 + SSE + 静态/缩略图 + 进程内编排 | `app` |
 | `serve` | 启动入口：uvicorn 单进程单 worker | `main()` |
 
@@ -119,6 +121,8 @@ POST /api/jobs
         └─ _get_json_path → record_file_lock → _load/_save_records + _img_to_b64 (records)
   → call_image_generate (api)                     # 按 provider 路由
         └─ call_gemini_generate / call_fal_generate
+  ↘ [选择 sd35] compile_sd35_prompt
+        → FAL 持久队列 → SD3.5 + IP-Adapter → AuraSR
   → _save_api_result_jpg + _api_write_to_record (records)   # 出一张落一张
   → record_usage (records)
   → _persist_jobs → persist_jobs (records)
@@ -141,7 +145,7 @@ POST /api/jobs
 > ⚠️ 这些是**进程内**状态，多 worker 不共享 → **必须单 worker**（见 [[pitfalls-and-conventions]]）。
 
 - `_job_history`（列表，新在前，`_MAX_RESIDENT_JOBS=60` 自动收口，只删最旧终态）
-- `_b2_semaphore` / `_pro_semaphore`（按模型信号量，lifespan 里按配置建）—— 见[[mental-model|并发演进]]
+- `_model_semaphores`（b2/pro/sd35 按模型信号量，lifespan 里按配置建）—— 见[[mental-model|并发演进]]
 - `_cancel_jobs`（单作业取消集合）/ `_cancel_generation`（全局取消计数器）
 - `_bg_tasks` + `_spawn(coro)`（持后台 task 强引用，防被 GC）
 - `_task_prep_lock`（同小样并发抢写 png 的串行锁）

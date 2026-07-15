@@ -6,7 +6,28 @@ import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+
+// 移除/添加模式可选模型（provider=fal 时生效）；与后端 config.INPAINT_*_MODELS 对齐
+const REMOVE_MODELS = [
+  { value: "bria-eraser", label: "BRIA Eraser（专职移除 · 推荐）" },
+  { value: "gemini-mark", label: "Gemini 标记法（需有效 Gemini Key · 较慢）" },
+  { value: "finegrain-eraser", label: "Finegrain Eraser（连阴影一起除 · 会降分辨率）" },
+  { value: "flux-fill", label: "FLUX Fill（移除易脑补物体，不推荐）" },
+  { value: "lama", label: "LaMa（廉价快速 · 复杂纹理弱）" },
+];
+const ADD_MODELS = [
+  { value: "flux-fill", label: "FLUX Fill（真 inpainting 填充）" },
+  { value: "qwen-inpaint", label: "Qwen Inpaint（便宜 · 指令式）" },
+  { value: "gemini-mark", label: "Gemini 标记法（质量最佳 · 较慢）" },
+];
 
 const fieldInput =
   "h-10 w-full rounded-[10px] border-border bg-panel text-[13px] text-foreground";
@@ -17,6 +38,7 @@ export default function SettingsPage() {
   const [geminiKey, setGeminiKey] = useState("");
   const [falKey, setFalKey] = useState("");
   const [proxy, setProxy] = useState("");
+  const [falQueueProxy, setFalQueueProxy] = useState("");
   const [provider, setProvider] = useState("google");
   const [speed, setSpeed] = useState("fast");
   const [failover, setFailover] = useState(false);
@@ -30,10 +52,28 @@ export default function SettingsPage() {
   const [showGemini, setShowGemini] = useState(false);
   const [deepseekKey, setDeepseekKey] = useState("");
   const [omakaseEnabled, setOmakaseEnabled] = useState(false);
+  const [sdEnabled, setSdEnabled] = useState(false);
   // 成本单价（元/张成功图）：字符串态便于清空；保存时空串=删除该项
   const [priceB2, setPriceB2] = useState("");
   const [pricePro, setPricePro] = useState("");
   const [priceLite, setPriceLite] = useState("");
+  const [priceSD35, setPriceSD35] = useState("");
+  const [priceAuraSR, setPriceAuraSR] = useState("");
+  const [priceFluxFill, setPriceFluxFill] = useState("");
+  // 生成式修补引擎（inpaint）：fal=云 API（remove/add 分模型）；comfyui=自备 ComfyUI 实例
+  const [inpaintProvider, setInpaintProvider] = useState("fal");
+  const [removeModel, setRemoveModel] = useState("bria-eraser");
+  const [addModel, setAddModel] = useState("flux-fill");
+  const [priceBriaEraser, setPriceBriaEraser] = useState("");
+  const [priceFinegrain, setPriceFinegrain] = useState("");
+  const [priceQwen, setPriceQwen] = useState("");
+  const [priceGeminiMark, setPriceGeminiMark] = useState("");
+  const [comfyuiUrl, setComfyuiUrl] = useState("");
+  const [comfyuiWorkflow, setComfyuiWorkflow] = useState("");
+  const [comfyuiTimeout, setComfyuiTimeout] = useState(600);
+  const [removePrompt, setRemovePrompt] = useState("");
+  const [comfyTesting, setComfyTesting] = useState(false);
+  const [comfyResult, setComfyResult] = useState("");
   // PPTX 品牌导出
   const [pptxCompany, setPptxCompany] = useState("");
   const [pptxContact, setPptxContact] = useState("");
@@ -45,15 +85,33 @@ export default function SettingsPage() {
       .then((c) => {
         setCfg(c);
         setProxy(c.proxy || "");
+        setFalQueueProxy(c.fal_queue_proxy || "");
         setProvider(c.image_provider);
         setSpeed(c.speed_profile);
         setFailover(c.auto_failover);
         setTlsVerify(c.tls_verify);
         setConc(c.max_concurrent_per_model);
         setOmakaseEnabled(!!c.omakase_enabled);
+        setSdEnabled(!!c.sd_enabled);
         setPriceB2(c.usage_prices?.B2 != null ? String(c.usage_prices.B2) : "");
         setPricePro(c.usage_prices?.Pro != null ? String(c.usage_prices.Pro) : "");
         setPriceLite(c.usage_prices?.Lite != null ? String(c.usage_prices.Lite) : "");
+        setPriceSD35(c.usage_prices?.SD35 != null ? String(c.usage_prices.SD35) : "");
+        setPriceAuraSR(c.usage_prices?.AuraSR != null ? String(c.usage_prices.AuraSR) : "");
+        setPriceFluxFill(c.usage_prices?.FluxFill != null ? String(c.usage_prices.FluxFill) : "");
+        setInpaintProvider(c.inpaint_provider || "fal");
+        setRemoveModel(c.inpaint_remove_model || "bria-eraser");
+        setAddModel(c.inpaint_add_model || "flux-fill");
+        setPriceBriaEraser(c.usage_prices?.BriaEraser != null ? String(c.usage_prices.BriaEraser) : "");
+        setPriceFinegrain(
+          c.usage_prices?.FinegrainEraser != null ? String(c.usage_prices.FinegrainEraser) : "",
+        );
+        setPriceQwen(c.usage_prices?.QwenInpaint != null ? String(c.usage_prices.QwenInpaint) : "");
+        setPriceGeminiMark(c.usage_prices?.GeminiMark != null ? String(c.usage_prices.GeminiMark) : "");
+        setComfyuiUrl(c.comfyui_base_url || "");
+        setComfyuiWorkflow(c.comfyui_workflow_path || "");
+        setComfyuiTimeout(c.comfyui_timeout || 600);
+        setRemovePrompt(c.inpaint_remove_prompt || "");
         setPptxCompany(c.pptx_company || "");
         setPptxContact(c.pptx_contact || "");
       })
@@ -71,6 +129,7 @@ export default function SettingsPage() {
         speed_profile: speed,
         auto_failover: failover,
         proxy,
+        fal_queue_proxy: falQueueProxy,
         tls_verify: tlsVerify,
         max_concurrent_per_model: conc,
       };
@@ -78,12 +137,27 @@ export default function SettingsPage() {
       if (falKey.trim()) patch.fal_api_key = falKey.trim();
       if (deepseekKey.trim()) patch.deepseek_api_key = deepseekKey.trim();
       patch.omakase_enabled = omakaseEnabled;
+      patch.sd_enabled = sdEnabled;
+      patch.inpaint_provider = inpaintProvider;
+      patch.inpaint_remove_model = removeModel;
+      patch.inpaint_add_model = addModel;
+      patch.comfyui_base_url = comfyuiUrl.trim();
+      patch.comfyui_workflow_path = comfyuiWorkflow.trim();
+      patch.comfyui_timeout = Math.max(60, Math.min(3600, comfyuiTimeout || 600));
+      patch.inpaint_remove_prompt = removePrompt.trim();
       // 单价：以已存配置为底（保留 'B2:fal' 等细分 key），B2/Pro 按输入覆盖，空串=删除
       const prices: Record<string, number> = { ...(cfg?.usage_prices || {}) };
       for (const [key, raw] of [
         ["B2", priceB2],
         ["Pro", pricePro],
         ["Lite", priceLite],
+        ["SD35", priceSD35],
+        ["AuraSR", priceAuraSR],
+        ["FluxFill", priceFluxFill],
+        ["BriaEraser", priceBriaEraser],
+        ["FinegrainEraser", priceFinegrain],
+        ["QwenInpaint", priceQwen],
+        ["GeminiMark", priceGeminiMark],
       ] as const) {
         const t = raw.trim();
         if (!t) {
@@ -259,6 +333,16 @@ export default function SettingsPage() {
                 <Switch checked={omakaseEnabled} onCheckedChange={setOmakaseEnabled} />
               </div>
 
+              <div className="mb-[15px] flex items-center justify-between rounded-[10px] border border-border bg-panel p-[13px]">
+                <div className="leading-snug">
+                  <div className="text-[13px] font-bold text-foreground">启用 SD 3.5 实验线路</div>
+                  <div className="mt-px text-[11px] text-muted-foreground">
+                    仅纯效果图；使用 Fal SD 3.5 Large + IP-Adapter，2K/4K 追加 AuraSR 超分
+                  </div>
+                </div>
+                <Switch checked={sdEnabled} onCheckedChange={setSdEnabled} />
+              </div>
+
               <div className="flex flex-col gap-[7px]">
                 <span className={fieldLabel}>代理（留空走系统/软路由）</span>
                 <Input
@@ -267,6 +351,18 @@ export default function SettingsPage() {
                   placeholder="http://127.0.0.1:7890 或留空"
                   className={fieldInput}
                 />
+              </div>
+              <div className="mt-[15px] flex flex-col gap-[7px]">
+                <span className={fieldLabel}>FAL 队列专用代理（默认留空直连）</span>
+                <Input
+                  value={falQueueProxy}
+                  onChange={(e) => setFalQueueProxy(e.target.value)}
+                  placeholder="留空直连；仅 FAL 无法直连时单独填写"
+                  className={fieldInput}
+                />
+                <span className="text-[10.5px] text-muted-foreground">
+                  Google 代理可能截断 SD 大请求；此项与上面的 Gemini/通用代理分离。
+                </span>
               </div>
             </div>
 
@@ -333,6 +429,146 @@ export default function SettingsPage() {
               </div>
             </div>
 
+            {/* 生成式修补引擎卡 */}
+            <div className="rounded-[14px] border border-border bg-card p-[20px] shadow-[0_2px_8px_rgba(120,90,60,.05)]">
+              <div className="mb-[14px] text-[11px] font-extrabold tracking-[0.1em] text-accent-foreground">
+                生成式修补引擎 / INPAINT
+              </div>
+              <div>
+                <span className={cn(fieldLabel, "mb-[7px] block")}>引擎（画笔涂抹移除/添加所用的模型）</span>
+                <div className="flex gap-2">
+                  <button onClick={() => setInpaintProvider("fal")} className={provBtn(inpaintProvider === "fal")}>
+                    Fal FLUX Fill
+                  </button>
+                  <button onClick={() => setInpaintProvider("comfyui")} className={provBtn(inpaintProvider === "comfyui")}>
+                    ComfyUI（本地）
+                  </button>
+                </div>
+                <div className="mt-[7px] text-[11px] leading-relaxed text-muted-foreground">
+                  {inpaintProvider === "fal"
+                    ? cfg.has_fal_key
+                      ? "复用上方已配置的 Fal API Key，按张计费（遮罩外像素不动）。移除=擦除物体并延续背景（无需描述）；添加=按描述在选区里生成新内容。"
+                      : "⚠ 需要 Fal API Key：请先在上方「API 密钥」里填写，否则修补会报错。"
+                    : "走你自备的 ComfyUI 实例，本地算力零 API 费用；请填可信内网地址（ComfyUI 无鉴权）。本地引擎不区分移除/添加模型（由 workflow 模板决定）。"}
+                </div>
+              </div>
+
+              {inpaintProvider === "fal" && (
+                <div className="mt-[14px] grid grid-cols-2 gap-[14px] max-[700px]:grid-cols-1">
+                  <div className="flex flex-col gap-[7px]">
+                    <span className={fieldLabel}>移除模型（生成式移除用）</span>
+                    <Select
+                      value={removeModel}
+                      onValueChange={(v) => setRemoveModel(v || "bria-eraser")}
+                    >
+                      <SelectTrigger className={fieldInput}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {REMOVE_MODELS.map((m) => (
+                          <SelectItem key={m.value} value={m.value}>
+                            {m.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex flex-col gap-[7px]">
+                    <span className={fieldLabel}>添加模型（生成式添加用）</span>
+                    <Select value={addModel} onValueChange={(v) => setAddModel(v || "flux-fill")}>
+                      <SelectTrigger className={fieldInput}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ADD_MODELS.map((m) => (
+                          <SelectItem key={m.value} value={m.value}>
+                            {m.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
+
+              {inpaintProvider === "comfyui" && (
+                <div className="mt-[14px] space-y-[12px]">
+                  <div className="flex flex-col gap-[7px]">
+                    <span className={fieldLabel}>ComfyUI 地址</span>
+                    <div className="flex gap-2">
+                      <Input
+                        value={comfyuiUrl}
+                        onChange={(e) => setComfyuiUrl(e.target.value)}
+                        placeholder="http://127.0.0.1:8188"
+                        className={fieldInput}
+                      />
+                      <button
+                        onClick={async () => {
+                          setComfyTesting(true);
+                          setComfyResult("");
+                          try {
+                            const r = await api.comfyuiPing(comfyuiUrl.trim());
+                            setComfyResult(
+                              r.ok
+                                ? `✅ 连接成功${r.version ? ` · ComfyUI ${r.version}` : ""}${
+                                    r.devices?.length ? ` · ${r.devices[0]}` : ""
+                                  }`
+                                : `❌ 连接失败：${r.error || "未知错误"}`,
+                            );
+                          } catch (e) {
+                            setComfyResult("❌ " + (e as Error).message);
+                          } finally {
+                            setComfyTesting(false);
+                          }
+                        }}
+                        disabled={comfyTesting || !comfyuiUrl.trim()}
+                        className="h-10 flex-none rounded-[10px] border border-border bg-panel px-3 text-[12px] font-bold text-secondary-foreground hover:bg-accent disabled:opacity-50"
+                      >
+                        {comfyTesting ? "测试中…" : "测试连接"}
+                      </button>
+                    </div>
+                    {comfyResult && (
+                      <span className="text-[11px] text-muted-foreground">{comfyResult}</span>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-[7px]">
+                    <span className={fieldLabel}>自定义 workflow 路径（可选，API 格式 JSON）</span>
+                    <Input
+                      value={comfyuiWorkflow}
+                      onChange={(e) => setComfyuiWorkflow(e.target.value)}
+                      placeholder="留空用内置默认模板（需自改模板里的 checkpoint 名）"
+                      className={fieldInput}
+                    />
+                    <span className="text-[10.5px] leading-relaxed text-muted-foreground">
+                      模板里写占位符 __INPAINT_IMAGE__ / __INPAINT_MASK__ / __INPAINT_PROMPT__ /
+                      __INPAINT_NEGATIVE__ / __INPAINT_SEED__，引擎自动注入；可用任意 inpaint workflow（含 Flux Fill GGUF）。
+                    </span>
+                  </div>
+                  <div className="flex flex-col gap-[7px]">
+                    <span className={fieldLabel}>超时（秒，60–3600）</span>
+                    <Input
+                      type="number"
+                      min={60}
+                      max={3600}
+                      value={comfyuiTimeout}
+                      onChange={(e) => setComfyuiTimeout(Number(e.target.value) || 600)}
+                      className={fieldInput}
+                    />
+                  </div>
+                </div>
+              )}
+
+              <div className="mt-[14px] flex flex-col gap-[7px]">
+                <span className={fieldLabel}>移除模式默认提示词（可选）</span>
+                <Input
+                  value={removePrompt}
+                  onChange={(e) => setRemovePrompt(e.target.value)}
+                  placeholder="留空用内置英文默认：延续周边地板/墙面、空无一物"
+                  className={fieldInput}
+                />
+              </div>
+            </div>
+
             {/* 成本单价卡 */}
             <div className="rounded-[14px] border border-border bg-card p-[20px] shadow-[0_2px_8px_rgba(120,90,60,.05)]">
               <div className="mb-[14px] text-[11px] font-extrabold tracking-[0.1em] text-accent-foreground">
@@ -373,6 +609,62 @@ export default function SettingsPage() {
                     onChange={(e) => setPriceLite(e.target.value)}
                     placeholder="留空不估算"
                     className={fieldInput}
+                  />
+                </div>
+                <div className="flex flex-col gap-[7px]">
+                  <span className={fieldLabel}>SD 3.5 基础图（元）</span>
+                  <Input
+                    type="number" min={0} step="0.01" value={priceSD35}
+                    onChange={(e) => setPriceSD35(e.target.value)}
+                    placeholder="留空不估算" className={fieldInput}
+                  />
+                </div>
+                <div className="flex flex-col gap-[7px]">
+                  <span className={fieldLabel}>AuraSR 超分（元）</span>
+                  <Input
+                    type="number" min={0} step="0.01" value={priceAuraSR}
+                    onChange={(e) => setPriceAuraSR(e.target.value)}
+                    placeholder="留空不估算" className={fieldInput}
+                  />
+                </div>
+                <div className="flex flex-col gap-[7px]">
+                  <span className={fieldLabel}>FLUX Fill 修补每张（元）</span>
+                  <Input
+                    type="number" min={0} step="0.01" value={priceFluxFill}
+                    onChange={(e) => setPriceFluxFill(e.target.value)}
+                    placeholder="留空不估算（ComfyUI 引擎恒 0 成本）" className={fieldInput}
+                  />
+                </div>
+                <div className="flex flex-col gap-[7px]">
+                  <span className={fieldLabel}>BRIA Eraser 移除每张（元）</span>
+                  <Input
+                    type="number" min={0} step="0.01" value={priceBriaEraser}
+                    onChange={(e) => setPriceBriaEraser(e.target.value)}
+                    placeholder="参考 $0.04/次" className={fieldInput}
+                  />
+                </div>
+                <div className="flex flex-col gap-[7px]">
+                  <span className={fieldLabel}>Finegrain 移除每张（元）</span>
+                  <Input
+                    type="number" min={0} step="0.01" value={priceFinegrain}
+                    onChange={(e) => setPriceFinegrain(e.target.value)}
+                    placeholder="参考 Express $0.04/次" className={fieldInput}
+                  />
+                </div>
+                <div className="flex flex-col gap-[7px]">
+                  <span className={fieldLabel}>Qwen 修补每张（元）</span>
+                  <Input
+                    type="number" min={0} step="0.01" value={priceQwen}
+                    onChange={(e) => setPriceQwen(e.target.value)}
+                    placeholder="参考 $0.03/MP" className={fieldInput}
+                  />
+                </div>
+                <div className="flex flex-col gap-[7px]">
+                  <span className={fieldLabel}>Gemini 标记修补每张（元）</span>
+                  <Input
+                    type="number" min={0} step="0.01" value={priceGeminiMark}
+                    onChange={(e) => setPriceGeminiMark(e.target.value)}
+                    placeholder="参考 2K 档 ~$0.13/次" className={fieldInput}
                   />
                 </div>
               </div>

@@ -220,6 +220,69 @@ def get_image_provider() -> str:
     return prov if prov in ("google", "fal") else "google"
 
 
+# ── 生成式修补（inpaint：局部移除/添加）引擎 ────────────────────────────
+# 两条引擎：fal = FLUX Fill 真 inpainting 云 API（复用 fal_api_key，按张计费）；
+# comfyui = 用户自备的 ComfyUI 实例（内网 HTTP，本地算力零 API 费用）。
+# 不做自动 failover——两引擎出图风格差异大，静默切换会让用户困惑。
+DEFAULT_INPAINT_PROVIDER = "fal"
+
+
+def get_inpaint_provider() -> str:
+    """读取生成式修补引擎；非法值回落到 fal。
+
+    扩展位（第三轮，暂未实现）：'comfyui_fal' = 在 fal 网页端(comfy.new)把 workflow
+    部署成私有 app 后经 queue.fal.run 调用——fal 不支持 API 直提任意 workflow JSON，
+    届时新增 inpaint_fal_comfy_endpoint 键 + api.py 薄封装即可，队列层零改动。"""
+    prov = (_load_config().get("inpaint_provider") or DEFAULT_INPAINT_PROVIDER).strip().lower()
+    return prov if prov in ("fal", "comfyui") else DEFAULT_INPAINT_PROVIDER
+
+
+# provider=fal 时 remove/add 两种模式分模型：FLUX Fill 是填充/替换模型，做移除会在
+# 选区里脑补新物体；Lightroom 式移除要用专职 eraser（BRIA / Finegrain）。
+DEFAULT_INPAINT_REMOVE_MODEL = "bria-eraser"
+DEFAULT_INPAINT_ADD_MODEL = "flux-fill"
+# gemini-mark = 红色标记引导的 Nano Banana Pro（走 gemini_api_key，非 Fal）。
+# qwen-inpaint 只在『添加』列表：2026-07 实测它做移除不行——其 inpaint 管线强条件于
+# 原图内容，mask 区物体会被原样重绘（strength=1.0、红标法、remove-element LoRA 均失败）；
+# 做『添加』(描述新内容)则是它的正常用法。
+INPAINT_REMOVE_MODELS = ("bria-eraser", "finegrain-eraser", "lama", "flux-fill", "gemini-mark")
+INPAINT_ADD_MODELS = ("flux-fill", "qwen-inpaint", "gemini-mark")
+
+
+def get_inpaint_models() -> dict:
+    """返回 {'remove': str, 'add': str}；非法值回落默认。仅 provider=fal 时生效
+    （comfyui 引擎不分模式，模型由 workflow 模板自带）。"""
+    cfg = _load_config()
+    remove = (str(cfg.get("inpaint_remove_model") or "")).strip().lower()
+    add = (str(cfg.get("inpaint_add_model") or "")).strip().lower()
+    return {
+        "remove": remove if remove in INPAINT_REMOVE_MODELS else DEFAULT_INPAINT_REMOVE_MODEL,
+        "add": add if add in INPAINT_ADD_MODELS else DEFAULT_INPAINT_ADD_MODEL,
+    }
+
+
+def get_comfyui_settings() -> dict:
+    """ComfyUI 引擎连接配置。base_url 形如 http://127.0.0.1:8188（仅可信内网地址，
+    ComfyUI 无鉴权）；workflow_path 空 = 用内置默认 inpaint 模板；timeout 钳 [60, 3600] 秒。"""
+    cfg = _load_config()
+    try:
+        timeout = max(60, min(3600, int(cfg.get("comfyui_timeout", 600))))
+    except (TypeError, ValueError):
+        timeout = 600
+    return {
+        "base_url": (str(cfg.get("comfyui_base_url") or "")).strip().rstrip("/"),
+        "workflow_path": (str(cfg.get("comfyui_workflow_path") or "")).strip(),
+        "timeout": timeout,
+        "negative_prompt": (str(cfg.get("comfyui_negative_prompt") or "")).strip(),
+    }
+
+
+def get_inpaint_remove_prompt() -> str:
+    """『生成式移除』模式下用户留空 prompt 时的替补提示词；空 = 用 api.py 内置默认。
+    （FLUX Fill 的 prompt 为必填项，移除场景必须注入一句描述背景延续的文本。）"""
+    return (str(_load_config().get("inpaint_remove_prompt") or "")).strip()
+
+
 # ── HTTPS 证书校验（可配置；2026-06-18 连通性自检证实本网络 verify=True 能通过，默认改为开启）──
 # 历史上走 verify=False 是怕软路由(透明代理)做 TLS 解密导致证书错；实测本机软路由不拦 TLS、校验能过，
 # 故默认开启更安全（尤其保护用户自费的 Fal key）。若换到会拦 HTTPS 的网络报证书错（见 failure_kb 的 tls_cert）：

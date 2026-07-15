@@ -122,6 +122,40 @@ FAILURE_RULES = [
         'action': '微调提示词或更换素材/参照图后重试。',
         'subs': ['安全拦截'],
     },
+    # ── 生成式修补（inpaint）专属：ComfyUI 是内网自备实例，错误话术与云线路完全不同，
+    #    必须排在 overload/network 之前，否则「ComfyUI 连接失败」会被网络兜底吃掉 ──
+    {
+        'key': 'comfyui_unreachable',
+        'title': '🔌 ComfyUI 连不上',
+        'cause': '修补引擎选了 ComfyUI，但配置的地址无法访问：实例没启动、地址/端口写错、或跨机器时防火墙未放行。',
+        'action': '先确认 ComfyUI 已启动并能在浏览器打开；到「⚙ 设置 → 生成式修补引擎」点「测试连接」自查；'
+                  '或把引擎切回「Fal FLUX Fill」。',
+        'subs': ['ComfyUI 连接失败', '未配置 ComfyUI 地址', 'ComfyUI 提交失败', 'ComfyUI 状态轮询网络错误'],
+    },
+    {
+        'key': 'comfyui_workflow',
+        'title': '🧩 ComfyUI workflow 问题',
+        'cause': '多数是内置模板里的 checkpoint 文件名在你的 ComfyUI 里不存在；或自定义 workflow JSON 不合法/缺占位符。',
+        'action': '改内置模板的 ckpt_name 为你已有的模型文件；或在设置里指向自己的 inpaint workflow'
+                  '（记得写 __INPAINT_IMAGE__/__INPAINT_MASK__/__INPAINT_PROMPT__ 占位符）。',
+        'subs': ['ComfyUI workflow 校验失败', 'workflow 模板不存在', 'workflow 模板解析失败',
+                 'ComfyUI 执行失败', '未产出图片'],
+    },
+    {
+        'key': 'eraser_endpoint',
+        'title': '🧹 修补模型暂不可用',
+        'cause': '生成式修补所选的云端模型端点返回 403/404：模型下线、改名或账号无权限。',
+        'action': '到「⚙ 设置 → 生成式修补引擎」换一个移除模型（如切回 FLUX Fill）应急，并反馈开发者更新端点。',
+        'regex': r'修补失败.*HTTP (403|404)',
+        'subs': [],
+    },
+    {
+        'key': 'inpaint_mask',
+        'title': '🖌️ 遮罩无效',
+        'cause': '提交的涂抹遮罩为空、解码失败、或与原图宽高比不一致（一般是前端图未加载完就提交）。',
+        'action': '重新打开修补弹窗，等图完全显示后再涂抹提交；「生成式添加」记得填要添加内容的描述。',
+        'subs': ['遮罩为空', '遮罩解码失败', '遮罩与原图宽高比不一致'],
+    },
     # ── Omakase 文本模型专属：必须排在 overload/network 之前，
     #    否则文本线路的 429/5xx 会被误导向生图 Fal 线路 ──
     {

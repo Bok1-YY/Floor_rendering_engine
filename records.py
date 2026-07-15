@@ -61,7 +61,7 @@ def persist_jobs(jobs) -> None:
                 ctx = dict(ctx); ctx.pop('api_key', None); d['retry_ctx'] = ctx
             if isinstance(ctx, dict):
                 ctx = dict(ctx)
-                for key in ('cpt', 'cpt_pro'):
+                for key in ('cpt', 'cpt_pro', 'sd_positive', 'sd_negative'):
                     value = ctx.pop(key, '')
                     if value:
                         ctx[f'{key}_obf'] = _obfuscate(value)
@@ -96,15 +96,23 @@ def load_persisted_jobs() -> List[JobRecord]:
             continue
         # 中断态修正：程序重启时仍标 queued/running 的任务不可能还在跑
         if job.status in ('queued', 'running'):
-            job.status = 'partial' if (job.b2_path or job.pro_path) else 'failed'
+            generic_paths = any((r or {}).get('paths') for r in (job.model_runs or {}).values() if isinstance(r, dict))
+            job.status = 'partial' if (job.b2_path or job.pro_path or generic_paths) else 'failed'
             job.error = '程序重启，任务已中断'
         job.b2_stage = ''; job.pro_stage = ''; job.pro_polishing = False
+        for run in (job.model_runs or {}).values():
+            if isinstance(run, dict):
+                run['stage'] = ''
+                if run.get('status') in ('queued', 'running'):
+                    run['status'] = 'partial' if run.get('paths') else 'failed'
         if isinstance(job.retry_ctx, dict):
-            for key in ('cpt', 'cpt_pro'):
+            for key in ('cpt', 'cpt_pro', 'sd_positive', 'sd_negative'):
                 encoded = job.retry_ctx.pop(f'{key}_obf', '')
                 if encoded and not job.retry_ctx.get(key):
                     job.retry_ctx[key] = _deobfuscate(encoded)
         ensure_candidate_lists(job)  # 老持久化只有 *_path → 回填成单元素候选列表(单张无 nav)，之后重抽即累积
+        from .models import ensure_model_runs
+        ensure_model_runs(job)
         jobs.append(job)
     if jobs:
         logger.info(f"[队列] 恢复 {len(jobs)} 个历史任务")
@@ -148,6 +156,8 @@ def _short_mode_label(mode: str) -> str:
 
 def _short_model_label(model: str) -> str:
     m = model or ""
+    if "Aura" in m: return "AuraSR"
+    if "SD35" in m or "SD 3.5" in m: return "SD35"
     if "Lite" in m: return "Lite"
     if "Pro" in m: return "Pro"
     if "B2" in m or " 2" in m or m.endswith("2"): return "B2"
@@ -607,7 +617,8 @@ def reveal_prompt_fn(json_path, record_id, input_password):
     return "❌ 未找到记录"
 
 # ── API 生成结果落地 & 记录写入（原在 api.py，归入记录层）──────────────
-def _api_write_to_record(pil_img, model_key: str, json_path_val: str, record_id_val: str, image_file: Optional[str] = None):
+def _api_write_to_record(pil_img, model_key: str, json_path_val: str, record_id_val: str,
+                         image_file: Optional[str] = None, metadata: Optional[dict] = None):
     # 用 is not None 而不是 bool(pil_img)——PIL Image 在某些版本布尔求值会异常
     if pil_img is None or not json_path_val or not record_id_val:
         logger.warning(f"_api_write_to_record 参数不全: img={pil_img is not None}, jpath={bool(json_path_val)}, rid={bool(record_id_val)}")
@@ -624,6 +635,8 @@ def _api_write_to_record(pil_img, model_key: str, json_path_val: str, record_id_
             'comment': f'API 自动生成 ({pil_img.width}×{pil_img.height})',
             'model_label': model_key,
         }
+        if metadata:
+            entry['generation_metadata'] = dict(metadata)
         if rel:
             entry['result_image_file'] = rel
         else:
@@ -639,10 +652,12 @@ def _api_write_to_record(pil_img, model_key: str, json_path_val: str, record_id_
                     break
         if matched:
             logger.info(f"✅ 已写入记录 {record_id_val} / {model_key} ({'file' if rel else 'b64'})")
+            return entry['result_id']
         else:
             logger.warning(f"未找到记录 ID {record_id_val}，文件: {json_path_val}")
     except Exception as e:
         logger.error(f"❌ 写入记录失败 ({model_key}): {e}")
+    return None
 
 def _save_api_result_jpg(pil_img, model_key: str, png_path_val: str) -> str:
     tmp_path = None
@@ -664,6 +679,31 @@ def _save_api_result_jpg(pil_img, model_key: str, png_path_val: str) -> str:
         return fpath
     except Exception as e:
         logger.error(f"API 结果图片保存失败 ({model_key}): {e}")
+        return None
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            try: os.remove(tmp_path)
+            except OSError: pass
+
+
+def _save_api_result_png(pil_img, model_key: str, source_path: str) -> str:
+    """给 SD/超分结果保存无损 PNG；命名与 JPG 出口同样防碰撞。"""
+    tmp_path = None
+    try:
+        ts = time.strftime("%Y%m%d_%H%M%S") + f"_{int(time.time_ns() % 1_000_000_000):09d}"
+        safe_key = ''.join(c if (c.isalnum() or c in '._-') else '_' for c in str(model_key or 'result')).strip('._') or 'result'
+        raw_base = os.path.basename(source_path or "api")
+        orig_name = raw_base.replace('_优化图.png', '').rsplit('.', 1)[0] or "result"
+        orig_name = ''.join(c if (c.isalnum() or c in '._-') else '_' for c in orig_name).strip('._') or 'result'
+        fpath = os.path.join(MAIN_OUTPUT_DIR, f"{orig_name}_{safe_key}_{ts}_{uuid.uuid4().hex[:10]}.png")
+        fd, tmp_path = tempfile.mkstemp(prefix='.result_', suffix='.png', dir=MAIN_OUTPUT_DIR)
+        os.close(fd)
+        pil_img.convert('RGB').save(tmp_path, format='PNG', optimize=True)
+        os.replace(tmp_path, fpath)
+        tmp_path = None
+        return fpath
+    except Exception as ex:
+        logger.error(f"API PNG 结果保存失败 ({model_key}): {ex}")
         return None
     finally:
         if tmp_path and os.path.exists(tmp_path):

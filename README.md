@@ -14,10 +14,12 @@
 - **智能配方与我的配方**：按色调/风格自动推荐场景搭配，也可保存、更新和删除自己的参数配方。
 - **35+ 参数化提示词**：风格、灯光、机位、房型、地区市场等多维选项，组装为高质量英文提示词。
 - **多工作流**：纯出图 / 参照图 / 替换 / 宠物友好 / Omakase / 墙板模式等多种生成工作流；Omakase 复用 Gemini Key 生成场景，可配 DeepSeek 自动备用。
-- **双模型双档位**：B2 快出预览 + Pro 精修成图；可选 Google Gemini 或 Fal 提供方，支持失败自动切换（failover）。
+- **多模型并行**：B2 快出 + Pro 精修，并可启用独立的 SD 3.5 Large 实验线路；多模型可同时选择，统一进入同一任务卡。
+- **SD 地板参考与超分**：SD 3.5 使用专属正/负提示词和 InstantX IP-Adapter 强制参考地板小样，约 1MP 扩散后由 AuraSR 交付 2K/4K；超分失败保留基础图并可单独重试。
 - **4K 出图**：面向商用提案的高分辨率输出。
 - **批量生成**：同一地板批量套用多个房间，或同一参数批量处理多个地板小样。
 - **磨缝 / 二次编辑 / 手动校色**：本地区域校色支持 1% 自动强度、原图基准的色温/曝光/亮度区间等高级参数、双重置、实时预览与多候选切换。
+- **生成式修补（实验）**：类 Lightroom 画笔涂抹移除/添加物体——一次生成 1~3 个候选抽卡挑选后才落盘；任务结果、历史记录、房间图（生成前清理家具）三处入口；移除/添加引擎可分别切换（BRIA / Finegrain / LaMa / FLUX Fill / Gemini 标记法 / 本地 ComfyUI）。⚠️ 已知局限：复杂纹理场景下修补区贴回可能出现像素偏移或发糊，暂不保证 Lightroom 级效果。
 - **异步作业队列**：`POST` 秒回 `job_id`，`SSE` 推送实时进度；长请求不再被网络中间层 reset。
 - **记录复用与对比**：生成入参随记录落盘，可一键复用参数；替换类工作流支持前后拖动对比。
 - **记录、评审与导出**：历史记录持久化、收藏、最佳图、评审标签/备注；独立复盘页聚合通过率与好图样本，导出 HTML / 带品牌信息的 PPTX 提案 deck。
@@ -119,9 +121,12 @@ cd Floor_engine_server/web && npm run dev        # → http://localhost:3000
 | `fal_api_key` | Fal 密钥（选用 Fal 提供方时需要） |
 | `deepseek_api_key` | 可选：Omakase 的 DeepSeek 备用线路 Key |
 | `omakase_enabled` | 是否启用 AI 场景代笔（Gemini 主线路） |
+| `sd_enabled` | 是否启用 SD 3.5 实验线路（默认关闭，仅纯效果图） |
 | `omakase_gemini_model` | Omakase 文本模型，默认 `gemini-2.5-flash` |
 | `image_provider` | `google`（默认）或 `fal` |
+| `inpaint_provider` 等 | 生成式修补引擎组：提供方（`fal`/`comfyui`）、移除模型 `inpaint_remove_model`、添加模型 `inpaint_add_model`、ComfyUI 地址/超时/自定义 workflow；均可在设置页可视化配置 |
 | `proxy` | HTTP 代理，如 `http://127.0.0.1:7897/`；网络无法直连 Google 时填写 |
+| `fal_queue_proxy` | SD/AuraSR 队列专用代理；默认留空并忽略系统代理直接连接 FAL |
 | `speed_profile` | `fast`（快速失败）/ `resilient`（死磕重试） |
 | `auto_failover` | Google 失败时是否自动切到 Fal |
 | `tls_verify` / `tls_ca_bundle` | HTTPS 证书校验开关 / 自定义 CA |
@@ -171,9 +176,10 @@ Floor_engine_server/            # 后端 Python 包（= 本仓库根）
 ├── models.py                   # 数据模型：作业、参数、状态
 ├── prompt_data.py              # 选项表（风格/灯光/机位/房型/色调…）+ 识色 + 中英翻译
 ├── prompts.py                  # 提示词组装（参数 → 英文 prompt + 落 JSON/PNG）
+├── sd_prompts.py               # SD 3.5 独立正/负提示词编译器（不改 Gemini 资产）
 ├── recipes.py                  # 智能配方推荐
 ├── custom_recipes.py           # “我的配方”运行期 CRUD
-├── api.py                      # 图像模型调用（Gemini / Fal / 磨缝二改 / 本地校色 / 连通测试）
+├── api.py                      # 图像模型调用（Gemini / Fal / 磨缝二改 / 生成式修补 / 本地校色 / 连通测试）
 ├── records.py                  # 记录持久化、生成上下文、评审聚合、用量成本、导出 HTML/PPTX
 ├── failure_kb.py               # 失败知识库（错误分类与建议）
 ├── web/                        # Next.js 前端
@@ -185,11 +191,15 @@ Floor_engine_server/            # 后端 Python 包（= 本仓库根）
 
 ## 🛠️ 开发
 
-深入的开发文档见 [`DEVGUIDE.md`](./DEVGUIDE.md)：架构原理、后端端点目录、前端结构与设计系统、关键约定与坑、开发工作流等。
+深入的开发文档见：
+
+- [`DEVGUIDE.md`](./DEVGUIDE.md)：当前单机版架构、后端端点、前端结构、关键约定与开发工作流。
+- [`SAAS_ARCHITECTURE.md`](./SAAS_ARCHITECTURE.md)：未来在线网页订阅版的完整目标架构、计费、任务调度、多供应商容灾与迁移路线。
+- [`SD35_INTEGRATION.md`](./SD35_INTEGRATION.md)：SD 3.5 + IP-Adapter + AuraSR 的实现、接口、失败语义与校准说明。
 
 常用命令：
 ```bash
-# 后端测试（当前 88 项）
+# 后端测试（当前 116 项）
 .venv/bin/python -m pytest
 
 # 前端 lint + 类型/生产构建

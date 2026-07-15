@@ -1,0 +1,68 @@
+{
+  "1": {
+    "class_type": "CheckpointLoaderSimple",
+    "_meta": {"title": "模型加载（把 ckpt_name 改成你 ComfyUI 里已有的 checkpoint）"},
+    "inputs": {"ckpt_name": "sd_xl_base_1.0.safetensors"}
+  },
+  "2": {
+    "class_type": "CLIPTextEncode",
+    "_meta": {"title": "正向提示词（占位符由引擎注入）"},
+    "inputs": {"text": "__INPAINT_PROMPT__", "clip": ["1", 1]}
+  },
+  "3": {
+    "class_type": "CLIPTextEncode",
+    "_meta": {"title": "负向提示词"},
+    "inputs": {"text": "__INPAINT_NEGATIVE__, text, watermark, low quality, blurry, distorted", "clip": ["1", 1]}
+  },
+  "4": {
+    "class_type": "LoadImage",
+    "_meta": {"title": "原图（引擎注入文件名）"},
+    "inputs": {"image": "__INPAINT_IMAGE__"}
+  },
+  "5": {
+    "class_type": "LoadImage",
+    "_meta": {"title": "遮罩图（白=重绘区）"},
+    "inputs": {"image": "__INPAINT_MASK__"}
+  },
+  "6": {
+    "class_type": "ImageToMask",
+    "_meta": {"title": "遮罩图转 mask"},
+    "inputs": {"image": ["5", 0], "channel": "red"}
+  },
+  "7": {
+    "class_type": "GrowMask",
+    "_meta": {"title": "mask 外扩"},
+    "inputs": {"mask": ["6", 0], "expand": 8, "tapered_corners": true}
+  },
+  "8": {
+    "class_type": "VAEEncodeForInpaint",
+    "_meta": {"title": "Inpaint 编码"},
+    "inputs": {"pixels": ["4", 0], "mask": ["7", 0], "vae": ["1", 2], "grow_mask_by": 16}
+  },
+  "9": {
+    "class_type": "KSampler",
+    "_meta": {"title": "采样"},
+    "inputs": {
+      "model": ["1", 0],
+      "positive": ["2", 0],
+      "negative": ["3", 0],
+      "latent_image": ["8", 0],
+      "seed": "__INPAINT_SEED__",
+      "steps": 25,
+      "cfg": 7.0,
+      "sampler_name": "euler",
+      "scheduler": "normal",
+      "denoise": 1.0
+    }
+  },
+  "10": {
+    "class_type": "VAEDecode",
+    "_meta": {"title": "解码"},
+    "inputs": {"samples": ["9", 0], "vae": ["1", 2]}
+  },
+  "11": {
+    "class_type": "SaveImage",
+    "_meta": {"title": "保存输出"},
+    "inputs": {"images": ["10", 0], "filename_prefix": "floor_inpaint"}
+  }
+}

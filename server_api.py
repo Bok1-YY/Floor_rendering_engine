@@ -25,7 +25,7 @@ import mimetypes
 from typing import Optional, List, Literal
 from contextlib import asynccontextmanager
 
-from PIL import Image
+from PIL import Image, ImageFilter
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Query
 from fastapi.responses import StreamingResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -44,17 +44,20 @@ from .config import (
     get_omakase_gemini_model,
     save_deepseek_settings,
     update_config, get_usage_prices, get_pptx_branding,
+    get_inpaint_provider, get_comfyui_settings, get_inpaint_models,
 )
 from .api import (
     call_image_generate, call_gemini_generate, call_gemini_edit, test_connection, analyze_style_image,
     call_omakase_scenes,
+    call_fal_sd35_generate, call_fal_aura_upscale, SD35_ENDPOINT,
     FLOOR_DESEAM_INSTRUCTION, _infer_aspect_ratio_from_b64, _match_color_to_reference,
-    match_color_region,
+    match_color_region, call_image_inpaint, resolve_inpaint_engine,
 )
 from .prompts import save_task_files_html
+from .sd_prompts import compile_sd35_prompt
 from .records import (
     persist_jobs, load_persisted_jobs, record_usage,
-    _save_api_result_jpg, _api_write_to_record,
+    _save_api_result_jpg, _save_api_result_png, _api_write_to_record,
     _safe_output_path, scan_json_files, _load_records, get_record_labels,
     reveal_prompt_fn, _list_recent_floor_swatches, _b64_to_pil,
     _delete_record, _delete_result_image, toggle_result_favorite,
@@ -66,7 +69,9 @@ from .records import (
 from .models import (
     JobRecord, new_job, update_job, compute_final_status,
     job_time_text, running_model_status_text, add_candidate, ensure_candidate_lists,
-    TaskParams, task_params_to_kwargs,
+    TaskParams, task_params_to_kwargs, ensure_model_runs, update_model_run,
+    add_model_candidate, nav_model_candidate, model_run_current_path,
+    compute_runs_final_status, legacy_filter_from_targets,
 )
 from .failure_kb import classify_failure, FAILURE_RULES
 from .recipes import recommend_recipes, FLOOR_RECIPES, pick_option_key
@@ -89,8 +94,7 @@ _job_history: List[JobRecord] = []
 _job_lock = threading.Lock()
 # 每个模型最多 max_concurrent_per_model(默认 1) 个进行中任务；B2 / Pro 各一把信号量。
 # 在 lifespan 启动钩子里、于本服务事件循环上惰性创建（绝不在 import 期建，否则绑错 loop）。
-_b2_semaphore: Optional[asyncio.Semaphore] = None
-_pro_semaphore: Optional[asyncio.Semaphore] = None
+_model_semaphores: dict = {}
 # prep 串行锁：save_task_files_html 按小样路径派生 png/json 输出路径，同图并发首处理会抢写同一 png。
 _task_prep_lock: Optional[asyncio.Lock] = None
 # 取消：单任务用集合(stop this one)；全局用单调计数器(stop all：in-flight 任务捕获的旧值 < 新值即自行退出)。
@@ -202,14 +206,41 @@ def _result_thumb_url(p, s: int = 480) -> str:
 
 def _job_view(job: JobRecord) -> dict:
     """把 JobRecord 序列化成前端友好的 JSON（含实时阶段、耗时文案、结果图 URL/缩略图、候选下标）。"""
+    ensure_model_runs(job)
     ensure_candidate_lists(job)   # 向后兼容 + 同步 *_path = *_paths[*_idx]
     effective_error = job.operation_error or job.error
+    runs = {}
+    for key in job.model_targets:
+        run = job.model_runs.get(key) or {}
+        paths = list(run.get('paths') or [])
+        idx = max(0, min(int(run.get('index') or 0), len(paths) - 1)) if paths else 0
+        current = paths[idx] if paths else ''
+        runs[key] = {
+            'key': key,
+            'label': run.get('label') or key,
+            'provider': run.get('provider') or '',
+            'model_id': run.get('model_id') or '',
+            'status': run.get('status') or 'queued',
+            'stage': run.get('stage') or '',
+            'seconds': run.get('seconds'),
+            'error': run.get('error') or '',
+            'url': _to_url(current),
+            'thumb': _result_thumb_url(current),
+            'idx': idx,
+            'total': len(paths),
+            'base_url': _to_url(run.get('base_path')),
+            'delivery_status': run.get('delivery_status') or '',
+            'seed': run.get('seed'),
+            'settings': run.get('settings') or {},
+        }
     return {
         'job_id': job.job_id,
         'display_name': job.display_name,
         'ts': job.ts,
         'status': job.status,
         'model_filter': job.model_filter,
+        'model_targets': job.model_targets,
+        'model_runs': runs,
         'workflow_mode': job.workflow_mode,
         'error': job.error,
         'error_kb': classify_failure(effective_error) if (effective_error and '取消' not in effective_error) else None,
@@ -255,10 +286,11 @@ async def _generate_one_model(job: JobRecord, model_id, prompt_text, stage_key, 
     def _on_stage(text):
         try:
             setattr(job, f'{stage_key}_stage', text)
+            update_model_run(job, stage_key, stage=text, status='running')
         except Exception as ex:
             logger.debug(f"写入阶段状态失败 job={job.job_id}: {ex}")
 
-    sem = _b2_semaphore if stage_key == 'b2' else _pro_semaphore
+    sem = _model_semaphores[stage_key]
     img = err = provider = None
     try:
         if sem.locked():
@@ -273,9 +305,11 @@ async def _generate_one_model(job: JobRecord, model_id, prompt_text, stage_key, 
     finally:
         try:
             setattr(job, f'{stage_key}_stage', '')
+            update_model_run(job, stage_key, stage='')
         except Exception:
             pass
     setattr(job, f'{stage_key}_secs', round(time.time() - _t0, 1))
+    update_model_run(job, stage_key, seconds=getattr(job, f'{stage_key}_secs'))
 
     path = None
     if img is not None:
@@ -284,7 +318,7 @@ async def _generate_one_model(job: JobRecord, model_id, prompt_text, stage_key, 
         if not path:
             record_usage(job.workflow_mode, model_name, provider, True, job.operation)
             return None, '图片已生成，但保存到磁盘失败'
-        add_candidate(job, stage_key, path)
+        add_model_candidate(job, stage_key, path)
         try:
             await asyncio.to_thread(_api_write_to_record, img, model_name, jpt, rid, path)
         except Exception as ex:
@@ -297,7 +331,102 @@ async def _generate_one_model(job: JobRecord, model_id, prompt_text, stage_key, 
             record_usage(job.workflow_mode, model_name, provider, img is not None, job.operation)
         except Exception as ex:
             logger.debug(f"记录用量失败 job={job.job_id}: {ex}")
+    update_model_run(job, stage_key, status=('done' if path else 'failed'), error=_err, provider=provider or '')
     return path, _err
+
+
+async def _generate_sd35_model(job: JobRecord, *, fal_key: str, positive: str, negative: str,
+                               pnp: str, ims: str, ar: str, jpt: str, rid: str,
+                               options: dict, should_cancel):
+    """SD3.5 基础图 + AuraSR 交付图；超分失败保留基础图并标 partial。"""
+    key = 'sd35'
+    sem = _model_semaphores[key]
+    started = time.time()
+    sd_usage_recorded = False
+
+    def _stage(text):
+        update_model_run(job, key, stage=text, status='running')
+
+    if sem.locked():
+        _stage('排队中')
+    update_model_run(job, key, model_id=SD35_ENDPOINT, provider='fal', status='running', error='',
+                     settings={k: options.get(k) for k in ('steps', 'guidance_scale', 'reference_strength')})
+    try:
+        async with sem:
+            base, err, used_seed = await asyncio.to_thread(
+                call_fal_sd35_generate, fal_key, positive, negative, pnp, ar,
+                seed=options.get('seed'), steps=options.get('steps', 28),
+                guidance_scale=options.get('guidance_scale', 3.5),
+                reference_strength=options.get('reference_strength', 0.5),
+                on_stage=_stage, should_cancel=should_cancel,
+            )
+            update_model_run(job, key, seed=used_seed)
+            if base is None:
+                if '取消' not in str(err or ''):
+                    record_usage(job.workflow_mode, 'SD35', 'fal', False, job.operation)
+                    sd_usage_recorded = True
+                update_model_run(job, key, status='failed', error=str(err or 'SD 生成失败'), stage='',
+                                 seconds=round(time.time() - started, 1))
+                return None, str(err or 'SD 生成失败')
+
+            # API 已成功出图即产生费用；磁盘保存失败也必须按成功调用计成本。
+            record_usage(job.workflow_mode, 'SD35', 'fal', True, job.operation)
+            sd_usage_recorded = True
+            base_path = _save_api_result_png(base, 'SD35_Base', pnp)
+            if not base_path:
+                update_model_run(job, key, status='failed', error='基础图保存失败', stage='')
+                return None, 'SD 基础图已生成，但保存失败'
+            update_model_run(job, key, base_path=base_path, delivery_status='base_ready')
+
+            final_image = base
+            final_path = base_path
+            upscale_error = ''
+            target_long = 4096 if str(ims).upper().startswith('4') else (2048 if str(ims).upper().startswith('2') else 0)
+            if target_long:
+                upscaled, up_err = await asyncio.to_thread(
+                    call_fal_aura_upscale, fal_key, base, on_stage=_stage, should_cancel=should_cancel)
+                if upscaled is None:
+                    upscale_error = f'4K 超分失败：{up_err}'
+                    record_usage(job.workflow_mode, 'AuraSR', 'fal', False, 'upscale')
+                else:
+                    record_usage(job.workflow_mode, 'AuraSR', 'fal', True, 'upscale')
+                    scale = target_long / max(upscaled.size)
+                    if scale < 0.999:
+                        upscaled = upscaled.resize(
+                            (max(1, round(upscaled.width * scale)), max(1, round(upscaled.height * scale))),
+                            Image.Resampling.LANCZOS,
+                        )
+                    saved_upscale = _save_api_result_png(upscaled, 'SD35_4K', pnp)
+                    if saved_upscale:
+                        final_image = upscaled
+                        final_path = saved_upscale
+                    else:
+                        upscale_error = '超分已完成但保存失败，已保留基础图'
+            add_model_candidate(job, key, final_path)
+            metadata = {
+                'provider': 'fal', 'model': SD35_ENDPOINT, 'seed': used_seed,
+                'steps': options.get('steps', 28), 'guidance_scale': options.get('guidance_scale', 3.5),
+                'reference_strength': options.get('reference_strength', 0.5),
+                'base_image_file': os.path.relpath(base_path, MAIN_OUTPUT_DIR).replace('\\', '/'),
+                'prompt_sha256': hashlib.sha256(positive.encode()).hexdigest(),
+                'negative_prompt_sha256': hashlib.sha256(negative.encode()).hexdigest(),
+            }
+            try:
+                await asyncio.to_thread(_api_write_to_record, final_image, 'SD 3.5', jpt, rid, final_path, metadata)
+            except Exception as ex:
+                logger.warning(f'写 SD 记录失败 job={job.job_id}: {ex}')
+            update_model_run(
+                job, key, status=('partial' if upscale_error else 'done'), error=upscale_error,
+                stage='', seconds=round(time.time() - started, 1),
+                delivery_status=('upscale_failed' if upscale_error else ('upscaled' if target_long else 'base_ready')),
+            )
+            return final_path, upscale_error
+    except Exception as ex:
+        logger.exception(f'[SD35] 生成异常 job={job.job_id}')
+        update_model_run(job, key, status='failed', error=str(ex), stage='', seconds=round(time.time() - started, 1))
+        if not sd_usage_recorded:
+            record_usage(job.workflow_mode, 'SD35', 'fal', False, job.operation)
+        return None, str(ex)
 
 
 async def _run_job_bg(job: JobRecord, req: 'JobSubmitRequest'):
@@ -305,10 +434,14 @@ async def _run_job_bg(job: JobRecord, req: 'JobSubmitRequest'):
     jid = job.job_id
     generation = _cancel_generation[0]
     mf = job.model_filter
-    run_b2 = mf in ('b2', 'both')
-    run_pro = mf in ('pro', 'both')
+    targets = list(job.model_targets or [])
+    run_b2 = 'b2' in targets
+    run_pro = 'pro' in targets
+    run_sd = 'sd35' in targets
     p = req.params
-    api_key = (req.api_key or '').strip() or _load_config().get('gemini_api_key', '').strip()
+    cfg = _load_config()
+    api_key = (req.api_key or '').strip() or cfg.get('gemini_api_key', '').strip()
+    fal_key = (cfg.get('fal_api_key') or '').strip()
 
     if _is_cancelled(jid, generation):
         update_job(job, status='failed', error='已取消（用户停止）',
@@ -347,6 +480,11 @@ async def _run_job_bg(job: JobRecord, req: 'JobSubmitRequest'):
         cpt = extract_clean_prompt(prt)
         ar = (p.aspect_ratio or '4:3').split(' ')[0]
         cpt_pro = extract_clean_prompt(prt_pro) if prt_pro else cpt
+        sd_bundle = compile_sd35_prompt(
+            tp,
+            positive_addition=req.sd_options.positive_addition,
+            negative_addition=req.sd_options.negative_addition,
+        ) if run_sd else None
         # B2 也用 Pro 终极指令（实测无缝效果最佳）；唯「圆弧倒角·直拼」例外，B2 保留自己的软细缝词。
         _seam_v = p.seam_type or ''
         _size_v = p.floor_size or ''
@@ -369,15 +507,19 @@ async def _run_job_bg(job: JobRecord, req: 'JobSubmitRequest'):
 
         # 存生成上下文，供「重试」只重跑未成图的模型（持久化时 api_key 会被剥除）
         job.retry_ctx = dict(api_key=api_key, pnp=pnp, cpt=cpt, cpt_pro=cpt_pro,
+                             sd_positive=(sd_bundle.positive if sd_bundle else ''),
+                             sd_negative=(sd_bundle.negative if sd_bundle else ''),
+                             sd_options=req.sd_options.model_dump(),
                              ims=ims, ar=ar, rp=rp, sref=sref, bevel_ref=bevel_ref,
-                             jpt=jpt, rid=rid, model_filter=mf)
+                             jpt=jpt, rid=rid, model_filter=mf, model_targets=targets)
         update_job(job, json_path=jpt, record_id=rid, png_path=pnp)
 
         # gen_context 快照：完整入参落记录 JSON，供「复用参数」「前后对比」。绝不含 api_key。
         try:
             await asyncio.to_thread(attach_generation_context, jpt, rid, dict(
                 image_path=req.image_path, room_path=req.room_path or '',
-                ref_path=req.ref_path or '', model_filter=mf, params=p.model_dump()))
+                ref_path=req.ref_path or '', model_filter=mf, model_targets=targets,
+                sd_options=req.sd_options.model_dump() if run_sd else None, params=p.model_dump()))
         except Exception as ex:
             logger.warning(f"[API任务] gen_context 写入失败 job={jid}: {ex}")
 
@@ -397,26 +539,33 @@ async def _run_job_bg(job: JobRecord, req: 'JobSubmitRequest'):
             tasks.append(('b2', _gen_one(GEMINI_MODEL_MAP['Nano Banana 2'], cpt, 'b2', 'Nano Banana 2')))
         if run_pro:
             tasks.append(('pro', _gen_one(GEMINI_MODEL_MAP['Nano Banana Pro'], cpt_pro, 'pro', 'Nano Banana Pro')))
+        if run_sd and sd_bundle:
+            tasks.append(('sd35', _generate_sd35_model(
+                job, fal_key=fal_key, positive=sd_bundle.positive, negative=sd_bundle.negative,
+                pnp=pnp, ims=ims, ar=ar, jpt=jpt, rid=rid,
+                options=req.sd_options.model_dump(), should_cancel=should_cancel,
+            )))
         results = await asyncio.gather(*[c for _, c in tasks], return_exceptions=True)
 
-        b2_err = pro_err = ''
+        errors = []
         for (k, _), res in zip(tasks, results):
             if isinstance(res, Exception):
-                if k == 'b2':
-                    b2_err = str(res)
-                else:
-                    pro_err = str(res)
+                errors.append(f'{k.upper()}: {res}')
+                update_model_run(job, k, status='failed', error=str(res), stage='')
             else:
                 _path, _e = res
                 if k == 'b2':
-                    b2j, b2_err = _path, _e
-                else:
-                    proj, pro_err = _path, _e
+                    b2j = _path
+                elif k == 'pro':
+                    proj = _path
+                if _e:
+                    errors.append(f'{k.upper()}: {_e}')
 
         if _is_cancelled(jid, generation):
             # 取消后：已返回的图(已计费)已在 _gen_one 里存盘，这里据实标注，不丢弃
-            if b2j or proj:
-                update_job(job, status=('done' if (b2j and proj) else 'partial'),
+            final = compute_runs_final_status(job)
+            if final in ('done', 'partial'):
+                update_job(job, status=final,
                            b2_path=b2j, pro_path=proj, error='已取消，但已出图已保留（已付费）',
                            operation_status='cancelled', operation_error='已取消')
             else:
@@ -424,15 +573,15 @@ async def _run_job_bg(job: JobRecord, req: 'JobSubmitRequest'):
                            operation_status='cancelled', operation_error='已取消')
             return
 
-        err_msg = ('B2: ' + b2_err if b2_err else '') + (' Pro: ' + pro_err if pro_err else '')
-        final = compute_final_status(mf, b2j, proj)
+        err_msg = ' '.join(errors)
+        final = compute_runs_final_status(job)
         update_job(job, status=final, b2_path=b2j, pro_path=proj, error=err_msg.strip(),
                    operation_status=('done' if final in ('done', 'partial') else 'failed'),
                    operation_error=err_msg.strip())
-        logger.info(f"[API任务] finished job={jid}, status={final}, b2={bool(b2j)}, pro={bool(proj)}")
+        logger.info(f"[API任务] finished job={jid}, status={final}, targets={targets}")
     except Exception as e:
         logger.exception(f"[API任务] unhandled job={jid}")
-        update_job(job, status='failed', b2_path=b2j, pro_path=proj, error=str(e),
+        update_job(job, status=compute_runs_final_status(job), b2_path=b2j, pro_path=proj, error=str(e),
                    operation_status='failed', operation_error=str(e))
     finally:
         _cancel_jobs.discard(jid)
@@ -443,11 +592,13 @@ async def _retry_bg(job: JobRecord):
     """重试：用 retry_ctx 只重跑还没出图的模型（移植 webui._retry_job 去 UI）。"""
     ctx = job.retry_ctx or {}
     api_key = (ctx.get('api_key') or '').strip() or _load_config().get('gemini_api_key', '').strip()
-    mf = ctx.get('model_filter', job.model_filter)
-    need_b2 = (mf in ('b2', 'both')) and not (job.b2_path and os.path.exists(str(job.b2_path)))
-    need_pro = (mf in ('pro', 'both')) and not (job.pro_path and os.path.exists(str(job.pro_path)))
-    if not (need_b2 or need_pro):
-        update_job(job, status='done', operation='retry', operation_status='done')
+    fal_key = (_load_config().get('fal_api_key') or '').strip()
+    targets = list(ctx.get('model_targets') or job.model_targets)
+    need_b2 = 'b2' in targets and not (job.b2_path and os.path.exists(str(job.b2_path)))
+    need_pro = 'pro' in targets and not (job.pro_path and os.path.exists(str(job.pro_path)))
+    need_sd = 'sd35' in targets and not model_run_current_path(job, 'sd35')
+    if not (need_b2 or need_pro or need_sd):
+        update_job(job, status=compute_runs_final_status(job), operation='retry', operation_status='done')
         _persist_jobs()
         return
     _cancel_jobs.discard(job.job_id)   # 清掉残留取消标记，否则 should_cancel 恒 True
@@ -468,13 +619,19 @@ async def _retry_bg(job: JobRecord):
             tasks.append(('b2', _retry_one(GEMINI_MODEL_MAP['Nano Banana 2'], ctx['cpt'], 'b2', 'Nano Banana 2')))
         if need_pro:
             tasks.append(('pro', _retry_one(GEMINI_MODEL_MAP['Nano Banana Pro'], ctx['cpt_pro'], 'pro', 'Nano Banana Pro')))
+        if need_sd:
+            tasks.append(('sd35', _generate_sd35_model(
+                job, fal_key=fal_key, positive=ctx.get('sd_positive', ''), negative=ctx.get('sd_negative', ''),
+                pnp=ctx['pnp'], ims=ctx['ims'], ar=ctx['ar'], jpt=ctx['jpt'], rid=ctx['rid'],
+                options=dict(ctx.get('sd_options') or {}), should_cancel=should_cancel,
+            )))
         results = await asyncio.gather(*[c for _, c in tasks], return_exceptions=True)
         errs = []
         for (k, _), res in zip(tasks, results):
             e = str(res) if isinstance(res, Exception) else res[1]
             if e and '取消' not in e:
                 errs.append(f'{k.upper()}: {e}')
-        final = compute_final_status(mf, job.b2_path, job.pro_path)
+        final = compute_runs_final_status(job)
         op_error = ('；'.join(errs)).strip()
         update_job(job, status=final, error=op_error,
                    operation_status=('done' if final in ('done', 'partial') else 'failed'),
@@ -482,6 +639,51 @@ async def _retry_bg(job: JobRecord):
     except Exception as e:
         logger.exception(f"[API重试] unhandled job={job.job_id}")
         update_job(job, status='failed', error=str(e), operation_status='failed', operation_error=str(e))
+    finally:
+        _cancel_jobs.discard(job.job_id)
+        _persist_jobs()
+
+
+async def _retry_sd_upscale_bg(job: JobRecord):
+    run = (job.model_runs or {}).get('sd35') or {}
+    base_path = run.get('base_path') or ''
+    fal_key = (_load_config().get('fal_api_key') or '').strip()
+    generation = _cancel_generation[0]
+    try:
+        update_model_run(job, 'sd35', status='running', stage='🔎 4K 超分中…', error='')
+        base = Image.open(base_path); base.load()
+        async with _model_semaphores['sd35']:
+            out, err = await asyncio.to_thread(
+                call_fal_aura_upscale, fal_key, base,
+                on_stage=lambda t: update_model_run(job, 'sd35', stage=t),
+                should_cancel=lambda: _is_cancelled(job.job_id, generation),
+            )
+        if out is None:
+            record_usage(job.workflow_mode, 'AuraSR', 'fal', False, 'upscale')
+            update_model_run(job, 'sd35', status='partial', stage='', error=f'4K 超分失败：{err}',
+                             delivery_status='upscale_failed')
+            update_job(job, status='partial', operation_status='failed', operation_error=f'4K 超分失败：{err}')
+            return
+        record_usage(job.workflow_mode, 'AuraSR', 'fal', True, 'upscale')
+        ims = str((job.retry_ctx or {}).get('ims') or '4K')
+        target_long = 4096 if ims.upper().startswith('4') else 2048
+        scale = target_long / max(out.size)
+        if scale < 0.999:
+            out = out.resize((round(out.width * scale), round(out.height * scale)), Image.Resampling.LANCZOS)
+        path = _save_api_result_png(out, 'SD35_4K', job.png_path or base_path)
+        if not path:
+            raise RuntimeError('超分图保存失败')
+        add_model_candidate(job, 'sd35', path)
+        update_model_run(job, 'sd35', status='done', stage='', error='', delivery_status='upscaled')
+        try:
+            await asyncio.to_thread(_api_write_to_record, out, 'SD 3.5 · 4K重试', job.json_path, job.record_id, path)
+        except Exception as ex:
+            logger.warning(f'写超分重试记录失败 job={job.job_id}: {ex}')
+        update_job(job, status=compute_runs_final_status(job), operation_status='done', operation_error='')
+    except Exception as ex:
+        logger.exception(f'[SD35] 重试超分失败 job={job.job_id}')
+        update_model_run(job, 'sd35', status='partial', stage='', error=str(ex), delivery_status='upscale_failed')
+        update_job(job, status='partial', operation_status='failed', operation_error=str(ex))
     finally:
         _cancel_jobs.discard(job.job_id)
         _persist_jobs()
@@ -516,9 +718,9 @@ async def _edit_bg(job: JobRecord, *, api_key, instruction, model_id, model_labe
         src_pil.convert('RGB').save(buf, format='JPEG', quality=95)
         b64 = base64.b64encode(buf.getvalue()).decode()
         ar = _infer_aspect_ratio_from_b64(b64)
-        if _pro_semaphore.locked():
+        if _model_semaphores['pro'].locked():
             _on_stage('排队中')
-        async with _pro_semaphore:
+        async with _model_semaphores['pro']:
             out, err = await asyncio.to_thread(
                 call_gemini_edit, api_key, model_id, instruction, b64,
                 image_size, ar, preserve, _on_stage, lambda: _is_cancelled(jid, generation))
@@ -603,11 +805,22 @@ class GenParams(BaseModel):
     panel_size: str = ''            # 墙板尺寸/板型(预设或自定义；仅墙板再设计/纯原创生效)
 
 
+class SDOptions(BaseModel):
+    seed: Optional[int] = Field(default=None, ge=0)
+    steps: int = Field(default=28, ge=10, le=50)
+    guidance_scale: float = Field(default=3.5, ge=1.0, le=10.0)
+    reference_strength: float = Field(default=0.5, ge=0.1, le=1.0)
+    positive_addition: str = Field(default='', max_length=1000)
+    negative_addition: str = Field(default='', max_length=1000)
+
+
 class JobSubmitRequest(BaseModel):
     model_config = {'protected_namespaces': ()}   # 允许 model_filter
 
     image_path: str                       # /api/uploads/floor 返回的绝对路径
     model_filter: Literal['b2', 'pro', 'both'] = 'both'
+    model_targets: Optional[List[Literal['b2', 'pro', 'sd35']]] = None
+    sd_options: SDOptions = Field(default_factory=SDOptions)
     api_key: str = ''                     # 缺省回退 engine_config.json 里的 gemini_api_key
     room_path: Optional[str] = None       # 房间替换图（地板替换流程）
     ref_path: Optional[str] = None        # 参照模式参考图
@@ -654,9 +867,20 @@ class ConfigPatch(BaseModel):
     speed_profile: Optional[Literal['fast', 'resilient']] = None
     auto_failover: Optional[bool] = None
     proxy: Optional[str] = Field(default=None, max_length=1000)
+    fal_queue_proxy: Optional[str] = Field(default=None, max_length=1000)
     tls_verify: Optional[bool] = None
     tls_ca_bundle: Optional[str] = Field(default=None, max_length=2000)
     max_concurrent_per_model: Optional[int] = Field(default=None, ge=1, le=8)
+    sd_enabled: Optional[bool] = None
+    # 生成式修补引擎：fal=云 API（remove/add 分模型）；comfyui=用户自备 ComfyUI 实例
+    inpaint_provider: Optional[Literal['fal', 'comfyui']] = None
+    inpaint_remove_model: Optional[Literal['bria-eraser', 'finegrain-eraser', 'lama',
+                                           'flux-fill', 'gemini-mark']] = None
+    inpaint_add_model: Optional[Literal['flux-fill', 'qwen-inpaint', 'gemini-mark']] = None
+    comfyui_base_url: Optional[str] = Field(default=None, max_length=500)
+    comfyui_workflow_path: Optional[str] = Field(default=None, max_length=1000)
+    comfyui_timeout: Optional[int] = Field(default=None, ge=60, le=3600)
+    inpaint_remove_prompt: Optional[str] = Field(default=None, max_length=1000)
     deepseek_api_key: Optional[str] = None
     deepseek_base_url: Optional[str] = None
     deepseek_model: Optional[str] = None
@@ -681,7 +905,16 @@ def _config_view() -> dict:
         'tls_verify': get_tls_verify(),
         'tls_ca_bundle': get_tls_ca_bundle(),
         'proxy': get_proxy(),
+        'fal_queue_proxy': str(cfg.get('fal_queue_proxy') or ''),
         'max_concurrent_per_model': int(cfg.get('max_concurrent_per_model', 1) or 1),
+        'sd_enabled': bool(cfg.get('sd_enabled', False)),
+        'inpaint_provider': get_inpaint_provider(),
+        'inpaint_remove_model': get_inpaint_models()['remove'],
+        'inpaint_add_model': get_inpaint_models()['add'],
+        'comfyui_base_url': get_comfyui_settings()['base_url'],
+        'comfyui_workflow_path': get_comfyui_settings()['workflow_path'],
+        'comfyui_timeout': get_comfyui_settings()['timeout'],
+        'inpaint_remove_prompt': str(cfg.get('inpaint_remove_prompt') or ''),
         'speed_params': get_speed_profile_params(cfg),
         # Omakase：Gemini 复用主 Key，DeepSeek 只回是否已配置，绝不回明文 key
         'has_deepseek_key': bool((cfg.get('deepseek_api_key') or '').strip()),
@@ -701,14 +934,15 @@ def _config_view() -> dict:
 # ============================================================
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    global _b2_semaphore, _pro_semaphore, _task_prep_lock
+    global _model_semaphores, _task_prep_lock
     try:
         lim = max(1, int(_load_config().get('max_concurrent_per_model', 1)))
     except Exception as ex:
         logger.warning(f"读取 max_concurrent_per_model 失败，用默认 1: {ex}")
         lim = 1
-    _b2_semaphore = asyncio.Semaphore(lim)
-    _pro_semaphore = asyncio.Semaphore(lim)
+    _model_semaphores = {key: asyncio.Semaphore(lim) for key in ('b2', 'pro', 'sd35')}
+    # 生成式修补独立信号量(恒 1)：修补与主生成互不阻塞、也不占 b2/pro 槽
+    _model_semaphores['inpaint'] = asyncio.Semaphore(1)
     _task_prep_lock = asyncio.Lock()
     migrated = migrate_all_record_storage()
     with _job_lock:
@@ -810,16 +1044,31 @@ def _panel_require_second_image(req):
 # ── 任务：提交 / 列表 / 详情 / SSE / 取消 / 重试 ──
 @app.post('/api/jobs')
 async def create_job(req: JobSubmitRequest):
-    if not ((req.api_key or '').strip() or _load_config().get('gemini_api_key', '').strip()):
-        raise HTTPException(400, '缺少 API Key')
+    cfg = _load_config()
+    targets = list(req.model_targets or ({'b2': ['b2'], 'pro': ['pro'], 'both': ['b2', 'pro']}[req.model_filter]))
+    if not targets or len(targets) != len(set(targets)):
+        raise HTTPException(422, 'model_targets 至少选择一个且不可重复')
+    if any(k in targets for k in ('b2', 'pro')) and not ((req.api_key or '').strip() or cfg.get('gemini_api_key', '').strip()):
+        raise HTTPException(400, '所选 B2/Pro 缺少 Gemini API Key')
+    if 'sd35' in targets:
+        if not bool(cfg.get('sd_enabled', False)):
+            raise HTTPException(400, 'SD 3.5 实验模型尚未在设置中启用')
+        if not (cfg.get('fal_api_key') or '').strip():
+            raise HTTPException(400, '所选 SD 3.5 缺少 Fal API Key')
+        if '纯效果图' not in (req.params.workflow_mode or ''):
+            raise HTTPException(422, 'SD 3.5 首期仅支持纯效果图工作流')
     req.image_path = _require_upload_image_path(req.image_path, '地板图', required=True)
     req.room_path = _require_upload_image_path(req.room_path, '房间图')
     req.ref_path = _require_upload_image_path(req.ref_path, '参照图')
     _panel_require_second_image(req)
-    label = {'b2': '[B2]', 'pro': '[Pro]', 'both': '[双模型]'}.get(req.model_filter, '')
+    labels = {'b2': 'B2', 'pro': 'Pro', 'sd35': 'SD3.5'}
+    label = '[' + '+'.join(labels[k] for k in targets) + ']'
     room_disp = req.params.cn_room_type if req.params.cn_mode else req.params.room_type
     dname = f"{os.path.splitext(os.path.basename(req.image_path))[0]} · {room_disp} {label}"
-    job = new_job(dname, time.strftime('%H:%M:%S'), req.model_filter)
+    legacy_filter = legacy_filter_from_targets(targets)
+    job = new_job(dname, time.strftime('%H:%M:%S'), legacy_filter)
+    job.model_targets = targets
+    ensure_model_runs(job)
     job.workflow_mode = req.params.workflow_mode
     with _job_lock:
         _job_history.insert(0, job)
@@ -944,19 +1193,36 @@ async def retry_job(jid: str):
     return _job_view(job)
 
 
+@app.post('/api/jobs/{jid}/sd-upscale')
+async def retry_sd_upscale(jid: str):
+    job = _get_job(jid)
+    if not job:
+        raise HTTPException(404, 'job not found')
+    ensure_model_runs(job)
+    run = job.model_runs.get('sd35') or {}
+    base_path = run.get('base_path') or ''
+    if run.get('delivery_status') != 'upscale_failed' or not os.path.isfile(base_path):
+        raise HTTPException(400, '没有可重试的 SD 基础图')
+    if job.operation_status == 'running':
+        raise HTTPException(409, '任务进行中')
+    update_job(job, status='running', operation='sd_upscale', operation_status='running', operation_error='')
+    _spawn(_retry_sd_upscale_bg(job))
+    return _job_view(job)
+
+
 @app.get('/api/jobs/{jid}/result')
 def job_result(jid: str, model: str = 'pro', idx: int = -1):
     job = _get_job(jid)
     if not job:
         raise HTTPException(404, 'job not found')
-    ensure_candidate_lists(job)
-    paths = job.pro_paths if model == 'pro' else job.b2_paths
-    cur = job.pro_idx if model == 'pro' else job.b2_idx
-    if not paths:
+    ensure_model_runs(job)
+    run = job.model_runs.get(model)
+    if not run or not (run.get('paths') or []):
         raise HTTPException(404, 'no result for this model')
-    i = cur if idx < 0 else max(0, min(idx, len(paths) - 1))
-    return {'model': model, 'idx': i, 'total': len(paths),
-            'url': _to_url(paths[i]), 'thumb': _result_thumb_url(paths[i])}
+    requested = int(run.get('index') or 0) if idx < 0 else idx
+    i, total, path = nav_model_candidate(job, model, requested)
+    return {'model': model, 'idx': i, 'total': total,
+            'url': _to_url(path), 'thumb': _result_thumb_url(path)}
 
 
 # ── 编辑 / 磨缝（对 job 现有成图）──
@@ -1314,9 +1580,10 @@ def get_config():
 @app.put('/api/config')
 def put_config(req: ConfigPatch):
     patch = req.model_dump(exclude_none=True)
-    for key in ('gemini_api_key', 'fal_api_key', 'proxy', 'tls_ca_bundle',
+    for key in ('gemini_api_key', 'fal_api_key', 'proxy', 'fal_queue_proxy', 'tls_ca_bundle',
                 'deepseek_api_key', 'deepseek_base_url', 'deepseek_model',
-                'omakase_gemini_model', 'pptx_company', 'pptx_contact'):
+                'omakase_gemini_model', 'pptx_company', 'pptx_contact',
+                'comfyui_base_url', 'comfyui_workflow_path', 'inpaint_remove_prompt'):
         if key in patch:
             patch[key] = str(patch[key] or '').strip()
     if 'usage_prices' in patch:
@@ -1451,7 +1718,8 @@ async def _regen_once(job: JobRecord):
     返回本轮每模型错误拼接串（'B2: xx Pro: yy'，全成功为 ''），供 _regen_bg 写进 job.error。"""
     ctx = job.retry_ctx or {}
     api_key = (ctx.get('api_key') or '').strip() or _load_config().get('gemini_api_key', '').strip()
-    mf = ctx.get('model_filter', job.model_filter)
+    targets = list(ctx.get('model_targets') or job.model_targets)
+    fal_key = (_load_config().get('fal_api_key') or '').strip()
     generation = _cancel_generation[0]
     should_cancel = lambda: _is_cancelled(job.job_id, generation)
 
@@ -1462,20 +1730,26 @@ async def _regen_once(job: JobRecord):
                                    jpt=ctx['jpt'], rid=ctx['rid'], should_cancel=should_cancel)
 
     tasks = []
-    if mf in ('b2', 'both'):
+    if 'b2' in targets:
         tasks.append(('b2', gen_one(GEMINI_MODEL_MAP['Nano Banana 2'], ctx['cpt'], 'b2', 'Nano Banana 2')))
-    if mf in ('pro', 'both'):
+    if 'pro' in targets:
         tasks.append(('pro', gen_one(GEMINI_MODEL_MAP['Nano Banana Pro'], ctx['cpt_pro'], 'pro', 'Nano Banana Pro')))
+    if 'sd35' in targets:
+        sd_options = dict(ctx.get('sd_options') or {})
+        sd_options['seed'] = None  # 重抽必须产生新 seed；retry 才复用原 seed
+        tasks.append(('sd35', _generate_sd35_model(
+            job, fal_key=fal_key, positive=ctx.get('sd_positive', ''), negative=ctx.get('sd_negative', ''),
+            pnp=ctx['pnp'], ims=ctx['ims'], ar=ctx['ar'], jpt=ctx['jpt'], rid=ctx['rid'],
+            options=sd_options, should_cancel=should_cancel,
+        )))
     results = await asyncio.gather(*[c for _, c in tasks], return_exceptions=True)
     # 收集每模型错误串（镜像 _run_job_bg）：否则重抽失败对用户完全静默——没出新图也没任何提示
-    b2_err = pro_err = ''
+    errors = []
     for (k, _), res in zip(tasks, results):
         e = str(res) if isinstance(res, Exception) else (res[1] or '')
-        if k == 'b2':
-            b2_err = e
-        else:
-            pro_err = e
-    return (('B2: ' + b2_err) if b2_err else '') + ((' Pro: ' + pro_err) if pro_err else '')
+        if e:
+            errors.append(f'{k.upper()}: {e}')
+    return ' '.join(errors)
 
 
 async def _regen_bg(job: JobRecord, n: int):
@@ -1485,7 +1759,6 @@ async def _regen_bg(job: JobRecord, n: int):
         update_job(job, error='缺少重抽上下文')
         return
     _cancel_jobs.discard(job.job_id)
-    mf = job.retry_ctx.get('model_filter', job.model_filter)
     # 整批期间保持 running（不在迭代间置终态）——否则 SSE 见终态即关流，多抽第二张起就断了。
     update_job(job, status='running', started_at=time.time(), error='',
                operation='regen', operation_status='running', operation_error='')
@@ -1503,7 +1776,7 @@ async def _regen_bg(job: JobRecord, n: int):
         logger.exception(f"[API多抽] 异常 job={job.job_id}")
         err = str(e)
     finally:
-        final = compute_final_status(mf, job.b2_path, job.pro_path)
+        final = compute_runs_final_status(job)
         op_error = err or last_err
         cancelled = _is_cancelled(job.job_id, _cancel_generation[0])
         update_job(job, status=final, error=op_error,
@@ -1532,9 +1805,9 @@ async def _record_edit_bg(job: JobRecord, *, src_pil, api_key, instruction, mode
         src_pil.convert('RGB').save(buf, format='JPEG', quality=95)
         b64 = base64.b64encode(buf.getvalue()).decode()
         ar = _infer_aspect_ratio_from_b64(b64)
-        if _pro_semaphore.locked():
+        if _model_semaphores['pro'].locked():
             _on_stage('排队中')
-        async with _pro_semaphore:
+        async with _model_semaphores['pro']:
             out, err = await asyncio.to_thread(
                 call_gemini_edit, api_key, model_id, instruction, b64,
                 image_size, ar, preserve, _on_stage, lambda: _is_cancelled(jid, generation))
@@ -1910,7 +2183,7 @@ def color_match_preview(req: ColorMatchPreviewRequest):
 
 class JobColorMatchRequest(ColorMatchPreviewRequest):
     ref_path: str = ''                       # 空 → 回退本任务地板小样(job.png_path)
-    stage: Literal['b2', 'pro'] = 'pro'
+    stage: Literal['b2', 'pro', 'sd35'] = 'pro'
 
 
 @app.post('/api/jobs/{jid}/color-match')
@@ -1922,9 +2195,9 @@ async def job_color_match(jid: str, req: JobColorMatchRequest):
     if job.status in ('running', 'queued') or job.pro_polishing or job.operation_status == 'running':
         raise HTTPException(409, '任务进行中，请稍后校色')
     abs_src = _require_output_image_rel(req.image_rel)
-    ensure_candidate_lists(job)
+    ensure_model_runs(job)
     # 归属校验：必须是该任务对应 stage 的候选之一（防跨任务写入 + 免候选下标竞态）
-    cand = {os.path.realpath(str(p)) for p in getattr(job, f'{req.stage}_paths', []) if p}
+    cand = {os.path.realpath(str(p)) for p in ((job.model_runs.get(req.stage) or {}).get('paths') or []) if p}
     if os.path.realpath(abs_src) not in cand:
         raise HTTPException(400, '该图不属于此任务的候选')
     ref = _require_ref_image_path(req.ref_path or job.png_path or '')
@@ -1936,8 +2209,8 @@ async def job_color_match(jid: str, req: JobColorMatchRequest):
                                     job.png_path or abs_src)
     if not ppath:
         raise HTTPException(500, '校色结果保存失败')
-    add_candidate(job, req.stage, ppath)
-    update_job(job, status=compute_final_status(job.model_filter, job.b2_path, job.pro_path))
+    add_model_candidate(job, req.stage, ppath)
+    update_job(job, status=compute_runs_final_status(job))
     if job.json_path and job.record_id:
         try:
             await asyncio.to_thread(_api_write_to_record, out, '手动校色',
@@ -2000,6 +2273,344 @@ def record_color_match(req: RecordColorMatchRequest):
     if not str(msg).startswith('✅'):
         raise HTTPException(500, str(msg))
     return {'ok': True, 'result_url': _to_url(ppath)}
+
+
+# ============================================================
+# 生成式修补（inpaint：画笔涂抹选区 → 选区内移除/添加，选区外像素不变）
+# 引擎按 inpaint_provider 分派：fal=FLUX Fill 真 inpainting；comfyui=用户自备实例。
+# 三个入口：job 结果二改 / records 记录图 / 上传房间图预处理（生成前清理家具）。
+# ============================================================
+class InpaintPayload(BaseModel):
+    mask_b64: str = Field(min_length=1)          # 纯 base64 PNG(无 data: 前缀)，白=重绘区
+    prompt: str = Field(default='', max_length=2000)
+    mode: Literal['remove', 'add'] = 'remove'
+    grow: int = Field(default=8, ge=0, le=64)    # mask 最小外扩 px（实际随选区尺寸自适应放大）
+    feather: float = Field(default=0.01, ge=0, le=0.1)   # 羽化半径 / 短边比例
+    seed: Optional[int] = None
+    n: int = Field(default=3, ge=1, le=3)        # 候选数（Lightroom 式抽卡；n 张记 n 次费用）
+
+
+def _require_inpaint_prompt(req: InpaintPayload) -> None:
+    if req.mode == 'add' and not (req.prompt or '').strip():
+        raise HTTPException(400, '生成式添加需要描述要添加的内容')
+
+
+def _decode_inpaint_mask(mask_b64: str) -> Image.Image:
+    try:
+        raw = base64.b64decode(mask_b64)
+        m = Image.open(io.BytesIO(raw))
+        m.load()
+        return m
+    except Exception:
+        raise HTTPException(400, '遮罩解码失败（需要 PNG 的 base64）')
+
+
+def _prepare_inpaint_mask(mask: Image.Image, target_size, grow: int, feather: float) -> Image.Image:
+    """遮罩标准化：转 L → 尺寸对齐 → 二值化 → 自适应外扩 → 羽化。各引擎共用同一语义(白=重绘)。
+
+    - 外扩量自适应选区尺寸：max(grow, 8% × 选区 bbox 长边)，上限 64px——LaMa/业界经验
+      是 mask 宁大勿小（太小会留物体边缘和阴影残迹）；请求参数 grow 语义 = 最小外扩。
+    - 外扩用『高斯模糊 + 低阈值』近似膨胀(≈1.15σ)：PIL MaxFilter 在 4K 大核下慢到不可用，
+      而画笔选区本就无需像素级精确的形态学膨胀。"""
+    m = mask.convert('L')
+    tw, th = target_size
+    if m.size != (tw, th):
+        mw, mh = m.size
+        if abs((mw / mh) - (tw / th)) > 0.01 * (tw / th):
+            raise HTTPException(400, '遮罩与原图宽高比不一致，请重新涂抹')
+        m = m.resize((tw, th), Image.NEAREST)
+    m = m.point(lambda v: 255 if v >= 128 else 0)
+    bbox = m.getbbox()
+    if not bbox:
+        raise HTTPException(400, '遮罩为空：请先在图上涂抹要处理的区域')
+    effective_grow = max(grow, min(64, round(0.08 * max(bbox[2] - bbox[0], bbox[3] - bbox[1]))))
+    if effective_grow > 0:
+        m = m.filter(ImageFilter.GaussianBlur(effective_grow)).point(lambda v: 255 if v >= 32 else 0)
+    if feather > 0:
+        m = m.filter(ImageFilter.GaussianBlur(max(1.0, feather * min(tw, th))))
+    return m
+
+
+# ── 通用修补流：生成候选 → 挑选 → 提交（Lightroom 式抽卡体验）────────────
+# 三种目标（job 候选 / 记录结果 / 房间图）统一走 _inpaints 轮询表：
+#   POST /api/inpaint → 后台并发生成 n 个候选（临时目录，前端轮询挑选）
+#   → POST /api/inpaint/{iid}/apply 才落到目标。usage 在生成时记（n 张记 n 次），apply 不计费。
+_inpaints: dict = {}          # iid → {status, stage, candidates, error, ts, target, mode, prompt}
+_inpaint_lock = threading.Lock()
+_inpaint_cancel: set = set()
+_MAX_INPAINTS = 20
+_INPAINT_TMP_DIR = os.path.join(MAIN_OUTPUT_DIR, '_inpaint_candidates')
+
+
+def _delete_inpaint_files(entry) -> None:
+    for cand in (entry or {}).get('candidates') or []:
+        try:
+            p = cand.get('path')
+            if p and os.path.isfile(p):
+                os.remove(p)
+        except Exception:
+            pass
+
+
+def _trim_inpaints() -> None:
+    """收口 _inpaints 到 _MAX_INPAINTS：按 ts 删最旧的终态项（running 不删），
+    连带删临时候选文件。调用方须持 _inpaint_lock。"""
+    if len(_inpaints) <= _MAX_INPAINTS:
+        return
+    done = sorted(((iid, v) for iid, v in _inpaints.items()
+                   if v.get('status') in ('done', 'failed')),
+                  key=lambda kv: kv[1].get('ts', 0))
+    for iid, entry in done[:len(_inpaints) - _MAX_INPAINTS]:
+        _delete_inpaint_files(entry)
+        _inpaints.pop(iid, None)
+        _inpaint_cancel.discard(iid)
+
+
+class InpaintTarget(BaseModel):
+    """修补目标：job 候选 / 记录结果 / 房间图。字段按 kind 选用，校验在 _resolve_inpaint_source。"""
+    kind: Literal['job', 'record', 'room']
+    jid: str = ''
+    stage: Literal['b2', 'pro', 'sd35'] = 'pro'
+    image_rel: str = ''
+    json_path: str = ''
+    record_id: str = ''
+    result_id: str = Field(default='', max_length=80)
+    room_path: str = ''
+
+
+class GenericInpaintRequest(InpaintPayload):
+    target: InpaintTarget
+
+
+class InpaintApplyRequest(BaseModel):
+    index: int = Field(ge=0, le=2)
+
+
+def _resolve_inpaint_source(target: InpaintTarget):
+    """按 target 定位源图，校验逻辑与旧三端点一致。返回 (src_pil, workflow_mode, operation)。"""
+    if target.kind == 'job':
+        job = _get_job(target.jid)
+        if not job:
+            raise HTTPException(404, 'job not found')
+        if job.status in ('running', 'queued') or job.pro_polishing or job.operation_status == 'running':
+            raise HTTPException(409, '任务进行中，请稍后修补')
+        abs_src = _require_output_image_rel(target.image_rel)
+        ensure_model_runs(job)
+        cand = {os.path.realpath(str(p)) for p in ((job.model_runs.get(target.stage) or {}).get('paths') or []) if p}
+        if os.path.realpath(abs_src) not in cand:
+            raise HTTPException(400, '该图不属于此任务的候选')
+        src = Image.open(abs_src)
+        src.load()
+        return src, job.workflow_mode, 'inpaint'
+    if target.kind == 'record':
+        json_path = _require_record_json_path(target.json_path)
+        recs = _load_records(json_path)
+        rec = next((r for r in recs if r.get('id') == target.record_id), None)
+        if not rec:
+            raise HTTPException(404, '未找到记录')
+        res = next((item for item in rec.get('results', [])
+                    if item.get('result_id') == target.result_id), None)
+        if res is None:
+            raise HTTPException(404, '未找到该效果图')
+        src = None
+        rel = res.get('result_image_file')
+        abs_src = _safe_output_path(rel) if rel else None
+        if abs_src and os.path.isfile(abs_src):
+            try:
+                src = Image.open(abs_src)
+                src.load()
+            except Exception:
+                src = None
+        if src is None and res.get('result_image_b64'):
+            src = _b64_to_pil(res['result_image_b64'])
+        if src is None:
+            raise HTTPException(404, '该结果无可用图片')
+        return src, rec.get('workflow_mode', ''), 'record_inpaint'
+    room = _require_upload_image_path(target.room_path, '房间图', required=True)
+    src = Image.open(room)
+    src.load()
+    return src, '房间图预处理', 'room_prep'
+
+
+async def _generic_inpaint_bg(iid: str, src_pil, mask_pil, prompt, mode, seed, n,
+                              workflow_mode, operation):
+    """并发生成 n 个候选（信号量整体持有一次=一次用户操作），部分失败仍交付成功的候选。"""
+    def _set(**kw):
+        with _inpaint_lock:
+            if iid in _inpaints:
+                _inpaints[iid].update(kw)
+
+    should_cancel = lambda: iid in _inpaint_cancel
+    try:
+        async with _model_semaphores['inpaint']:
+            async def one(i: int):
+                variant_seed = (int(seed) + i) if seed is not None else None
+                # 只让第 0 路上报阶段文案，避免多路互相覆盖
+                stage_cb = (lambda t: _set(stage=t)) if i == 0 else None
+                return await asyncio.to_thread(
+                    call_image_inpaint, src_pil, mask_pil, prompt, mode=mode,
+                    seed=variant_seed, on_stage=stage_cb, should_cancel=should_cancel)
+            results = await asyncio.gather(*[one(i) for i in range(max(1, n))],
+                                           return_exceptions=True)
+        os.makedirs(_INPAINT_TMP_DIR, exist_ok=True)
+        candidates = []
+        last_err = ''
+        for i, res in enumerate(results):
+            if isinstance(res, BaseException):
+                logger.error(f'[修补] 候选 {i} 异常 iid={iid}: {res}')
+                last_err = str(res)
+                continue
+            out, err, provider, usage_label = res
+            if out is None:
+                last_err = str(err or '生成失败')
+                record_usage(workflow_mode, usage_label, provider, False, operation)
+                continue
+            record_usage(workflow_mode, usage_label, provider, True, operation)
+            path = os.path.join(_INPAINT_TMP_DIR, f'{iid}_{i}.jpg')
+            await asyncio.to_thread(lambda p=path, im=out: im.convert('RGB').save(p, format='JPEG', quality=95))
+            candidates.append({'url': _to_url(path), 'thumb': _result_thumb_url(path), 'path': path})
+        if not candidates:
+            _set(status='failed', error=last_err or '修补失败', stage='')
+            return
+        note = f'{max(1, n) - len(candidates)} 个候选失败：{last_err}' if len(candidates) < max(1, n) and last_err else ''
+        _set(status='done', stage='', candidates=candidates, error=note)
+        logger.info(f'[修补] 候选就绪 iid={iid}, {len(candidates)}/{n}')
+    except Exception as e:
+        logger.exception(f'[修补] 异常 iid={iid}')
+        _set(status='failed', error=str(e), stage='')
+    finally:
+        _inpaint_cancel.discard(iid)
+
+
+@app.post('/api/inpaint')
+async def create_inpaint(req: GenericInpaintRequest):
+    """提交修补：定位源图 → 标准化 mask → 后台并发生成 n 个候选，前端轮询后挑选提交。"""
+    _require_inpaint_prompt(req)
+    src_pil, workflow_mode, operation = _resolve_inpaint_source(req.target)
+    mask_raw = _decode_inpaint_mask(req.mask_b64)
+    mask_pil = await asyncio.to_thread(_prepare_inpaint_mask, mask_raw, src_pil.size, req.grow, req.feather)
+    iid = f'ip_{uuid.uuid4().hex}'
+    with _inpaint_lock:
+        _inpaints[iid] = {'status': 'running', 'stage': '', 'candidates': [], 'error': '',
+                          'ts': time.time(), 'target': req.target.model_dump(),
+                          'mode': req.mode, 'prompt': (req.prompt or '').strip()}
+        _trim_inpaints()
+    _spawn(_generic_inpaint_bg(iid, src_pil, mask_pil, req.prompt, req.mode, req.seed,
+                               req.n, workflow_mode, operation))
+    return {'inpaint_id': iid}
+
+
+@app.post('/api/inpaint/{iid}/apply')
+async def inpaint_apply(iid: str, req: InpaintApplyRequest):
+    """把选中的候选提交到目标（apply 不计费；成功后清理该次全部临时候选）。"""
+    with _inpaint_lock:
+        entry = _inpaints.get(iid)
+        if not entry:
+            raise HTTPException(404, 'inpaint task not found')
+        if entry.get('status') != 'done':
+            raise HTTPException(409, '候选尚未就绪')
+        candidates = entry.get('candidates') or []
+        if req.index >= len(candidates):
+            raise HTTPException(400, '候选序号无效')
+        cand_path = candidates[req.index].get('path') or ''
+    if not os.path.isfile(cand_path):
+        raise HTTPException(410, '候选文件已被清理，请重新生成')
+    out = await asyncio.to_thread(lambda: (lambda im: (im.load(), im)[1])(Image.open(cand_path)))
+    target = InpaintTarget(**entry['target'])
+    mode = entry.get('mode') or 'remove'
+    prompt = entry.get('prompt') or ''
+    label = '生成式移除' if mode == 'remove' else '生成式添加'
+    if target.kind == 'job':
+        job = _get_job(target.jid)
+        if not job:
+            raise HTTPException(404, '任务卡已被清除，无法写回')
+        if job.status in ('running', 'queued') or job.pro_polishing or job.operation_status == 'running':
+            raise HTTPException(409, '任务进行中，请稍后提交')
+        ppath = await asyncio.to_thread(_save_api_result_jpg, out, label, job.png_path or cand_path)
+        if not ppath:
+            raise HTTPException(500, '结果保存失败')
+        add_model_candidate(job, target.stage, ppath)
+        update_job(job, status=compute_runs_final_status(job))
+        if job.json_path and job.record_id:
+            try:
+                await asyncio.to_thread(_api_write_to_record, out, label, job.json_path, job.record_id, ppath)
+            except Exception as ex:
+                logger.warning(f'[修补] 写记录失败 iid={iid}: {ex}')
+        _persist_jobs()
+        resp = {'ok': True, 'job': _job_view(job)}
+    elif target.kind == 'record':
+        json_path = _require_record_json_path(target.json_path)
+        ppath = await asyncio.to_thread(_save_api_result_jpg, out, label,
+                                        json_path.replace('_记录.json', '_优化图.png'))
+        if not ppath:
+            raise HTTPException(500, '结果保存失败')
+        msg = await asyncio.to_thread(append_edited_result_to_record, json_path, target.record_id,
+                                      target.result_id, out, prompt or label, label, ppath)
+        if not str(msg).startswith('✅'):
+            raise HTTPException(500, str(msg))
+        resp = {'ok': True, 'result_url': _to_url(ppath)}
+    else:
+        stem = os.path.splitext(os.path.basename(target.room_path))[0]
+        dest = safe_upload_path(f'{stem}_clean.jpg', 'room_')
+        if not dest:
+            raise HTTPException(500, '结果保存路径无效')
+        await asyncio.to_thread(lambda: out.convert('RGB').save(dest, format='JPEG', quality=95))
+        resp = {'ok': True, 'path': dest, 'url': _to_url(dest), 'thumb': _thumb_url(dest)}
+    with _inpaint_lock:
+        entry = _inpaints.pop(iid, None)
+    _delete_inpaint_files(entry)
+    _inpaint_cancel.discard(iid)
+    logger.info(f'[修补] 已提交候选 iid={iid}, kind={target.kind}, index={req.index}')
+    return resp
+
+
+@app.get('/api/inpaint/comfyui/ping')
+def comfyui_ping(url: str = ''):
+    """后端代理探测 ComfyUI（浏览器直连内网地址会撞 CORS，一切 ComfyUI 通信走后端）。"""
+    base = (url or get_comfyui_settings()['base_url']).strip().rstrip('/')
+    if not base:
+        raise HTTPException(400, '未配置 ComfyUI 地址')
+    import requests as _preq
+    session = _preq.Session()
+    session.trust_env = False   # 内网地址不走系统代理
+    try:
+        resp = session.get(f'{base}/system_stats', timeout=(5, 10))
+        resp.raise_for_status()
+        stats = resp.json()
+        devices = [d.get('name', '') for d in (stats.get('devices') or [])]
+        return {'ok': True, 'version': (stats.get('system') or {}).get('comfyui_version', ''),
+                'devices': devices}
+    except Exception as ex:
+        return {'ok': False, 'error': str(ex)[:300]}
+
+
+@app.get('/api/inpaint/{iid}')
+def inpaint_status(iid: str):
+    with _inpaint_lock:
+        v = _inpaints.get(iid)
+        if not v:
+            raise HTTPException(404, 'inpaint task not found')
+        # 只回传前端需要的字段（path 是服务端内部路径，target/prompt 前端已知）
+        return {'inpaint_id': iid, 'status': v.get('status', ''), 'stage': v.get('stage', ''),
+                'error': v.get('error', ''),
+                'candidates': [{'url': c.get('url', ''), 'thumb': c.get('thumb', '')}
+                               for c in (v.get('candidates') or [])]}
+
+
+@app.post('/api/inpaint/{iid}/cancel')
+def inpaint_cancel(iid: str):
+    """running 中 = 标记取消(引擎轮询停止)；终态 = 直接清理（前端「再抽」前废弃旧候选）。"""
+    with _inpaint_lock:
+        entry = _inpaints.get(iid)
+        if not entry:
+            raise HTTPException(404, 'inpaint task not found')
+        if entry.get('status') != 'running':
+            _delete_inpaint_files(entry)
+            _inpaints.pop(iid, None)
+            _inpaint_cancel.discard(iid)
+            return {'cancelled': True}
+    _inpaint_cancel.add(iid)
+    return {'cancelled': True}
 
 
 # ── 失败知识库：常见失败参考 ──

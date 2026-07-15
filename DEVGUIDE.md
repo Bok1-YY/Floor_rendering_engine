@@ -1,6 +1,6 @@
 # Floor AI 生图引擎 · 开发手册（DEVGUIDE）
 
-> 地板行业**效果图生成**引擎的商业版。上传地板小样 → 自动识色/智能配方 → 配参数 → 调 Gemini/Fal 出图（B2 快出 + Pro 精修，支持 4K）。
+> 地板行业**效果图生成**引擎的商业版。上传地板小样 → 自动识色/智能配方 → 配参数 → 调 Gemini/Fal 出图（B2 + Pro + 可选 SD 3.5，支持 4K）。
 > 本仓库 `Floor_engine_server/` 是从原型 `test/floor_engine/` fork 出来的**商业主线**：把界面从 NiceGUI 迁到「FastAPI 无头后端 + Next.js 真前端」，引擎逻辑原样复用。
 > 本手册按当前真实代码（2026-07）维护，**开头就是启动**。读完「零」即可跑起来；要改代码再往下看。
 
@@ -106,9 +106,10 @@ Floor_engine_server/
 ├── models.py            纯数据：JobRecord(作业)、TaskParams(参数)、compute_final_status、候选图导航(add/nav_candidate)
 ├── prompt_data.py       海量选项表（STYLES/LIGHTINGS/ANGLES/FLOOR_TONES/ROOM_TYPES/CN_*…）+ 识色 analyze_floor_tone + 中英翻译
 ├── prompts.py           提示词组装：save_task_files_html(35+ 参数 → 英文 prompt + 落 JSON/PNG)，4 种工作流各一个 builder
+├── sd_prompts.py        SD 3.5 专属正/负提示词编译器；只读 TaskParams，不读取/改写 Gemini prompt
 ├── recipes.py           智能配方：recommend_recipes(按色调推荐) + pick_option_key(关键词→具体选项)
 ├── custom_recipes.py    “我的配方”：运行期 JSON 存储及增删改查
-├── api.py               模型调用：Google/Fal 生图、Gemini→DeepSeek Omakase 主备路由、磨缝二改、本地颜色处理、连通性自检
+├── api.py               模型调用：Google/Fal 生图、FAL 持久队列、SD3.5 IP-Adapter、AuraSR、磨缝二改与本地颜色处理
 ├── records.py           持久化：队列、记录、生成上下文、收藏/评审、复盘聚合、用量成本、HTML/PPTX 导出
 ├── failure_kb.py        失败知识库：FAILURE_RULES + classify_failure(错误串→{title,cause,action})
 ├── themes.py            旧 UI 主题 CSS 生成（曾供 NiceGUI；webui 退役后已无运行期消费者，留待后续清理）
@@ -144,7 +145,7 @@ Floor_engine_server/
 
 - **新旧版共享同一份数据**：旧 NiceGUI(7869) 和新后端(7870) 同时跑也互不冲突，看到的是同一批历史与配置。
 - **将来迁出 `test/`**：把本仓库挪到别处，`BASE_DIR` 自动指向新位置 → 自动获得**独立**数据目录，无需改一行代码。`.gitignore` 已提前忽略这些运行期产物，防止迁出后误入库。
-- engine_config.json 关键字段：`gemini_api_key`/`proxy`/`fal_api_key`/`image_provider`(google|fal)/`speed_profile`(fast|resilient)/`auto_failover`/`tls_verify`/`tls_ca_bundle`/`max_concurrent_per_model`，以及成本估算 `usage_prices`、PPTX 品牌字段 `pptx_company`/`pptx_contact`。前端「设置」页读写这些（经 `GET/PUT /api/config`，返回时密钥脱敏）；品牌 Logo 走独立上传端点。
+- engine_config.json 关键字段：`gemini_api_key`/`proxy`/`fal_api_key`/`fal_queue_proxy`（SD/AuraSR 专用，默认空=忽略系统代理直连）/`image_provider`(google|fal)/`sd_enabled`（SD 实验线路，默认关）/`speed_profile`(fast|resilient)/`auto_failover`/`tls_verify`/`tls_ca_bundle`/`max_concurrent_per_model`，生成式修补组 `inpaint_provider`(fal|comfyui)/`inpaint_remove_model`/`inpaint_add_model`/`comfyui_base_url`/`comfyui_workflow_path`/`comfyui_timeout`/`inpaint_remove_prompt`，以及成本估算 `usage_prices`、PPTX 品牌字段 `pptx_company`/`pptx_contact`。前端「设置」页读写这些（经 `GET/PUT /api/config`，返回时密钥脱敏）；品牌 Logo 走独立上传端点。
 
 ---
 
@@ -159,19 +160,21 @@ Floor_engine_server/
 ```
 POST /api/jobs ──秒回 job_id──▶ 后台 asyncio task(_run_job_bg)
                                   │  _task_prep_lock 内 save_task_files_html 组装提示词
-                                  │  _b2_semaphore / _pro_semaphore 限并发，分别调 call_image_generate
+                                  │  _model_semaphores 按 b2/pro/sd35 分模型限并发
+                                  │  B2/Pro → call_image_generate；SD → FAL queue + IP-Adapter + AuraSR
                                   │  出一张 _api_write_to_record 落盘一张；stage 文本实时更新
 前端 GET /api/jobs/{id}/stream ◀─ SSE 每秒推 _job_view 快照，进终态推 done 事件并关闭
 ```
-进程内状态（都在 `_job_lock` 下读写）：`_job_history`(列表，新在前)、`_b2_semaphore`/`_pro_semaphore`(并发，lifespan 里按配置建)、`_cancel_jobs`(单作业取消集合)、`_cancel_generation`(全局取消计数器)。终态：`done`/`partial`/`failed`；`compute_final_status` 据 model_filter + 出图情况判定。
+进程内状态（都在 `_job_lock` 下读写）：`_job_history`(列表，新在前)、`_model_semaphores`(b2/pro/sd35 各一把，lifespan 里按配置建)、`_cancel_jobs`(单作业取消集合)、`_cancel_generation`(全局取消计数器)。新任务以 `model_targets` + `model_runs` 为真源，旧 `model_filter`/B2/Pro 固定字段仅作兼容；终态由 `compute_runs_final_status` 汇总。
 
 ### 4.3 端点目录（50+ API 路由）
-- **作业** `/api/jobs`：`POST`建 · `GET`列 · `GET {id}` · `GET {id}/stream`(SSE) · `POST {id}/cancel` · `POST cancel-all` · `POST clear-completed`(清完成) · `POST {id}/delete`(删单条) · `POST {id}/retry` · `GET {id}/result?model=&idx=`(候选切换) · `POST {id}/polish`(磨缝) · `POST {id}/edit`(二改) · `POST {id}/regen?n=`(重抽/多抽)。
+- **作业** `/api/jobs`：`POST`建（`model_targets` 可多选 b2/pro/sd35）· `GET`列 · `GET {id}` · `GET {id}/stream`(SSE) · `POST {id}/cancel` · `POST cancel-all` · `POST clear-completed`(清完成) · `POST {id}/delete`(删单条) · `POST {id}/retry` · `POST {id}/sd-upscale`(仅重试 AuraSR) · `GET {id}/result?model=&idx=`(候选切换) · `POST {id}/polish`(磨缝) · `POST {id}/edit`(二改) · `POST {id}/regen?n=`(重抽/多抽)。
 - **预览** `/api/preview`：`POST` 创建轻量预览 · `GET {pid}` 查询 · `POST {pid}/cancel` 取消。
 - **记录** `/api/records`：`GET`列文件 · `GET load` · `POST reveal`(解密) · `POST edit`(记录内二改) · `POST result/delete` · `POST result/favorite` · `POST result/review`(人工评审：通过/备选/淘汰、标签、备注、最佳图) · `POST delete`(删整条) · `GET export/{html,pptx,favorites-pptx}`(FileResponse 下载)。
 - **上传** `POST /api/uploads/{floor,room,ref}`；品牌 Logo 为 `POST /api/uploads/logo` 与 `POST /api/uploads/logo/clear`。
 - **小样与配方**：`GET /api/swatches/recent` · `GET /api/recipes` · `/api/recipes/custom` 列表/新增/更新/删除。
 - **识色与校色**：`GET /api/floor/analyze`；`POST /api/color-match/preview` 生成本地缩图预览并返回满强度 `auto_adjustments`；`POST /api/jobs/{id}/color-match` 或 `/api/records/color-match` 全分辨率落为新候选。三条校色请求共用 `adjustments` 与 `adjustment_mode=auto|manual`：自动模式保留区域 Reinhard，手动模式以 Gemini 原图为零点应用绝对高级参数。
+- **生成式修补** `/api/inpaint`（两段式，实验）：`POST /api/inpaint`（target 三种 kind=job/record/room + mask + n=1~3 并发候选）· `GET {iid}`(轮询候选) · `POST {iid}/apply`(挑中才落目标) · `POST {iid}/cancel` · `GET comfyui/ping`(后端代理探测本地实例)。
 - **评审复盘**：`GET /api/review/summary` 聚合维度统计 · `GET /api/review/gallery?filter=pass|best` 好图样本库。
 - **失败** `POST /api/failure/classify` · `GET /api/failure/rules`；**连通** `GET /api/connection/test`。
 - **配置** `GET/PUT /api/config`；**模型** `GET /api/models`；**选项** `GET /api/options`(前端下拉真源)；**用量** `GET /api/usage`；**健康** `GET /api/healthz`。
@@ -179,6 +182,20 @@ POST /api/jobs ──秒回 job_id──▶ 后台 asyncio task(_run_job_bg)
 
 ### 4.4 加新端点的范式
 仿 `cancel_all` / `clear_completed`：改 `_job_history` 要持 `_job_lock`；**`_persist_jobs()` 必须在锁外调**（它内部会再取同一把锁，threading.Lock 不可重入，锁内调会死锁）。业务逻辑能复用引擎就复用（导出→`records.export_*`、识色→`prompt_data.analyze_floor_tone`、配方→`recipes.*`）。
+
+### 4.5 SD 3.5 独立线路
+- 仅“纯效果图”，必须开启 `sd_enabled` 且配置 Fal Key。
+- `sd_prompts.py` 独立编译正负提示词，禁止把 Gemini 的对抗式 prompt 机械清洗后共用。
+- `api._call_fal_queue_json` 使用 `queue.fal.run` 持久队列；状态接口的 HTTP 202 表示正常排队/推理。提交响应未知时不自动重交，防重复计费。新队列默认忽略系统/Google 代理直连，只有 `fal_queue_proxy` 非空时才走专用代理。
+- SD 基础图约 1MP、64 对齐；InstantX IP-Adapter 强制使用地板小样；2K/4K 再走 AuraSR 4×。超分失败保留基础图并标 partial。
+- 完整契约与校准说明见 [`SD35_INTEGRATION.md`](SD35_INTEGRATION.md)。
+
+### 4.6 生成式修补（实验线路，2026-07-15 暂停深入）
+- **能力**：画笔涂抹 mask → 选区内移除/添加物体，选区外像素严格不变（羽化 mask 合成回贴兜底）。三处入口：任务结果、历史记录、房间图生成前清理家具。
+- **管线**（`api.call_image_inpaint` 统一调度）：`_prepare_inpaint_mask` 自适应膨胀（max(用户 grow, 8%×选区长边, 上限 64px)，高斯+低阈值近似膨胀）→ `_crop_inpaint_context` 裁选区上下文窗口（外扩 max(bbox 长边×0.75, 256px)，长边>2048 缩到工作分辨率）→ 引擎 → `_stitch_inpaint_result` 贴回 → 羽化合成。裁剪回贴是对齐 Lightroom 清晰度的关键（整图直送会压掉选区细节）。
+- **引擎**：移除默认 `bria-eraser`（可选 finegrain/lama/flux-fill/gemini-mark）；添加默认 `flux-fill`（可选 qwen-inpaint/gemini-mark）。**qwen-inpaint 实测无法做移除**（指令编辑类模型强条件于原图，mask 对模型不可见），只保留在添加列表。`inpaint_provider=comfyui` 时全部走本地 ComfyUI 实例（workflow 模板占位符注入，内置模板在 `assets/comfy_workflows/`）。
+- **计费**：usage 在生成时按候选张数记（n 张 n 次），apply 不计费；候选存 `output_files/_inpaint_candidates/`，apply/cancel/trim 时清理。
+- **⚠️ 已知局限（当前状态）**：实测复杂纹理场景下修补区贴回后可能与原图**像素偏移或发糊**，整体效果仍不及 Lightroom 原生生成式移除；该方向 2026-07-15 起暂停投入（功能保留可用）。后续可排查点：贴回缩放的取整/重采样链路、gemini-mark 引擎待有效 Gemini Key 实测。
 
 ---
 
@@ -197,14 +214,15 @@ web/src/
 │   ├── records/page.tsx  记录页（左 280px 文件列表 + 右记录卡；房间/评审筛选、收藏、最佳图、人工标注）
 │   ├── review/page.tsx   评审复盘（覆盖率/通过率、维度统计、问题标签、好图样本库）
 │   ├── usage/page.tsx    用量页（stat 卡 + 成功率 + 估算成本 + 明细表）
-│   └── settings/page.tsx 设置页（密钥、线路网络、模型单价、PPTX 品牌）
+│   └── settings/page.tsx 设置页（密钥、线路网络、生成式修补引擎、模型单价、PPTX 品牌）
 ├── components/
 │   ├── AppShell.tsx      ★ 应用外壳：奶油侧边栏(236) + 顶栏(56,路由映射标题) + 内容槽
-│   ├── ParamsForm.tsx    参数表单（工作流 2×2 卡 / 市场·模型 segmented / 字段 Select / 胶囊 / 高级折叠）
-│   ├── JobCard.tsx       任务卡（SSE 实时 / 状态徽章 / 候选‹n/N› / 停止·重试·磨缝·二改·重抽·清除）
+│   ├── ParamsForm.tsx    参数表单（工作流 / 多模型选择 / SD 高级参数 / 字段 Select / 胶囊 / 高级折叠）
+│   ├── JobCard.tsx       通用模型任务卡（model_runs / 候选 / SD Seed·基础图·超分重试 / 既有编辑操作）
 │   ├── FloorUploader.tsx 地板上传 + 最近小样网格 + 历史弹窗
 │   ├── CompareSlider.tsx 前后图拖动对比
 │   ├── ColorMatchDialog.tsx 手动校色区域、1% 自动强度、原图基准高级参数、双重置与竞态安全预览
+│   ├── InpaintDialog.tsx 生成式修补（画笔/橡皮/撤销 canvas、1~3 候选抽卡、CompareSlider 对比、apply 落盘）
 │   ├── ThemeProvider.tsx next-themes 接线（浅色/深色/跟随系统）
 │   ├── ImageZoom.tsx     全屏看图；支持原图+结果透明图层，滚轮缩放/拖动/双击复位/Esc
 │   ├── dc-ui.tsx         设计基元：SectionHeader(点头标)·Segmented(分段)·Pill(胶囊)
@@ -259,7 +277,7 @@ web/src/
 6. 在 **`开发日志.md` 顶部追加一条**（改了啥、为什么）。
 7. 提交（见 §九）。
 
-**测试**：`cd Floor_engine_server && python -m pytest`（引擎层 golden 提示词、安全硬化、人工评审元数据、自动/手动校色和非校色新功能回归；当前 **88 项**）。本机若系统 `python` 无 pytest，可用项目虚拟环境：`.venv/bin/python -m pytest`。`tests/golden/` 基准入库，缓存不入。
+**测试**：`cd Floor_engine_server && python -m pytest`（引擎层 golden 提示词、安全硬化、人工评审元数据、自动/手动校色、SD 提示词/IP-Adapter/FAL 队列、生成式修补引擎解析/裁剪回贴和非校色新功能回归；当前 **116 项**）。本机若系统 `python` 无 pytest，可用项目虚拟环境：`.venv/bin/python -m pytest`。`tests/golden/` 基准入库，缓存不入。
 
 ---
 

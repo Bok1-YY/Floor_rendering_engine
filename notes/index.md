@@ -13,6 +13,8 @@
 |---|---|
 | 🧠 [[mental-model]] | 我遇到过什么大 Bug、做过什么架构大改（为什么从 A 换到 B）、当时怎么想的 |
 | 🏗️ [[architecture]] | 当前目录结构、模块调用依赖图、关键调用链、前端结构 |
+| ☁️ [[../SAAS_ARCHITECTURE\|SAAS_ARCHITECTURE]] | 未来在线订阅版、多供应商能力池、计费、部署与分阶段迁移 |
+| 🎨 [[../SD35_INTEGRATION\|SD35_INTEGRATION]] | SD 3.5 独立提示词、IP-Adapter 地板参考、AuraSR 与通用模型任务结构 |
 | ⚔️ [[bevel-saga]] | 招牌调试战役：圆弧倒角「双峰失败」如何试错→撤回→沉淀认知 |
 | 🕳️ [[pitfalls-and-conventions]] | 改代码前必读的坑与约定（单 worker / golden / Next16 / 保真红线…） |
 
@@ -40,7 +42,7 @@
 │ records(持久化+人工评审+导出) · failure_kb(失败分类)      │
 ├─ 图像模型 ──────────────────────────────────────────────┤
 │ Google Gemini（B2 快出 / Pro 精修 / Lite 1K 预览）       │
-│ Fal（可选生图备线）· Gemini 文本 → DeepSeek（Omakase 备线）│
+│ Fal SD3.5+IP-Adapter / AuraSR · Gemini→DeepSeek 文本备线 │
 ├─ 图像/数据 ─────────────────────────────────────────────┤
 │ Pillow · NumPy · python-pptx（导出 deck）                │
 └─────────────────────────────────────────────────────────┘
@@ -72,6 +74,7 @@
 
 - **日志文件**：[[开发日志]]（`开发日志.md`）— 每次会话改了啥、为什么，最新在最上。
 - **开发手册**：`DEVGUIDE.md` — 启动 / 端点目录 / 前端结构 / 坑。
+- **SaaS 规划**：`SAAS_ARCHITECTURE.md` — 在线订阅、多租户、可靠任务、多供应商和计费架构。
 - **说明**：`README.md`、`打包说明.md`。
 - **代码结构**：见 [[architecture|各模块职责表]]。
 

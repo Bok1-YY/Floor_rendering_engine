@@ -2,7 +2,7 @@
 "use client";
 import { useRef, useState } from "react";
 import { api } from "@/lib/api";
-import type { GenParams, ModelFilter, OptionsView, Swatch, OmakaseOption } from "@/lib/types";
+import type { GenParams, ModelKey, OptionsView, SDOptions, Swatch, OmakaseOption } from "@/lib/types";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { SectionHeader, Segmented } from "@/components/dc-ui";
+import { InpaintDialog } from "@/components/InpaintDialog";
 
 const short = (s: string) => s.split(" (")[0];
 
@@ -167,9 +168,12 @@ function ImageUpload({
 export function ParamsForm({
   options,
   params,
-  modelFilter,
+  modelTargets,
+  sdOptions,
+  sdEnabled,
   onParams,
-  onModelFilter,
+  onModelTargets,
+  onSDOptions,
   refValue,
   onRefPick,
   roomValue,
@@ -177,9 +181,12 @@ export function ParamsForm({
 }: {
   options: OptionsView;
   params: GenParams;
-  modelFilter: ModelFilter;
+  modelTargets: ModelKey[];
+  sdOptions: SDOptions;
+  sdEnabled: boolean;
   onParams: (patch: Partial<GenParams>) => void;
-  onModelFilter: (m: ModelFilter) => void;
+  onModelTargets: (m: ModelKey[]) => void;
+  onSDOptions: (patch: Partial<SDOptions>) => void;
   refValue: Swatch | null;
   onRefPick: (s: Swatch) => void;
   roomValue: Swatch | null;
@@ -194,6 +201,17 @@ export function ParamsForm({
   const panelSub = params.panel_submode || "再设计";
   const isPanelScene = isPanel && !panelSub.includes("替换"); // 再设计/纯原创：暴露场景控件；替换保留原图
   const [advOpen, setAdvOpen] = useState(false);
+  const [sdOpen, setSdOpen] = useState(false);
+  // 房间图生成前预处理：画笔涂抹移除原有家具/杂物，清理结果另存并回填为当前房间图
+  const [roomCleanOpen, setRoomCleanOpen] = useState(false);
+  const toggleModel = (key: ModelKey) => {
+    if (key === "sd35" && (!sdEnabled || !params.workflow_mode.includes("纯效果图"))) return;
+    onModelTargets(
+      modelTargets.includes(key)
+        ? modelTargets.filter((m) => m !== key)
+        : [...modelTargets, key],
+    );
+  };
 
   // ── Omakase：本地状态（诉求输入 / 加载 / 候选）。最终 scene_override 存进 params 交给后端 ──
   const [omaIdea, setOmaIdea] = useState("");
@@ -313,6 +331,27 @@ export function ParamsForm({
               <span className="text-[11px] text-muted-foreground">
                 保留原图的空间、家具与采光，仅把原地面替换为所选地板
               </span>
+              {roomValue && (
+                <button
+                  type="button"
+                  onClick={() => setRoomCleanOpen(true)}
+                  className="h-9 w-fit rounded-[9px] border border-border bg-card px-3 text-[12.5px] font-semibold text-secondary-foreground hover:bg-accent"
+                  title="生成前先用画笔涂抹移除房间里的家具/杂物，清理后的图自动作为当前房间图"
+                >
+                  🧹 清理家具（生成式移除）
+                </button>
+              )}
+              {roomCleanOpen && roomValue && (
+                <InpaintDialog
+                  open={roomCleanOpen}
+                  onOpenChange={setRoomCleanOpen}
+                  srcUrl={roomValue.url}
+                  target={{ kind: "room", roomPath: roomValue.path }}
+                  onRoomCleaned={(path, url, thumb) =>
+                    onRoomPick({ ...roomValue, path, url, thumb })
+                  }
+                />
+              )}
             </div>
           )}
           {isRef && (
@@ -457,16 +496,113 @@ export function ParamsForm({
         )}
         <div className="flex-1">
           <div className="mb-[7px] text-[11.5px] font-semibold text-muted-foreground">模型线路</div>
-          <Segmented<ModelFilter>
-            value={modelFilter}
-            options={options.model_filters.map((m) => ({
-              value: m.value,
-              label: m.label,
-            }))}
-            onChange={onModelFilter}
-          />
+          <div className="grid grid-cols-3 gap-2">
+            {([
+              ["b2", "B2"],
+              ["pro", "Pro"],
+              ["sd35", "SD 3.5"],
+            ] as const).map(([key, label]) => {
+              const disabled = key === "sd35" && (!sdEnabled || !params.workflow_mode.includes("纯效果图"));
+              const active = modelTargets.includes(key);
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  disabled={disabled}
+                  onClick={() => toggleModel(key)}
+                  title={key === "sd35" && disabled
+                    ? (!sdEnabled ? "请先在设置中启用 SD 3.5" : "SD 3.5 当前仅支持纯效果图")
+                    : `选择 ${label}`}
+                  className={cn(
+                    "h-10 rounded-[10px] border text-[12.5px] font-bold transition-colors",
+                    active
+                      ? "border-primary bg-primary-soft text-accent-foreground"
+                      : "border-border bg-card text-secondary-foreground hover:bg-accent",
+                    disabled && "cursor-not-allowed opacity-45",
+                  )}
+                >
+                  {active ? "✓ " : ""}{label}
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-1.5 text-[10.5px] text-muted-foreground">
+            可同时选择多个模型并行生成；SD 3.5 使用独立提示词与地板参考图。
+          </div>
         </div>
       </div>
+
+      {modelTargets.includes("sd35") && (
+        <div className="mt-3 rounded-xl border border-border bg-card">
+          <button
+            type="button"
+            onClick={() => setSdOpen((v) => !v)}
+            className="flex w-full items-center justify-between px-[13px] py-[11px]"
+          >
+            <span className="text-[12.5px] font-bold text-secondary-foreground">SD 3.5 高级参数</span>
+            <span className="text-[11px] text-muted-foreground">{sdOpen ? "收起 ▲" : "展开 ▼"}</span>
+          </button>
+          {sdOpen && (
+            <div className="grid grid-cols-2 gap-[11px] border-t border-border p-[13px]">
+              <label className="flex flex-col gap-1.5">
+                <span className="text-[11.5px] font-semibold text-muted-foreground">Seed（留空为随机）</span>
+                <Input
+                  type="number"
+                  min={0}
+                  value={sdOptions.seed ?? ""}
+                  onChange={(e) => onSDOptions({ seed: e.target.value === "" ? null : Math.max(0, Number(e.target.value)) })}
+                  className="h-10 rounded-[10px] bg-panel"
+                />
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-[11.5px] font-semibold text-muted-foreground">采样步数（10–50）</span>
+                <Input
+                  type="number" min={10} max={50} value={sdOptions.steps}
+                  onChange={(e) => onSDOptions({ steps: Number(e.target.value) })}
+                  className="h-10 rounded-[10px] bg-panel"
+                />
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-[11.5px] font-semibold text-muted-foreground">CFG（1–10）</span>
+                <Input
+                  type="number" min={1} max={10} step={0.1} value={sdOptions.guidance_scale}
+                  onChange={(e) => onSDOptions({ guidance_scale: Number(e.target.value) })}
+                  className="h-10 rounded-[10px] bg-panel"
+                />
+              </label>
+              <label className="flex flex-col gap-1.5">
+                <span className="text-[11.5px] font-semibold text-muted-foreground">地板参考强度（0.1–1）</span>
+                <Input
+                  type="number" min={0.1} max={1} step={0.05} value={sdOptions.reference_strength}
+                  onChange={(e) => onSDOptions({ reference_strength: Number(e.target.value) })}
+                  className="h-10 rounded-[10px] bg-panel"
+                />
+              </label>
+              <label className="col-span-2 flex flex-col gap-1.5">
+                <span className="text-[11.5px] font-semibold text-muted-foreground">正向追加（不改内置结构）</span>
+                <Textarea
+                  rows={2} value={sdOptions.positive_addition}
+                  onChange={(e) => onSDOptions({ positive_addition: e.target.value })}
+                  placeholder="仅追加 Stable Diffusion 正向提示词…"
+                  className="rounded-[9px] bg-panel"
+                />
+              </label>
+              <label className="col-span-2 flex flex-col gap-1.5">
+                <span className="text-[11.5px] font-semibold text-muted-foreground">负向追加（不改内置结构）</span>
+                <Textarea
+                  rows={2} value={sdOptions.negative_addition}
+                  onChange={(e) => onSDOptions({ negative_addition: e.target.value })}
+                  placeholder="例如：warped floor, duplicate furniture…"
+                  className="rounded-[9px] bg-panel"
+                />
+              </label>
+              <p className="col-span-2 text-[10.5px] leading-relaxed text-muted-foreground">
+                基础图约 1MP；选择 2K/4K 时由 AuraSR 放大，再按目标长边交付。固定 Seed 可复现实验。
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {!isOmakase && !isPanel && (<>
       {/* ── 位置 ── */}

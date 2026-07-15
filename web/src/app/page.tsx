@@ -7,9 +7,11 @@ import type {
   GenParams,
   JobView,
   ModelFilter,
+  ModelKey,
   OptionsView,
   PreviewView,
   ResolvedRecipe,
+  SDOptions,
   Swatch,
 } from "@/lib/types";
 import { toast } from "sonner";
@@ -75,12 +77,32 @@ function buildDefaultParams(o: OptionsView, prevWorkflow?: string): GenParams {
   };
 }
 
+const DEFAULT_SD_OPTIONS: SDOptions = {
+  seed: null,
+  steps: 28,
+  guidance_scale: 3.5,
+  reference_strength: 0.5,
+  positive_addition: "",
+  negative_addition: "",
+};
+
+const targetsFromLegacy = (filter?: ModelFilter): ModelKey[] =>
+  filter === "b2" ? ["b2"] : filter === "pro" ? ["pro"] : ["b2", "pro"];
+
+const legacyFromTargets = (targets: ModelKey[]): "b2" | "pro" | "both" => {
+  const hasB2 = targets.includes("b2");
+  const hasPro = targets.includes("pro");
+  return hasB2 && hasPro ? "both" : hasPro ? "pro" : "b2";
+};
+
 export default function GeneratePage() {
   const [options, setOptions] = useState<OptionsView | null>(null);
   const [floor, setFloor] = useState<Swatch | null>(null);
   const [refImg, setRefImg] = useState<Swatch | null>(null);
   const [roomImg, setRoomImg] = useState<Swatch | null>(null);
-  const [modelFilter, setModelFilter] = useState<ModelFilter>("both");
+  const [modelTargets, setModelTargets] = useState<ModelKey[]>(["b2", "pro"]);
+  const [sdOptions, setSdOptions] = useState<SDOptions>(DEFAULT_SD_OPTIONS);
+  const [sdEnabled, setSdEnabled] = useState(false);
   const [params, setParams] = useState<GenParams>({
     workflow_mode: "纯效果图 (生成全新空间)",
   });
@@ -125,7 +147,8 @@ export default function GeneratePage() {
         const reuse = takeReuseRequest();
         if (reuse?.params) {
           setParams(() => ({ ...buildDefaultParams(o), ...reuse.params }));
-          if (reuse.modelFilter) setModelFilter(reuse.modelFilter);
+          setModelTargets(reuse.modelTargets || targetsFromLegacy(reuse.modelFilter));
+          if (reuse.sdOptions) setSdOptions({ ...DEFAULT_SD_OPTIONS, ...reuse.sdOptions });
           setFloor(swatchFromPath(reuse.floorPath));
           setRefImg(swatchFromPath(reuse.refPath));
           setRoomImg(swatchFromPath(reuse.roomPath));
@@ -145,20 +168,31 @@ export default function GeneratePage() {
           if (draft.refImg) setRefImg(draft.refImg);
           if (draft.roomImg) setRoomImg(draft.roomImg);
           if (draft.recipes) setRecipes(draft.recipes);
-          if (draft.modelFilter) setModelFilter(draft.modelFilter);
+          setModelTargets(draft.modelTargets || targetsFromLegacy(draft.modelFilter));
+          if (draft.sdOptions) setSdOptions({ ...DEFAULT_SD_OPTIONS, ...draft.sdOptions });
         }
       })
       .catch((e) => toast.error("加载选项失败：" + (e as Error).message));
     api.listJobs(50).then(setJobs).catch(() => {});
     api.listCustomRecipes().then(setMyRecipes).catch(() => {});
+    api.getConfig().then((c) => setSdEnabled(!!c.sd_enabled)).catch(() => {});
   }, []);
 
   // 任一配置变化即写回草稿；options 未就绪（尚未从后端拿到默认、恢复未完成）时跳过，
   // 避免用「仅含 workflow_mode 的空 params」把已存的好草稿覆盖掉（clobber 防护）。
   useEffect(() => {
     if (!options) return;
-    saveDraft({ params, modelFilter, floor, refImg, roomImg, recipes });
-  }, [options, params, modelFilter, floor, refImg, roomImg, recipes]);
+    saveDraft({
+      params,
+      modelFilter: legacyFromTargets(modelTargets),
+      modelTargets,
+      sdOptions,
+      floor,
+      refImg,
+      roomImg,
+      recipes,
+    });
+  }, [options, params, modelTargets, sdOptions, floor, refImg, roomImg, recipes]);
 
   // 队列整体进度：轮询任务列表（卡片各自走 SSE，这里只为聚合进度/新任务出现）
   useEffect(() => {
@@ -256,6 +290,14 @@ export default function GeneratePage() {
       toast.warning("请先上传地板图");
       return;
     }
+    if (modelTargets.length === 0) {
+      toast.warning("请至少选择一个生图模型");
+      return;
+    }
+    if (modelTargets.includes("sd35") && !params.workflow_mode.includes("纯效果图")) {
+      toast.warning("SD 3.5 当前仅支持纯效果图工作流");
+      return;
+    }
     if (params.workflow_mode.includes("参照模式") && !refImg) {
       toast.warning("参照模式需上传参照图");
       return;
@@ -279,7 +321,9 @@ export default function GeneratePage() {
     try {
       const job = await api.createJob({
         image_path: floor.path,
-        model_filter: modelFilter,
+        model_filter: legacyFromTargets(modelTargets),
+        model_targets: modelTargets,
+        sd_options: sdOptions,
         room_path: roomImg?.path ?? null,
         ref_path: refImg?.path ?? null,
         params: omakaseSafeParams(params),
@@ -339,7 +383,9 @@ export default function GeneratePage() {
         batchRooms.map((room) =>
           api.createJob({
             image_path: floor.path,
-            model_filter: modelFilter,
+            model_filter: legacyFromTargets(modelTargets),
+            model_targets: modelTargets,
+            sd_options: sdOptions,
             room_path: roomImg?.path ?? null,
             ref_path: refImg?.path ?? null,
             params: cnMode
@@ -401,7 +447,9 @@ export default function GeneratePage() {
           }
           return api.createJob({
             image_path: f.path,
-            model_filter: modelFilter,
+            model_filter: legacyFromTargets(modelTargets),
+            model_targets: modelTargets,
+            sd_options: sdOptions,
             room_path: roomImg?.path ?? null,
             ref_path: refImg?.path ?? null,
             params: omakaseSafeParams({ ...params, floor_tone: tone }),
@@ -641,9 +689,12 @@ export default function GeneratePage() {
             <ParamsForm
               options={options}
               params={params}
-              modelFilter={modelFilter}
+              modelTargets={modelTargets}
+              sdOptions={sdOptions}
+              sdEnabled={sdEnabled}
               onParams={updateParams}
-              onModelFilter={setModelFilter}
+              onModelTargets={setModelTargets}
+              onSDOptions={(patch) => setSdOptions((v) => ({ ...v, ...patch }))}
               refValue={refImg}
               onRefPick={setRefImg}
               roomValue={roomImg}

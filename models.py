@@ -6,7 +6,14 @@
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import Optional, List
+from typing import Optional, List, Dict
+
+
+MODEL_LABELS = {
+    'b2': 'B2',
+    'pro': 'Pro',
+    'sd35': 'SD 3.5',
+}
 
 
 @dataclass
@@ -45,6 +52,10 @@ class JobRecord:
     b2_idx: int = 0
     pro_idx: int = 0
     pro_polish_idx: int = 0
+    # 通用模型运行结构。B2/Pro 旧字段继续保留一段兼容期；新模型只需在此增加运行项，
+    # 无需继续给 JobRecord 增加 sd_path/sd_stage/... 一整套固定字段。
+    model_targets: List[str] = field(default_factory=list)
+    model_runs: Dict[str, dict] = field(default_factory=dict)
 
 
 # ── JobRecord 相关纯逻辑（从 webui 下沉，无 UI/IO 依赖）─────────────────────
@@ -55,6 +66,157 @@ def new_job(display_name: str, ts: str, model_filter: str = 'both') -> JobRecord
     而 job_id 是 _job_ui 的 key，撞 id 会串掉彼此卡片的按钮。排序另用 ts 字段。"""
     return JobRecord(job_id=f"job_{uuid.uuid4().hex}",
                      display_name=display_name, ts=ts, model_filter=model_filter)
+
+
+def targets_from_legacy(model_filter: str) -> List[str]:
+    if model_filter == 'b2':
+        return ['b2']
+    if model_filter == 'pro':
+        return ['pro']
+    if model_filter == 'both':
+        return ['b2', 'pro']
+    if model_filter == 'sd35':
+        return ['sd35']
+    return []
+
+
+def legacy_filter_from_targets(targets: List[str]) -> str:
+    """给旧客户端/旧记录保留的 model_filter 展示值。新逻辑一律读 model_targets。"""
+    keys = list(dict.fromkeys(targets or []))
+    gemini = [k for k in keys if k in ('b2', 'pro')]
+    if keys == ['sd35']:
+        return 'sd35'
+    if gemini == ['b2'] and len(keys) == 1:
+        return 'b2'
+    if gemini == ['pro'] and len(keys) == 1:
+        return 'pro'
+    if set(gemini) == {'b2', 'pro'} and len(keys) == 2:
+        return 'both'
+    return 'custom'
+
+
+def _new_model_run(key: str) -> dict:
+    return {
+        'key': key,
+        'label': MODEL_LABELS.get(key, key),
+        'provider': 'fal' if key == 'sd35' else '',
+        'model_id': '',
+        'status': 'queued',
+        'stage': '',
+        'seconds': None,
+        'error': '',
+        'paths': [],
+        'index': 0,
+        'base_path': '',
+        'delivery_status': '',
+        'seed': None,
+        'settings': {},
+    }
+
+
+def ensure_model_runs(job: JobRecord) -> None:
+    """迁移旧固定槽并维护通用运行结构；可重复调用。"""
+    if not job.model_targets:
+        job.model_targets = targets_from_legacy(job.model_filter)
+    job.model_targets = list(dict.fromkeys(k for k in job.model_targets if k in MODEL_LABELS))
+    if not isinstance(job.model_runs, dict):
+        job.model_runs = {}
+    for key in job.model_targets:
+        run = job.model_runs.get(key)
+        if not isinstance(run, dict):
+            run = _new_model_run(key)
+            job.model_runs[key] = run
+        else:
+            defaults = _new_model_run(key)
+            defaults.update(run)
+            defaults['key'] = key
+            defaults['label'] = defaults.get('label') or MODEL_LABELS.get(key, key)
+            defaults['paths'] = list(defaults.get('paths') or [])
+            defaults['settings'] = dict(defaults.get('settings') or {})
+            job.model_runs[key] = run = defaults
+
+    # B2/Pro 旧字段仍被既有编辑链使用；以它们为源同步到通用结构。
+    ensure_candidate_lists(job)
+    for key in ('b2', 'pro'):
+        if key not in job.model_runs:
+            continue
+        run = job.model_runs[key]
+        paths = list(getattr(job, f'{key}_paths') or [])
+        run['paths'] = paths
+        run['index'] = getattr(job, f'{key}_idx')
+        run['stage'] = getattr(job, f'{key}_stage')
+        run['seconds'] = getattr(job, f'{key}_secs')
+        if getattr(job, f'{key}_path'):
+            run['status'] = 'done'
+
+
+def update_model_run(job: JobRecord, key: str, **values) -> dict:
+    if key not in job.model_targets:
+        job.model_targets.append(key)
+    ensure_model_runs(job)
+    run = job.model_runs[key]
+    run.update(values)
+    return run
+
+
+def add_model_candidate(job: JobRecord, key: str, path: str) -> int:
+    """通用候选追加；B2/Pro 继续双写旧槽以兼容现有编辑链。"""
+    if key in CANDIDATE_SLOTS:
+        idx = add_candidate(job, key, path)
+        ensure_model_runs(job)
+        run = job.model_runs[key]
+        run.update(paths=list(getattr(job, f'{key}_paths')), index=idx, status='done')
+        return idx
+    run = update_model_run(job, key)
+    paths = list(run.get('paths') or [])
+    paths.append(path)
+    if len(paths) > MAX_CANDIDATES_PER_SLOT:
+        paths = paths[-MAX_CANDIDATES_PER_SLOT:]
+    run.update(paths=paths, index=len(paths) - 1, status='done')
+    return len(paths) - 1
+
+
+def nav_model_candidate(job: JobRecord, key: str, index: int) -> tuple:
+    if key in CANDIDATE_SLOTS:
+        ensure_candidate_lists(job)
+        paths = getattr(job, f'{key}_paths')
+        if not paths:
+            return 0, 0, ''
+        idx = max(0, min(index, len(paths) - 1))
+        setattr(job, f'{key}_idx', idx)
+        setattr(job, f'{key}_path', paths[idx])
+        ensure_model_runs(job)
+        job.model_runs[key].update(index=idx, paths=list(paths))
+        return idx, len(paths), paths[idx]
+    ensure_model_runs(job)
+    run = job.model_runs.get(key) or {}
+    paths = list(run.get('paths') or [])
+    if not paths:
+        return 0, 0, ''
+    idx = max(0, min(index, len(paths) - 1))
+    run['index'] = idx
+    return idx, len(paths), paths[idx]
+
+
+def model_run_current_path(job: JobRecord, key: str) -> str:
+    ensure_model_runs(job)
+    run = job.model_runs.get(key) or {}
+    paths = list(run.get('paths') or [])
+    if not paths:
+        return ''
+    idx = max(0, min(int(run.get('index') or 0), len(paths) - 1))
+    return paths[idx]
+
+
+def compute_runs_final_status(job: JobRecord) -> str:
+    ensure_model_runs(job)
+    selected = [job.model_runs[k] for k in job.model_targets if k in job.model_runs]
+    if not selected:
+        return 'failed'
+    successes = sum(bool((r.get('paths') or [])) for r in selected)
+    if successes == len(selected) and all(r.get('status') != 'partial' for r in selected):
+        return 'done'
+    return 'partial' if successes else 'failed'
 
 
 def update_job(job: JobRecord, **kw) -> None:
@@ -75,23 +237,17 @@ def job_time_text(job: JobRecord) -> str:
     完成后按模型分别显示用时。纯函数，不碰 UI。"""
     def _fmt(s):
         return f'{s:.1f}s' if s is not None else '—'
+    ensure_model_runs(job)
     # 运行中：已用秒数 + 各模型实时阶段
     if job.status == 'running' and job.started_at:
         base = f'⏱ 已用 {time.time() - job.started_at:.0f}s'
-        stages = []
-        if job.model_filter in ('b2', 'both') and job.b2_stage:
-            stages.append(job.b2_stage if job.model_filter != 'both' else f'B2 {job.b2_stage}')
-        if job.model_filter in ('pro', 'both') and job.pro_stage:
-            stages.append(job.pro_stage if job.model_filter != 'both' else f'Pro {job.pro_stage}')
+        stages = [f"{r['label']} {r.get('stage')}" for k in job.model_targets
+                  if (r := job.model_runs.get(k)) and r.get('stage')]
         return base + ('　·　' + '　·　'.join(stages) if stages else '')
-    has_secs = (job.b2_secs is not None) or (job.pro_secs is not None)
-    if has_secs:
-        if job.model_filter == 'both':
-            return f'⏱ B2 {_fmt(job.b2_secs)} · Pro {_fmt(job.pro_secs)}'
-        elif job.model_filter == 'b2':
-            return f'⏱ B2 {_fmt(job.b2_secs)}'
-        else:
-            return f'⏱ Pro {_fmt(job.pro_secs)}'
+    timed = [f"{r['label']} {_fmt(r.get('seconds'))}" for k in job.model_targets
+             if (r := job.model_runs.get(k)) and r.get('seconds') is not None]
+    if timed:
+        return '⏱ ' + ' · '.join(timed)
     return ''
 
 
@@ -99,13 +255,14 @@ def running_model_status_text(job) -> str:
     """运行中任务的【分模型】状态串，给卡片右上角徽章用：
     某模型已出图(`{m}_path` 有值)→✓；其阶段文案含「排队」(在等模型并发槽)→排队中；否则→生成中。
     按 model_filter 只显示相关模型。例：'B2 生成中 · Pro 排队中'、'B2 ✓ · Pro 生成中'。纯函数、不碰 UI。"""
+    ensure_model_runs(job)
     parts = []
-    for m, name in (('b2', 'B2'), ('pro', 'Pro')):
-        if job.model_filter not in (m, 'both'):
-            continue
-        if getattr(job, f'{m}_path', None):
+    for key in job.model_targets:
+        run = job.model_runs.get(key) or {}
+        name = run.get('label') or MODEL_LABELS.get(key, key)
+        if run.get('paths'):
             s = '✓'
-        elif '排队' in (getattr(job, f'{m}_stage', '') or ''):
+        elif '排队' in (run.get('stage') or ''):
             s = '排队中'
         else:
             s = '生成中'

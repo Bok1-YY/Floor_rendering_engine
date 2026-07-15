@@ -4,13 +4,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import { useJobStream } from "@/hooks/useJobStream";
 import { notifyJobEnd } from "@/lib/notify";
-import type { JobView } from "@/lib/types";
+import type { JobView, ModelKey, ModelRunView } from "@/lib/types";
 import { toast } from "sonner";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ImageZoom } from "@/components/ImageZoom";
 import { CompareSlider } from "@/components/CompareSlider";
 import { ColorMatchDialog } from "@/components/ColorMatchDialog";
+import { InpaintDialog } from "@/components/InpaintDialog";
 import { cn } from "@/lib/utils";
 
 const BADGE: Record<string, { label: string; color: string; bg: string }> = {
@@ -42,17 +43,29 @@ export function JobCard({
   const [compareOpen, setCompareOpen] = useState(false);
   // 手动校色：记录点的是哪个图槽（B2/Pro 各自的当前浏览候选）
   const [colorMatch, setColorMatch] = useState<{
-    stage: "b2" | "pro";
+    stage: ModelKey;
+    srcUrl: string;
+    imageRel: string;
+  } | null>(null);
+  // 生成式修补：同样记录所点图槽的当前浏览候选
+  const [inpaint, setInpaint] = useState<{
+    stage: ModelKey;
     srcUrl: string;
     imageRel: string;
   } | null>(null);
   const [regenN, setRegenN] = useState(1);
   // 候选切换的本地覆盖（不影响后端"当前下标"，仅前端浏览）
-  const [view, setView] = useState<{ b2?: SlotView; pro?: SlotView }>({});
+  const [view, setView] = useState<Partial<Record<ModelKey, SlotView>>>({});
 
   const prevStatus = useRef(initial.status);
   const prevOperationStatus = useRef(initial.operation_status);
-  const totalsRef = useRef({ b2: initial.b2_total, pro: initial.pro_total });
+  const totalsRef = useRef(
+    JSON.stringify(
+      Object.fromEntries(
+        Object.entries(initial.model_runs || {}).map(([key, run]) => [key, run?.total || 0]),
+      ),
+    ),
+  );
   // 快照统一入口（SSE / 父级 2.5s 轮询 / 操作回执三路共用）：刷新 job；
   // 仅当候选总数变化(新图落地)才清候选浏览覆盖，避免每秒把用户正在翻的 ‹n/N› 重置回去；
   // 非终态→终态时触发完成提醒(系统通知+提示音)——放在共用路径上，SSE 断流时轮询也能补上通知。
@@ -77,11 +90,13 @@ export function JobCard({
     }
     prevStatus.current = j.status;
     prevOperationStatus.current = j.operation_status;
-    if (
-      j.b2_total !== totalsRef.current.b2 ||
-      j.pro_total !== totalsRef.current.pro
-    ) {
-      totalsRef.current = { b2: j.b2_total, pro: j.pro_total };
+    const totals = JSON.stringify(
+      Object.fromEntries(
+        Object.entries(j.model_runs || {}).map(([key, run]) => [key, run?.total || 0]),
+      ),
+    );
+    if (totals !== totalsRef.current) {
+      totalsRef.current = totals;
       setView({});
     }
     setJob(j);
@@ -124,10 +139,11 @@ export function JobCard({
     }
   }
 
-  async function nav(model: "b2" | "pro", delta: number) {
-    const total = model === "b2" ? job.b2_total : job.pro_total;
+  async function nav(model: ModelKey, delta: number) {
+    const run = job.model_runs?.[model];
+    const total = run?.total || 0;
     if (total <= 1) return;
-    const cur = view[model]?.idx ?? (model === "b2" ? job.b2_idx : job.pro_idx);
+    const cur = view[model]?.idx ?? run?.idx ?? 0;
     const next = Math.max(0, Math.min(cur + delta, total - 1));
     if (next === cur && view[model]) return;
     try {
@@ -141,29 +157,34 @@ export function JobCard({
   const b = BADGE[job.status] ?? BADGE.queued;
 
   const slots: {
-    key: "b2" | "pro";
+    key: ModelKey;
     name: string;
     url: string;
     thumb: string;
     idx: number;
     total: number;
+    run: ModelRunView;
   }[] = [];
-  for (const key of ["b2", "pro"] as const) {
-    const baseUrl = key === "b2" ? job.b2_url : job.pro_url;
-    if (!baseUrl) continue;
+  for (const key of job.model_targets || (["b2", "pro"] as ModelKey[])) {
+    const run = job.model_runs?.[key];
+    if (!run?.url) continue;
     const ov = view[key];
     slots.push({
       key,
-      name: key === "b2" ? "B2" : "Pro",
-      url: ov?.url ?? baseUrl,
-      thumb: ov?.thumb ?? (key === "b2" ? job.b2_thumb : job.pro_thumb),
-      idx: ov?.idx ?? (key === "b2" ? job.b2_idx : job.pro_idx),
-      total: key === "b2" ? job.b2_total : job.pro_total,
+      name: run.label,
+      url: ov?.url ?? run.url,
+      thumb: ov?.thumb ?? run.thumb,
+      idx: ov?.idx ?? run.idx,
+      total: run.total,
+      run,
     });
   }
 
   const stageLine =
-    [job.b2_stage && `B2 ${job.b2_stage}`, job.pro_stage && `Pro ${job.pro_stage}`]
+    (job.model_targets || []).map((key) => {
+      const run = job.model_runs?.[key];
+      return run?.stage ? `${run.label} ${run.stage}` : "";
+    })
       .filter(Boolean)
       .join(" · ") || "处理中…";
 
@@ -173,7 +194,7 @@ export function JobCard({
 
   // 前后对比：仅替换类工作流有房间原图（room_url）；效果图优先取当前浏览中的 Pro 候选，无 Pro 用 B2
   const compareAfter =
-    (slots.find((s) => s.key === "pro") ?? slots.find((s) => s.key === "b2"))?.url || "";
+    (slots.find((s) => s.key === "pro") ?? slots.find((s) => s.key === "b2") ?? slots[0])?.url || "";
 
   return (
     <div className="animate-scfade rounded-[14px] border border-border bg-card p-[13px] shadow-[0_2px_8px_rgba(120,90,60,.05)]">
@@ -268,6 +289,21 @@ export function JobCard({
                   )}
                 </span>
                 <span className="flex items-center gap-2">
+                  {terminal && m.url.startsWith("/outputs/") && (
+                    <button
+                      title={`对这张 ${m.name} 图做生成式修补（画笔涂抹移除/添加物体）`}
+                      onClick={() =>
+                        setInpaint({
+                          stage: m.key,
+                          srcUrl: m.url,
+                          imageRel: m.url.slice("/outputs/".length),
+                        })
+                      }
+                      className="hover:text-foreground"
+                    >
+                      🖌️ 修补
+                    </button>
+                  )}
                   {terminal && job.floor_url && m.url.startsWith("/outputs/") && (
                     <button
                       title={`对这张 ${m.name} 图做手动校色（以地板小样为参照）`}
@@ -293,6 +329,17 @@ export function JobCard({
                   </a>
                 </span>
               </div>
+              {m.key === "sd35" && (
+                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[10.5px] text-muted-foreground">
+                  {m.run.seed != null && <span>Seed {m.run.seed}</span>}
+                  {m.run.delivery_status && <span>交付：{m.run.delivery_status}</span>}
+                  {m.run.base_url && m.run.base_url !== m.url && (
+                    <a href={api.imgUrl(m.run.base_url)} target="_blank" rel="noreferrer" className="hover:text-foreground">
+                      ↗ 1MP 基础图
+                    </a>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -329,6 +376,14 @@ export function JobCard({
             onClick={() => act(() => api.polishJob(job.job_id), "已提交磨缝")}
           >
             🪄 磨缝
+          </button>
+        )}
+        {terminal && job.model_runs?.sd35?.delivery_status === "upscale_failed" && (
+          <button
+            className={actBtn}
+            onClick={() => act(() => api.retrySdUpscale(job.job_id), "已重试 SD 超分")}
+          >
+            ⤴ 重试超分
           </button>
         )}
         {terminal && (job.pro_url || job.b2_url) && (
@@ -385,6 +440,22 @@ export function JobCard({
       </div>
 
       <ImageZoom url={zoom} onClose={() => setZoom(null)} />
+
+      {/* 生成式修补（画笔涂抹选区，引擎局部重绘，结果并入所点图槽的候选） */}
+      {inpaint && (
+        <InpaintDialog
+          open={!!inpaint}
+          onOpenChange={(o) => !o && setInpaint(null)}
+          srcUrl={inpaint.srcUrl}
+          target={{ kind: "job", jobId: job.job_id, stage: inpaint.stage, imageRel: inpaint.imageRel }}
+          onDone={(jv) => {
+            if (jv) {
+              applySnapshot(jv);
+              setView({});
+            }
+          }}
+        />
+      )}
 
       {/* 手动校色（区域化 Reinhard，结果并入所点图槽的候选） */}
       {colorMatch && (
