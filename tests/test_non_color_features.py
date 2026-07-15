@@ -59,6 +59,21 @@ def test_usage_prices_lite_separately_and_marks_partial_total(tmp_path, monkeypa
     assert summary["totals"]["cost_complete"] is False
 
 
+def test_local_inpaint_usage_is_not_charged_as_google(tmp_path, monkeypatch):
+    usage_file = tmp_path / "usage.json"
+    monkeypatch.setattr(records, "_USAGE_STATS_FILE", str(usage_file))
+
+    records.record_usage("纯效果图", "ComfyUI", "comfyui", True, "inpaint")
+    summary = records.load_usage_summary({})
+
+    assert summary["rows"] == [{
+        "mode": "纯效果图", "operation": "inpaint", "model": "ComfyUI",
+        "provider": "local", "ok": 1, "fail": 0, "cost": 0.0,
+    }]
+    assert summary["totals"]["cost"] == 0.0
+    assert summary["totals"]["unpriced_ok"] == 0
+
+
 def test_usage_prices_reject_non_finite_values(tmp_path, monkeypatch):
     cfg_file = tmp_path / "engine_config.json"
     cfg_file.write_text('{"usage_prices":{"B2":Infinity,"Pro":NaN,"Lite":0.2}}', encoding="utf-8")

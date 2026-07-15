@@ -66,8 +66,10 @@ function InpaintSession({
   const [hasMask, setHasMask] = useState(false);
   const [canUndo, setCanUndo] = useState(false);
   const [advancedOpen, setAdvancedOpen] = useState(false);
-  const [grow, setGrow] = useState(8);
-  const [feather, setFeather] = useState(0.01);
+  const [removeGrow, setRemoveGrow] = useState(8);
+  const [addGrow, setAddGrow] = useState(0);
+  const [removeFeather, setRemoveFeather] = useState(0.01);
+  const [addFeather, setAddFeather] = useState(0.005);
   const [seedText, setSeedText] = useState("");
   const [nCount, setNCount] = useState(3); // Lightroom 式默认 3 变体
   // 流程：draw（涂抹）→ running（生成中）→ pick（候选挑选）
@@ -77,9 +79,12 @@ function InpaintSession({
   const [selected, setSelected] = useState(0);
   const [partialNote, setPartialNote] = useState("");
   const [applying, setApplying] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   // 当前配置的移除模型（决定 remove 模式下 prompt 框是否显示）
   const [removeModel, setRemoveModel] = useState("bria-eraser");
+  const [addModel, setAddModel] = useState("flux-fill");
   const [inpaintProvider, setInpaintProvider] = useState("fal");
+  const [inpaintConfigLoaded, setInpaintConfigLoaded] = useState(false);
 
   const boxRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -90,6 +95,11 @@ function InpaintSession({
   const eraserRef = useRef(false);
   const brushRef = useRef(36);
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const submitLock = useRef(false);
+  const taskIdRef = useRef("");
+  const pickIdRef = useRef("");
+  const openRef = useRef(open);
+  const modeRef = useRef<"remove" | "add">("remove");
   useEffect(() => {
     eraserRef.current = eraser;
   }, [eraser]);
@@ -100,21 +110,55 @@ function InpaintSession({
     api
       .getConfig()
       .then((c) => {
-        setRemoveModel(c.inpaint_remove_model || "bria-eraser");
-        setInpaintProvider(c.inpaint_provider || "fal");
+        const configuredRemove = c.inpaint_remove_model || "bria-eraser";
+        const configuredProvider = c.inpaint_provider || "fal";
+        setRemoveModel(configuredRemove);
+        setAddModel(c.inpaint_add_model || "flux-fill");
+        setInpaintProvider(configuredProvider);
+        if (
+          modeRef.current === "remove" &&
+          configuredProvider === "fal" &&
+          PURE_ERASERS.has(configuredRemove)
+        ) {
+          setNCount(1);
+        }
       })
       .catch(() => {
         /* 拉不到配置就按默认展示，不阻塞 */
-      });
+      })
+      .finally(() => setInpaintConfigLoaded(true));
   }, []);
   useEffect(
     () => () => {
       if (pollTimer.current) clearTimeout(pollTimer.current);
+      const iid = taskIdRef.current || pickIdRef.current;
+      if (iid) void api.cancelInpaint(iid).catch(() => {});
     },
     [],
   );
+  useEffect(() => {
+    taskIdRef.current = task?.iid || "";
+  }, [task]);
+  useEffect(() => {
+    pickIdRef.current = pickIid;
+  }, [pickIid]);
+  useEffect(() => {
+    openRef.current = open;
+  }, [open]);
   const eraserRemove =
-    mode === "remove" && inpaintProvider === "fal" && PURE_ERASERS.has(removeModel);
+    inpaintConfigLoaded && mode === "remove" && inpaintProvider === "fal" && PURE_ERASERS.has(removeModel);
+  const grow = mode === "remove" ? removeGrow : addGrow;
+  const feather = mode === "remove" ? removeFeather : addFeather;
+  const setGrow = mode === "remove" ? setRemoveGrow : setAddGrow;
+  const setFeather = mode === "remove" ? setRemoveFeather : setAddFeather;
+
+  function changeMode(next: "remove" | "add") {
+    modeRef.current = next;
+    setMode(next);
+    if (next === "remove" && inpaintConfigLoaded && inpaintProvider === "fal" && PURE_ERASERS.has(removeModel)) {
+      setNCount(1);
+    }
+  }
 
   // ── 画布 ──
   const onImgLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
@@ -251,14 +295,20 @@ function InpaintSession({
         .inpaintStatus(iid)
         .then((s: InpaintStatusView) => {
           if (s.status === "done") {
+            taskIdRef.current = "";
+            pickIdRef.current = iid;
             setTask(null);
             setCandidates(s.candidates || []);
             setPickIid(iid);
             setSelected(0);
-            setPartialNote(s.error || "");
+            setPartialNote([s.notice, s.error].filter(Boolean).join("；"));
           } else if (s.status === "failed") {
+            taskIdRef.current = "";
             setTask(null);
             toast.error("修补失败：" + (s.error || "未知错误"));
+          } else if (s.status === "cancelled") {
+            taskIdRef.current = "";
+            setTask(null);
           } else {
             setTask({ iid, stage: s.stage });
             pollTimer.current = setTimeout(tick, 1500);
@@ -272,6 +322,7 @@ function InpaintSession({
   }, []);
 
   async function submit() {
+    if (submitLock.current) return;
     const mask = exportMask();
     if (!mask) {
       toast.error("请先涂抹要处理的区域");
@@ -282,6 +333,8 @@ function InpaintSession({
       return;
     }
     const seed = seedText.trim() ? Number(seedText.trim()) : undefined;
+    submitLock.current = true;
+    setSubmitting(true);
     try {
       const r = await api.submitInpaint({
         mask_b64: mask,
@@ -293,10 +346,20 @@ function InpaintSession({
         ...(Number.isFinite(seed) ? { seed } : {}),
         target: toTargetPayload(target),
       });
+      if (!openRef.current) {
+        void api.cancelInpaint(r.inpaint_id).catch(() => {});
+        return;
+      }
+      setNCount(r.effective_n);
+      setPartialNote(r.notice || "");
+      taskIdRef.current = r.inpaint_id;
       setTask({ iid: r.inpaint_id, stage: "" });
       pollStatus(r.inpaint_id);
     } catch (e) {
       toast.error("提交失败：" + (e as Error).message);
+    } finally {
+      submitLock.current = false;
+      setSubmitting(false);
     }
   }
 
@@ -328,6 +391,8 @@ function InpaintSession({
     setApplying(true);
     try {
       const r = await api.applyInpaint(pickIid, selected);
+      pickIdRef.current = "";
+      setPickIid("");
       if (target.kind === "job") {
         toast.success("已保存为新候选（‹n/N› 可切回原图对比）");
         onDone?.(r.job);
@@ -357,6 +422,22 @@ function InpaintSession({
     setTask(null);
   }
 
+  function handleOpenChange(next: boolean) {
+    openRef.current = next;
+    if (!next) {
+      if (pollTimer.current) clearTimeout(pollTimer.current);
+      const iid = taskIdRef.current || pickIdRef.current;
+      if (iid) void api.cancelInpaint(iid).catch(() => {});
+      taskIdRef.current = "";
+      pickIdRef.current = "";
+      setTask(null);
+      setPickIid("");
+      setCandidates([]);
+      setPartialNote("");
+    }
+    onOpenChange(next);
+  }
+
   const modeBtn = (active: boolean) =>
     `h-8 rounded-[8px] px-3 text-[12px] font-bold transition-colors ${
       active
@@ -369,7 +450,7 @@ function InpaintSession({
   // ── 候选挑选视图（三种目标统一）──
   if (candidates.length > 0) {
     return (
-      <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className="max-h-[94vh] max-w-[96vw] overflow-y-auto sm:max-w-[min(96vw,1280px)]">
           <div className="space-y-3">
             <div>
@@ -429,14 +510,14 @@ function InpaintSession({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       {/* sm:前缀必须带：DialogContent 默认 sm:max-w-sm，无前缀的 max-w 在 sm+ 会被它覆盖 */}
       <DialogContent className="max-h-[94vh] max-w-[96vw] overflow-y-auto sm:max-w-[min(96vw,1280px)]">
         <div className="space-y-3">
           <div>
             <div className="text-[15.5px] font-bold">生成式修补</div>
             <div className="mt-0.5 text-[12px] text-muted-foreground">
-              用画笔涂抹要处理的区域：移除会自动重建背景（阴影会一并处理），添加按描述生成新内容；选区外像素保持不变。
+              用画笔涂抹要处理的区域：移除会适度外扩，请把物体及阴影一起涂上；添加默认严格限制在涂抹区。最终处理范围之外保持原图。
             </div>
           </div>
 
@@ -503,10 +584,10 @@ function InpaintSession({
           {/* 工具行 */}
           <div className="flex flex-wrap items-center gap-2.5">
             <div className="flex items-center gap-1.5">
-              <button className={modeBtn(mode === "remove")} onClick={() => setMode("remove")}>
+              <button className={modeBtn(mode === "remove")} onClick={() => changeMode("remove")}>
                 🧹 生成式移除
               </button>
-              <button className={modeBtn(mode === "add")} onClick={() => setMode("add")}>
+              <button className={modeBtn(mode === "add")} onClick={() => changeMode("add")}>
                 ✨ 生成式添加
               </button>
             </div>
@@ -546,12 +627,14 @@ function InpaintSession({
                 <button
                   key={k}
                   onClick={() => setNCount(k)}
+                  disabled={eraserRemove && k > 1}
                   className={cn(
                     "rounded px-1.5 text-[11.5px] font-semibold",
                     nCount === k
                       ? "bg-primary text-primary-foreground"
-                      : "text-muted-foreground hover:bg-accent",
+                      : "text-muted-foreground hover:bg-accent disabled:cursor-not-allowed disabled:opacity-35",
                   )}
+                  title={eraserRemove && k > 1 ? "专职移除模型不支持可控变体，避免重复计费" : undefined}
                 >
                   ×{k}
                 </button>
@@ -579,19 +662,19 @@ function InpaintSession({
                 onChange={(e) => setPrompt(e.target.value)}
                 placeholder={
                   mode === "remove"
-                    ? "可选补充说明：比如“这里应该是延续的木地板”（留空 = 自动处理）"
-                    : "必填：描述要添加的内容，如“一盆大型龟背竹绿植”"
+                    ? "可选补充说明：比如“这里应延续木地板”（留空 = 自动重建周边材质）"
+                    : `必填：描述要添加的内容，如“一盆大型龟背竹绿植”（当前 ${addModel}）`
                 }
                 className="h-9 min-w-[260px] flex-1 rounded-[9px] border border-border bg-panel px-3 text-[12.5px] outline-none placeholder:text-muted-foreground focus:border-primary"
               />
             )}
             <button
               onClick={submit}
-              disabled={!hasMask || !!task}
+              disabled={!hasMask || !!task || submitting}
               title={!hasMask ? "请先涂抹选区" : undefined}
               className="h-9 flex-none rounded-[9px] bg-primary px-4 text-[13px] font-bold text-primary-foreground hover:bg-primary-hover disabled:opacity-50"
             >
-              {task
+              {task || submitting
                 ? "处理中…"
                 : mode === "remove"
                 ? `移除所涂区域 ×${nCount}`
@@ -601,7 +684,7 @@ function InpaintSession({
 
           {advancedOpen && (
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-[10px] border border-border bg-panel/60 p-3">
-              <div className="flex min-w-[220px] items-center gap-2" title="选区最小外扩像素（实际随选区尺寸自适应放大；移除带阴影的物体时调大更干净）">
+              <div className="flex min-w-[220px] items-center gap-2" title={mode === "remove" ? "移除会按选区尺寸自动外扩，这里设置最小值；请仍把完整阴影涂上" : "添加默认不外扩；只有你主动调大时才扩展处理范围"}>
                 <span className="flex-none text-[11.5px] font-semibold text-secondary-foreground">选区外扩</span>
                 <Slider
                   value={grow}
@@ -612,7 +695,7 @@ function InpaintSession({
                 />
                 <span className="w-10 flex-none text-right text-[11px] tabular-nums text-muted-foreground">{grow}px</span>
               </div>
-              <div className="flex min-w-[220px] items-center gap-2" title="选区边缘过渡宽度（占短边比例）：越大衔接越柔和">
+              <div className="flex min-w-[220px] items-center gap-2" title={mode === "add" ? "添加模式只向有效选区内部羽化，选区外像素保持不变" : "移除模式在外扩后的边缘做柔和过渡"}>
                 <span className="flex-none text-[11.5px] font-semibold text-secondary-foreground">边缘羽化</span>
                 <Slider
                   value={feather}

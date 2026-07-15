@@ -174,7 +174,7 @@ POST /api/jobs ──秒回 job_id──▶ 后台 asyncio task(_run_job_bg)
 - **上传** `POST /api/uploads/{floor,room,ref}`；品牌 Logo 为 `POST /api/uploads/logo` 与 `POST /api/uploads/logo/clear`。
 - **小样与配方**：`GET /api/swatches/recent` · `GET /api/recipes` · `/api/recipes/custom` 列表/新增/更新/删除。
 - **识色与校色**：`GET /api/floor/analyze`；`POST /api/color-match/preview` 生成本地缩图预览并返回满强度 `auto_adjustments`；`POST /api/jobs/{id}/color-match` 或 `/api/records/color-match` 全分辨率落为新候选。三条校色请求共用 `adjustments` 与 `adjustment_mode=auto|manual`：自动模式保留区域 Reinhard，手动模式以 Gemini 原图为零点应用绝对高级参数。
-- **生成式修补** `/api/inpaint`（两段式，实验）：`POST /api/inpaint`（target 三种 kind=job/record/room + mask + n=1~3 并发候选）· `GET {iid}`(轮询候选) · `POST {iid}/apply`(挑中才落目标) · `POST {iid}/cancel` · `GET comfyui/ping`(后端代理探测本地实例)。
+- **生成式修补** `/api/inpaint`（两段式，实验）：`POST /api/inpaint`（target 三种 kind=job/record/room + mask + n=1~3；响应含 requested_n/effective_n/notice，专职 Eraser 强制 effective_n=1）· `GET {iid}`(轮询候选) · `POST {iid}/apply`(挑中才落目标) · `POST {iid}/cancel` · `GET comfyui/ping`(后端代理探测本地实例)。
 - **评审复盘**：`GET /api/review/summary` 聚合维度统计 · `GET /api/review/gallery?filter=pass|best` 好图样本库。
 - **失败** `POST /api/failure/classify` · `GET /api/failure/rules`；**连通** `GET /api/connection/test`。
 - **配置** `GET/PUT /api/config`；**模型** `GET /api/models`；**选项** `GET /api/options`(前端下拉真源)；**用量** `GET /api/usage`；**健康** `GET /api/healthz`。
@@ -186,16 +186,17 @@ POST /api/jobs ──秒回 job_id──▶ 后台 asyncio task(_run_job_bg)
 ### 4.5 SD 3.5 独立线路
 - 仅“纯效果图”，必须开启 `sd_enabled` 且配置 Fal Key。
 - `sd_prompts.py` 独立编译正负提示词，禁止把 Gemini 的对抗式 prompt 机械清洗后共用。
-- `api._call_fal_queue_json` 使用 `queue.fal.run` 持久队列；状态接口的 HTTP 202 表示正常排队/推理。提交响应未知时不自动重交，防重复计费。新队列默认忽略系统/Google 代理直连，只有 `fal_queue_proxy` 非空时才走专用代理。
+- `api._call_fal_queue_json` 使用 `queue.fal.run` 持久队列；提交成功后立即把 SD/AuraSR 的 `request_id/status_url/response_url/cancel_url` 写入 `model_runs.settings` 并随 `.queue_state.json` 落盘，重启后重试继续轮询同一请求。状态接口的 HTTP 202 表示正常排队/推理。提交响应未知时不自动重交，防重复计费。新队列默认忽略系统/Google 代理直连，只有 `fal_queue_proxy` 非空时才走专用代理。
 - SD 基础图约 1MP、64 对齐；InstantX IP-Adapter 强制使用地板小样；2K/4K 再走 AuraSR 4×。超分失败保留基础图并标 partial。
 - 完整契约与校准说明见 [`SD35_INTEGRATION.md`](SD35_INTEGRATION.md)。
 
-### 4.6 生成式修补（实验线路，2026-07-15 暂停深入）
-- **能力**：画笔涂抹 mask → 选区内移除/添加物体，选区外像素严格不变（羽化 mask 合成回贴兜底）。三处入口：任务结果、历史记录、房间图生成前清理家具。
-- **管线**（`api.call_image_inpaint` 统一调度）：`_prepare_inpaint_mask` 自适应膨胀（max(用户 grow, 8%×选区长边, 上限 64px)，高斯+低阈值近似膨胀）→ `_crop_inpaint_context` 裁选区上下文窗口（外扩 max(bbox 长边×0.75, 256px)，长边>2048 缩到工作分辨率）→ 引擎 → `_stitch_inpaint_result` 贴回 → 羽化合成。裁剪回贴是对齐 Lightroom 清晰度的关键（整图直送会压掉选区细节）。
+### 4.6 生成式修补（移除已可用；添加仍为实验能力）
+- **能力**：画笔涂抹 mask → 移除自动外扩覆盖边缘/阴影；添加默认 grow=0，内部羽化确保涂抹区外逐像素不变。三处入口：任务结果、历史记录、房间图生成前清理家具；房间 JPEG 先按 EXIF 方向归一化，避免选区错位。
+- **管线**（`api.call_image_inpaint` 统一调度）：`_prepare_inpaint_masks` 拆出二值 `engine_mask` 与最终 `blend_mask` → 按模式裁上下文（移除偏局部清晰度，添加扩大透视上下文，长边上限 2048）→ 引擎 → `_stitch_inpaint_result` 贴回 → 独立 blend mask 合成。默认 ComfyUI 模板不再重复 GrowMask；自定义 workflow 收到的也是已处理二值 mask。
 - **引擎**：移除默认 `bria-eraser`（可选 finegrain/lama/flux-fill/gemini-mark）；添加默认 `flux-fill`（可选 qwen-inpaint/gemini-mark）。**qwen-inpaint 实测无法做移除**（指令编辑类模型强条件于原图，mask 对模型不可见），只保留在添加列表。`inpaint_provider=comfyui` 时全部走本地 ComfyUI 实例（workflow 模板占位符注入，内置模板在 `assets/comfy_workflows/`）。
-- **计费**：usage 在生成时按候选张数记（n 张 n 次），apply 不计费；候选存 `output_files/_inpaint_candidates/`，apply/cancel/trim 时清理。
-- **⚠️ 已知局限（当前状态）**：实测复杂纹理场景下修补区贴回后可能与原图**像素偏移或发糊**，整体效果仍不及 Lightroom 原生生成式移除；该方向 2026-07-15 起暂停投入（功能保留可用）。后续可排查点：贴回缩放的取整/重采样链路、gemini-mark 引擎待有效 Gemini Key 实测。
+- **提示词与计费**：FLUX/Qwen/Gemini/ComfyUI 使用按模式编译的边界、透视、光照和材质保持指令；BRIA/Finegrain/LaMa 不读取提示词且没有可控 seed，服务端把多候选请求降为 1 次。usage 按实际候选调用数记录，取消不记失败、已出图仍记成功，本地 ComfyUI 归 `local` 且默认 API 成本为 0；apply 不计费。候选以无损 PNG 存 `output_files/_inpaint_candidates/`，apply/cancel/trim/关闭弹窗时清理；同时最多 3 个 running/applying 会话，总表最多 20 条，超限返回 429。
+- **恢复边界**：修补会话仍是进程内临时状态，不承诺服务重启恢复；需要持久恢复的是主作业与 SD/AuraSR Fal 队列句柄。
+- **成熟度与验收**：2026-07-15 经用户在本地真实工作图上操作确认，当前生成式移除已经达到可用程度，可作为任务结果、历史记录和房间图预处理的正式工具使用。生成式添加仍依赖所选模型对物体尺度、透视和光照的理解，继续标为实验能力；超大选区被缩到 2048 工作分辨率时，局部细节仍可能比原图略软。
 
 ---
 
@@ -277,7 +278,7 @@ web/src/
 6. 在 **`开发日志.md` 顶部追加一条**（改了啥、为什么）。
 7. 提交（见 §九）。
 
-**测试**：`cd Floor_engine_server && python -m pytest`（引擎层 golden 提示词、安全硬化、人工评审元数据、自动/手动校色、SD 提示词/IP-Adapter/FAL 队列、生成式修补引擎解析/裁剪回贴和非校色新功能回归；当前 **116 项**）。本机若系统 `python` 无 pytest，可用项目虚拟环境：`.venv/bin/python -m pytest`。`tests/golden/` 基准入库，缓存不入。
+**测试**：`cd Floor_engine_server && python -m pytest`（引擎层 golden 提示词、安全硬化、人工评审元数据、自动/手动校色、SD 提示词/IP-Adapter/FAL 队列恢复、生成式修补的模式化 mask/提示词/EXIF/候选计费/无损落盘和非校色新功能回归；当前 **132 项**）。本机若系统 `python` 无 pytest，可用项目虚拟环境：`.venv/bin/python -m pytest`。`tests/golden/` 基准入库，缓存不入。
 
 ---
 

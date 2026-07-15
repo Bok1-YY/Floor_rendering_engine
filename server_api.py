@@ -22,10 +22,11 @@ import asyncio
 import hashlib
 import threading
 import mimetypes
+import tempfile
 from typing import Optional, List, Literal
 from contextlib import asynccontextmanager
 
-from PIL import Image, ImageFilter
+from PIL import Image, ImageChops, ImageFilter, ImageOps
 from fastapi import FastAPI, UploadFile, File, HTTPException, Request, Query
 from fastapi.responses import StreamingResponse, FileResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -52,6 +53,7 @@ from .api import (
     call_fal_sd35_generate, call_fal_aura_upscale, SD35_ENDPOINT,
     FLOOR_DESEAM_INSTRUCTION, _infer_aspect_ratio_from_b64, _match_color_to_reference,
     match_color_region, call_image_inpaint, resolve_inpaint_engine,
+    effective_inpaint_candidate_count,
 )
 from .prompts import save_task_files_html
 from .sd_prompts import compile_sd35_prompt
@@ -335,48 +337,97 @@ async def _generate_one_model(job: JobRecord, model_id, prompt_text, stage_key, 
     return path, _err
 
 
+def _model_queue_handle(job: JobRecord, key: str, name: str) -> dict:
+    ensure_model_runs(job)
+    settings = dict((job.model_runs.get(key) or {}).get('settings') or {})
+    value = settings.get(name)
+    return dict(value) if isinstance(value, dict) else {}
+
+
+def _set_model_queue_handle(job: JobRecord, key: str, name: str, handle) -> None:
+    """队列提交一成功就原子持久化句柄；重启后的 retry 会恢复同一供应商请求。"""
+    run = update_model_run(job, key)
+    settings = dict(run.get('settings') or {})
+    if handle:
+        settings[name] = dict(handle)
+    else:
+        settings.pop(name, None)
+    update_model_run(job, key, settings=settings)
+    _persist_jobs()
+
+
+def _fal_queue_is_terminal_error(err: str) -> bool:
+    text = str(err or '').upper()
+    return 'FAL 队列任务FAILED' in text or 'FAL 队列任务CANCELLED' in text
+
+
 async def _generate_sd35_model(job: JobRecord, *, fal_key: str, positive: str, negative: str,
                                pnp: str, ims: str, ar: str, jpt: str, rid: str,
                                options: dict, should_cancel):
     """SD3.5 基础图 + AuraSR 交付图；超分失败保留基础图并标 partial。"""
     key = 'sd35'
+    ensure_model_runs(job)
     sem = _model_semaphores[key]
     started = time.time()
     sd_usage_recorded = False
+    previous = (job.model_runs or {}).get(key) or {}
+    previous_base_path = str(previous.get('base_path') or '')
+    # retry 可承接「SD 已落盘、AuraSR 未完成」的现场；regen 必须重新生成，不能复用旧基础图。
+    existing_base = (previous_base_path
+                     if job.operation != 'regen' and os.path.isfile(previous_base_path) else '')
 
     def _stage(text):
         update_model_run(job, key, stage=text, status='running')
 
     if sem.locked():
         _stage('排队中')
+    prior_settings = dict(previous.get('settings') or {})
+    if job.operation == 'regen':
+        # 旧 run 可能保留了超时但仍可轮询的请求；重抽语义是新请求，不能承接旧队列。
+        prior_settings.pop('sd_queue', None)
+        prior_settings.pop('upscale_queue', None)
+    prior_settings.update({k: options.get(k) for k in ('steps', 'guidance_scale', 'reference_strength')})
     update_model_run(job, key, model_id=SD35_ENDPOINT, provider='fal', status='running', error='',
-                     settings={k: options.get(k) for k in ('steps', 'guidance_scale', 'reference_strength')})
+                     settings=prior_settings)
     try:
         async with sem:
-            base, err, used_seed = await asyncio.to_thread(
-                call_fal_sd35_generate, fal_key, positive, negative, pnp, ar,
-                seed=options.get('seed'), steps=options.get('steps', 28),
-                guidance_scale=options.get('guidance_scale', 3.5),
-                reference_strength=options.get('reference_strength', 0.5),
-                on_stage=_stage, should_cancel=should_cancel,
-            )
-            update_model_run(job, key, seed=used_seed)
-            if base is None:
-                if '取消' not in str(err or ''):
-                    record_usage(job.workflow_mode, 'SD35', 'fal', False, job.operation)
-                    sd_usage_recorded = True
-                update_model_run(job, key, status='failed', error=str(err or 'SD 生成失败'), stage='',
-                                 seconds=round(time.time() - started, 1))
-                return None, str(err or 'SD 生成失败')
+            if existing_base:
+                # 程序可能在 SD 已落盘、AuraSR 未完成时重启；直接复用基础图，绝不重交 SD。
+                sd_usage_recorded = True
+                base = Image.open(existing_base); base.load()
+                base_path = existing_base
+                used_seed = previous.get('seed')
+            else:
+                base, err, used_seed = await asyncio.to_thread(
+                    call_fal_sd35_generate, fal_key, positive, negative, pnp, ar,
+                    seed=options.get('seed'), steps=options.get('steps', 28),
+                    guidance_scale=options.get('guidance_scale', 3.5),
+                    reference_strength=options.get('reference_strength', 0.5),
+                    on_stage=_stage, should_cancel=should_cancel,
+                    queue_handle=_model_queue_handle(job, key, 'sd_queue'),
+                    on_queue_submitted=lambda h: _set_model_queue_handle(job, key, 'sd_queue', h),
+                )
+                update_model_run(job, key, seed=used_seed)
+                if base is None:
+                    if _fal_queue_is_terminal_error(err) or '取消' in str(err or ''):
+                        _set_model_queue_handle(job, key, 'sd_queue', None)
+                    if '取消' not in str(err or ''):
+                        record_usage(job.workflow_mode, 'SD35', 'fal', False, job.operation)
+                        sd_usage_recorded = True
+                    update_model_run(job, key, status='failed', error=str(err or 'SD 生成失败'), stage='',
+                                     seconds=round(time.time() - started, 1))
+                    return None, str(err or 'SD 生成失败')
 
-            # API 已成功出图即产生费用；磁盘保存失败也必须按成功调用计成本。
-            record_usage(job.workflow_mode, 'SD35', 'fal', True, job.operation)
-            sd_usage_recorded = True
-            base_path = _save_api_result_png(base, 'SD35_Base', pnp)
-            if not base_path:
-                update_model_run(job, key, status='failed', error='基础图保存失败', stage='')
-                return None, 'SD 基础图已生成，但保存失败'
-            update_model_run(job, key, base_path=base_path, delivery_status='base_ready')
+                # API 已成功出图即产生费用；磁盘保存失败也必须按成功调用计成本。
+                record_usage(job.workflow_mode, 'SD35', 'fal', True, job.operation)
+                sd_usage_recorded = True
+                base_path = _save_api_result_png(base, 'SD35_Base', pnp)
+                if not base_path:
+                    update_model_run(job, key, status='failed', error='基础图保存失败', stage='')
+                    return None, 'SD 基础图已生成，但保存失败'
+                update_model_run(job, key, base_path=base_path, delivery_status='base_ready')
+                _persist_jobs()  # AuraSR 前先确保基础图可在重启后恢复
+                _set_model_queue_handle(job, key, 'sd_queue', None)
 
             final_image = base
             final_path = base_path
@@ -384,10 +435,15 @@ async def _generate_sd35_model(job: JobRecord, *, fal_key: str, positive: str, n
             target_long = 4096 if str(ims).upper().startswith('4') else (2048 if str(ims).upper().startswith('2') else 0)
             if target_long:
                 upscaled, up_err = await asyncio.to_thread(
-                    call_fal_aura_upscale, fal_key, base, on_stage=_stage, should_cancel=should_cancel)
+                    call_fal_aura_upscale, fal_key, base, on_stage=_stage, should_cancel=should_cancel,
+                    queue_handle=_model_queue_handle(job, key, 'upscale_queue'),
+                    on_queue_submitted=lambda h: _set_model_queue_handle(job, key, 'upscale_queue', h))
                 if upscaled is None:
-                    upscale_error = f'4K 超分失败：{up_err}'
-                    record_usage(job.workflow_mode, 'AuraSR', 'fal', False, 'upscale')
+                    upscale_error = f'{target_long // 1024}K 超分失败：{up_err}'
+                    if _fal_queue_is_terminal_error(up_err) or '取消' in str(up_err or ''):
+                        _set_model_queue_handle(job, key, 'upscale_queue', None)
+                    if '取消' not in str(up_err or ''):
+                        record_usage(job.workflow_mode, 'AuraSR', 'fal', False, 'upscale')
                 else:
                     record_usage(job.workflow_mode, 'AuraSR', 'fal', True, 'upscale')
                     scale = target_long / max(upscaled.size)
@@ -400,6 +456,7 @@ async def _generate_sd35_model(job: JobRecord, *, fal_key: str, positive: str, n
                     if saved_upscale:
                         final_image = upscaled
                         final_path = saved_upscale
+                        _set_model_queue_handle(job, key, 'upscale_queue', None)
                     else:
                         upscale_error = '超分已完成但保存失败，已保留基础图'
             add_model_candidate(job, key, final_path)
@@ -633,12 +690,14 @@ async def _retry_bg(job: JobRecord):
                 errs.append(f'{k.upper()}: {e}')
         final = compute_runs_final_status(job)
         op_error = ('；'.join(errs)).strip()
+        cancelled = _is_cancelled(job.job_id, generation)
         update_job(job, status=final, error=op_error,
-                   operation_status=('done' if final in ('done', 'partial') else 'failed'),
-                   operation_error=op_error)
+                   operation_status=('cancelled' if cancelled else ('failed' if op_error else 'done')),
+                   operation_error=('已取消' if cancelled else op_error))
     except Exception as e:
         logger.exception(f"[API重试] unhandled job={job.job_id}")
-        update_job(job, status='failed', error=str(e), operation_status='failed', operation_error=str(e))
+        update_job(job, status=compute_runs_final_status(job), error=str(e),
+                   operation_status='failed', operation_error=str(e))
     finally:
         _cancel_jobs.discard(job.job_id)
         _persist_jobs()
@@ -657,12 +716,20 @@ async def _retry_sd_upscale_bg(job: JobRecord):
                 call_fal_aura_upscale, fal_key, base,
                 on_stage=lambda t: update_model_run(job, 'sd35', stage=t),
                 should_cancel=lambda: _is_cancelled(job.job_id, generation),
+                queue_handle=_model_queue_handle(job, 'sd35', 'upscale_queue'),
+                on_queue_submitted=lambda h: _set_model_queue_handle(job, 'sd35', 'upscale_queue', h),
             )
         if out is None:
-            record_usage(job.workflow_mode, 'AuraSR', 'fal', False, 'upscale')
-            update_model_run(job, 'sd35', status='partial', stage='', error=f'4K 超分失败：{err}',
+            if _fal_queue_is_terminal_error(err) or '取消' in str(err or ''):
+                _set_model_queue_handle(job, 'sd35', 'upscale_queue', None)
+            cancelled = '取消' in str(err or '') or _is_cancelled(job.job_id, generation)
+            if not cancelled:
+                record_usage(job.workflow_mode, 'AuraSR', 'fal', False, 'upscale')
+            label = '已取消' if cancelled else f'SD 超分失败：{err}'
+            update_model_run(job, 'sd35', status='partial', stage='', error=label,
                              delivery_status='upscale_failed')
-            update_job(job, status='partial', operation_status='failed', operation_error=f'4K 超分失败：{err}')
+            update_job(job, status='partial',
+                       operation_status=('cancelled' if cancelled else 'failed'), operation_error=label)
             return
         record_usage(job.workflow_mode, 'AuraSR', 'fal', True, 'upscale')
         ims = str((job.retry_ctx or {}).get('ims') or '4K')
@@ -674,6 +741,7 @@ async def _retry_sd_upscale_bg(job: JobRecord):
         if not path:
             raise RuntimeError('超分图保存失败')
         add_model_candidate(job, 'sd35', path)
+        _set_model_queue_handle(job, 'sd35', 'upscale_queue', None)
         update_model_run(job, 'sd35', status='done', stage='', error='', delivery_status='upscaled')
         try:
             await asyncio.to_thread(_api_write_to_record, out, 'SD 3.5 · 4K重试', job.json_path, job.record_id, path)
@@ -1205,7 +1273,10 @@ async def retry_sd_upscale(jid: str):
         raise HTTPException(400, '没有可重试的 SD 基础图')
     if job.operation_status == 'running':
         raise HTTPException(409, '任务进行中')
-    update_job(job, status='running', operation='sd_upscale', operation_status='running', operation_error='')
+    if not (_load_config().get('fal_api_key') or '').strip():
+        raise HTTPException(400, '重试 SD 超分需要 Fal API Key')
+    update_job(job, status='running', started_at=time.time(), operation='sd_upscale',
+               operation_status='running', operation_error='')
     _spawn(_retry_sd_upscale_bg(job))
     return _job_view(job)
 
@@ -2276,15 +2347,15 @@ def record_color_match(req: RecordColorMatchRequest):
 
 
 # ============================================================
-# 生成式修补（inpaint：画笔涂抹选区 → 选区内移除/添加，选区外像素不变）
-# 引擎按 inpaint_provider 分派：fal=FLUX Fill 真 inpainting；comfyui=用户自备实例。
+# 生成式修补（inpaint：移除自动外扩；添加默认严格限制在涂抹区）
+# 引擎按 inpaint_provider 与 remove/add 模型配置分派；comfyui=用户自备实例。
 # 三个入口：job 结果二改 / records 记录图 / 上传房间图预处理（生成前清理家具）。
 # ============================================================
 class InpaintPayload(BaseModel):
-    mask_b64: str = Field(min_length=1)          # 纯 base64 PNG(无 data: 前缀)，白=重绘区
+    mask_b64: str = Field(min_length=1, max_length=12_000_000)  # 纯 base64 PNG，白=重绘区
     prompt: str = Field(default='', max_length=2000)
     mode: Literal['remove', 'add'] = 'remove'
-    grow: int = Field(default=8, ge=0, le=64)    # mask 最小外扩 px（实际随选区尺寸自适应放大）
+    grow: Optional[int] = Field(default=None, ge=0, le=64)  # 空值：remove=8，add=0
     feather: float = Field(default=0.01, ge=0, le=0.1)   # 羽化半径 / 短边比例
     seed: Optional[int] = None
     n: int = Field(default=3, ge=1, le=3)        # 候选数（Lightroom 式抽卡；n 张记 n 次费用）
@@ -2297,21 +2368,26 @@ def _require_inpaint_prompt(req: InpaintPayload) -> None:
 
 def _decode_inpaint_mask(mask_b64: str) -> Image.Image:
     try:
-        raw = base64.b64decode(mask_b64)
-        m = Image.open(io.BytesIO(raw))
-        m.load()
-        return m
+        raw = base64.b64decode(mask_b64, validate=True)
+        with Image.open(io.BytesIO(raw)) as image:
+            if (image.format or '').upper() != 'PNG':
+                raise HTTPException(400, '遮罩必须是 PNG 图片')
+            if image.width * image.height > 5_000_000:
+                raise HTTPException(413, '遮罩像素超过 500 万上限')
+            image.load()
+            return image.copy()
+    except HTTPException:
+        raise
     except Exception:
         raise HTTPException(400, '遮罩解码失败（需要 PNG 的 base64）')
 
 
-def _prepare_inpaint_mask(mask: Image.Image, target_size, grow: int, feather: float) -> Image.Image:
-    """遮罩标准化：转 L → 尺寸对齐 → 二值化 → 自适应外扩 → 羽化。各引擎共用同一语义(白=重绘)。
+def _prepare_inpaint_masks(mask: Image.Image, target_size, grow: int, feather: float,
+                           mode: str) -> tuple[Image.Image, Image.Image]:
+    """返回 (engine_mask, blend_mask)：模型只看二值范围，最终合成单独使用羽化范围。
 
-    - 外扩量自适应选区尺寸：max(grow, 8% × 选区 bbox 长边)，上限 64px——LaMa/业界经验
-      是 mask 宁大勿小（太小会留物体边缘和阴影残迹）；请求参数 grow 语义 = 最小外扩。
-    - 外扩用『高斯模糊 + 低阈值』近似膨胀(≈1.15σ)：PIL MaxFilter 在 4K 大核下慢到不可用，
-      而画笔选区本就无需像素级精确的形态学膨胀。"""
+    remove 自动外扩以覆盖物体边缘/阴影；add 只采用用户显式 grow（前端默认 0）。
+    add 羽化限制在有效选区内部，所以默认选区外逐像素不变。"""
     m = mask.convert('L')
     tw, th = target_size
     if m.size != (tw, th):
@@ -2323,12 +2399,29 @@ def _prepare_inpaint_mask(mask: Image.Image, target_size, grow: int, feather: fl
     bbox = m.getbbox()
     if not bbox:
         raise HTTPException(400, '遮罩为空：请先在图上涂抹要处理的区域')
-    effective_grow = max(grow, min(64, round(0.08 * max(bbox[2] - bbox[0], bbox[3] - bbox[1]))))
+    auto_grow = min(64, round(0.08 * max(bbox[2] - bbox[0], bbox[3] - bbox[1]))) if mode == 'remove' else 0
+    effective_grow = max(grow, auto_grow)
+    engine_mask = m
     if effective_grow > 0:
-        m = m.filter(ImageFilter.GaussianBlur(effective_grow)).point(lambda v: 255 if v >= 32 else 0)
+        engine_mask = m.filter(ImageFilter.GaussianBlur(effective_grow)).point(
+            lambda v: 255 if v >= 32 else 0)
+    blend_mask = engine_mask
     if feather > 0:
-        m = m.filter(ImageFilter.GaussianBlur(max(1.0, feather * min(tw, th))))
-    return m
+        blurred = engine_mask.filter(ImageFilter.GaussianBlur(max(1.0, feather * min(tw, th))))
+        blend_mask = (ImageChops.multiply(engine_mask, blurred) if mode == 'add' else blurred)
+    return engine_mask, blend_mask
+
+
+def _prepare_inpaint_mask(mask: Image.Image, target_size, grow: int, feather: float) -> Image.Image:
+    """旧内部调用兼容：沿用 remove 的最终合成 mask。"""
+    return _prepare_inpaint_masks(mask, target_size, grow, feather, 'remove')[1]
+
+
+def _normalize_inpaint_source(image: Image.Image) -> Image.Image:
+    """对齐浏览器的 EXIF 方向，并脱离原文件句柄。"""
+    normalized = ImageOps.exif_transpose(image).convert('RGB')
+    normalized.load()
+    return normalized.copy()
 
 
 # ── 通用修补流：生成候选 → 挑选 → 提交（Lightroom 式抽卡体验）────────────
@@ -2339,6 +2432,7 @@ _inpaints: dict = {}          # iid → {status, stage, candidates, error, ts, t
 _inpaint_lock = threading.Lock()
 _inpaint_cancel: set = set()
 _MAX_INPAINTS = 20
+_MAX_ACTIVE_INPAINTS = 3       # 1 个执行 + 最多 2 个等待，避免付费任务无限堆积
 _INPAINT_TMP_DIR = os.path.join(MAIN_OUTPUT_DIR, '_inpaint_candidates')
 
 
@@ -2352,18 +2446,41 @@ def _delete_inpaint_files(entry) -> None:
             pass
 
 
-def _trim_inpaints() -> None:
-    """收口 _inpaints 到 _MAX_INPAINTS：按 ts 删最旧的终态项（running 不删），
+def _save_inpaint_candidate_png(image: Image.Image, path: str) -> None:
+    """原子保存无损候选；避免 JPEG 临时图 + 最终图二次有损编码。"""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    fd, tmp = tempfile.mkstemp(prefix='.inpaint_', suffix='.png', dir=os.path.dirname(path))
+    os.close(fd)
+    try:
+        image.convert('RGB').save(tmp, format='PNG', optimize=True)
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+
+
+def _trim_inpaints(*, reserve: int = 0) -> None:
+    """收口 _inpaints 并为新会话预留槽位：按 ts 删最旧的终态项（活动项不删），
     连带删临时候选文件。调用方须持 _inpaint_lock。"""
-    if len(_inpaints) <= _MAX_INPAINTS:
+    limit = max(0, _MAX_INPAINTS - max(0, reserve))
+    if len(_inpaints) <= limit:
         return
     done = sorted(((iid, v) for iid, v in _inpaints.items()
-                   if v.get('status') in ('done', 'failed')),
+                   if v.get('status') in ('done', 'failed', 'cancelled')),
                   key=lambda kv: kv[1].get('ts', 0))
-    for iid, entry in done[:len(_inpaints) - _MAX_INPAINTS]:
+    for iid, entry in done[:len(_inpaints) - limit]:
         _delete_inpaint_files(entry)
         _inpaints.pop(iid, None)
         _inpaint_cancel.discard(iid)
+
+
+def _inpaint_queue_is_full() -> bool:
+    """调用方持有 _inpaint_lock 时检查运行中背压与会话表硬上限。"""
+    active = sum(v.get('status') in ('running', 'applying') for v in _inpaints.values())
+    return active >= _MAX_ACTIVE_INPAINTS or len(_inpaints) >= _MAX_INPAINTS
 
 
 class InpaintTarget(BaseModel):
@@ -2399,8 +2516,8 @@ def _resolve_inpaint_source(target: InpaintTarget):
         cand = {os.path.realpath(str(p)) for p in ((job.model_runs.get(target.stage) or {}).get('paths') or []) if p}
         if os.path.realpath(abs_src) not in cand:
             raise HTTPException(400, '该图不属于此任务的候选')
-        src = Image.open(abs_src)
-        src.load()
+        with Image.open(abs_src) as image:
+            src = _normalize_inpaint_source(image)
         return src, job.workflow_mode, 'inpaint'
     if target.kind == 'record':
         json_path = _require_record_json_path(target.json_path)
@@ -2417,23 +2534,24 @@ def _resolve_inpaint_source(target: InpaintTarget):
         abs_src = _safe_output_path(rel) if rel else None
         if abs_src and os.path.isfile(abs_src):
             try:
-                src = Image.open(abs_src)
-                src.load()
+                with Image.open(abs_src) as image:
+                    src = _normalize_inpaint_source(image)
             except Exception:
                 src = None
         if src is None and res.get('result_image_b64'):
-            src = _b64_to_pil(res['result_image_b64'])
+            decoded = _b64_to_pil(res['result_image_b64'])
+            src = _normalize_inpaint_source(decoded) if decoded is not None else None
         if src is None:
             raise HTTPException(404, '该结果无可用图片')
         return src, rec.get('workflow_mode', ''), 'record_inpaint'
     room = _require_upload_image_path(target.room_path, '房间图', required=True)
-    src = Image.open(room)
-    src.load()
+    with Image.open(room) as image:
+        src = _normalize_inpaint_source(image)
     return src, '房间图预处理', 'room_prep'
 
 
-async def _generic_inpaint_bg(iid: str, src_pil, mask_pil, prompt, mode, seed, n,
-                              workflow_mode, operation):
+async def _generic_inpaint_bg(iid: str, src_pil, engine_mask, blend_mask, prompt, mode, seed, n,
+                              workflow_mode, operation, resolved_engine):
     """并发生成 n 个候选（信号量整体持有一次=一次用户操作），部分失败仍交付成功的候选。"""
     def _set(**kw):
         with _inpaint_lock:
@@ -2448,8 +2566,9 @@ async def _generic_inpaint_bg(iid: str, src_pil, mask_pil, prompt, mode, seed, n
                 # 只让第 0 路上报阶段文案，避免多路互相覆盖
                 stage_cb = (lambda t: _set(stage=t)) if i == 0 else None
                 return await asyncio.to_thread(
-                    call_image_inpaint, src_pil, mask_pil, prompt, mode=mode,
-                    seed=variant_seed, on_stage=stage_cb, should_cancel=should_cancel)
+                    call_image_inpaint, src_pil, engine_mask, prompt, blend_mask=blend_mask, mode=mode,
+                    seed=variant_seed, on_stage=stage_cb, should_cancel=should_cancel,
+                    resolved_engine=resolved_engine)
             results = await asyncio.gather(*[one(i) for i in range(max(1, n))],
                                            return_exceptions=True)
         os.makedirs(_INPAINT_TMP_DIR, exist_ok=True)
@@ -2463,12 +2582,25 @@ async def _generic_inpaint_bg(iid: str, src_pil, mask_pil, prompt, mode, seed, n
             out, err, provider, usage_label = res
             if out is None:
                 last_err = str(err or '生成失败')
-                record_usage(workflow_mode, usage_label, provider, False, operation)
+                if '取消' not in last_err and not should_cancel():
+                    record_usage(workflow_mode, usage_label, provider, False, operation)
                 continue
+            # 上游已经成功出图即可能产生费用；即便用户随后取消，也按成功调用记账。
             record_usage(workflow_mode, usage_label, provider, True, operation)
-            path = os.path.join(_INPAINT_TMP_DIR, f'{iid}_{i}.jpg')
-            await asyncio.to_thread(lambda p=path, im=out: im.convert('RGB').save(p, format='JPEG', quality=95))
+            if should_cancel():
+                continue
+            path = os.path.join(_INPAINT_TMP_DIR, f'{iid}_{i}.png')
+            try:
+                await asyncio.to_thread(_save_inpaint_candidate_png, out, path)
+            except Exception as ex:
+                logger.error(f'[修补] 候选 {i} 保存失败 iid={iid}: {ex}')
+                last_err = f'候选保存失败：{ex}'
+                continue
             candidates.append({'url': _to_url(path), 'thumb': _result_thumb_url(path), 'path': path})
+        if should_cancel():
+            _delete_inpaint_files({'candidates': candidates})
+            _set(status='cancelled', error='已取消', stage='', candidates=[])
+            return
         if not candidates:
             _set(status='failed', error=last_err or '修补失败', stage='')
             return
@@ -2488,16 +2620,25 @@ async def create_inpaint(req: GenericInpaintRequest):
     _require_inpaint_prompt(req)
     src_pil, workflow_mode, operation = _resolve_inpaint_source(req.target)
     mask_raw = _decode_inpaint_mask(req.mask_b64)
-    mask_pil = await asyncio.to_thread(_prepare_inpaint_mask, mask_raw, src_pil.size, req.grow, req.feather)
+    requested_grow = req.grow if req.grow is not None else (8 if req.mode == 'remove' else 0)
+    engine_mask, blend_mask = await asyncio.to_thread(
+        _prepare_inpaint_masks, mask_raw, src_pil.size, requested_grow, req.feather, req.mode)
+    resolved_engine = resolve_inpaint_engine(req.mode)
+    effective_n, notice = effective_inpaint_candidate_count(
+        req.mode, req.n, resolved_engine=resolved_engine)
     iid = f'ip_{uuid.uuid4().hex}'
     with _inpaint_lock:
+        _trim_inpaints(reserve=1)
+        if _inpaint_queue_is_full():
+            raise HTTPException(429, '修补队列已满，请等待当前任务完成后再试')
         _inpaints[iid] = {'status': 'running', 'stage': '', 'candidates': [], 'error': '',
                           'ts': time.time(), 'target': req.target.model_dump(),
-                          'mode': req.mode, 'prompt': (req.prompt or '').strip()}
-        _trim_inpaints()
-    _spawn(_generic_inpaint_bg(iid, src_pil, mask_pil, req.prompt, req.mode, req.seed,
-                               req.n, workflow_mode, operation))
-    return {'inpaint_id': iid}
+                          'mode': req.mode, 'prompt': (req.prompt or '').strip(),
+                          'requested_n': req.n, 'effective_n': effective_n, 'notice': notice,
+                          'provider': resolved_engine[0], 'model_key': resolved_engine[1]}
+    _spawn(_generic_inpaint_bg(iid, src_pil, engine_mask, blend_mask, req.prompt, req.mode, req.seed,
+                               effective_n, workflow_mode, operation, resolved_engine))
+    return {'inpaint_id': iid, 'requested_n': req.n, 'effective_n': effective_n, 'notice': notice}
 
 
 @app.post('/api/inpaint/{iid}/apply')
@@ -2513,49 +2654,56 @@ async def inpaint_apply(iid: str, req: InpaintApplyRequest):
         if req.index >= len(candidates):
             raise HTTPException(400, '候选序号无效')
         cand_path = candidates[req.index].get('path') or ''
-    if not os.path.isfile(cand_path):
-        raise HTTPException(410, '候选文件已被清理，请重新生成')
-    out = await asyncio.to_thread(lambda: (lambda im: (im.load(), im)[1])(Image.open(cand_path)))
-    target = InpaintTarget(**entry['target'])
-    mode = entry.get('mode') or 'remove'
-    prompt = entry.get('prompt') or ''
-    label = '生成式移除' if mode == 'remove' else '生成式添加'
-    if target.kind == 'job':
-        job = _get_job(target.jid)
-        if not job:
-            raise HTTPException(404, '任务卡已被清除，无法写回')
-        if job.status in ('running', 'queued') or job.pro_polishing or job.operation_status == 'running':
-            raise HTTPException(409, '任务进行中，请稍后提交')
-        ppath = await asyncio.to_thread(_save_api_result_jpg, out, label, job.png_path or cand_path)
-        if not ppath:
-            raise HTTPException(500, '结果保存失败')
-        add_model_candidate(job, target.stage, ppath)
-        update_job(job, status=compute_runs_final_status(job))
-        if job.json_path and job.record_id:
-            try:
-                await asyncio.to_thread(_api_write_to_record, out, label, job.json_path, job.record_id, ppath)
-            except Exception as ex:
-                logger.warning(f'[修补] 写记录失败 iid={iid}: {ex}')
-        _persist_jobs()
-        resp = {'ok': True, 'job': _job_view(job)}
-    elif target.kind == 'record':
-        json_path = _require_record_json_path(target.json_path)
-        ppath = await asyncio.to_thread(_save_api_result_jpg, out, label,
-                                        json_path.replace('_记录.json', '_优化图.png'))
-        if not ppath:
-            raise HTTPException(500, '结果保存失败')
-        msg = await asyncio.to_thread(append_edited_result_to_record, json_path, target.record_id,
-                                      target.result_id, out, prompt or label, label, ppath)
-        if not str(msg).startswith('✅'):
-            raise HTTPException(500, str(msg))
-        resp = {'ok': True, 'result_url': _to_url(ppath)}
-    else:
-        stem = os.path.splitext(os.path.basename(target.room_path))[0]
-        dest = safe_upload_path(f'{stem}_clean.jpg', 'room_')
-        if not dest:
-            raise HTTPException(500, '结果保存路径无效')
-        await asyncio.to_thread(lambda: out.convert('RGB').save(dest, format='JPEG', quality=95))
-        resp = {'ok': True, 'path': dest, 'url': _to_url(dest), 'thumb': _thumb_url(dest)}
+        entry['status'] = 'applying'  # 锁内抢占；并发第二次 apply 会得到 409
+    try:
+        if not os.path.isfile(cand_path):
+            raise HTTPException(410, '候选文件已被清理，请重新生成')
+        out = await asyncio.to_thread(lambda: (lambda im: (im.load(), im)[1])(Image.open(cand_path)))
+        target = InpaintTarget(**entry['target'])
+        mode = entry.get('mode') or 'remove'
+        prompt = entry.get('prompt') or ''
+        label = '生成式移除' if mode == 'remove' else '生成式添加'
+        if target.kind == 'job':
+            job = _get_job(target.jid)
+            if not job:
+                raise HTTPException(404, '任务卡已被清除，无法写回')
+            if job.status in ('running', 'queued') or job.pro_polishing or job.operation_status == 'running':
+                raise HTTPException(409, '任务进行中，请稍后提交')
+            ppath = await asyncio.to_thread(_save_api_result_png, out, label, job.png_path or cand_path)
+            if not ppath:
+                raise HTTPException(500, '结果保存失败')
+            add_model_candidate(job, target.stage, ppath)
+            update_job(job, status=compute_runs_final_status(job))
+            if job.json_path and job.record_id:
+                try:
+                    await asyncio.to_thread(_api_write_to_record, out, label, job.json_path, job.record_id, ppath)
+                except Exception as ex:
+                    logger.warning(f'[修补] 写记录失败 iid={iid}: {ex}')
+            _persist_jobs()
+            resp = {'ok': True, 'job': _job_view(job)}
+        elif target.kind == 'record':
+            json_path = _require_record_json_path(target.json_path)
+            ppath = await asyncio.to_thread(_save_api_result_png, out, label,
+                                            json_path.replace('_记录.json', '_优化图.png'))
+            if not ppath:
+                raise HTTPException(500, '结果保存失败')
+            msg = await asyncio.to_thread(append_edited_result_to_record, json_path, target.record_id,
+                                          target.result_id, out, prompt or label, label, ppath)
+            if not str(msg).startswith('✅'):
+                raise HTTPException(500, str(msg))
+            resp = {'ok': True, 'result_url': _to_url(ppath)}
+        else:
+            stem = os.path.splitext(os.path.basename(target.room_path))[0]
+            dest = safe_upload_path(f'{stem}_clean.png', 'room_')
+            if not dest:
+                raise HTTPException(500, '结果保存路径无效')
+            await asyncio.to_thread(lambda: out.convert('RGB').save(dest, format='PNG', optimize=True))
+            resp = {'ok': True, 'path': dest, 'url': _to_url(dest), 'thumb': _thumb_url(dest)}
+    except Exception:
+        with _inpaint_lock:
+            if _inpaints.get(iid) is entry:
+                entry['status'] = 'done'
+        raise
     with _inpaint_lock:
         entry = _inpaints.pop(iid, None)
     _delete_inpaint_files(entry)
@@ -2592,7 +2740,8 @@ def inpaint_status(iid: str):
             raise HTTPException(404, 'inpaint task not found')
         # 只回传前端需要的字段（path 是服务端内部路径，target/prompt 前端已知）
         return {'inpaint_id': iid, 'status': v.get('status', ''), 'stage': v.get('stage', ''),
-                'error': v.get('error', ''),
+                'error': v.get('error', ''), 'notice': v.get('notice', ''),
+                'requested_n': v.get('requested_n', 1), 'effective_n': v.get('effective_n', 1),
                 'candidates': [{'url': c.get('url', ''), 'thumb': c.get('thumb', '')}
                                for c in (v.get('candidates') or [])]}
 
@@ -2604,6 +2753,8 @@ def inpaint_cancel(iid: str):
         entry = _inpaints.get(iid)
         if not entry:
             raise HTTPException(404, 'inpaint task not found')
+        if entry.get('status') == 'applying':
+            raise HTTPException(409, '候选正在写入，无法取消')
         if entry.get('status') != 'running':
             _delete_inpaint_files(entry)
             _inpaints.pop(iid, None)

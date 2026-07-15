@@ -237,6 +237,14 @@ export default function SettingsPage() {
     }
   }
 
+  const cloudModels = [removeModel, addModel];
+  const needsFalForInpaint = cloudModels.some((m) => m !== "gemini-mark");
+  const needsGeminiForInpaint = cloudModels.includes("gemini-mark");
+  const missingInpaintKeys = [
+    needsFalForInpaint && !(cfg?.has_fal_key || falKey.trim()) ? "Fal Key" : "",
+    needsGeminiForInpaint && !(cfg?.has_gemini_key || geminiKey.trim()) ? "Gemini Key" : "",
+  ].filter(Boolean);
+
   const provBtn = (active: boolean) =>
     cn(
       "h-[38px] flex-1 rounded-[9px] border text-[13px] font-semibold transition-colors",
@@ -438,7 +446,7 @@ export default function SettingsPage() {
                 <span className={cn(fieldLabel, "mb-[7px] block")}>引擎（画笔涂抹移除/添加所用的模型）</span>
                 <div className="flex gap-2">
                   <button onClick={() => setInpaintProvider("fal")} className={provBtn(inpaintProvider === "fal")}>
-                    Fal FLUX Fill
+                    云端模型
                   </button>
                   <button onClick={() => setInpaintProvider("comfyui")} className={provBtn(inpaintProvider === "comfyui")}>
                     ComfyUI（本地）
@@ -446,9 +454,9 @@ export default function SettingsPage() {
                 </div>
                 <div className="mt-[7px] text-[11px] leading-relaxed text-muted-foreground">
                   {inpaintProvider === "fal"
-                    ? cfg.has_fal_key
-                      ? "复用上方已配置的 Fal API Key，按张计费（遮罩外像素不动）。移除=擦除物体并延续背景（无需描述）；添加=按描述在选区里生成新内容。"
-                      : "⚠ 需要 Fal API Key：请先在上方「API 密钥」里填写，否则修补会报错。"
+                    ? missingInpaintKeys.length
+                      ? `⚠ 当前所选模型还需要：${missingInpaintKeys.join("、")}。请先在上方填写，否则修补会报错。`
+                      : "按移除/添加各自选择的云模型调用并按张计费；移除模型负责延续背景，添加模型按描述生成新内容。"
                     : "走你自备的 ComfyUI 实例，本地算力零 API 费用；请填可信内网地址（ComfyUI 无鉴权）。本地引擎不区分移除/添加模型（由 workflow 模板决定）。"}
                 </div>
               </div>
@@ -541,7 +549,8 @@ export default function SettingsPage() {
                     />
                     <span className="text-[10.5px] leading-relaxed text-muted-foreground">
                       模板里写占位符 __INPAINT_IMAGE__ / __INPAINT_MASK__ / __INPAINT_PROMPT__ /
-                      __INPAINT_NEGATIVE__ / __INPAINT_SEED__，引擎自动注入；可用任意 inpaint workflow（含 Flux Fill GGUF）。
+                      __INPAINT_NEGATIVE__ / __INPAINT_SEED__，引擎自动注入；mask 已由服务端二值化并按模式外扩，
+                      自定义 workflow 不要再次 GrowMask。可用任意 inpaint workflow（含 Flux Fill GGUF）。
                     </span>
                   </div>
                   <div className="flex flex-col gap-[7px]">
@@ -559,11 +568,11 @@ export default function SettingsPage() {
               )}
 
               <div className="mt-[14px] flex flex-col gap-[7px]">
-                <span className={fieldLabel}>移除模式默认提示词（可选）</span>
+                <span className={fieldLabel}>指令式移除模型默认提示词（可选）</span>
                 <Input
                   value={removePrompt}
                   onChange={(e) => setRemovePrompt(e.target.value)}
-                  placeholder="留空用内置英文默认：延续周边地板/墙面、空无一物"
+                  placeholder="供 FLUX / Gemini / ComfyUI 使用；专职 Eraser 不读取提示词"
                   className={fieldInput}
                 />
               </div>

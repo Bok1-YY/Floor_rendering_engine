@@ -1,8 +1,8 @@
 # Stable Diffusion 3.5 接入说明
 
-> 状态：已实现的实验线路；默认关闭，仅支持“纯效果图”工作流  
-> 端点：`fal-ai/stable-diffusion-v35-large` + `fal-ai/aura-sr`  
-> 更新日期：2026-07-14
+> 状态：已实现的实验线路；默认关闭，仅支持“纯效果图”工作流
+> 端点：`fal-ai/stable-diffusion-v35-large` + `fal-ai/aura-sr`
+> 更新日期：2026-07-15
 
 ## 1. 设计边界
 
@@ -34,7 +34,7 @@ TaskParams
              └─ AuraSR 失败 ─▶ 保留基础 PNG，任务标 partial，可单独重试超分
 ```
 
-FAL 调用使用持久队列：短连接提交到 `queue.fal.run`，随后轮询 `status_url`，完成后读取 `response_url`。排队/推理期间状态接口可能返回 HTTP 202，这是正常响应。提交响应未知时客户端不会自动重交，避免同一个请求重复计费。
+FAL 调用使用持久队列：短连接提交到 `queue.fal.run`，随后轮询 `status_url`，完成后读取 `response_url`。提交成功后，SD/AuraSR 的队列句柄立即写入对应 `model_runs.settings` 并持久化到 `.queue_state.json`；进程重启后的重试会继续轮询原 request，结果落盘后才清除句柄。排队/推理期间状态接口可能返回 HTTP 202，这是正常响应。提交响应未知时客户端不会自动重交，避免同一个请求重复计费。
 
 SD/AuraSR 队列默认忽略系统环境变量和通用 Google `proxy`，直接连接 FAL；本次真实校准证明通用代理会在大 POST/长轮询中产生 TLS EOF。只有显式配置 `fal_queue_proxy` 时才使用专用代理。
 
@@ -122,11 +122,11 @@ SD 内置提示词包含场景、机位、灯光、地板材质/色彩/纹理/�
 - “重试”只补尚无结果的模型；已有 SD 基础结果不会重新计费生成。
 - “重试超分”只调用 AuraSR。
 - “重抽”会为所有已选模型增加候选；SD 清空固定 Seed 以产生新结果。
-- 程序重启会把中断的 queued/running run 修正为 partial/failed，已有候选不会丢失。
+- 程序重启会把中断的 queued/running run 修正为 partial/failed；重试会复用已落盘的 SD 基础图，并按持久化句柄恢复未完成的 SD/AuraSR 请求，已有候选不会丢失。“重抽”明确绕过旧基础图，始终产生新请求。
 
 ## 8. 验证
 
-离线回归覆盖：提示词正负分离、缝型条件编译、约 1MP/64 对齐画布、IP-Adapter 请求、FAL 队列 202 状态、未知提交响应不重交、通用 model run 迁移与前端生产构建。
+离线回归覆盖：提示词正负分离、缝型条件编译、约 1MP/64 对齐画布、IP-Adapter 请求、FAL 队列 202 状态、句柄持久化回调、原 request 恢复且不重交、未知提交响应不重交、通用 model run 迁移与前端生产构建。
 
 真实环境校准必须记录两类结论：接口链路是否成功，以及地板颜色/纹理/铺法的人眼保真结果。前者不能代替后者；视觉质量仍需在记录页人工评审。
 

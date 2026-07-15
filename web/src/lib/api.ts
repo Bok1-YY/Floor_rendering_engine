@@ -29,6 +29,7 @@ import type {
   RecordColorMatchRequest,
   ModelKey,
   GenericInpaintRequest,
+  InpaintSubmitView,
   InpaintStatusView,
   InpaintApplyResponse,
   ComfyUIPingView,
@@ -211,7 +212,7 @@ export const api = {
 
   // ── 生成式修补（画笔选区 → 并发 n 候选抽卡 → 挑选提交；引擎可切换）──
   submitInpaint: (b: GenericInpaintRequest) =>
-    jsend<{ inpaint_id: string }>(`/api/inpaint`, "POST", b),
+    jsend<InpaintSubmitView>(`/api/inpaint`, "POST", b),
   inpaintStatus: (iid: string) => jget<InpaintStatusView>(`/api/inpaint/${iid}`),
   applyInpaint: (iid: string, index: number) =>
     jsend<InpaintApplyResponse>(`/api/inpaint/${iid}/apply`, "POST", { index }),

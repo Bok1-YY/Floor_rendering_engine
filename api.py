@@ -497,7 +497,8 @@ def _call_fal_json(api_key: str, endpoint: str, payload: dict, *, on_stage=None,
 
 
 def _call_fal_queue_json(api_key: str, endpoint: str, payload: dict, *, on_stage=None,
-                         should_cancel=None) -> Tuple[Optional[dict], Optional[str]]:
+                         should_cancel=None, resume_handle: Optional[dict] = None,
+                         on_submitted=None) -> Tuple[Optional[dict], Optional[str]]:
     """Fal 持久队列：只提交一次，随后轮询同一 request_id，避免长连接断线后重复计费。"""
     cfg = _load_config()
     # Google 代理常会破坏 FAL 的大 POST/长轮询；SD 队列默认直连，确有需要再单配 fal_queue_proxy。
@@ -519,23 +520,42 @@ def _call_fal_queue_json(api_key: str, endpoint: str, payload: dict, *, on_stage
         except Exception:
             return _short_text(response.text, 600)
 
-    try:
-        # 提交响应丢失时无法判断服务器是否已接单，因此绝不自动重交；由用户显式重试。
-        response = session.post(
-            f"https://queue.fal.run/{endpoint}", json=payload, headers=headers,
-            timeout=(30, 120), verify=verify,
-        )
-        if response.status_code not in (200, 201, 202):
-            return None, f"队列提交 HTTP {response.status_code}: {_detail(response)}"
-        queued = response.json()
-    except Exception as ex:
-        return None, f"队列提交网络错误（未自动重交）: {_redact_api_key(ex)}"
+    queued = dict(resume_handle or {})
+    if queued:
+        if on_stage:
+            try: on_stage("🔄 恢复已有 Fal 队列任务…")
+            except Exception: pass
+    else:
+        try:
+            # 提交响应丢失时无法判断服务器是否已接单，因此绝不自动重交；由用户显式重试。
+            response = session.post(
+                f"https://queue.fal.run/{endpoint}", json=payload, headers=headers,
+                timeout=(30, 120), verify=verify,
+            )
+            if response.status_code not in (200, 201, 202):
+                return None, f"队列提交 HTTP {response.status_code}: {_detail(response)}"
+            queued = response.json()
+        except Exception as ex:
+            return None, f"队列提交网络错误（未自动重交）: {_redact_api_key(ex)}"
 
     status_url = str(queued.get("status_url") or "")
     response_url = str(queued.get("response_url") or "")
     cancel_url = str(queued.get("cancel_url") or "")
     if not status_url.startswith("https://queue.fal.run/") or not response_url.startswith("https://queue.fal.run/"):
         return None, "Fal 队列响应缺少有效状态地址"
+    if not resume_handle and on_submitted:
+        handle = {
+            "endpoint": endpoint,
+            "request_id": str(queued.get("request_id") or ""),
+            "status_url": status_url,
+            "response_url": response_url,
+            "cancel_url": cancel_url,
+            "submitted_at": time.time(),
+        }
+        try:
+            on_submitted(handle)
+        except Exception as ex:
+            logger.warning(f"[Fal队列] 持久化请求句柄失败 endpoint={endpoint}: {ex}")
     try:
         deadline = time.time() + max(60, min(3600, int(cfg.get("fal_queue_timeout", 900))))
     except Exception:
@@ -614,7 +634,7 @@ def call_fal_sd35_generate(api_key: str, positive_prompt: str, negative_prompt: 
                            floor_image_path: str, aspect_ratio: str = "4:3", *,
                            seed=None, steps: int = 28, guidance_scale: float = 3.5,
                            reference_strength: float = 0.5, on_stage=None,
-                           should_cancel=None):
+                           should_cancel=None, queue_handle=None, on_queue_submitted=None):
     """Fal SD3.5 Large + InstantX IP-Adapter。返回 (PIL, error, seed)。"""
     ref_uri = _file_to_data_uri(floor_image_path)
     if not ref_uri:
@@ -641,14 +661,17 @@ def call_fal_sd35_generate(api_key: str, positive_prompt: str, negative_prompt: 
     if on_stage:
         try: on_stage("🎨 SD 3.5 生成中…")
         except Exception: pass
-    data, err = _call_fal_queue_json(api_key, SD35_ENDPOINT, payload, on_stage=on_stage, should_cancel=should_cancel)
+    data, err = _call_fal_queue_json(
+        api_key, SD35_ENDPOINT, payload, on_stage=on_stage, should_cancel=should_cancel,
+        resume_handle=queue_handle, on_submitted=on_queue_submitted)
     if err:
         return None, err, seed
     image, decode_err = _fal_image_from_result(data, plural=True, direct=True)
     return image, decode_err, data.get("seed", seed) if data else seed
 
 
-def call_fal_aura_upscale(api_key: str, image, *, on_stage=None, should_cancel=None):
+def call_fal_aura_upscale(api_key: str, image, *, on_stage=None, should_cancel=None,
+                          queue_handle=None, on_queue_submitted=None):
     """AuraSR 4× 保守超分。返回 (PIL, error)。"""
     if on_stage:
         try: on_stage("🔎 4K 超分中…")
@@ -659,7 +682,9 @@ def call_fal_aura_upscale(api_key: str, image, *, on_stage=None, should_cancel=N
         "overlapping_tiles": True,
         "checkpoint": "v2",
     }
-    data, err = _call_fal_queue_json(api_key, AURA_SR_ENDPOINT, payload, on_stage=on_stage, should_cancel=should_cancel)
+    data, err = _call_fal_queue_json(
+        api_key, AURA_SR_ENDPOINT, payload, on_stage=on_stage, should_cancel=should_cancel,
+        resume_handle=queue_handle, on_submitted=on_queue_submitted)
     if err:
         return None, err
     return _fal_image_from_result(data, plural=False, direct=True)
@@ -669,22 +694,32 @@ def call_fal_aura_upscale(api_key: str, image, *, on_stage=None, should_cancel=N
 FLUX_FILL_ENDPOINT = "fal-ai/flux-pro/v1/fill"
 # FLUX Fill 的 prompt 为必填；『生成式移除』留空时注入这句“延续周边背景”的替补描述
 DEFAULT_INPAINT_REMOVE_PROMPT = (
-    "empty clean interior surface, seamless continuation of the surrounding "
-    "floor, wall and background, nothing here, no shadow, no reflection, "
-    "photorealistic interior photo"
+    "Remove every foreground object inside the mask, including its complete shadow and reflection. "
+    "Reconstruct only the background that logically continues from the surrounding unmasked floor, "
+    "wall or interior surface. Keep the same material pattern, perspective, lighting and geometry. "
+    "Leave the area empty; do not add furniture, decorations, people, text or watermarks."
+)
+
+DEFAULT_INPAINT_ADD_SUFFIX = (
+    "Place it only inside the masked area and integrate it naturally into the existing interior. "
+    "Match the scene's perspective, realistic scale, lighting, color temperature and contact shadow. "
+    "Preserve the surrounding architecture, floor material and all unmasked content. "
+    "Do not add text or watermarks."
 )
 
 # ── 裁剪回贴（Lightroom 式"选区级处理"，对 4K 图是清晰度的决定性提升）────────
 # 云端生成模型的有效工作分辨率普遍 ≤2K：整图送入会让选区内细节被压缩摧毁。
 # 做法：围绕选区裁一个含上下文的窗口送引擎 → 结果缩回窗口尺寸贴回原图 →
-# 再走羽化 mask 合成（选区外像素严格不变的语义不变）。
+# 再走独立 blend mask 合成（blend_mask 为 0 的像素严格不变）。
 _INPAINT_CROP_MAX_SIDE = 2048
 
 
-def _crop_inpaint_context(image, mask, *, max_side: int = _INPAINT_CROP_MAX_SIDE):
+def _crop_inpaint_context(image, mask, *, max_side: int = _INPAINT_CROP_MAX_SIDE,
+                          mode: str = "remove"):
     """围绕 mask bbox 裁上下文窗口。返回 (crop_img, crop_mask, box)。
 
-    上下文外扩 = max(bbox 长边 × 0.75, 256px)，给引擎足够的纹理/透视参照；
+    移除上下文外扩 = max(bbox 长边 × 0.75, 256px)；添加为获得全局透视，
+    使用 max(bbox 长边, 512px)。
     裁剪区长边 > max_side 时等比缩小（引擎侧工作分辨率），贴回时由
     _stitch_inpaint_result 缩回。mask 全空时退化为整图（调用方已校验非空）。
     """
@@ -693,7 +728,9 @@ def _crop_inpaint_context(image, mask, *, max_side: int = _INPAINT_CROP_MAX_SIDE
     if not bbox:
         return image, mask, (0, 0, w, h)
     bl, bt, br, bb = bbox
-    pad = max(int(max(br - bl, bb - bt) * 0.75), 256)
+    longest = max(br - bl, bb - bt)
+    # 添加物体需要看到更多全局透视/尺度；移除则优先保住局部纹理分辨率。
+    pad = max(int(longest * (1.0 if mode == "add" else 0.75)), 512 if mode == "add" else 256)
     box = (max(0, bl - pad), max(0, bt - pad), min(w, br + pad), min(h, bb + pad))
     crop_img = image.crop(box)
     crop_mask = mask.crop(box)
@@ -702,7 +739,8 @@ def _crop_inpaint_context(image, mask, *, max_side: int = _INPAINT_CROP_MAX_SIDE
         scale = max_side / max(cw, ch)
         work = (max(8, round(cw * scale)), max(8, round(ch * scale)))
         crop_img = crop_img.resize(work, Image.LANCZOS)
-        crop_mask = crop_mask.resize(work, Image.LANCZOS)
+        # 发给模型的是二值 engine mask，缩放时不能用 LANCZOS 引入灰边。
+        crop_mask = crop_mask.resize(work, Image.NEAREST)
     return crop_img, crop_mask, box
 
 
@@ -772,6 +810,8 @@ def call_fal_qwen_inpaint(api_key: str, image, mask, prompt: str, *, mode: str =
     text = (prompt or "").strip()
     if mode == "remove":
         text = DEFAULT_QWEN_REMOVE_INSTRUCTION + (f" Additional guidance: {text}" if text else "")
+    else:
+        text = f"Edit only the masked area. Add: {text}. {DEFAULT_INPAINT_ADD_SUFFIX}"
     binary_mask = mask.convert("L").point(lambda v: 255 if v >= 128 else 0)
     payload = {
         "prompt": text,
@@ -817,13 +857,15 @@ def call_gemini_mark_inpaint(api_key: str, image, mask, prompt: str, *, mode: st
             "Completely remove the objects under the red marking, together with their shadows and reflections. "
             "Reconstruct the floor, wall and background behind them so the scene looks naturally empty there. "
             + (f"Additional guidance: {extra}. " if extra else "")
-            + "Do not add any new objects. The red marking itself must not appear in the output."
+            + "Do not add any new objects. The red marking itself must not appear in the output. "
+              "Everything outside the red marking must remain unchanged."
         )
     else:
         instruction = (
             f"Replace the area covered by the translucent red marking with: {extra}. "
             "Blend it naturally with the scene's lighting, perspective and scale. "
-            "The red marking itself must not appear in the output."
+            "Add realistic contact shadows where appropriate. The red marking itself must not appear in the output. "
+            "Everything outside the red marking must remain unchanged."
         )
     model_id = GEMINI_MODEL_MAP.get("Nano Banana Pro") or next(iter(GEMINI_MODEL_MAP.values()))
     # 裁剪窗口 ≤2048，2K 输出足够且比 4K 档便宜一半
@@ -1069,8 +1111,25 @@ def _composite_inpaint_result(original, result, mask):
         return result
 
 
-def call_image_inpaint(image, mask, prompt: str, *, mode: str = "remove", seed=None,
-                       on_stage=None, should_cancel=None) -> Tuple[Optional[object], Optional[str], str, str]:
+def effective_inpaint_candidate_count(mode: str, requested: int, *, resolved_engine=None) -> Tuple[int, str]:
+    """专职 eraser 无 seed/变体参数，重复调用通常只会重复计费；服务端强制一次。"""
+    provider, model_key, _ = resolved_engine or resolve_inpaint_engine(mode)
+    count = max(1, min(3, int(requested)))
+    if provider == "fal" and model_key in _FAL_ERASER_MODELS and count > 1:
+        return 1, "当前专职移除模型不支持可控变体，已只生成 1 张以避免重复计费"
+    return count, ""
+
+
+def _instruction_inpaint_prompt(mode: str, text: str) -> str:
+    if mode == "remove":
+        guidance = text or get_inpaint_remove_prompt()
+        return DEFAULT_INPAINT_REMOVE_PROMPT + (f" Additional guidance: {guidance}" if guidance else "")
+    return f"Add the following requested content: {text}. {DEFAULT_INPAINT_ADD_SUFFIX}"
+
+
+def call_image_inpaint(image, mask, prompt: str, *, blend_mask=None, mode: str = "remove", seed=None,
+                       on_stage=None, should_cancel=None,
+                       resolved_engine=None) -> Tuple[Optional[object], Optional[str], str, str]:
     """生成式修补调度器：按 (inpaint_provider, mode) 分派。
 
     返回 (PIL|None, 错误|None, provider, usage_label)——供用量归账（模型标签 + 线路）。
@@ -1078,17 +1137,18 @@ def call_image_inpaint(image, mask, prompt: str, *, mode: str = "remove", seed=N
     - fal + remove：专职 eraser（BRIA/Finegrain/LaMa，无 prompt/seed）；配成 flux-fill 时走旧路径
     - fal + add：FLUX Fill（prompt 必填由上游校验）
     不做自动 failover：各引擎出图风格差异大，静默切换会困惑用户。
-    成功后用羽化 mask 把结果合成回原图，保证选区外像素严格不变。
+    成功后用独立 blend mask 合成回原图；add 默认保证涂抹区外像素严格不变，
+    remove 则以自动外扩后的有效处理范围为边界。
     """
-    provider, model_key, usage_label = resolve_inpaint_engine(mode)
+    # 提交时可传入引擎快照，避免排队期间修改设置导致候选数判断与实际模型不一致。
+    provider, model_key, usage_label = resolved_engine or resolve_inpaint_engine(mode)
     text = (prompt or "").strip()
     # Lightroom 式选区级处理：所有引擎都只看围绕选区的上下文窗口（等效原生分辨率）
-    crop_img, crop_mask, box = _crop_inpaint_context(image, mask)
+    crop_img, crop_mask, box = _crop_inpaint_context(image, mask, mode=mode)
     logger.info(f"[生成式修补] start provider={provider} model={model_key} mode={mode} "
                 f"size={getattr(image, 'size', '?')} crop={crop_img.size}@{box} prompt_len={len(text)}")
     if provider == "comfyui":
-        if mode == "remove" and not text:
-            text = get_inpaint_remove_prompt() or DEFAULT_INPAINT_REMOVE_PROMPT
+        text = _instruction_inpaint_prompt(mode, text)
         comfy = get_comfyui_settings()
         img, err, _ = call_comfyui_inpaint(
             comfy["base_url"], crop_img, crop_mask, text,
@@ -1099,6 +1159,8 @@ def call_image_inpaint(image, mask, prompt: str, *, mode: str = "remove", seed=N
         gemini_key = (_load_config().get("gemini_api_key") or "").strip()
         if not gemini_key:
             return None, "未配置 Gemini API Key(Gemini 标记法需要它；或在设置里换一个修补模型)", provider, usage_label
+        if mode == "remove" and not text:
+            text = get_inpaint_remove_prompt()
         img, err = call_gemini_mark_inpaint(gemini_key, crop_img, crop_mask, text, mode=mode,
                                             on_stage=on_stage, should_cancel=should_cancel)
     else:
@@ -1113,13 +1175,12 @@ def call_image_inpaint(image, mask, prompt: str, *, mode: str = "remove", seed=N
             img, err = call_fal_mask_eraser(fal_key, crop_img, crop_mask, model_key=model_key,
                                             on_stage=on_stage, should_cancel=should_cancel)
         else:
-            if mode == "remove" and not text:
-                text = get_inpaint_remove_prompt() or DEFAULT_INPAINT_REMOVE_PROMPT
+            text = _instruction_inpaint_prompt(mode, text)
             img, err, _ = call_fal_inpaint(fal_key, crop_img, crop_mask, text, seed=seed,
                                            on_stage=on_stage, should_cancel=should_cancel)
     if img is not None:
         full = _stitch_inpaint_result(image, img, box)
-        img = _composite_inpaint_result(image, full, mask)
+        img = _composite_inpaint_result(image, full, blend_mask if blend_mask is not None else mask)
     return img, err, provider, usage_label
 
 

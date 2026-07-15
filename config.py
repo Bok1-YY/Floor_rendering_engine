@@ -221,7 +221,7 @@ def get_image_provider() -> str:
 
 
 # ── 生成式修补（inpaint：局部移除/添加）引擎 ────────────────────────────
-# 两条引擎：fal = FLUX Fill 真 inpainting 云 API（复用 fal_api_key，按张计费）；
+# 两条引擎：fal = 按 remove/add 配置选择云模型（复用 Fal/Gemini Key，按张计费）；
 # comfyui = 用户自备的 ComfyUI 实例（内网 HTTP，本地算力零 API 费用）。
 # 不做自动 failover——两引擎出图风格差异大，静默切换会让用户困惑。
 DEFAULT_INPAINT_PROVIDER = "fal"

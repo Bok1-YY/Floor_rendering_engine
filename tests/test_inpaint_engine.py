@@ -4,10 +4,16 @@
 只测配置→分派的纯逻辑：默认值、非法值回落、comfyui 优先级、usage 标签一致性。
 不发任何网络请求。
 """
+import io
+import json
+
 import pytest
+from fastapi import HTTPException
+from PIL import Image
 
 from Floor_engine_server import api as api_mod
 from Floor_engine_server import config as config_mod
+from Floor_engine_server import server_api
 
 
 def _patch_config(monkeypatch, cfg: dict):
@@ -165,6 +171,17 @@ def test_crop_context_downscales_when_large():
     assert crop_mask.size == crop_img.size
 
 
+def test_add_crop_keeps_more_scene_context_than_remove():
+    img = Image.new("RGB", (3000, 2000))
+    mask = _rect_mask(size=img.size, box=(1450, 950, 1549, 1049))
+
+    _, _, remove_box = api_mod._crop_inpaint_context(img, mask, mode="remove")
+    _, _, add_box = api_mod._crop_inpaint_context(img, mask, mode="add")
+
+    assert add_box[2] - add_box[0] > remove_box[2] - remove_box[0]
+    assert add_box[3] - add_box[1] > remove_box[3] - remove_box[1]
+
+
 def test_eraser_binarizes_mask(monkeypatch):
     """call_fal_mask_eraser 发出的 mask 必须是二值 PNG（BRIA 硬性要求 255/0）。"""
     from PIL import Image
@@ -190,7 +207,7 @@ def test_eraser_binarizes_mask(monkeypatch):
     mask_uri = captured["payload"]["mask_url"]
     raw = base64.b64decode(mask_uri.split(",", 1)[1])
     sent = Image.open(io.BytesIO(raw)).convert("L")
-    values = set(sent.getdata())
+    values = set(sent.get_flattened_data())
     assert values <= {0, 255}, f"mask 必须二值，实际出现灰度值: {sorted(values)[:10]}"
 
 
@@ -211,3 +228,166 @@ def test_lama_uses_mask_image_url_field(monkeypatch):
     assert captured["endpoint"] == api_mod.LAMA_ENDPOINT
     assert "mask_image_url" in captured["payload"]
     assert "mask_url" not in captured["payload"]
+
+
+def test_inpaint_candidate_png_is_pixel_exact(tmp_path):
+    """候选必须无损落盘，避免 JPEG 候选 + 最终图的二次有损编码。"""
+    src = Image.new("RGB", (17, 13))
+    for x in range(src.width):
+        for y in range(src.height):
+            src.putpixel((x, y), ((x * 17) % 256, (y * 23) % 256, ((x + y) * 29) % 256))
+    path = tmp_path / "candidate.png"
+
+    server_api._save_inpaint_candidate_png(src, str(path))
+    saved = Image.open(path)
+    saved.load()
+
+    assert saved.format == "PNG"
+    assert list(saved.get_flattened_data()) == list(src.get_flattened_data())
+
+
+def test_inpaint_queue_rejects_when_active_limit_reached():
+    """达到运行中上限后背压判断必须拒绝新付费任务。"""
+    old = dict(server_api._inpaints)
+    try:
+        server_api._inpaints.clear()
+        server_api._inpaints.update({
+            f"busy-{i}": {"status": "running", "ts": i, "candidates": []}
+            for i in range(server_api._MAX_ACTIVE_INPAINTS)
+        })
+        assert server_api._inpaint_queue_is_full() is True
+    finally:
+        server_api._inpaints.clear()
+        server_api._inpaints.update(old)
+
+
+def test_inpaint_trim_frees_slot_at_exact_capacity():
+    old = dict(server_api._inpaints)
+    try:
+        server_api._inpaints.clear()
+        server_api._inpaints.update({
+            f"done-{i}": {"status": "cancelled", "ts": i, "candidates": []}
+            for i in range(server_api._MAX_INPAINTS)
+        })
+        server_api._trim_inpaints(reserve=1)
+        assert len(server_api._inpaints) == server_api._MAX_INPAINTS - 1
+        assert "done-0" not in server_api._inpaints
+    finally:
+        server_api._inpaints.clear()
+        server_api._inpaints.update(old)
+
+
+def _rect_mask(size=(400, 300), box=(150, 100, 249, 199)):
+    mask = Image.new("L", size, 0)
+    for x in range(box[0], box[2] + 1):
+        for y in range(box[1], box[3] + 1):
+            mask.putpixel((x, y), 255)
+    return mask
+
+
+def test_add_mask_default_is_strict_and_binary():
+    raw = _rect_mask()
+    engine, blend = server_api._prepare_inpaint_masks(raw, raw.size, 0, 0.01, "add")
+
+    assert set(engine.get_flattened_data()) <= {0, 255}
+    assert engine.getbbox() == raw.getbbox()
+    assert blend.getbbox() == raw.getbbox(), "添加模式的羽化不得扩到用户选区外"
+
+
+def test_remove_mask_auto_expands_beyond_brush():
+    raw = _rect_mask()
+    engine, blend = server_api._prepare_inpaint_masks(raw, raw.size, 0, 0.01, "remove")
+    rl, rt, rr, rb = raw.getbbox()
+    el, et, er, eb = engine.getbbox()
+
+    assert el < rl and et < rt and er > rr and eb > rb
+    assert blend.getbbox() != raw.getbbox()
+
+
+def test_add_composite_keeps_every_pixel_outside_brush():
+    original = Image.new("RGB", (400, 300), (20, 40, 60))
+    generated = Image.new("RGB", original.size, (240, 20, 10))
+    raw = _rect_mask(size=original.size)
+    _, blend = server_api._prepare_inpaint_masks(raw, original.size, 0, 0.01, "add")
+
+    result = api_mod._composite_inpaint_result(original, generated, blend)
+    assert result.getpixel((149, 150)) == original.getpixel((149, 150))
+    assert result.getpixel((250, 150)) == original.getpixel((250, 150))
+    assert result.getpixel((200, 150)) != original.getpixel((200, 150))
+
+
+def test_pure_eraser_forces_single_candidate(monkeypatch):
+    _patch_config(monkeypatch, {
+        "inpaint_provider": "fal",
+        "inpaint_remove_model": "bria-eraser",
+        "inpaint_add_model": "flux-fill",
+    })
+    count, notice = api_mod.effective_inpaint_candidate_count("remove", 3)
+    assert count == 1
+    assert "避免重复计费" in notice
+    assert api_mod.effective_inpaint_candidate_count("add", 3) == (3, "")
+    # 排队任务使用提交时的引擎快照；后续设置变化不能把已收口的 Eraser 重新放大到 3 次。
+    _patch_config(monkeypatch, {"inpaint_provider": "fal", "inpaint_remove_model": "flux-fill"})
+    assert api_mod.effective_inpaint_candidate_count(
+        "remove", 3, resolved_engine=("fal", "bria-eraser", "BriaEraser"),
+    )[0] == 1
+
+
+def test_mode_specific_prompt_compiler_preserves_user_request(monkeypatch):
+    _patch_config(monkeypatch, {"inpaint_remove_prompt": "continue the oak floor"})
+    remove = api_mod._instruction_inpaint_prompt("remove", "")
+    add = api_mod._instruction_inpaint_prompt("add", "一盆龟背竹")
+
+    assert "shadow and reflection" in remove
+    assert "continue the oak floor" in remove
+    assert "一盆龟背竹" in add
+    assert "only inside the masked area" in add
+    assert "perspective" in add and "contact shadow" in add
+
+
+def test_qwen_add_payload_wraps_user_prompt(monkeypatch):
+    captured = {}
+
+    def fake_queue(api_key, endpoint, payload, *, on_stage=None, should_cancel=None):
+        captured.update(payload)
+        return None, "stop-here"
+
+    monkeypatch.setattr(api_mod, "_call_fal_queue_json", fake_queue)
+    api_mod.call_fal_qwen_inpaint(
+        "k", Image.new("RGB", (16, 16)), Image.new("L", (16, 16), 255),
+        "一盆龟背竹", mode="add",
+    )
+
+    assert "一盆龟背竹" in captured["prompt"]
+    assert "only inside the masked area" in captured["prompt"]
+    assert "contact shadow" in captured["prompt"]
+
+
+def test_inpaint_source_applies_exif_orientation():
+    raw = Image.new("RGB", (40, 20), (100, 120, 140))
+    exif = raw.getexif()
+    exif[274] = 6  # 90° clockwise
+    buf = io.BytesIO()
+    raw.save(buf, format="JPEG", exif=exif)
+    opened = Image.open(io.BytesIO(buf.getvalue()))
+
+    normalized = server_api._normalize_inpaint_source(opened)
+    assert normalized.size == (20, 40)
+    assert normalized.mode == "RGB"
+
+
+def test_inpaint_mask_decoder_rejects_non_png():
+    buf = io.BytesIO()
+    Image.new("RGB", (8, 8)).save(buf, format="JPEG")
+    import base64
+    with pytest.raises(HTTPException) as exc:
+        server_api._decode_inpaint_mask(base64.b64encode(buf.getvalue()).decode())
+    assert exc.value.status_code == 400
+    assert "PNG" in exc.value.detail
+
+
+def test_default_comfy_workflow_does_not_expand_mask_twice():
+    with open(api_mod._COMFY_DEFAULT_WORKFLOW, encoding="utf-8") as file:
+        workflow = json.load(file)
+    assert workflow["7"]["inputs"]["expand"] == 0
+    assert workflow["8"]["inputs"]["grow_mask_by"] == 8

@@ -205,9 +205,11 @@ export function ParamsForm({
   // 房间图生成前预处理：画笔涂抹移除原有家具/杂物，清理结果另存并回填为当前房间图
   const [roomCleanOpen, setRoomCleanOpen] = useState(false);
   const toggleModel = (key: ModelKey) => {
-    if (key === "sd35" && (!sdEnabled || !params.workflow_mode.includes("纯效果图"))) return;
+    const selected = modelTargets.includes(key);
+    // 不合法时只禁止新增；草稿恢复或切换工作流后，已选中的 SD 仍必须允许取消。
+    if (key === "sd35" && !selected && (!sdEnabled || !params.workflow_mode.includes("纯效果图"))) return;
     onModelTargets(
-      modelTargets.includes(key)
+      selected
         ? modelTargets.filter((m) => m !== key)
         : [...modelTargets, key],
     );
@@ -502,8 +504,8 @@ export function ParamsForm({
               ["pro", "Pro"],
               ["sd35", "SD 3.5"],
             ] as const).map(([key, label]) => {
-              const disabled = key === "sd35" && (!sdEnabled || !params.workflow_mode.includes("纯效果图"));
               const active = modelTargets.includes(key);
+              const disabled = key === "sd35" && !active && (!sdEnabled || !params.workflow_mode.includes("纯效果图"));
               return (
                 <button
                   key={key}

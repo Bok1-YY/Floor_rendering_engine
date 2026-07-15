@@ -149,6 +149,72 @@ def test_fal_queue_submits_once_then_polls(monkeypatch):
     assert session.trust_env is False
 
 
+def test_fal_queue_persists_submitted_handle(monkeypatch):
+    captured = []
+    base = "https://queue.fal.run/fal-ai/demo/requests/r1"
+
+    def post(url, **kwargs):
+        return _Response({
+            "request_id": "r1",
+            "status_url": base + "/status",
+            "response_url": base + "/response",
+            "cancel_url": base + "/cancel",
+        })
+
+    def get(url, **kwargs):
+        if url.endswith("/status"):
+            return _Response({"status": "COMPLETED"})
+        return _Response({"images": [{"url": "mock://image"}]})
+
+    monkeypatch.setattr(api, "_load_config", lambda: {"proxy": "", "fal_queue_timeout": 60})
+    monkeypatch.setattr(api._req, "Session", lambda: _Session(post, get))
+    data, err = api._call_fal_queue_json(
+        "secret", "fal-ai/demo", {"prompt": "x"}, on_submitted=captured.append,
+    )
+
+    assert err is None and data["images"]
+    assert captured == [{
+        "endpoint": "fal-ai/demo",
+        "request_id": "r1",
+        "status_url": base + "/status",
+        "response_url": base + "/response",
+        "cancel_url": base + "/cancel",
+        "submitted_at": captured[0]["submitted_at"],
+    }]
+    assert captured[0]["submitted_at"] > 0
+
+
+def test_fal_queue_resumes_handle_without_resubmitting(monkeypatch):
+    calls = {"post": 0, "status": 0, "result": 0}
+    base = "https://queue.fal.run/fal-ai/demo/requests/r1"
+    handle = {
+        "request_id": "r1",
+        "status_url": base + "/status",
+        "response_url": base + "/response",
+        "cancel_url": base + "/cancel",
+    }
+
+    def post(url, **kwargs):
+        calls["post"] += 1
+        raise AssertionError("恢复队列任务时不得重新提交")
+
+    def get(url, **kwargs):
+        if url.endswith("/status"):
+            calls["status"] += 1
+            return _Response({"status": "COMPLETED"})
+        calls["result"] += 1
+        return _Response({"images": [{"url": "mock://image"}]})
+
+    monkeypatch.setattr(api, "_load_config", lambda: {"proxy": "", "fal_queue_timeout": 60})
+    monkeypatch.setattr(api._req, "Session", lambda: _Session(post, get))
+    data, err = api._call_fal_queue_json(
+        "secret", "fal-ai/demo", {"prompt": "x"}, resume_handle=handle,
+    )
+
+    assert err is None and data["images"]
+    assert calls == {"post": 0, "status": 1, "result": 1}
+
+
 def test_fal_queue_never_resubmits_after_unknown_network_failure(monkeypatch):
     calls = {"post": 0}
 

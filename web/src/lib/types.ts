@@ -497,8 +497,8 @@ export interface InpaintPayload {
   mask_b64: string; // 纯 base64 PNG（无 data: 前缀），白=重绘区
   prompt?: string; // add 模式必填
   mode: "remove" | "add";
-  grow?: number; // mask 最小外扩 px（后端随选区尺寸自适应放大）
-  feather?: number; // 羽化 / 短边比例，默认 0.01
+  grow?: number; // remove=最小外扩且后端自适应；add=仅显式外扩，默认 0
+  feather?: number; // 羽化 / 短边比例；add 的羽化限制在有效选区内部
   seed?: number;
   n?: number; // 候选数 1-3（Lightroom 式抽卡；n 张记 n 次费用）
 }
@@ -521,10 +521,19 @@ export interface InpaintCandidate {
 }
 export interface InpaintStatusView {
   inpaint_id: string;
-  status: "running" | "done" | "failed";
+  status: "running" | "applying" | "done" | "failed" | "cancelled";
   stage: string;
   error: string;
+  notice: string;
+  requested_n: number;
+  effective_n: number;
   candidates: InpaintCandidate[];
+}
+export interface InpaintSubmitView {
+  inpaint_id: string;
+  requested_n: number;
+  effective_n: number;
+  notice: string;
 }
 export interface InpaintApplyResponse {
   ok: boolean;

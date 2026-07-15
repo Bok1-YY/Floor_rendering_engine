@@ -211,14 +211,16 @@ def _save_usage_raw(data: dict) -> None:
     os.replace(tmp, _USAGE_STATS_FILE)
 
 def record_usage(mode: str, model: str, provider: str, ok: bool, operation: str = 'generate') -> None:
-    """累加一次出图结果。维度: 模式 × 模型(B2/Pro) × 线路(google/fal)，各计 ok/fail。
+    """累加一次出图结果。维度: 模式 × 模型 × 线路(google/fal/local)，各计 ok/fail。
     全程吞异常——统计绝不能影响生图。"""
     try:
         mkey = _short_mode_label(mode)
         mdl = _short_model_label(model)
         prov = (provider or "google").strip().lower()
-        if prov not in ("google", "fal"):
-            prov = "google"
+        if prov == 'comfyui':
+            prov = 'local'
+        if prov not in ("google", "fal", "local"):
+            prov = "unknown"
         with _usage_lock:
             data = _load_usage_raw()
             counts = data.setdefault("counts", {})
@@ -256,6 +258,9 @@ def load_usage_summary(prices: Optional[dict] = None) -> dict:
                     ok = int(c.get("ok", 0)); fail = int(c.get("fail", 0))
                     tot_ok += ok; tot_fail += fail
                     price = prices.get(f"{model}:{prov}", prices.get(model))
+                    # 用量页统计 API 成本；本地 ComfyUI 未配置单价时按 0，而不是误报“未计价”。
+                    if price is None and prov == 'local':
+                        price = 0.0
                     cost = round(ok * price, 2) if price is not None else None
                     if cost is not None:
                         tot_cost += cost

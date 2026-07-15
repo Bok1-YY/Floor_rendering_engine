@@ -31,13 +31,13 @@
   },
   "7": {
     "class_type": "GrowMask",
-    "_meta": {"title": "mask 外扩"},
-    "inputs": {"mask": ["6", 0], "expand": 8, "tapered_corners": true}
+    "_meta": {"title": "mask 透传（外扩已由服务端完成）"},
+    "inputs": {"mask": ["6", 0], "expand": 0, "tapered_corners": true}
   },
   "8": {
     "class_type": "VAEEncodeForInpaint",
     "_meta": {"title": "Inpaint 编码"},
-    "inputs": {"pixels": ["4", 0], "mask": ["7", 0], "vae": ["1", 2], "grow_mask_by": 16}
+    "inputs": {"pixels": ["4", 0], "mask": ["7", 0], "vae": ["1", 2], "grow_mask_by": 8}
   },
   "9": {
     "class_type": "KSampler",
