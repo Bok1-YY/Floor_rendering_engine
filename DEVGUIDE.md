@@ -173,7 +173,7 @@ POST /api/jobs ──秒回 job_id──▶ 后台 asyncio task(_run_job_bg)
 - **记录** `/api/records`：`GET`列文件 · `GET load` · `POST reveal`(解密) · `POST edit`(记录内二改) · `POST result/delete` · `POST result/favorite` · `POST result/review`(人工评审：通过/备选/淘汰、标签、备注、最佳图) · `POST delete`(删整条) · `GET export/{html,pptx,favorites-pptx}`(FileResponse 下载)。
 - **上传** `POST /api/uploads/{floor,room,ref}`；品牌 Logo 为 `POST /api/uploads/logo` 与 `POST /api/uploads/logo/clear`。
 - **小样与配方**：`GET /api/swatches/recent` · `GET /api/recipes` · `/api/recipes/custom` 列表/新增/更新/删除。
-- **识色与校色**：`GET /api/floor/analyze`；`POST /api/color-match/preview` 生成本地缩图预览并返回满强度 `auto_adjustments`；`POST /api/jobs/{id}/color-match` 或 `/api/records/color-match` 全分辨率落为新候选。三条校色请求共用 `adjustments` 与 `adjustment_mode=auto|manual`：自动模式保留区域 Reinhard，手动模式以 Gemini 原图为零点应用绝对高级参数。
+- **识色与校色**：`GET /api/floor/analyze`；`POST /api/color-match/preview` 生成本地缩图预览并返回满强度 `auto_adjustments`，首帧/重新框选可用 `include_analysis=true` 同时取回受光、半阴影、阴影截图与偏色建议；`POST /api/jobs/{id}/color-match` 或 `/api/records/color-match` 全分辨率落为新候选。`rect` 只用于地板统计/诊断，`adjustment_mode=auto|manual` 均作用于整张效果图；`feather` 仅为旧客户端兼容保留。
 - **生成式修补** `/api/inpaint`（两段式，实验）：`POST /api/inpaint`（target 三种 kind=job/record/room + mask + n=1~3；响应含 requested_n/effective_n/notice，专职 Eraser 强制 effective_n=1）· `GET {iid}`(轮询候选) · `POST {iid}/apply`(挑中才落目标) · `POST {iid}/cancel` · `GET comfyui/ping`(后端代理探测本地实例)。
 - **评审复盘**：`GET /api/review/summary` 聚合维度统计 · `GET /api/review/gallery?filter=pass|best` 好图样本库。
 - **失败** `POST /api/failure/classify` · `GET /api/failure/rules`；**连通** `GET /api/connection/test`。
@@ -243,10 +243,10 @@ web/src/
 页面 `useEffect` 调 `api.*` 取数；活动作业用 `useJobStream`(EventSource) 看 SSE 实时进度；生成页另有 2.5s 轮询 `listJobs` 做队列聚合进度。每次生成把不含密钥的 `gen_context` 写入记录，记录页通过 `draft.ts` 将参数一次性回填到生成页。`api.imgUrl()` 把后端相对图 URL 拼成绝对地址。
 
 ### 5.5 手动校色数据流
-1. 弹窗按框选区域与参照小样请求 `/api/color-match/preview`；服务端返回满强度自动结果和相对 Gemini 原图推导的 `auto_adjustments`。
-2. 自动校准滑杆只改变原图/满强度结果的混合比例，因此 `0%~100%`、`1%` 步进可在 Canvas 即时重绘；高级滑杆同步显示该比例下的原图基准值。
-3. 拖动高级参数后切换 `manual`：后端从 Gemini 原图应用绝对色温/曝光/亮度区间等参数，再复用地板相似度掩膜与羽化。高级请求 180ms 防抖，旧响应按序号丢弃。
-4. 「恢复自动校准」切回精确的区域 Reinhard 自动结果；「恢复 Gemini 原图」使用手动全零。保存按钮只在预览与当前参数一致时可用。
+1. 弹窗初始以 `manual` 全零请求 `/api/color-match/preview`，请求体带 `include_analysis=true`：右栏保持 Gemini 原图，后端在框选的地板中按亮度分位提取受光/半阴影/阴影截图，并用有符号 LAB 对照小样判断冷暖、色调和饱和度偏差。
+2. 诊断只生成色温/色调/饱和度建议，不主动改曝光与明暗层次；点击「应用建议参数」后才填入滑杆并对全图请求手动预览，不会自动落盘。
+3. 全图自动校准滑杆从 `0%` 开始：后端用框选地板与小样计算 Reinhard LAB 变换，并将它应用到整张图；前端按 `0%~100%`、`1%` 步进即时混合原图/满强度结果。
+4. 拖动高级参数后切换 `manual`：后端从 Gemini 原图对整张图应用绝对参数。4K 全图使用 256 行水平分片处理以控制内存；高级请求 180ms 防抖，旧响应按序号丢弃，保存仍是独立动作。
 
 ---
 
@@ -278,7 +278,7 @@ web/src/
 6. 在 **`开发日志.md` 顶部追加一条**（改了啥、为什么）。
 7. 提交（见 §九）。
 
-**测试**：`cd Floor_engine_server && python -m pytest`（引擎层 golden 提示词、安全硬化、人工评审元数据、自动/手动校色、SD 提示词/IP-Adapter/FAL 队列恢复、生成式修补的模式化 mask/提示词/EXIF/候选计费/无损落盘和非校色新功能回归；当前 **132 项**）。本机若系统 `python` 无 pytest，可用项目虚拟环境：`.venv/bin/python -m pytest`。`tests/golden/` 基准入库，缓存不入。
+**测试**：`cd Floor_engine_server && python -m pytest`（引擎层 golden 提示词、安全硬化、人工评审元数据、三区诊断与全图自动/手动校色、SD 提示词/IP-Adapter/FAL 队列恢复、生成式修补的模式化 mask/提示词/EXIF/候选计费/无损落盘和非校色新功能回归；当前 **149 项**）。本机若系统 `python` 无 pytest，可用项目虚拟环境：`.venv/bin/python -m pytest`。`tests/golden/` 基准入库，缓存不入。
 
 ---
 

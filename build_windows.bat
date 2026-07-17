@@ -4,7 +4,7 @@ REM  Floor engine - single-exe packaging script (Windows / Nuitka)
 REM  Output: dist\FloorEngine.exe  (onefile, native code, bundled web UI)
 REM
 REM  Requirements:
-REM    1) Python 3.10-3.12 installed and on PATH
+REM    1) 64-bit Python 3.11-3.12 installed and on PATH
 REM    2) Node.js 20.9+ and npm installed and on PATH
 REM    3) Internet for the first build (Nuitka downloads MinGW64)
 REM
@@ -69,6 +69,7 @@ python -m nuitka ^
   --include-package=uvicorn ^
   --include-package=anyio ^
   --include-package=PIL ^
+  --include-package=cv2 ^
   --include-package=multipart ^
   --include-package-data=certifi ^
   --include-package-data=pptx ^

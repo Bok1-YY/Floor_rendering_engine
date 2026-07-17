@@ -12,7 +12,7 @@ import dataclasses
 import uuid
 from typing import List, Tuple, Optional
 
-from PIL import Image
+from PIL import Image, PngImagePlugin
 
 from .config import (
     BASE_DIR, MAIN_OUTPUT_DIR, CONFIG_FILE, UPLOAD_DIR,
@@ -435,8 +435,10 @@ def scan_json_files():
             if f.endswith('_记录.json'): results.append(os.path.join(root, f))
     return sorted(results, reverse=True)
 
-def get_record_labels(json_path):
-    records = _load_records(json_path)
+def get_record_labels(json_path, records=None):
+    """返回记录选项标签。records 可由调用方传入，避免文件列表汇总时重复读盘。"""
+    if records is None:
+        records = _load_records(json_path)
     choices = []
     for r in records:
         label = (f"{r.get('timestamp','')} | "
@@ -691,7 +693,8 @@ def _save_api_result_jpg(pil_img, model_key: str, png_path_val: str) -> str:
             except OSError: pass
 
 
-def _save_api_result_png(pil_img, model_key: str, source_path: str) -> str:
+def _save_api_result_png(pil_img, model_key: str, source_path: str,
+                         metadata: Optional[dict] = None) -> str:
     """给 SD/超分结果保存无损 PNG；命名与 JPG 出口同样防碰撞。"""
     tmp_path = None
     try:
@@ -703,7 +706,11 @@ def _save_api_result_png(pil_img, model_key: str, source_path: str) -> str:
         fpath = os.path.join(MAIN_OUTPUT_DIR, f"{orig_name}_{safe_key}_{ts}_{uuid.uuid4().hex[:10]}.png")
         fd, tmp_path = tempfile.mkstemp(prefix='.result_', suffix='.png', dir=MAIN_OUTPUT_DIR)
         os.close(fd)
-        pil_img.convert('RGB').save(tmp_path, format='PNG', optimize=True)
+        pnginfo = None
+        if metadata:
+            pnginfo = PngImagePlugin.PngInfo()
+            pnginfo.add_text('floor_engine', json.dumps(metadata, ensure_ascii=False, separators=(',', ':')))
+        pil_img.convert('RGB').save(tmp_path, format='PNG', optimize=True, pnginfo=pnginfo)
         os.replace(tmp_path, fpath)
         tmp_path = None
         return fpath

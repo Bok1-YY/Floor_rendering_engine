@@ -12,6 +12,7 @@ import { ImageZoom } from "@/components/ImageZoom";
 import { CompareSlider } from "@/components/CompareSlider";
 import { ColorMatchDialog } from "@/components/ColorMatchDialog";
 import { InpaintDialog } from "@/components/InpaintDialog";
+import { FloorVisualizeDialog } from "@/components/FloorVisualizeDialog";
 import { cn } from "@/lib/utils";
 
 const BADGE: Record<string, { label: string; color: string; bg: string }> = {
@@ -49,6 +50,11 @@ export function JobCard({
   } | null>(null);
   // 生成式修补：同样记录所点图槽的当前浏览候选
   const [inpaint, setInpaint] = useState<{
+    stage: ModelKey;
+    srcUrl: string;
+    imageRel: string;
+  } | null>(null);
+  const [floorVisualize, setFloorVisualize] = useState<{
     stage: ModelKey;
     srcUrl: string;
     imageRel: string;
@@ -289,6 +295,21 @@ export function JobCard({
                   )}
                 </span>
                 <span className="flex items-center gap-2">
+                  {terminal && job.floor_path && m.url.startsWith("/outputs/") && (
+                    <button
+                      title={`把原始地板小样确定性投影到这张 ${m.name} 图`}
+                      onClick={() =>
+                        setFloorVisualize({
+                          stage: m.key,
+                          srcUrl: m.url,
+                          imageRel: m.url.slice("/outputs/".length),
+                        })
+                      }
+                      className="hover:text-foreground"
+                    >
+                      🪵 真实贴地板
+                    </button>
+                  )}
                   {terminal && m.url.startsWith("/outputs/") && (
                     <button
                       title={`对这张 ${m.name} 图做生成式修补（画笔涂抹移除/添加物体）`}
@@ -448,6 +469,29 @@ export function JobCard({
           onOpenChange={(o) => !o && setInpaint(null)}
           srcUrl={inpaint.srcUrl}
           target={{ kind: "job", jobId: job.job_id, stage: inpaint.stage, imageRel: inpaint.imageRel }}
+          onDone={(jv) => {
+            if (jv) {
+              applySnapshot(jv);
+              setView({});
+            }
+          }}
+        />
+      )}
+
+      {/* 本地确定性纹理投影（不调用生成模型） */}
+      {floorVisualize && (
+        <FloorVisualizeDialog
+          open={!!floorVisualize}
+          onOpenChange={(o) => !o && setFloorVisualize(null)}
+          srcUrl={floorVisualize.srcUrl}
+          textureUrl={job.floor_url}
+          texturePath={job.floor_path}
+          target={{
+            kind: "job",
+            jobId: job.job_id,
+            stage: floorVisualize.stage,
+            imageRel: floorVisualize.imageRel,
+          }}
           onDone={(jv) => {
             if (jv) {
               applySnapshot(jv);

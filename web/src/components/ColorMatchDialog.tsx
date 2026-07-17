@@ -2,7 +2,14 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
-import type { ColorMatchAdjustments, ColorMatchRect, JobView, ModelKey } from "@/lib/types";
+import type {
+  ColorMatchAdjustments,
+  ColorMatchAnalysis,
+  ColorMatchHintCode,
+  ColorMatchRect,
+  JobView,
+  ModelKey,
+} from "@/lib/types";
 import { toast } from "sonner";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Slider } from "@/components/ui/slider";
@@ -51,6 +58,17 @@ const ADJUSTMENT_CONTROLS: AdjustmentControl[] = [
   { key: "saturation", label: "饱和度", min: -100, max: 100, step: 1, hint: "灰度 ↔ 鲜艳" },
 ];
 
+const HINT_STYLES: Record<ColorMatchHintCode, string> = {
+  warm: "border-orange-200 bg-orange-50 text-orange-800 dark:border-orange-900 dark:bg-orange-950/40 dark:text-orange-200",
+  cool: "border-sky-200 bg-sky-50 text-sky-800 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-200",
+  green: "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200",
+  magenta: "border-pink-200 bg-pink-50 text-pink-800 dark:border-pink-900 dark:bg-pink-950/40 dark:text-pink-200",
+  gray: "border-slate-200 bg-slate-50 text-slate-700 dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-200",
+  saturated: "border-violet-200 bg-violet-50 text-violet-800 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-200",
+  matched: "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200",
+  unavailable: "border-border bg-panel text-muted-foreground",
+};
+
 function scaleAutoAdjustments(
   profile: ColorMatchAdjustments,
   strength: number,
@@ -79,9 +97,10 @@ type ColorMatchDialogProps = {
 
 /**
  * 手动校色弹窗（大窗双栏 + 实时预览）：
- * 左栏原图上拖框住地板（常驻对照），右栏 canvas 实时显示校色结果。
+ * 左栏原图上拖框住地板作为分析样本，右栏 canvas 实时显示全图校色结果。
+ * 首帧以手动全零显示原图，同时返回受光/半阴影/阴影诊断；用户点击后才套用建议参数。
  * 实时原理：强度是线性混合（src·(1−m·s)+t·m·s ≡ 先按 s=1 出完整结果 F，再以 alpha=s 混合 src 与 F），
- * 故服务端只在选区、参照或高级参数变化时按 strength=1.0 重算一次（防抖自动请求），
+ * 故服务端只在分析框、参照或高级参数变化时按 strength=1.0 重算一次（防抖自动请求），
  * 强度滑杆纯客户端 canvas 混合、零网络即时生效；提交仍带真实 strength，结果与预览一致。
  */
 export function ColorMatchDialog(props: ColorMatchDialogProps) {
@@ -100,12 +119,14 @@ function ColorMatchSession({
   onDone,
 }: ColorMatchDialogProps) {
   const [rect, setRect] = useState<ColorMatchRect>(DEFAULT_RECT);
-  const [strength, setStrength] = useState(0.8);
+  const [strength, setStrength] = useState(0);
   const [ref, setRef] = useState<{ url: string; path: string }>({ url: refUrl, path: refPath });
   const [adjustments, setAdjustments] = useState<ColorMatchAdjustments>(() => ({ ...DEFAULT_ADJUSTMENTS }));
-  const [adjustmentMode, setAdjustmentMode] = useState<AdjustmentMode>("auto");
+  const [adjustmentMode, setAdjustmentMode] = useState<AdjustmentMode>("manual");
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [previewing, setPreviewing] = useState(Boolean(refPath));
+  const [analyzing, setAnalyzing] = useState(Boolean(refPath));
+  const [analysis, setAnalysis] = useState<ColorMatchAnalysis | null>(null);
   const [hasPreview, setHasPreview] = useState(false);
   const [ready, setReady] = useState(false); // fullPreview 与当前 rect/ref 对应（可保存）
   const [saving, setSaving] = useState(false);
@@ -129,9 +150,9 @@ function ColorMatchSession({
   const previewSeq = useRef(0);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortPreview = useRef<AbortController | null>(null);
-  const strengthRef = useRef(0.8);
+  const strengthRef = useRef(0);
   const lastAutoStrengthRef = useRef(0.8);
-  const adjustmentModeRef = useRef<AdjustmentMode>("auto");
+  const adjustmentModeRef = useRef<AdjustmentMode>("manual");
 
   // canvas 重绘：原图打底 + fullPreview 按当前强度 alpha 叠加（即时，无网络）
   const redraw = useCallback(() => {
@@ -154,7 +175,7 @@ function ColorMatchSession({
     ctx.globalAlpha = 1;
   }, []);
 
-  // 服务端预览（strength 固定 1.0；高级参数/选区/参照变化时防抖调用）
+  // 服务端全图预览（strength 固定 1.0；参数/分析框/参照变化时防抖调用）
   const requestPreview = useCallback(
     (
       r: ColorMatchRect,
@@ -162,6 +183,7 @@ function ColorMatchSession({
       nextAdjustments: ColorMatchAdjustments,
       nextMode: AdjustmentMode,
       seq: number,
+      includeAnalysis = false,
     ) => {
       if (!refPathNow || r.w < 0.02 || r.h < 0.02) return;
       const controller = new AbortController();
@@ -175,12 +197,17 @@ function ColorMatchSession({
             strength: 1.0,
             adjustments: nextAdjustments,
             adjustment_mode: nextMode,
+            include_analysis: includeAnalysis,
           },
           controller.signal,
         )
         .then((res) => {
           if (seq !== previewSeq.current) return; // 过期响应丢弃
           autoAdjustmentsRef.current = res.auto_adjustments;
+          if (includeAnalysis) {
+            setAnalysis(res.analysis ?? null);
+            setAnalyzing(false);
+          }
           if (nextMode === "auto") {
             setAdjustments(scaleAutoAdjustments(res.auto_adjustments, strengthRef.current));
           }
@@ -199,6 +226,7 @@ function ColorMatchSession({
           img.onerror = () => {
             if (seq !== previewSeq.current) return;
             setPreviewing(false);
+            if (includeAnalysis) setAnalyzing(false);
             toast.error("预览图片读取失败");
           };
           img.src = res.preview;
@@ -207,6 +235,7 @@ function ColorMatchSession({
           if (seq !== previewSeq.current) return;
           if ((e as Error).name === "AbortError") return;
           setPreviewing(false);
+          if (includeAnalysis) setAnalyzing(false);
           toast.error("预览失败：" + (e as Error).message);
         });
     },
@@ -220,6 +249,7 @@ function ColorMatchSession({
       nextAdjustments: ColorMatchAdjustments,
       nextMode: AdjustmentMode,
       delay = 180,
+      includeAnalysis = false,
     ) => {
       setReady(false);
       abortPreview.current?.abort();
@@ -227,11 +257,13 @@ function ColorMatchSession({
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
       if (!refPathNow || r.w < 0.02 || r.h < 0.02) {
         setPreviewing(false);
+        if (includeAnalysis) setAnalyzing(false);
         return;
       }
       setPreviewing(true);
+      if (includeAnalysis) setAnalyzing(true);
       debounceTimer.current = setTimeout(
-        () => requestPreview(r, refPathNow, nextAdjustments, nextMode, seq),
+        () => requestPreview(r, refPathNow, nextAdjustments, nextMode, seq, includeAnalysis),
         delay,
       );
     },
@@ -248,7 +280,7 @@ function ColorMatchSession({
     src.onload = () => redraw();
     srcImgRef.current = src;
     const seq = ++seqRef.current;
-    if (refPath) requestPreview(DEFAULT_RECT, refPath, DEFAULT_ADJUSTMENTS, "auto", seq);
+    if (refPath) requestPreview(DEFAULT_RECT, refPath, DEFAULT_ADJUSTMENTS, "manual", seq, true);
     return () => {
       seqRef.current++;
       if (timerRef.current) clearTimeout(timerRef.current);
@@ -280,6 +312,8 @@ function ColorMatchSession({
     abortPreview.current?.abort();
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
     autoPreviewRef.current = null;
+    setAnalysis(null);
+    setAnalyzing(false);
     setReady(false);
   }
   function onMove(e: React.PointerEvent) {
@@ -299,10 +333,15 @@ function ColorMatchSession({
   function onUp() {
     if (!dragStart.current) return;
     dragStart.current = null;
-    // 松手才请求服务端（拖动过程只画框）
-    adjustmentModeRef.current = "auto";
-    setAdjustmentMode("auto");
-    schedulePreview(rectRef.current, ref.path, adjustments, "auto", 350);
+    // 新选区先回到原图，只做三区诊断；用户点击后才应用建议。
+    const next = { ...DEFAULT_ADJUSTMENTS };
+    strengthRef.current = 0;
+    setStrength(0);
+    setAdjustments(next);
+    adjustmentModeRef.current = "manual";
+    setAdjustmentMode("manual");
+    setAnalysis(null);
+    schedulePreview(rectRef.current, ref.path, next, "manual", 350, true);
   }
 
   async function doSave() {
@@ -350,9 +389,14 @@ function ColorMatchSession({
       const s = await api.uploadRef(f);
       setRef({ url: s.url, path: s.path }); // 用原图 URL：贴片点开放大要看全尺寸小样
       autoPreviewRef.current = null;
-      adjustmentModeRef.current = "auto";
-      setAdjustmentMode("auto");
-      schedulePreview(rect, s.path, adjustments, "auto", 350);
+      const next = { ...DEFAULT_ADJUSTMENTS };
+      strengthRef.current = 0;
+      setStrength(0);
+      setAdjustments(next);
+      adjustmentModeRef.current = "manual";
+      setAdjustmentMode("manual");
+      setAnalysis(null);
+      schedulePreview(rect, s.path, next, "manual", 350, true);
       toast.success("已更换参照图");
     } catch (err) {
       toast.error((err as Error).message);
@@ -399,8 +443,29 @@ function ColorMatchSession({
     }
   }
 
+  function applySuggestedAdjustments() {
+    if (!analysis || analysis.status === "insufficient_region") return;
+    const next = { ...analysis.recommended_adjustments };
+    strengthRef.current = 0;
+    setStrength(0);
+    setAdjustments(next);
+    adjustmentModeRef.current = "manual";
+    setAdjustmentMode("manual");
+    setAdvancedOpen(true);
+    schedulePreview(rect, ref.path, next, "manual");
+  }
+
   const pct = (v: number) => `${v * 100}%`;
   const hasAdjustments = Object.values(adjustments).some((value) => value !== 0);
+  const suggestionValues = analysis
+    ? (["temperature", "tint", "saturation"] as AdjustmentKey[])
+        .filter((key) => analysis.recommended_adjustments[key] !== 0)
+        .map((key) => {
+          const label = ADJUSTMENT_CONTROLS.find((item) => item.key === key)?.label ?? key;
+          const value = analysis.recommended_adjustments[key];
+          return `${label} ${value > 0 ? "+" : ""}${Math.round(value)}`;
+        })
+    : [];
   const paneTitle =
     "mb-1.5 flex items-center gap-1.5 text-[11px] font-extrabold tracking-[0.08em] text-accent-foreground";
 
@@ -413,7 +478,7 @@ function ColorMatchSession({
           <div>
             <div className="text-[15.5px] font-bold">手动校色</div>
             <div className="mt-0.5 text-[12px] text-muted-foreground">
-              左图拖框住地板区域，右图实时显示校色结果；强度即时生效。只改选区颜色，边缘自动羽化，本地处理不计费。
+              左图框选尽量纯的地板只用于分析和生成建议；所有滑块、建议参数和自动校准都作用于整张效果图，墙面与家具也会同步变化。
             </div>
           </div>
 
@@ -459,7 +524,7 @@ function ColorMatchSession({
             {/* 右栏：实时校色结果（canvas） */}
             <div className="min-w-0">
               <div className={paneTitle}>
-                校色后 · 实时
+                预览 · {adjustmentMode === "auto" ? "自动校准" : hasAdjustments ? "手动参数" : "原图"}
                 {previewing && (
                   <svg
                     width="12"
@@ -495,7 +560,11 @@ function ColorMatchSession({
                 />
                 {!hasPreview && (
                   <div className="absolute inset-0 flex items-center justify-center text-[12.5px] text-muted-foreground">
-                    {previewing ? "首次预览生成中…" : "框选地板区域后自动出结果"}
+                    {previewing
+                      ? "首次预览生成中…"
+                      : !ref.path
+                      ? "请先在下方选择参照小样"
+                      : "框选地板区域后自动出结果"}
                   </div>
                 )}
                 {/* 小样参照贴片：校色的目标色，贴着结果图对比 */}
@@ -542,6 +611,93 @@ function ColorMatchSession({
             </div>
           </div>
 
+          <div className="rounded-[12px] border border-border bg-panel/45 p-3">
+            <div className="mb-2.5 flex items-center gap-2">
+              <div className="text-[12.5px] font-bold text-secondary-foreground">地板光照三区诊断</div>
+              {analyzing && (
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" className="animate-dc-spin text-primary">
+                  <path d="M21 12a9 9 0 1 1-6.2-8.6" />
+                </svg>
+              )}
+              <span className="ml-auto text-[10.5px] text-muted-foreground">截图来自未调色原图</span>
+            </div>
+
+            {analyzing && !analysis ? (
+              <div className="grid grid-cols-3 gap-2 max-[850px]:grid-cols-1">
+                {[0, 1, 2].map((item) => (
+                  <div key={item} className="h-[112px] animate-pulse rounded-[9px] border border-border bg-card/70" />
+                ))}
+              </div>
+            ) : analysis ? (
+              <>
+                <div className="grid grid-cols-3 gap-2 max-[850px]:grid-cols-1">
+                  {analysis.zones.map((zone) => (
+                    <div key={zone.zone} className="flex min-w-0 gap-2 rounded-[9px] border border-border bg-card p-2">
+                      {zone.preview ? (
+                        <button
+                          type="button"
+                          title={`放大${zone.label}截图`}
+                          onClick={() => setZoom({ url: zone.preview! })}
+                          className="h-[82px] w-[110px] flex-none overflow-hidden rounded-[7px] border border-border bg-black/5"
+                        >
+                          <img src={zone.preview} alt={`${zone.label}地板截图`} className="h-full w-full object-cover" />
+                        </button>
+                      ) : (
+                        <div className="flex h-[82px] w-[110px] flex-none items-center justify-center rounded-[7px] border border-dashed border-border bg-panel px-2 text-center text-[10px] text-muted-foreground">
+                          未提取到明显区域
+                        </div>
+                      )}
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 text-[11.5px] font-bold text-secondary-foreground">
+                          {zone.label}
+                          {zone.luminance !== null && (
+                            <span className="text-[9.5px] font-medium text-muted-foreground">L {zone.luminance}</span>
+                          )}
+                        </div>
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                          {zone.hints.map((hint, index) => (
+                            <span
+                              key={`${hint.code}:${index}`}
+                              className={`rounded border px-1.5 py-0.5 text-[9.5px] leading-4 ${HINT_STYLES[hint.code]}`}
+                            >
+                              {hint.text}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-2.5 flex flex-wrap items-center gap-2 rounded-[9px] border border-border bg-card px-3 py-2">
+                  <div className="min-w-[240px] flex-1">
+                    <div className="text-[11px] font-bold text-secondary-foreground">综合建议</div>
+                    <div className="mt-0.5 text-[10.5px] text-muted-foreground">{analysis.summary}</div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1">
+                    {suggestionValues.length ? suggestionValues.map((value) => (
+                      <span key={value} className="rounded-md bg-accent px-2 py-1 text-[10.5px] font-bold text-accent-foreground">{value}</span>
+                    )) : (
+                      <span className="text-[10.5px] font-semibold text-muted-foreground">建议参数均为 0</span>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={applySuggestedAdjustments}
+                    disabled={analysis.status === "insufficient_region" || suggestionValues.length === 0 || previewing}
+                    className="h-8 flex-none rounded-[8px] bg-primary px-3 text-[11.5px] font-bold text-primary-foreground hover:bg-primary-hover disabled:opacity-45"
+                  >
+                    应用建议参数
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className="rounded-[9px] border border-dashed border-border py-7 text-center text-[11px] text-muted-foreground">
+                框选地板后自动生成三区截图和调色建议
+              </div>
+            )}
+          </div>
+
           <div className="space-y-2.5">
             <div className="flex flex-wrap items-center gap-3 lg:flex-nowrap">
               {/* 参照小样 */}
@@ -554,19 +710,20 @@ function ColorMatchSession({
                   )}
                 </div>
                 <label className="cursor-pointer text-[11.5px] font-semibold text-secondary-foreground hover:text-accent-foreground">
-                  换参照
+                  {ref.path ? "换参照" : "选择参照"}
                   <input type="file" accept="image/*" className="hidden" onChange={pickRef} />
                 </label>
               </div>
 
               {/* 自动校准强度（客户端即时混合，1% 步进） */}
               <div className="flex min-w-[260px] flex-1 items-center gap-3">
-                <span className="flex-none text-[12px] font-semibold text-secondary-foreground">自动校准</span>
+                <span className="flex-none text-[12px] font-semibold text-secondary-foreground" title="使用框选地板计算偏差，对整张图做 Reinhard 自动校准">全图自动校准</span>
                 <Slider
                   value={strength}
                   min={0}
                   max={1}
                   step={0.01}
+                  disabled={!ref.path}
                   onValueChange={(v) => {
                     const s = Array.isArray(v) ? v[0] : (v as number);
                     restoreAuto(s);
@@ -589,7 +746,7 @@ function ColorMatchSession({
               <button
                 onClick={doSave}
                 disabled={!ready || saving}
-                title={!ready ? "预览更新中…" : undefined}
+                title={!ref.path ? "请先选择参照图" : !ready ? "预览更新中…" : undefined}
                 className="h-9 flex-none rounded-[9px] bg-primary px-4 text-[13px] font-bold text-primary-foreground hover:bg-primary-hover disabled:opacity-50"
               >
                 {saving
@@ -610,7 +767,7 @@ function ColorMatchSession({
                       以 Gemini 原图为零点的专业调色
                     </div>
                     <div className="text-[10.5px] text-muted-foreground">
-                      自动校准会移动滑杆；手动拖动后改为原图基准处理，仅作用于框选地板
+                      框选地板只用于计算偏差；自动校准、建议参数和手动滑块均作用于整张效果图
                     </div>
                   </div>
                   <div className="flex flex-none items-center gap-1.5">

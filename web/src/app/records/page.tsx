@@ -12,6 +12,7 @@ import { ImageZoom } from "@/components/ImageZoom";
 import { CompareSlider } from "@/components/CompareSlider";
 import { ColorMatchDialog } from "@/components/ColorMatchDialog";
 import { InpaintDialog } from "@/components/InpaintDialog";
+import { FloorVisualizeDialog } from "@/components/FloorVisualizeDialog";
 import { cn } from "@/lib/utils";
 
 const toolBtn =
@@ -40,6 +41,7 @@ export default function RecordsPage() {
   const router = useRouter();
   const [files, setFiles] = useState<RecordFile[]>([]);
   const [search, setSearch] = useState("");
+  const [favoriteOnly, setFavoriteOnly] = useState(false);
   const [active, setActive] = useState<string | null>(null);
   const [records, setRecords] = useState<RecordEntry[]>([]);
   const [roomFilter, setRoomFilter] = useState("__all__");
@@ -48,7 +50,7 @@ export default function RecordsPage() {
   const [zoom, setZoom] = useState<string | null>(null);
   // 前后对比（替换类工作流的记录才有 gen_context.room_url）
   const [compare, setCompare] = useState<{ before: string; after: string } | null>(null);
-  // 手动校色（有 gen_context.image_url 的记录才显示入口）
+  // 手动校色（新旧记录均由后端解析参照小样）
   const [colorMatch, setColorMatch] = useState<{
     open: boolean;
     srcUrl: string;
@@ -63,6 +65,14 @@ export default function RecordsPage() {
   const [inpaint, setInpaint] = useState<{
     open: boolean;
     srcUrl: string;
+    recordId: string;
+    resultId: string;
+  } | null>(null);
+  const [floorVisualize, setFloorVisualize] = useState<{
+    open: boolean;
+    srcUrl: string;
+    textureUrl: string;
+    texturePath: string;
     recordId: string;
     resultId: string;
   } | null>(null);
@@ -141,13 +151,20 @@ export default function RecordsPage() {
     }
   }
 
-  const visibleFiles = files.filter((f) =>
-    search.trim()
+  async function reloadFiles() {
+    const next = await api.listRecords();
+    setFiles(next);
+  }
+
+  const visibleFiles = files.filter((f) => {
+    if (favoriteOnly && f.favorite_count === 0) return false;
+    return search.trim()
       ? (f.json_path.split(/[\\/]/).pop() || "")
           .toLowerCase()
           .includes(search.trim().toLowerCase())
-      : true,
-  );
+      : true;
+  });
+  const totalFavorites = files.reduce((sum, f) => sum + f.favorite_count, 0);
 
   const roomCounts = useMemo(() => {
     const c: Record<string, number> = {};
@@ -159,6 +176,7 @@ export default function RecordsPage() {
   }, [records]);
 
   function resultVisible(res: RecordResult) {
+    if (favoriteOnly && !res.favorite) return false;
     if (reviewFilter === "__all__") return true;
     if (reviewFilter === "__best__") return !!res.best;
     return (res.review_status || "unreviewed") === reviewFilter;
@@ -183,7 +201,7 @@ export default function RecordsPage() {
     try {
       await api.deleteResult(active, rid, resultId);
       toast.success("已删除");
-      reload();
+      await Promise.all([reload(), reloadFiles()]);
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -194,7 +212,7 @@ export default function RecordsPage() {
     try {
       const r = await api.favoriteResult(active, rid, resultId);
       toast.success(r.favorite ? "已收藏" : "已取消收藏");
-      reload();
+      await Promise.all([reload(), reloadFiles()]);
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -288,7 +306,7 @@ export default function RecordsPage() {
     try {
       await api.deleteRecord(active, rid);
       toast.success("已删除记录");
-      reload();
+      await Promise.all([reload(), reloadFiles()]);
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -341,7 +359,7 @@ export default function RecordsPage() {
 
   return (
     <div className="flex h-full overflow-hidden">
-      {/* 左栏：文件列表 + 搜索 + 导出收藏夹 */}
+      {/* 左栏：文件列表 + 搜索 + 收藏筛选/导出 */}
       <aside className="flex w-[280px] flex-none flex-col border-r border-border bg-panel px-[14px] py-[16px]">
         <div className="relative mb-[9px]">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="absolute left-[11px] top-[11px] text-muted-foreground">
@@ -356,6 +374,20 @@ export default function RecordsPage() {
           />
         </div>
         <button
+          type="button"
+          aria-pressed={favoriteOnly}
+          onClick={() => setFavoriteOnly((on) => !on)}
+          className={cn(
+            "mb-2 flex h-9 w-full items-center justify-between rounded-[9px] border px-3 text-[12.5px] font-bold transition-colors",
+            favoriteOnly
+              ? "border-primary bg-primary-soft text-accent-foreground"
+              : "border-border bg-card text-secondary-foreground hover:bg-accent",
+          )}
+        >
+          <span>⭐ 只看收藏</span>
+          <span className="text-[11px] tabular-nums text-muted-foreground">{totalFavorites}</span>
+        </button>
+        <button
           onClick={() => download(api.exportFavoritesUrl())}
           className="mb-[11px] flex h-9 w-full items-center justify-center gap-1.5 rounded-[9px] border border-border bg-card text-[12.5px] font-bold text-accent-foreground hover:bg-accent"
         >
@@ -366,7 +398,9 @@ export default function RecordsPage() {
         </div>
         <div className="flex flex-1 flex-col gap-0.5 overflow-y-auto">
           {visibleFiles.length === 0 && (
-            <div className="px-2 py-1 text-xs text-muted-foreground">无记录</div>
+            <div className="px-2 py-1 text-xs text-muted-foreground">
+              {favoriteOnly ? "没有收藏记录" : "无记录"}
+            </div>
           )}
           {visibleFiles.map((f) => {
             const on = active === f.json_path;
@@ -383,7 +417,9 @@ export default function RecordsPage() {
                 )}
               >
                 {f.json_path.split(/[\\/]/).pop()?.replace("_记录.json", "")}{" "}
-                <span className="text-muted-foreground">({f.labels.length})</span>
+                <span className="text-muted-foreground">
+                  ({f.labels.length}{f.favorite_count ? ` · ⭐${f.favorite_count}` : ""})
+                </span>
               </button>
             );
           })}
@@ -464,6 +500,11 @@ export default function RecordsPage() {
 
             <div className="flex flex-1 flex-col gap-4 overflow-y-auto px-[22px] py-[18px]">
               {loading && <div className="text-sm text-muted-foreground">加载中…</div>}
+              {!loading && shownRecords.length === 0 && (
+                <div className="flex flex-1 items-center justify-center rounded-[14px] border border-dashed border-border py-16 text-[13px] text-muted-foreground">
+                  {favoriteOnly ? "当前筛选下没有收藏结果" : "当前筛选下没有结果"}
+                </div>
+              )}
               {!loading &&
                 shownRecords.map((r, i) => {
                   const rid = r.id || "";
@@ -566,6 +607,25 @@ export default function RecordsPage() {
                                   </button>
                                   {url && url.startsWith("/outputs/") && (
                                     <button
+                                      title="用原始小样像素重新投影地板（无生成模型费用）"
+                                      onClick={() =>
+                                        setFloorVisualize({
+                                          open: true,
+                                          srcUrl: url,
+                                          textureUrl: r.gen_context?.image_url || "",
+                                          texturePath: r.gen_context?.image_path || "",
+                                          recordId: rid,
+                                          resultId,
+                                        })
+                                      }
+                                      disabled={!r.gen_context?.image_path}
+                                      className="hover:text-foreground disabled:hidden"
+                                    >
+                                      🪵
+                                    </button>
+                                  )}
+                                  {url && url.startsWith("/outputs/") && (
+                                    <button
                                       title="生成式修补（画笔涂抹移除/添加物体）"
                                       onClick={() =>
                                         setInpaint({ open: true, srcUrl: url, recordId: rid, resultId })
@@ -575,7 +635,7 @@ export default function RecordsPage() {
                                       🖌️
                                     </button>
                                   )}
-                                  {url && r.gen_context?.image_url && url.startsWith("/outputs/") && (
+                                  {url && url.startsWith("/outputs/") && (
                                     <button
                                       title="手动校色（以地板小样为参照，框选地板区域）"
                                       onClick={() =>
@@ -583,8 +643,8 @@ export default function RecordsPage() {
                                           open: true,
                                           srcUrl: url,
                                           imageRel: url.slice("/outputs/".length),
-                                          refUrl: r.gen_context?.image_url || "",
-                                          refPath: r.gen_context?.image_path || "",
+                                          refUrl: r.color_match_ref_url || "",
+                                          refPath: r.color_match_ref_path || "",
                                           recordId: rid,
                                           resultId,
                                         })
@@ -715,6 +775,24 @@ export default function RecordsPage() {
             jsonPath: active,
             recordId: inpaint.recordId,
             resultId: inpaint.resultId,
+          }}
+          onDone={() => reload()}
+        />
+      )}
+
+      {/* 真实纹理投影 */}
+      {floorVisualize && active && (
+        <FloorVisualizeDialog
+          open={floorVisualize.open}
+          onOpenChange={(o) => !o && setFloorVisualize(null)}
+          srcUrl={floorVisualize.srcUrl}
+          textureUrl={floorVisualize.textureUrl}
+          texturePath={floorVisualize.texturePath}
+          target={{
+            kind: "record",
+            jsonPath: active,
+            recordId: floorVisualize.recordId,
+            resultId: floorVisualize.resultId,
           }}
           onDone={() => reload()}
         />

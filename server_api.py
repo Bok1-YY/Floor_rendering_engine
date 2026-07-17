@@ -52,7 +52,7 @@ from .api import (
     call_omakase_scenes,
     call_fal_sd35_generate, call_fal_aura_upscale, SD35_ENDPOINT,
     FLOOR_DESEAM_INSTRUCTION, _infer_aspect_ratio_from_b64, _match_color_to_reference,
-    match_color_region, call_image_inpaint, resolve_inpaint_engine,
+    match_color_global, analyze_color_region, call_image_inpaint, resolve_inpaint_engine,
     effective_inpaint_candidate_count,
 )
 from .prompts import save_task_files_html
@@ -66,7 +66,7 @@ from .records import (
     update_result_review, append_edited_result_to_record, load_usage_summary,
     attach_generation_context, load_review_summary, collect_review_gallery,
     export_html_from_json, export_pptx_from_json, export_favorites_pptx,
-    migrate_all_record_storage,
+    migrate_all_record_storage, migrate_record_file,
 )
 from .models import (
     JobRecord, new_job, update_job, compute_final_status,
@@ -76,6 +76,7 @@ from .models import (
     compute_runs_final_status, legacy_filter_from_targets,
 )
 from .failure_kb import classify_failure, FAILURE_RULES
+from .floor_renderer import RenderRecipe, image_sha256, render_floor, validate_calibration_quad
 from .recipes import recommend_recipes, FLOOR_RECIPES, pick_option_key
 from .custom_recipes import (
     list_custom_recipes, add_custom_recipe, update_custom_recipe, delete_custom_recipe,
@@ -1549,13 +1550,52 @@ def recent_swatches(limit: int = 24):
 def list_records():
     out = []
     for jp in scan_json_files():
-        out.append({'json_path': jp, 'labels': get_record_labels(jp)})
+        recs = _load_records(jp)
+        favorite_count = sum(
+            1 for rec in recs if isinstance(rec, dict)
+            for res in (rec.get('results') or []) if isinstance(res, dict) and res.get('favorite')
+        )
+        out.append({
+            'json_path': jp,
+            'labels': get_record_labels(jp, recs),
+            'favorite_count': favorite_count,
+        })
     return out
+
+
+def _record_color_match_ref_path(json_path: str, record: dict) -> str:
+    """解析记录校色的默认小样。
+
+    优先使用队列校色同源的 *_优化图.png；然后兼容新版 gen_context
+    和旧版 sample_image_file。所有候选都经参照图白名单校验。
+    """
+    gc = record.get('gen_context') if isinstance(record, dict) else None
+    sample_rel = record.get('sample_image_file') if isinstance(record, dict) else ''
+    sample_path = _safe_output_path(sample_rel) if sample_rel else ''
+    candidates = [
+        json_path.replace('_记录.json', '_优化图.png'),
+        str((gc or {}).get('image_path') or ''),
+        sample_path or '',
+    ]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        try:
+            return _require_ref_image_path(candidate)
+        except HTTPException:
+            continue
+    return ''
 
 
 @app.get('/api/records/load')
 def load_records(json_path: str):
     json_path = _require_record_json_path(json_path)
+    # 旧版 NiceGUI 在选中文件时会执行这个幂等迁移；Next 记录页迁移时漏了。
+    # 恢复后，仅内联 base64 的旧图会转为文件引用，从而可以浏览和校色。
+    try:
+        migrate_record_file(json_path)
+    except Exception as ex:
+        logger.warning(f'[记录] 旧图文件化失败，继续读取原记录: {json_path} / {ex}')
     recs = _load_records(json_path)
     # 结果图引用改写成 URL；内联 base64(老记录)不回传大 blob，仅标记 has_inline。
     for r in recs:
@@ -1567,6 +1607,9 @@ def load_records(json_path: str):
                 gc['room_url'] = _to_url(gc['room_path'])
             if gc.get('image_path'):
                 gc['image_url'] = _to_url(gc['image_path'])
+        color_ref = _record_color_match_ref_path(json_path, r)
+        r['color_match_ref_path'] = color_ref
+        r['color_match_ref_url'] = _to_url(color_ref)
         for res in r.get('results', []) if isinstance(r, dict) else []:
             rel = res.get('result_image_file')
             if rel:
@@ -2180,6 +2223,221 @@ def _require_ref_image_path(path: str) -> str:
     raise HTTPException(400, '参照图必须是已上传的小样或本程序的输出图')
 
 
+# ============================================================
+# 真实纹理投影：本地确定性 UV/透视渲染，不调生成模型。
+# AI 只负责提供房间底图；小样像素、纹理比例和缝隙由此管线保真。
+# ============================================================
+class FloorPoint(BaseModel):
+    x: float = Field(ge=0, le=1)
+    y: float = Field(ge=0, le=1)
+
+
+class FloorVisualizeTarget(BaseModel):
+    kind: Literal['job', 'record', 'room']
+    jid: str = ''
+    stage: Literal['b2', 'pro', 'sd35'] = 'pro'
+    image_rel: str = ''
+    json_path: str = ''
+    record_id: str = ''
+    result_id: str = Field(default='', max_length=80)
+    room_path: str = ''
+
+
+class FloorVisualizeRequest(BaseModel):
+    target: FloorVisualizeTarget
+    texture_path: str = Field(min_length=1)
+    mask_b64: str = Field(min_length=8)
+    calibration_quad: List[FloorPoint] = Field(min_length=4, max_length=4)
+    scale: float = Field(default=1.0, ge=0.15, le=4.0)
+    rotation: float = Field(default=0.0, ge=-180, le=180)
+    offset_x: float = Field(default=0.0, ge=-4, le=4)
+    offset_y: float = Field(default=0.0, ge=-4, le=4)
+    illumination_strength: float = Field(default=0.65, ge=0, le=1.5)
+    shadow_strength: float = Field(default=0.85, ge=0, le=1.5)
+    feather: float = Field(default=0.008, ge=0, le=0.08)
+    texture_width_mm: Optional[float] = Field(default=None, gt=0, le=100000)
+    texture_height_mm: Optional[float] = Field(default=None, gt=0, le=100000)
+    plank_width_mm: Optional[float] = Field(default=None, gt=0, le=5000)
+    plank_length_mm: Optional[float] = Field(default=None, gt=0, le=20000)
+
+
+_FLOOR_PREVIEW_MAX_SIDE = 1280
+_MAX_FLOOR_MASK_BYTES = 20 * 1024 * 1024
+_MAX_FLOOR_MASK_PIXELS = 30_000_000
+_floor_render_lock = threading.Lock()  # 4K OpenCV working set is sizeable; serialize local renders.
+
+
+def _decode_floor_mask(value: str) -> Image.Image:
+    raw_value = (value or '').split(',', 1)[-1]
+    try:
+        raw = base64.b64decode(raw_value, validate=True)
+    except Exception:
+        raise HTTPException(400, '地板遮罩不是有效的 base64 PNG')
+    if not raw or len(raw) > _MAX_FLOOR_MASK_BYTES:
+        raise HTTPException(413, '地板遮罩文件过大')
+    try:
+        with Image.open(io.BytesIO(raw)) as im:
+            if im.width * im.height > _MAX_FLOOR_MASK_PIXELS:
+                raise HTTPException(413, '地板遮罩尺寸过大')
+            mask = im.convert('L')
+            mask.load()
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(400, '地板遮罩图片无法解码')
+    if mask.getbbox() is None:
+        raise HTTPException(400, '地板遮罩为空，请先涂抹地面区域')
+    return mask
+
+
+def _resolve_floor_source(target: FloorVisualizeTarget):
+    """Return detached RGB image plus the validated write-back context."""
+    if target.kind == 'job':
+        job = _get_job(target.jid)
+        if not job:
+            raise HTTPException(404, 'job not found')
+        if job.status in ('running', 'queued') or job.pro_polishing or job.operation_status == 'running':
+            raise HTTPException(409, '任务进行中，请稍后贴地板')
+        abs_src = _require_output_image_rel(target.image_rel)
+        ensure_model_runs(job)
+        candidates = {os.path.realpath(str(p)) for p in
+                      ((job.model_runs.get(target.stage) or {}).get('paths') or []) if p}
+        if os.path.realpath(abs_src) not in candidates:
+            raise HTTPException(400, '该图不属于此任务的候选')
+        with Image.open(abs_src) as im:
+            src = ImageOps.exif_transpose(im).convert('RGB').copy()
+        return src, {'job': job, 'source_path': abs_src}
+    if target.kind == 'record':
+        json_path = _require_record_json_path(target.json_path)
+        recs = _load_records(json_path)
+        rec = next((r for r in recs if r.get('id') == target.record_id), None)
+        if not rec:
+            raise HTTPException(404, '未找到记录')
+        result = next((r for r in rec.get('results', []) if r.get('result_id') == target.result_id), None)
+        if result is None:
+            raise HTTPException(404, '未找到该效果图')
+        rel = result.get('result_image_file')
+        abs_src = _safe_output_path(rel) if rel else None
+        src = None
+        if abs_src and os.path.isfile(abs_src):
+            with Image.open(abs_src) as im:
+                src = ImageOps.exif_transpose(im).convert('RGB').copy()
+        elif result.get('result_image_b64'):
+            decoded = _b64_to_pil(result['result_image_b64'])
+            if decoded is not None:
+                src = ImageOps.exif_transpose(decoded).convert('RGB').copy()
+        if src is None:
+            raise HTTPException(404, '该结果无可用图片')
+        return src, {'json_path': json_path, 'record': rec, 'source_path': abs_src or json_path}
+    room_path = _require_upload_image_path(target.room_path, '房间图', required=True)
+    with Image.open(room_path) as im:
+        src = ImageOps.exif_transpose(im).convert('RGB').copy()
+    return src, {'room_path': room_path, 'source_path': room_path}
+
+
+def _run_floor_visualize(req: FloorVisualizeRequest, max_side: int = 0):
+    if _load_config().get('floor_visualizer_enabled', True) is False:
+        raise HTTPException(503, '真实纹理投影已在配置中关闭')
+    try:
+        validate_calibration_quad(req.calibration_quad)
+    except ValueError as ex:
+        raise HTTPException(400, str(ex))
+    scene, context = _resolve_floor_source(req.target)
+    texture_path = _require_ref_image_path(req.texture_path)
+    mask = _decode_floor_mask(req.mask_b64)
+    try:
+        with Image.open(texture_path) as im:
+            texture = ImageOps.exif_transpose(im).convert('RGB').copy()
+        recipe = RenderRecipe(
+            scale=req.scale, rotation=req.rotation,
+            offset_x=req.offset_x, offset_y=req.offset_y,
+            illumination_strength=req.illumination_strength,
+            shadow_strength=req.shadow_strength, feather=req.feather,
+            texture_width_mm=req.texture_width_mm,
+            texture_height_mm=req.texture_height_mm,
+        )
+        with _floor_render_lock:
+            out, metadata = render_floor(scene, texture, mask, req.calibration_quad,
+                                         recipe=recipe, max_side=max_side)
+    except ValueError as ex:
+        raise HTTPException(400, str(ex))
+    except Exception as ex:
+        logger.exception('[真实贴地板] 渲染失败')
+        raise HTTPException(500, f'本地渲染失败：{ex}')
+    metadata.update({
+        'source_sha256': image_sha256(scene),
+        'texture_path': os.path.basename(texture_path),
+        'physical_dimensions': {
+            'texture_width_mm': req.texture_width_mm,
+            'texture_height_mm': req.texture_height_mm,
+            'plank_width_mm': req.plank_width_mm,
+            'plank_length_mm': req.plank_length_mm,
+        },
+    })
+    return out, metadata, context
+
+
+@app.post('/api/floor-visualize/preview')
+def floor_visualize_preview(req: FloorVisualizeRequest):
+    out, metadata, _ = _run_floor_visualize(req, max_side=_FLOOR_PREVIEW_MAX_SIDE)
+    buf = io.BytesIO()
+    out.save(buf, format='PNG', optimize=True)
+    return {
+        'preview': 'data:image/png;base64,' + base64.b64encode(buf.getvalue()).decode(),
+        'width': out.width,
+        'height': out.height,
+        'warnings': metadata.get('warnings') or [],
+        'metadata': metadata,
+    }
+
+
+@app.post('/api/floor-visualize/apply')
+async def floor_visualize_apply(req: FloorVisualizeRequest):
+    out, metadata, context = await asyncio.to_thread(_run_floor_visualize, req, 0)
+    label = '真实纹理投影'
+    target = req.target
+    if target.kind == 'job':
+        job = context['job']
+        current = _get_job(job.job_id)
+        if current is not job:
+            raise HTTPException(409, '任务卡已被清除，无法写回')
+        if job.status in ('running', 'queued') or job.pro_polishing or job.operation_status == 'running':
+            raise HTTPException(409, '任务状态已变化，请稍后重试')
+        ppath = await asyncio.to_thread(_save_api_result_png, out, label,
+                                        job.png_path or context['source_path'], metadata)
+        if not ppath:
+            raise HTTPException(500, '结果保存失败')
+        add_model_candidate(job, target.stage, ppath)
+        update_job(job, status=compute_runs_final_status(job))
+        if job.json_path and job.record_id:
+            await asyncio.to_thread(_api_write_to_record, out, label, job.json_path,
+                                    job.record_id, ppath, metadata)
+        _persist_jobs()
+        logger.info(f'[真实贴地板] 任务候选已保存 job={job.job_id}, stage={target.stage}, path={ppath}')
+        return {'ok': True, 'job': _job_view(job), 'url': _to_url(ppath),
+                'warnings': metadata.get('warnings') or [], 'metadata': metadata}
+    if target.kind == 'record':
+        json_path = context['json_path']
+        ppath = await asyncio.to_thread(_save_api_result_png, out, label,
+                                        context['source_path'], metadata)
+        if not ppath:
+            raise HTTPException(500, '结果保存失败')
+        result_id = await asyncio.to_thread(_api_write_to_record, out, label, json_path,
+                                            target.record_id, ppath, metadata)
+        if not result_id:
+            raise HTTPException(500, '结果写入记录失败')
+        return {'ok': True, 'result_url': _to_url(ppath), 'result_id': result_id,
+                'warnings': metadata.get('warnings') or [], 'metadata': metadata}
+    room_path = context['room_path']
+    stem = os.path.splitext(os.path.basename(room_path))[0]
+    dest = safe_upload_path(f'{stem}_floor.png', 'room_')
+    if not dest:
+        raise HTTPException(500, '结果保存路径无效')
+    await asyncio.to_thread(lambda: out.save(dest, format='PNG', optimize=True))
+    return {'ok': True, 'path': dest, 'url': _to_url(dest), 'thumb': _thumb_url(dest),
+            'warnings': metadata.get('warnings') or [], 'metadata': metadata}
+
+
 class ColorMatchRect(BaseModel):
     x: float = Field(ge=0, le=1)
     y: float = Field(ge=0, le=1)
@@ -2188,7 +2446,7 @@ class ColorMatchRect(BaseModel):
 
 
 class ColorMatchAdjustments(BaseModel):
-    """自动校色后的专业微调；全零时保持旧版输出。"""
+    """以 Gemini 原图为零点的全图专业调整。"""
     temperature: float = Field(default=0, ge=-100, le=100)
     tint: float = Field(default=0, ge=-100, le=100)
     exposure: float = Field(default=0, ge=-2, le=2)
@@ -2204,11 +2462,12 @@ class ColorMatchAdjustments(BaseModel):
 class ColorMatchPreviewRequest(BaseModel):
     image_rel: str = Field(min_length=1)   # 成图相对 /outputs 路径
     ref_path: str = Field(min_length=1)    # 参照小样绝对路径
-    rect: ColorMatchRect
+    rect: ColorMatchRect                 # 只用于地板统计和三区诊断
     strength: float = Field(default=0.8, ge=0, le=1)
-    feather: float = Field(default=0.05, ge=0, le=0.3)
+    feather: float = Field(default=0.05, ge=0, le=0.3)  # 兼容字段，全图校色忽略
     adjustments: ColorMatchAdjustments = Field(default_factory=ColorMatchAdjustments)
     adjustment_mode: Literal['auto', 'manual'] = 'auto'
+    include_analysis: bool = False
 
 
 _PREVIEW_MAX_SIDE = 1600
@@ -2218,38 +2477,72 @@ def _run_color_match(abs_src: str, ref_path: str, rect: ColorMatchRect,
                      strength: float, feather: float, max_side: int = 0,
                      adjustments: Optional[ColorMatchAdjustments] = None,
                      adjustment_mode: Literal['auto', 'manual'] = 'auto',
-                     return_auto_adjustments: bool = False):
-    """读图 → （可选缩到 max_side 长边）→ match_color_region。羽化按短边比例定义，
-    预览与全分辨率提交走同一代码路径，视觉一致。"""
+                     return_auto_adjustments: bool = False,
+                     return_analysis: bool = False):
+    """读图 → （可选缩到 max_side 长边）→ 全图校色。
+    rect 只用于地板统计/诊断，feather 保留为兼容字段但不再限制修改范围。"""
     src = Image.open(abs_src)
     src.load()
     if max_side:
         src.thumbnail((max_side, max_side), Image.LANCZOS)
     ref = Image.open(ref_path)
     ref.load()
-    return match_color_region(src, ref, (rect.x, rect.y, rect.w, rect.h),
-                              strength=strength, feather=feather,
-                              adjustments=(adjustments.model_dump() if adjustments else None),
-                              adjustment_mode=adjustment_mode,
-                              return_auto_adjustments=return_auto_adjustments)
+    result = match_color_global(src, ref, (rect.x, rect.y, rect.w, rect.h),
+                                strength=strength, feather=feather,
+                                adjustments=(adjustments.model_dump() if adjustments else None),
+                                adjustment_mode=adjustment_mode,
+                                return_auto_adjustments=return_auto_adjustments)
+    if not return_analysis:
+        return result
+    out, auto_adjustments = result
+    analysis = analyze_color_region(src, ref, (rect.x, rect.y, rect.w, rect.h))
+    return out, auto_adjustments, analysis
+
+
+def _serialize_color_analysis(analysis: dict) -> dict:
+    """Encode representative PIL crops for the stateless JSON preview response."""
+    serialized = {key: value for key, value in analysis.items() if key != 'zones'}
+    zones = []
+    for zone in analysis.get('zones') or []:
+        item = {key: value for key, value in zone.items() if key != 'image'}
+        image = zone.get('image')
+        item['preview'] = None
+        if image is not None:
+            thumb = image.convert('RGB').copy()
+            thumb.thumbnail((480, 360), Image.LANCZOS)
+            buf = io.BytesIO()
+            thumb.save(buf, format='JPEG', quality=86)
+            item['preview'] = 'data:image/jpeg;base64,' + base64.b64encode(buf.getvalue()).decode()
+        zones.append(item)
+    serialized['zones'] = zones
+    return serialized
 
 
 @app.post('/api/color-match/preview')
 def color_match_preview(req: ColorMatchPreviewRequest):
-    """预览：缩图处理，返回 data URL（1280 长边 JPEG，无临时文件、无状态）。
+    """预览：缩图处理，返回 data URL（1600 长边 JPEG，无临时文件、无状态）。
     同步 def → FastAPI 线程池执行，numpy 不堵事件循环。"""
     abs_src = _require_output_image_rel(req.image_rel)
     ref = _require_ref_image_path(req.ref_path)
-    out, auto_adjustments = _run_color_match(
+    result = _run_color_match(
         abs_src, ref, req.rect, req.strength, req.feather,
         max_side=_PREVIEW_MAX_SIDE, adjustments=req.adjustments,
-        adjustment_mode=req.adjustment_mode, return_auto_adjustments=True)
+        adjustment_mode=req.adjustment_mode, return_auto_adjustments=True,
+        return_analysis=req.include_analysis)
+    if req.include_analysis:
+        out, auto_adjustments, analysis = result
+    else:
+        out, auto_adjustments = result
+        analysis = None
     buf = io.BytesIO()
     out.save(buf, format='JPEG', quality=85)
     b64 = base64.b64encode(buf.getvalue()).decode()
-    return {'preview': f'data:image/jpeg;base64,{b64}',
-            'width': out.size[0], 'height': out.size[1],
-            'auto_adjustments': auto_adjustments}
+    response = {'preview': f'data:image/jpeg;base64,{b64}',
+                'width': out.size[0], 'height': out.size[1],
+                'auto_adjustments': auto_adjustments}
+    if analysis is not None:
+        response['analysis'] = _serialize_color_analysis(analysis)
+    return response
 
 
 class JobColorMatchRequest(ColorMatchPreviewRequest):
@@ -2297,10 +2590,10 @@ class RecordColorMatchRequest(BaseModel):
     json_path: str
     record_id: str
     result_id: str = Field(min_length=1, max_length=80)
-    ref_path: str = ''                       # 空 → 回退该记录 gen_context.image_path
-    rect: ColorMatchRect
+    ref_path: str = ''                       # 空 → 回退记录同目录优化图/历史小样
+    rect: ColorMatchRect                 # 只用于地板统计
     strength: float = Field(default=0.8, ge=0, le=1)
-    feather: float = Field(default=0.05, ge=0, le=0.3)
+    feather: float = Field(default=0.05, ge=0, le=0.3)  # 兼容字段，全图校色忽略
     adjustments: ColorMatchAdjustments = Field(default_factory=ColorMatchAdjustments)
     adjustment_mode: Literal['auto', 'manual'] = 'auto'
 
@@ -2323,8 +2616,7 @@ def record_color_match(req: RecordColorMatchRequest):
         raise HTTPException(404, '该结果无落盘图片，无法校色')
     ref_path = (req.ref_path or '').strip()
     if not ref_path:
-        gc = rec.get('gen_context') or {}
-        ref_path = str(gc.get('image_path') or '')
+        ref_path = _record_color_match_ref_path(json_path, rec)
     if not ref_path:
         raise HTTPException(400, '该记录没有参照小样，请在弹窗中上传参照图')
     ref = _require_ref_image_path(ref_path)

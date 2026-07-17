@@ -33,6 +33,9 @@ import type {
   InpaintStatusView,
   InpaintApplyResponse,
   ComfyUIPingView,
+  FloorVisualizeRequest,
+  FloorVisualizePreview,
+  FloorVisualizeApplyResponse,
 } from "./types";
 
 // dev（next dev 在 :3000）用 .env.local 里的 NEXT_PUBLIC_API_BASE 指到后端 :7870；
@@ -220,4 +223,10 @@ export const api = {
     jsend<{ cancelled: boolean }>(`/api/inpaint/${iid}/cancel`, "POST"),
   comfyuiPing: (url = "") =>
     jget<ComfyUIPingView>(`/api/inpaint/comfyui/ping${url ? `?url=${encodeURIComponent(url)}` : ""}`),
+
+  // ── 真实纹理投影（无外部 API 费用）──
+  previewFloorVisualize: (b: FloorVisualizeRequest, signal?: AbortSignal) =>
+    jsend<FloorVisualizePreview>("/api/floor-visualize/preview", "POST", b, signal),
+  applyFloorVisualize: (b: FloorVisualizeRequest) =>
+    jsend<FloorVisualizeApplyResponse>("/api/floor-visualize/apply", "POST", b),
 };

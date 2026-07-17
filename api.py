@@ -1953,6 +1953,224 @@ def _estimate_auto_color_adjustments(src_mean, src_std, ref_mean, ref_std):
     }
 
 
+_COLOR_ANALYSIS_ZONE_LABELS = {
+    'highlight': '受光区',
+    'penumbra': '半阴影区',
+    'shadow': '阴影区',
+}
+
+
+def _signed_lab_array(img):
+    """Return Pillow LAB as float32 with conventional signed a*/b* channels."""
+    import numpy as np
+
+    lab = np.asarray(img.convert('LAB'), dtype=np.float32).copy()
+    lab[..., 1] = np.where(lab[..., 1] > 127, lab[..., 1] - 256, lab[..., 1])
+    lab[..., 2] = np.where(lab[..., 2] > 127, lab[..., 2] - 256, lab[..., 2])
+    return lab
+
+
+def _representative_color_patch(src_crop, floor_mask, zone_mask):
+    """Pick a 4:3 source crop with the highest zone/floor pixel coverage."""
+    import numpy as np
+
+    ch, cw = zone_mask.shape
+    ys, xs = np.nonzero(zone_mask)
+    if not len(xs):
+        return None
+
+    patch_w = min(cw, max(48, int(round(cw * 0.25))))
+    patch_h = max(36, int(round(patch_w * 0.75)))
+    if patch_h > ch:
+        patch_h = ch
+        patch_w = min(cw, max(1, int(round(patch_h * 4.0 / 3.0))))
+    patch_w, patch_h = max(1, patch_w), max(1, patch_h)
+
+    # Integral images make several thousand candidate windows inexpensive.
+    zone_integral = np.pad(zone_mask.astype(np.int32), ((1, 0), (1, 0))).cumsum(0).cumsum(1)
+    floor_integral = np.pad(floor_mask.astype(np.int32), ((1, 0), (1, 0))).cumsum(0).cumsum(1)
+    if len(xs) > 3000:
+        sample = np.linspace(0, len(xs) - 1, 3000, dtype=np.int64)
+        xs, ys = xs[sample], ys[sample]
+    x0 = np.clip(xs - patch_w // 2, 0, max(0, cw - patch_w))
+    y0 = np.clip(ys - patch_h // 2, 0, max(0, ch - patch_h))
+    x1, y1 = x0 + patch_w, y0 + patch_h
+
+    def sums(integral):
+        return integral[y1, x1] - integral[y0, x1] - integral[y1, x0] + integral[y0, x0]
+
+    area = float(patch_w * patch_h)
+    score = 0.82 * (sums(zone_integral) / area) + 0.18 * (sums(floor_integral) / area)
+    best = int(np.argmax(score))
+    return src_crop.crop((int(x0[best]), int(y0[best]), int(x1[best]), int(y1[best])))
+
+
+def _color_bias_hints(zone_values, ref_values):
+    """Return structured, user-facing color-cast hints for one lighting zone."""
+    import numpy as np
+
+    source_a, source_b, source_chroma = zone_values
+    ref_a, ref_b, ref_chroma = ref_values
+    hints = []
+    delta_b = float(source_b - ref_b)
+    delta_a = float(source_a - ref_a)
+    chroma_threshold = max(3.0, abs(float(ref_chroma)) * 0.12)
+    delta_chroma = float(source_chroma - ref_chroma)
+    if delta_b >= 3.0:
+        hints.append({'code': 'warm', 'text': '偏暖，建议降低色温'})
+    elif delta_b <= -3.0:
+        hints.append({'code': 'cool', 'text': '偏冷，建议提高色温'})
+    if delta_a >= 3.0:
+        hints.append({'code': 'magenta', 'text': '偏洋红，建议降低色调'})
+    elif delta_a <= -3.0:
+        hints.append({'code': 'green', 'text': '偏绿，建议提高色调'})
+    if delta_chroma >= chroma_threshold:
+        hints.append({'code': 'saturated', 'text': '偏饱和，建议降低饱和度'})
+    elif delta_chroma <= -chroma_threshold:
+        hints.append({'code': 'gray', 'text': '偏灰，建议增加饱和度'})
+    if not hints:
+        hints.append({'code': 'matched', 'text': '冷暖和饱和度接近小样'})
+    return hints
+
+
+def analyze_color_region(src_img, ref_img, rect):
+    """Analyze representative floor patches in highlight/penumbra/shadow zones.
+
+    The caller supplies the user-selected floor rectangle.  Analysis remains
+    advisory: returned adjustments are absolute manual controls relative to the
+    unmodified source and do not mutate either image.
+    """
+    import numpy as np
+
+    src = src_img.convert('RGB')
+    width, height = src.size
+    x, y, w, h = rect
+    x0 = max(0, min(width - 1, int(round(x * width))))
+    y0 = max(0, min(height - 1, int(round(y * height))))
+    x1 = max(x0, min(width, int(round((x + w) * width))))
+    y1 = max(y0, min(height, int(round((y + h) * height))))
+    defaults = dict(_COLOR_ADJUSTMENT_DEFAULTS)
+
+    def unavailable(message):
+        return {
+            'status': 'insufficient_region',
+            'confidence': 'low',
+            'summary': message,
+            'recommended_adjustments': defaults,
+            'zones': [{
+                'zone': key, 'label': label, 'image': None, 'luminance': None,
+                'hints': [{'code': 'unavailable', 'text': message}],
+            } for key, label in _COLOR_ANALYSIS_ZONE_LABELS.items()],
+        }
+
+    if x1 - x0 < max(32, int(0.02 * width)) or y1 - y0 < max(32, int(0.02 * height)):
+        return unavailable('框选区域太小，请重新框选更大的纯地板范围')
+
+    crop = src.crop((x0, y0, x1, y1))
+    lab = _signed_lab_array(crop)
+    flat = lab.reshape(-1, 3)
+    center = np.median(flat, axis=0)
+    scale = np.maximum(np.median(np.abs(flat - center), axis=0) * 1.4826, (2.0, 1.5, 1.5))
+    distance = np.sqrt((((flat - center) / scale) ** 2).mean(axis=1))
+    floor_mask = (distance <= 3.2).reshape(lab.shape[:2])
+    floor_count = int(floor_mask.sum())
+    if floor_count < max(512, int(0.05 * floor_mask.size)):
+        return unavailable('未找到足够的地板像素，请避开地毯和家具重新框选')
+
+    floor_lab = lab[floor_mask]
+    ref_lab = _signed_lab_array(ref_img.convert('RGB')).reshape(-1, 3)
+    ref_a = float(np.median(ref_lab[:, 1]))
+    ref_b = float(np.median(ref_lab[:, 2]))
+    ref_chroma = float(np.median(np.hypot(ref_lab[:, 1], ref_lab[:, 2])))
+    ref_values = (ref_a, ref_b, ref_chroma)
+    p10, p33, p67, p90 = np.quantile(floor_lab[:, 0], (0.10, 0.33, 0.67, 0.90))
+    low_dynamic = float(p90 - p10) < 12.0
+
+    if low_dynamic:
+        masks = {
+            'highlight': np.zeros_like(floor_mask),
+            'penumbra': floor_mask,
+            'shadow': np.zeros_like(floor_mask),
+        }
+    else:
+        masks = {
+            'highlight': floor_mask & (lab[..., 0] >= p67),
+            'penumbra': floor_mask & (lab[..., 0] > p33) & (lab[..., 0] < p67),
+            'shadow': floor_mask & (lab[..., 0] <= p33),
+        }
+
+    zones = []
+    zone_values = []
+    for key, label in _COLOR_ANALYSIS_ZONE_LABELS.items():
+        zone_mask = masks[key]
+        if not zone_mask.any():
+            zones.append({
+                'zone': key, 'label': label, 'image': None, 'luminance': None,
+                'hints': [{'code': 'unavailable', 'text': f'未检测到明显{label}'}],
+            })
+            continue
+        values = lab[zone_mask]
+        median_a = float(np.median(values[:, 1]))
+        median_b = float(np.median(values[:, 2]))
+        median_chroma = float(np.median(np.hypot(values[:, 1], values[:, 2])))
+        zone_values.append((median_a, median_b, median_chroma))
+        zones.append({
+            'zone': key,
+            'label': label,
+            'image': _representative_color_patch(crop, floor_mask, zone_mask),
+            'luminance': round(float(np.median(values[:, 0])) / 255.0 * 100.0, 1),
+            'hints': _color_bias_hints((median_a, median_b, median_chroma), ref_values),
+        })
+
+    source_a, source_b, source_chroma = np.mean(np.asarray(zone_values), axis=0)
+    delta_a, delta_b = float(source_a - ref_a), float(source_b - ref_b)
+    chroma_threshold = max(3.0, abs(ref_chroma) * 0.12)
+    delta_chroma = float(source_chroma - ref_chroma)
+
+    def clamp(value, lo=-100.0, hi=100.0):
+        return float(min(max(value, lo), hi))
+
+    recommended = dict(defaults)
+    recommended['temperature'] = 0.0 if abs(delta_b) < 3.0 else round(clamp(-delta_b / 0.24))
+    recommended['tint'] = 0.0 if abs(delta_a) < 3.0 else round(clamp(-delta_a / 0.24))
+    if abs(delta_chroma) >= chroma_threshold and source_chroma > 1e-5:
+        recommended['saturation'] = round(clamp((ref_chroma / source_chroma - 1.0) * 100.0))
+
+    valid_values = np.asarray(zone_values)
+    warm_signs = set(np.sign(valid_values[np.abs(valid_values[:, 1] - ref_b) >= 3.0, 1] - ref_b))
+    sat_delta = valid_values[:, 2] - ref_chroma
+    sat_signs = set(np.sign(sat_delta[np.abs(sat_delta) >= chroma_threshold]))
+    mixed = len(warm_signs) > 1 or len(sat_signs) > 1
+
+    summary_parts = []
+    if recommended['temperature'] < 0:
+        summary_parts.append('整体偏暖')
+    elif recommended['temperature'] > 0:
+        summary_parts.append('整体偏冷')
+    if recommended['tint'] < 0:
+        summary_parts.append('整体偏洋红')
+    elif recommended['tint'] > 0:
+        summary_parts.append('整体偏绿')
+    if recommended['saturation'] < 0:
+        summary_parts.append('整体偏饱和')
+    elif recommended['saturation'] > 0:
+        summary_parts.append('整体偏灰')
+    summary = '、'.join(summary_parts) + '；建议使用下方参数。' if summary_parts else \
+        '整体冷暖和饱和度接近小样，无需明显调整。'
+    if mixed:
+        summary = '各光照区偏色方向不一致，可能存在混合光源；' + summary
+    elif low_dynamic:
+        summary = '光照层次不明显；' + summary
+
+    return {
+        'status': 'low_dynamic_range' if low_dynamic else 'ok',
+        'confidence': 'low' if (mixed or low_dynamic) else 'high',
+        'summary': summary,
+        'recommended_adjustments': recommended,
+        'zones': zones,
+    }
+
+
 def _apply_color_adjustments(img, adjustments=None):
     """Apply deterministic photo-editor controls to an RGB image.
 
@@ -2175,6 +2393,119 @@ def match_color_region(src_img, ref_img, rect, strength=1.0, feather=0.05,
     return out
 
 
+def _global_color_profile(src_img, ref_img, rect):
+    """Estimate a robust floor-to-swatch LAB transform from the analysis rect."""
+    import numpy as np
+
+    src = src_img.convert('RGB')
+    width, height = src.size
+    x, y, w, h = rect
+    x0 = max(0, min(width - 1, int(round(x * width))))
+    y0 = max(0, min(height - 1, int(round(y * height))))
+    x1 = max(x0, min(width, int(round((x + w) * width))))
+    y1 = max(y0, min(height, int(round((y + h) * height))))
+    if (x1 - x0) < max(2, int(0.02 * width)) or (y1 - y0) < max(2, int(0.02 * height)):
+        return None, dict(_COLOR_ADJUSTMENT_DEFAULTS)
+
+    # Statistics do not need every 4K pixel.  Bounding both inputs keeps the
+    # selected-floor and reference working sets predictable on customer PCs.
+    sample = src.crop((x0, y0, x1, y1))
+    sample.thumbnail((1600, 1600), Image.Resampling.LANCZOS)
+    reference = ref_img.convert('RGB').copy()
+    reference.thumbnail((1200, 1200), Image.Resampling.LANCZOS)
+    source_lab = _signed_lab_array(sample).reshape(-1, 3)
+    ref_lab = _signed_lab_array(reference).reshape(-1, 3)
+
+    center = source_lab.mean(axis=0)
+    spread = np.maximum(source_lab.std(axis=0), (2.0, 1.5, 1.5))
+    distance = np.sqrt((((source_lab - center) / spread) ** 2).mean(axis=1))
+    inliers = distance <= 2.5
+    if inliers.sum() >= max(64, int(0.05 * len(source_lab))):
+        source_floor = source_lab[inliers]
+    else:
+        source_floor = source_lab
+
+    source_mean = source_floor.mean(axis=0)
+    source_std = np.maximum(source_floor.std(axis=0), (2.0, 1.5, 1.5))
+    ref_mean = ref_lab.mean(axis=0)
+    ref_std = ref_lab.std(axis=0)
+    ratio = np.clip(ref_std / source_std, 0.7, 1.3)
+    auto_adjustments = _estimate_auto_color_adjustments(
+        source_mean, source_std, ref_mean, ref_std)
+    return {
+        'source_mean': source_mean.astype(np.float32),
+        'ratio': ratio.astype(np.float32),
+        'ref_mean': ref_mean.astype(np.float32),
+    }, auto_adjustments
+
+
+def _apply_color_adjustments_striped(img, adjustments=None, strip_rows=256):
+    """Apply pointwise editor controls to the full image with bounded memory."""
+    src = img.convert('RGB')
+    normalized = _normalize_color_adjustments(adjustments)
+    if not any(normalized.values()):
+        return src.copy()
+    rows = max(1, int(strip_rows))
+    if src.height <= rows:
+        return _apply_color_adjustments(src, normalized)
+    out = Image.new('RGB', src.size)
+    for y0 in range(0, src.height, rows):
+        y1 = min(src.height, y0 + rows)
+        out.paste(_apply_color_adjustments(src.crop((0, y0, src.width, y1)), normalized), (0, y0))
+    return out
+
+
+def match_color_global(src_img, ref_img, rect, strength=1.0, feather=0.05,
+                       adjustments=None, adjustment_mode='auto',
+                       return_auto_adjustments=False, strip_rows=256):
+    """Use the selected floor only for statistics, then adjust the whole image.
+
+    ``feather`` remains in the signature for wire compatibility but is
+    intentionally ignored: auto, manual and relative modes all affect every
+    pixel.  Processing is striped because all supported controls and the LAB
+    transfer are pointwise operations.
+    """
+    import numpy as np
+
+    del feather
+    src = src_img.convert('RGB')
+    normalized = _normalize_color_adjustments(adjustments)
+
+    if adjustment_mode == 'manual' and not return_auto_adjustments:
+        return _apply_color_adjustments_striped(src, normalized, strip_rows)
+
+    profile, auto_adjustments = _global_color_profile(src, ref_img, rect)
+    if adjustment_mode == 'manual':
+        out = _apply_color_adjustments_striped(src, normalized, strip_rows)
+        return (out, auto_adjustments) if return_auto_adjustments else out
+    if profile is None or strength <= 0:
+        out = src.copy()
+        return (out, auto_adjustments) if return_auto_adjustments else out
+
+    strength = float(min(max(strength, 0.0), 1.0))
+    rows = max(1, int(strip_rows))
+    out = Image.new('RGB', src.size)
+    for y0 in range(0, src.height, rows):
+        y1 = min(src.height, y0 + rows)
+        source_strip = src.crop((0, y0, src.width, y1))
+        lab = _signed_lab_array(source_strip)
+        lab = (lab - profile['source_mean']) * profile['ratio'] + profile['ref_mean']
+        lab[..., 0] = np.clip(lab[..., 0], 0, 255)
+        lab[..., 1:] = np.clip(lab[..., 1:], -128, 127)
+        encoded = lab.copy()
+        encoded[..., 1:] = np.where(encoded[..., 1:] < 0, encoded[..., 1:] + 256, encoded[..., 1:])
+        transferred = Image.fromarray(np.rint(encoded).astype(np.uint8), mode='LAB').convert('RGB')
+        if adjustment_mode == 'relative' and any(normalized.values()):
+            transferred = _apply_color_adjustments(transferred, normalized)
+        if strength < 1.0:
+            transferred = Image.blend(source_strip, transferred, strength)
+        out.paste(transferred, (0, y0))
+
+    if return_auto_adjustments:
+        return out, auto_adjustments
+    return out
+
+
 def _infer_aspect_ratio_from_b64(b64_str: str) -> str:
     img = _b64_to_pil(b64_str)
     if img is None or not img.width or not img.height:
@@ -2262,5 +2593,6 @@ __all__ = [
     'call_gemini_edit', 'analyze_style_image', 'test_connection',
     'call_gemini_scenes', 'call_deepseek_scenes', 'call_omakase_scenes',
     'FLOOR_DESEAM_INSTRUCTION',
-    '_match_color_to_reference', 'match_color_region', '_infer_aspect_ratio_from_b64',
+    '_match_color_to_reference', 'match_color_region', 'match_color_global',
+    '_infer_aspect_ratio_from_b64',
 ]

@@ -342,12 +342,15 @@ export interface RecordEntry {
   workflow_mode?: string;
   results?: RecordResult[];
   gen_context?: GenContext;
+  color_match_ref_url?: string;  // 后端从记录同目录优化图/历史小样解析
+  color_match_ref_path?: string;
   [k: string]: unknown;
 }
 
 export interface RecordFile {
   json_path: string;
   labels: [string, string][];
+  favorite_count: number;
 }
 
 export interface UsageRow {
@@ -450,20 +453,49 @@ export interface ColorMatchAdjustments {
   midtones: number;
   saturation: number;
 }
+export type ColorMatchHintCode =
+  | "warm"
+  | "cool"
+  | "green"
+  | "magenta"
+  | "gray"
+  | "saturated"
+  | "matched"
+  | "unavailable";
+export interface ColorMatchHint {
+  code: ColorMatchHintCode;
+  text: string;
+}
+export interface ColorMatchZoneAnalysis {
+  zone: "highlight" | "penumbra" | "shadow";
+  label: string;
+  preview: string | null;
+  luminance: number | null;
+  hints: ColorMatchHint[];
+}
+export interface ColorMatchAnalysis {
+  status: "ok" | "low_dynamic_range" | "insufficient_region";
+  confidence: "high" | "low";
+  summary: string;
+  recommended_adjustments: ColorMatchAdjustments;
+  zones: ColorMatchZoneAnalysis[];
+}
 export interface ColorMatchPreviewRequest {
   image_rel: string; // 成图相对 /outputs 路径
   ref_path: string;
-  rect: ColorMatchRect;
+  rect: ColorMatchRect; // 只用于地板统计
   strength?: number; // 默认 0.8
-  feather?: number; // 默认 0.05
+  feather?: number; // 兼容旧客户端；全图校色时忽略
   adjustments?: ColorMatchAdjustments;
-  adjustment_mode?: "auto" | "manual"; // auto=自动校准；manual=以 Gemini 原图为零点
+  adjustment_mode?: "auto" | "manual"; // auto=框选取样后全图校准；manual=以 Gemini 原图为零点全图调整
+  include_analysis?: boolean; // 仅首帧/重新框选/更换小样时请求三区诊断
 }
 export interface ColorMatchPreviewView {
   preview: string; // data URL
   width: number;
   height: number;
   auto_adjustments: ColorMatchAdjustments; // 满强度自动校准对应的原图基准滑杆值
+  analysis?: ColorMatchAnalysis;
 }
 export interface JobColorMatchRequest extends ColorMatchPreviewRequest {
   stage: ModelKey;
@@ -473,11 +505,11 @@ export interface RecordColorMatchRequest {
   record_id: string;
   result_id: string;
   ref_path?: string; // 空 → 后端回退 gen_context.image_path
-  rect: ColorMatchRect;
+  rect: ColorMatchRect; // 只用于地板统计
   strength?: number;
-  feather?: number;
+  feather?: number; // 兼容字段，全图校色忽略
   adjustments?: ColorMatchAdjustments;
-  adjustment_mode?: "auto" | "manual";
+  adjustment_mode?: "auto" | "manual"; // 两种模式均作用于全图
 }
 
 export interface RecordEditRequest {
@@ -548,4 +580,55 @@ export interface ComfyUIPingView {
   version?: string;
   devices?: string[];
   error?: string;
+}
+
+// ── 真实纹理投影（本地确定性渲染）──
+export interface FloorPoint {
+  x: number;
+  y: number;
+}
+export interface FloorVisualizeTargetPayload {
+  kind: "job" | "record" | "room";
+  jid?: string;
+  stage?: ModelKey;
+  image_rel?: string;
+  json_path?: string;
+  record_id?: string;
+  result_id?: string;
+  room_path?: string;
+}
+export interface FloorVisualizeRequest {
+  target: FloorVisualizeTargetPayload;
+  texture_path: string;
+  mask_b64: string;
+  calibration_quad: FloorPoint[];
+  scale: number;
+  rotation: number;
+  offset_x: number;
+  offset_y: number;
+  illumination_strength: number;
+  shadow_strength: number;
+  feather: number;
+  texture_width_mm?: number;
+  texture_height_mm?: number;
+  plank_width_mm?: number;
+  plank_length_mm?: number;
+}
+export interface FloorVisualizePreview {
+  preview: string;
+  width: number;
+  height: number;
+  warnings: string[];
+  metadata: Record<string, unknown>;
+}
+export interface FloorVisualizeApplyResponse {
+  ok: boolean;
+  job?: JobView;
+  result_url?: string;
+  result_id?: string;
+  path?: string;
+  url?: string;
+  thumb?: string;
+  warnings: string[];
+  metadata: Record<string, unknown>;
 }

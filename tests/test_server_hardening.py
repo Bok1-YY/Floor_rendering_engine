@@ -71,6 +71,43 @@ def test_record_api_response_redacts_prompt_fields(tmp_path, monkeypatch):
     assert not ({"prompt_en", "prompt_en_pro", "_pe", "_pe_pro", "sample_image_b64"} & response.keys())
 
 
+def test_record_api_exposes_legacy_color_match_reference(tmp_path, monkeypatch):
+    out_dir = tmp_path / "output_files"
+    material_dir = out_dir / "oak"
+    material_dir.mkdir(parents=True, exist_ok=True)
+    path = material_dir / "oak_记录.json"
+    path.write_text(json.dumps([{"id": "r1", "results": []}]), encoding="utf-8")
+    ref = material_dir / "oak_优化图.png"
+    Image.new("RGB", (8, 8), "tan").save(ref)
+    monkeypatch.setattr(server_api, "MAIN_OUTPUT_DIR", str(out_dir))
+
+    response = server_api.load_records(str(path))[0]
+
+    assert response["color_match_ref_path"] == os.path.realpath(ref)
+    assert response["color_match_ref_url"] == "/outputs/oak/oak_优化图.png"
+
+
+def test_record_list_includes_favorite_count(tmp_path, monkeypatch):
+    path = tmp_path / "oak_记录.json"
+    path.write_text(json.dumps([{
+        "id": "r1",
+        "results": [
+            {"result_id": "res_1", "favorite": True},
+            {"result_id": "res_2", "favorite": False},
+            {"result_id": "res_3", "favorite": True},
+        ],
+    }]), encoding="utf-8")
+    monkeypatch.setattr(server_api, "scan_json_files", lambda: [str(path)])
+
+    response = server_api.list_records()
+
+    assert response == [{
+        "json_path": str(path),
+        "labels": [(" |  | ", "r1")],
+        "favorite_count": 2,
+    }]
+
+
 def test_output_route_never_serves_record_json(tmp_path, monkeypatch):
     record = tmp_path / "oak_记录.json"
     record.write_text('{"prompt_en":"secret"}', encoding="utf-8")

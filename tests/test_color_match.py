@@ -1,6 +1,8 @@
-# 手动区域校色：match_color_region 单测（选区内外行为、羽化连续性、强度恒等、输入健壮性）
+# 旧区域引擎兼容测试 + 当前全图校色、三区诊断与分片一致性测试
 # + 校色端点硬化（路径逃逸、参照目录白名单、候选归属、b64-only 记录）。
 import asyncio
+import base64
+import io
 import json
 import os
 
@@ -10,7 +12,13 @@ from fastapi import HTTPException
 from PIL import Image
 
 from Floor_engine_server import records, server_api
-from Floor_engine_server.api import _apply_color_adjustments, match_color_region
+from Floor_engine_server.api import (
+    _apply_color_adjustments,
+    _apply_color_adjustments_striped,
+    analyze_color_region,
+    match_color_global,
+    match_color_region,
+)
 from Floor_engine_server.models import new_job
 
 
@@ -178,6 +186,64 @@ def test_advanced_adjustment_respects_region_and_master_strength():
     assert np.abs(a_half[:, 150] - expected).max() <= 1
 
 
+def test_global_manual_adjustments_change_pixels_outside_analysis_rect():
+    src = _split_lr(240, 120, (55, 75, 110), (175, 135, 80))
+    ref = _solid(60, 40, (145, 110, 75))
+    out = match_color_global(
+        src, ref, (0.5, 0, 0.5, 1), adjustment_mode='manual',
+        adjustments={'temperature': 30, 'saturation': 20})
+    base = np.asarray(src, dtype=np.int16)
+    changed = np.asarray(out, dtype=np.int16)
+    assert np.abs(changed[:, :100] - base[:, :100]).max() > 5
+    assert np.abs(changed[:, 140:] - base[:, 140:]).max() > 5
+
+
+def test_global_manual_result_is_independent_of_analysis_rect_and_strength():
+    src = _split_lr(180, 100, (70, 90, 120), (170, 130, 75))
+    ref = _solid(40, 40, (130, 100, 70))
+    adjustments = {'exposure': 0.4, 'tint': -18, 'contrast': 12}
+    left_rect = match_color_global(
+        src, ref, (0, 0, 0.5, 1), strength=0.1,
+        adjustment_mode='manual', adjustments=adjustments)
+    right_rect = match_color_global(
+        src, ref, (0.5, 0, 0.5, 1), strength=1,
+        adjustment_mode='manual', adjustments=adjustments)
+    assert np.array_equal(np.asarray(left_rect), np.asarray(right_rect))
+
+
+def test_global_auto_changes_full_image_and_strength_is_global_blend():
+    src = _split_lr(240, 120, (45, 65, 115), (170, 120, 70))
+    ref = _solid(60, 50, (115, 145, 95))
+    rect = (0.5, 0, 0.5, 1)
+    full = match_color_global(src, ref, rect, strength=1, adjustment_mode='auto')
+    half = match_color_global(src, ref, rect, strength=0.5, adjustment_mode='auto')
+    zero = match_color_global(src, ref, rect, strength=0, adjustment_mode='auto')
+    manual_zero = match_color_global(src, ref, rect, adjustment_mode='manual', adjustments={})
+    base = np.asarray(src, dtype=np.int16)
+    full_arr = np.asarray(full, dtype=np.int16)
+    half_arr = np.asarray(half, dtype=np.int16)
+    assert np.abs(full_arr[:, :100] - base[:, :100]).max() > 10
+    assert np.abs(full_arr[:, 140:] - base[:, 140:]).max() > 10
+    expected = np.asarray(Image.blend(src.convert('RGB'), full, 0.5), dtype=np.int16)
+    assert np.abs(half_arr - expected).max() <= 1
+    assert np.array_equal(np.asarray(zero), np.asarray(src))
+    assert np.array_equal(np.asarray(manual_zero), np.asarray(src))
+
+
+def test_striped_global_adjustments_match_single_pass():
+    src = Image.new('RGB', (97, 53))
+    pixels = np.arange(97 * 53 * 3, dtype=np.uint32).reshape(53, 97, 3)
+    src = Image.fromarray((pixels % 256).astype(np.uint8), mode='RGB')
+    adjustments = {
+        'temperature': 22, 'tint': -11, 'exposure': 0.3, 'contrast': 17,
+        'highlights': -8, 'shadows': 13, 'whites': 6, 'blacks': -5,
+        'midtones': 9, 'saturation': 18,
+    }
+    expected = _apply_color_adjustments(src, adjustments)
+    striped = _apply_color_adjustments_striped(src, adjustments, strip_rows=7)
+    assert np.array_equal(np.asarray(striped), np.asarray(expected))
+
+
 def test_adjustment_request_defaults_and_bounds():
     req = server_api.ColorMatchPreviewRequest(
         image_rel='result.jpg', ref_path='ref.jpg', rect=_rect())
@@ -200,6 +266,53 @@ def test_auto_profile_is_relative_to_source_and_bounded():
         'temperature', 'tint', 'contrast', 'highlights', 'shadows',
         'whites', 'blacks', 'midtones', 'saturation'))
     assert -2 <= profile['exposure'] <= 2
+
+
+def test_color_analysis_extracts_three_ordered_source_patches():
+    src = Image.new('RGB', (360, 240))
+    src.paste(_solid(360, 80, (215, 175, 125)), (0, 0))
+    src.paste(_solid(360, 80, (150, 110, 72)), (0, 80))
+    src.paste(_solid(360, 80, (78, 54, 36)), (0, 160))
+    ref = _solid(120, 80, (150, 110, 72))
+
+    analysis = analyze_color_region(src, ref, (0, 0, 1, 1))
+
+    assert analysis['status'] == 'ok'
+    assert [zone['zone'] for zone in analysis['zones']] == ['highlight', 'penumbra', 'shadow']
+    assert all(zone['image'] is not None for zone in analysis['zones'])
+    luminance = [zone['luminance'] for zone in analysis['zones']]
+    assert luminance[0] > luminance[1] > luminance[2]
+    assert all(zone['image'].width / zone['image'].height == pytest.approx(4 / 3, rel=0.08)
+               for zone in analysis['zones'])
+
+
+def test_color_analysis_warm_and_gray_advice_has_correct_signs():
+    ref = _solid(160, 100, (145, 112, 82))
+    warm = _apply_color_adjustments(ref, {'temperature': 35})
+    gray = _apply_color_adjustments(ref, {'saturation': -45})
+
+    warm_analysis = analyze_color_region(warm, ref, (0, 0, 1, 1))
+    gray_analysis = analyze_color_region(gray, ref, (0, 0, 1, 1))
+    warm_codes = {hint['code'] for hint in warm_analysis['zones'][1]['hints']}
+    gray_codes = {hint['code'] for hint in gray_analysis['zones'][1]['hints']}
+
+    assert warm_analysis['status'] == gray_analysis['status'] == 'low_dynamic_range'
+    assert 'warm' in warm_codes and 'gray' in gray_codes
+    assert warm_analysis['recommended_adjustments']['temperature'] < 0
+    assert gray_analysis['recommended_adjustments']['saturation'] > 0
+    assert warm_analysis['recommended_adjustments']['exposure'] == 0
+
+
+def test_color_analysis_uniform_light_does_not_invent_light_zones():
+    src = _solid(240, 160, (130, 105, 80))
+    analysis = analyze_color_region(src, src, (0, 0, 1, 1))
+
+    assert analysis['status'] == 'low_dynamic_range'
+    zones = {zone['zone']: zone for zone in analysis['zones']}
+    assert zones['highlight']['image'] is None
+    assert zones['penumbra']['image'] is not None
+    assert zones['shadow']['image'] is None
+    assert not any(analysis['recommended_adjustments'].values())
 
 
 def test_manual_mode_uses_gemini_source_as_zero_point():
@@ -290,6 +403,52 @@ def test_preview_returns_original_based_auto_profile(dirs):
         'shadows', 'whites', 'blacks', 'midtones', 'saturation'}
 
 
+def test_preview_optionally_returns_serialized_zone_analysis(dirs):
+    out_dir, up_dir = dirs
+    src = out_dir / "result.jpg"
+    ref = up_dir / "swatch.jpg"
+    image = Image.new('RGB', (300, 240))
+    image.paste(_solid(300, 80, (210, 170, 120)), (0, 0))
+    image.paste(_solid(300, 80, (145, 108, 72)), (0, 80))
+    image.paste(_solid(300, 80, (75, 52, 34)), (0, 160))
+    image.save(src)
+    _solid(80, 60, (145, 108, 72)).save(ref)
+
+    with_analysis = server_api.color_match_preview(server_api.ColorMatchPreviewRequest(
+        image_rel="result.jpg", ref_path=str(ref), rect=server_api.ColorMatchRect(x=0, y=0, w=1, h=1),
+        adjustment_mode="manual", include_analysis=True))
+    without_analysis = server_api.color_match_preview(server_api.ColorMatchPreviewRequest(
+        image_rel="result.jpg", ref_path=str(ref), rect=server_api.ColorMatchRect(x=0, y=0, w=1, h=1),
+        adjustment_mode="manual"))
+
+    assert with_analysis['analysis']['status'] == 'ok'
+    assert all(zone['preview'].startswith('data:image/jpeg;base64,')
+               for zone in with_analysis['analysis']['zones'])
+    assert 'analysis' not in without_analysis
+
+
+def test_preview_manual_adjustments_are_applied_outside_analysis_rect(dirs):
+    out_dir, up_dir = dirs
+    src = out_dir / "result.jpg"
+    ref = up_dir / "swatch.jpg"
+    source = _split_lr(240, 120, (55, 75, 110), (175, 135, 80))
+    source.save(src, quality=95)
+    _solid(40, 40, (145, 110, 75)).save(ref)
+
+    result = server_api.color_match_preview(server_api.ColorMatchPreviewRequest(
+        image_rel="result.jpg", ref_path=str(ref),
+        rect=server_api.ColorMatchRect(x=0.5, y=0, w=0.5, h=1),
+        adjustment_mode="manual",
+        adjustments=server_api.ColorMatchAdjustments(temperature=35, saturation=20)))
+    encoded = result['preview'].split(',', 1)[1]
+    preview = Image.open(io.BytesIO(base64.b64decode(encoded))).convert('RGB')
+    saved_source = Image.open(src).convert('RGB')
+    before = np.asarray(saved_source, dtype=np.int16)
+    after = np.asarray(preview, dtype=np.int16)
+
+    assert np.abs(after[:, :90] - before[:, :90]).mean() > 3
+
+
 def test_job_color_match_rejects_foreign_candidate(dirs, monkeypatch):
     out_dir, up_dir = dirs
     # outputs 内的真实图，但不属于该 job 的任何候选
@@ -320,3 +479,26 @@ def test_record_color_match_b64_only_404(dirs):
     with pytest.raises(HTTPException) as ei:
         server_api.record_color_match(req)
     assert ei.value.status_code == 404
+
+
+def test_record_color_match_falls_back_to_material_optimized_image(dirs):
+    out_dir, _ = dirs
+    material_dir = out_dir / "oak"
+    material_dir.mkdir()
+    jp = material_dir / "oak_记录.json"
+    src = out_dir / "result.jpg"
+    ref = material_dir / "oak_优化图.png"
+    _solid(80, 60, (70, 90, 140)).save(src)
+    _solid(30, 30, (180, 140, 70)).save(ref)
+    jp.write_text(json.dumps([{
+        "id": "r1",
+        "results": [{"result_id": "res_1", "result_image_file": "result.jpg"}],
+    }]), encoding="utf-8")
+
+    result = server_api.record_color_match(server_api.RecordColorMatchRequest(
+        json_path=str(jp), record_id="r1", result_id="res_1", rect=_rect()))
+
+    saved = records._load_records(str(jp))[0]["results"]
+    assert result["ok"] is True
+    assert len(saved) == 2
+    assert saved[-1]["model_label"] == "手动校色 Edit"
