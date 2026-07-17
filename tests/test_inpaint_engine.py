@@ -17,9 +17,9 @@ from Floor_engine_server import server_api
 
 
 def _patch_config(monkeypatch, cfg: dict):
-    """api 与 config 各自 import 了 _load_config，两处都要 patch。"""
-    monkeypatch.setattr(config_mod, "_load_config", lambda: dict(cfg))
-    monkeypatch.setattr(api_mod, "_load_config", lambda: dict(cfg))
+    """api 与 config 各自 import 了 load_config，两处都要 patch。"""
+    monkeypatch.setattr(config_mod, "load_config", lambda: dict(cfg))
+    monkeypatch.setattr(api_mod, "load_config", lambda: dict(cfg))
 
 
 def test_default_models(monkeypatch):

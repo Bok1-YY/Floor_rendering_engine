@@ -39,7 +39,7 @@ def test_gemini_scenes_uses_structured_output_and_normalizes_recommended(monkeyp
             "candidates": [{"content": {"parts": [{"text": content}]}}],
         })
 
-    monkeypatch.setattr(api, "_load_config", lambda: {"tls_verify": True})
+    monkeypatch.setattr(api, "load_config", lambda: {"tls_verify": True})
     monkeypatch.setattr(api._req, "post", fake_post)
 
     options, err = api.call_gemini_scenes(
@@ -112,7 +112,7 @@ def test_omakase_endpoint_exposes_fallback_notice(monkeypatch):
 
     monkeypatch.setattr(server_api.asyncio, "to_thread", immediate)
     monkeypatch.setattr(server_api, "get_omakase_enabled", lambda: True)
-    monkeypatch.setattr(server_api, "_load_config", lambda: {"gemini_api_key": "g"})
+    monkeypatch.setattr(server_api, "load_config", lambda: {"gemini_api_key": "g"})
     monkeypatch.setattr(server_api, "get_deepseek_api_key", lambda: "d")
     monkeypatch.setattr(server_api, "get_omakase_gemini_model", lambda: "gemini-2.5-flash")
     monkeypatch.setattr(server_api, "get_deepseek_base_url", lambda: "https://api.deepseek.com")
@@ -131,7 +131,7 @@ def test_omakase_endpoint_exposes_fallback_notice(monkeypatch):
 
 def test_omakase_endpoint_rejects_when_no_text_provider_key(monkeypatch):
     monkeypatch.setattr(server_api, "get_omakase_enabled", lambda: True)
-    monkeypatch.setattr(server_api, "_load_config", lambda: {})
+    monkeypatch.setattr(server_api, "load_config", lambda: {})
     monkeypatch.setattr(server_api, "get_deepseek_api_key", lambda: "")
 
     with pytest.raises(HTTPException) as exc:

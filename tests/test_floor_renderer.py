@@ -111,7 +111,7 @@ def test_record_apply_saves_lossless_png_and_generation_metadata(tmp_path, monke
     monkeypatch.setattr(records, "MAIN_OUTPUT_DIR", str(output))
     monkeypatch.setattr(server_api, "MAIN_OUTPUT_DIR", str(output))
     monkeypatch.setattr(server_api, "UPLOAD_DIR", str(uploads))
-    monkeypatch.setattr(server_api, "_load_config", lambda: {})
+    monkeypatch.setattr(server_api, "load_config", lambda: {})
     # Unit-test the endpoint orchestration inline.  Production FastAPI keeps one
     # long-lived event loop; short-lived asyncio.run() executors are unreliable
     # in the packaged test interpreter during executor shutdown.
@@ -144,7 +144,7 @@ def test_record_apply_saves_lossless_png_and_generation_metadata(tmp_path, monke
     assert response["ok"] is True
     assert response["result_url"].startswith("/outputs/")
 
-    saved = records._load_records(str(record_path))[0]["results"][-1]
+    saved = records.load_records_file(str(record_path))[0]["results"][-1]
     assert saved["model_label"] == "真实纹理投影"
     assert saved["generation_metadata"]["provider"] == "local"
     assert saved["generation_metadata"]["model"] == "deterministic-floor-render-v1"

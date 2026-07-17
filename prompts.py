@@ -7,7 +7,7 @@ from PIL import Image
 
 from .config import (
     BASE_DIR, MAIN_OUTPUT_DIR,
-    logger, _short_text, is_seamless_herringbone,
+    logger, short_text, is_seamless_herringbone,
 )
 from .prompt_data import (
     translate_zh_to_en, extract_zh, extract_en,
@@ -20,11 +20,11 @@ from .prompt_data import (
     CN_ROOM_TYPE_MAP, CN_DELIVERY_MAP,
     CN_SPACE_FEATURES, CN_FACILITIES,
     build_overseas_realism_layer, build_cn_layout_guidance,
-    _convert_to_srgb, _get_srgb_save_kwargs,
+    convert_to_srgb, get_srgb_save_kwargs,
 )
 from .records import (
-    _get_json_path, _load_records, _save_records,
-    _img_to_b64, _obfuscate, record_file_lock,
+    get_json_path, load_records_file, save_records_file,
+    img_to_b64, obfuscate_text, record_file_lock,
 )
 
 # 地板整体颜色锁定指令：强制生成图地板的整体颜色与上传小样完全一致。
@@ -178,7 +178,7 @@ def save_task_files_html(workflow_mode, model_choice, image_path, continent, cou
                          style_ref_correction="", style_analysis_text="", scene_override="",
                          panel_submode="再设计", panel_size="", persist=True):
     if not image_path: return None, "⚠️ 请上传图片", "", "", "", "", "", ""
-    json_path, base_name, target_dir = _get_json_path(image_path)
+    json_path, base_name, target_dir = get_json_path(image_path)
     png_path = os.path.join(target_dir, f"{base_name}_优化图.png")
 
     # ── 图片预处理（含 ICC 色彩空间转换）──────────────────────────────
@@ -194,12 +194,12 @@ def save_task_files_html(workflow_mode, model_choice, image_path, continent, cou
                 bg = Image.new('RGB', img.size, (255, 255, 255)); bg.paste(img, mask=img.split()[3]); img = bg
             elif img.mode not in ('RGB', 'L', 'CMYK'):
                 img = img.convert('RGB')
-            img = _convert_to_srgb(img, icc_profile)
+            img = convert_to_srgb(img, icc_profile)
             # 兜底：PNG 不支持 CMYK 等模式，保存前强制转为 RGB（无 ICC 的 CMYK 图会走到这里）
             if img.mode not in ('RGB', 'L'):
                 img = img.convert('RGB')
             img.thumbnail((4096, 4096), Image.Resampling.LANCZOS)
-            img.save(png_path, **_get_srgb_save_kwargs())
+            img.save(png_path, **get_srgb_save_kwargs())
             processed_img = img; msg_prefix = "✅ 新图片已处理并"
         except Exception as e:
             return None, f"❌ 图片处理失败: {e}", "", last_image_path, "", "", "", ""
@@ -981,7 +981,7 @@ Professional photorealistic interior architectural photography. {en_property}, {
 
     # ── 写入 JSON 记录 ────────────────────────────────────────────────
     # 附毫秒后缀防撞：批量并发(同款地板的多个场景在同一秒落记录)时，秒级 record_id 会重复，
-    # 导致 _api_write_to_record 按 id 匹配到同一条、出图串记录。id 仅做相等匹配+文件名前缀，加后缀向后兼容。
+    # 导致 api_write_to_record 按 id 匹配到同一条、出图串记录。id 仅做相等匹配+文件名前缀，加后缀向后兼容。
     record_id = time.strftime("%Y%m%d_%H%M%S") + f"_{uuid.uuid4().hex[:12]}"
     _loc = (city if city and city not in ("通用", "") else
             country if country and country not in ("通用", "") else continent)
@@ -1004,21 +1004,22 @@ Professional photorealistic interior architectural photography. {en_property}, {
         "location": _loc,
         "seam": seam_type or "",
         "params_summary": params_summary,
-        "_pe": _obfuscate(final_prompt_en),
-        "_pe_pro": _obfuscate(final_prompt_en_pro),
+        "_pe": obfuscate_text(final_prompt_en),
+        "_pe_pro": obfuscate_text(final_prompt_en_pro),
         "_schema_version": 2,
-        "sample_image_b64": _img_to_b64(processed_img, max_width=400),
+        "sample_image_b64": img_to_b64(processed_img, max_width=400),
         "results": []
     }
     # persist=False（快速预览借用提示词逻辑）：只出 PNG + 提示词，不新建 JSON 记录，避免污染记录页。
     if persist:
         with record_file_lock(json_path):
-            records = _load_records(json_path)
+            records = load_records_file(json_path)
             records.append(new_record)
-            _save_records(json_path, records)
+            save_records_file(json_path, records)
     return processed_img, f"{msg_prefix}生成成功！当前模式：{workflow_mode}", final_prompt_combined, image_path, json_path, record_id, png_path, final_prompt_en_pro
 
 
 
 
-__all__ = [n for n in dir() if not n.startswith('__')]
+# 对外契约只有提示词组装入口;其余全部是内部实现。
+__all__ = ['save_task_files_html']

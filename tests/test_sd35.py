@@ -139,7 +139,7 @@ def test_fal_queue_submits_once_then_polls(monkeypatch):
         calls["result"] += 1
         return _Response({"images": [{"url": "mock://image"}]})
 
-    monkeypatch.setattr(api, "_load_config", lambda: {"proxy": "", "fal_queue_timeout": 60})
+    monkeypatch.setattr(api, "load_config", lambda: {"proxy": "", "fal_queue_timeout": 60})
     session = _Session(post, get)
     monkeypatch.setattr(api._req, "Session", lambda: session)
     monkeypatch.setattr(api.time, "sleep", lambda _: None)
@@ -166,7 +166,7 @@ def test_fal_queue_persists_submitted_handle(monkeypatch):
             return _Response({"status": "COMPLETED"})
         return _Response({"images": [{"url": "mock://image"}]})
 
-    monkeypatch.setattr(api, "_load_config", lambda: {"proxy": "", "fal_queue_timeout": 60})
+    monkeypatch.setattr(api, "load_config", lambda: {"proxy": "", "fal_queue_timeout": 60})
     monkeypatch.setattr(api._req, "Session", lambda: _Session(post, get))
     data, err = api._call_fal_queue_json(
         "secret", "fal-ai/demo", {"prompt": "x"}, on_submitted=captured.append,
@@ -205,7 +205,7 @@ def test_fal_queue_resumes_handle_without_resubmitting(monkeypatch):
         calls["result"] += 1
         return _Response({"images": [{"url": "mock://image"}]})
 
-    monkeypatch.setattr(api, "_load_config", lambda: {"proxy": "", "fal_queue_timeout": 60})
+    monkeypatch.setattr(api, "load_config", lambda: {"proxy": "", "fal_queue_timeout": 60})
     monkeypatch.setattr(api._req, "Session", lambda: _Session(post, get))
     data, err = api._call_fal_queue_json(
         "secret", "fal-ai/demo", {"prompt": "x"}, resume_handle=handle,
@@ -222,7 +222,7 @@ def test_fal_queue_never_resubmits_after_unknown_network_failure(monkeypatch):
         calls["post"] += 1
         raise api._req.exceptions.ConnectionError("lost after submit")
 
-    monkeypatch.setattr(api, "_load_config", lambda: {"proxy": ""})
+    monkeypatch.setattr(api, "load_config", lambda: {"proxy": ""})
     monkeypatch.setattr(api._req, "Session", lambda: _Session(post))
     data, err = api._call_fal_queue_json("secret", "fal-ai/demo", {"prompt": "x"})
     assert data is None

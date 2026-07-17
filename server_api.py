@@ -36,7 +36,7 @@ from pydantic import BaseModel, Field
 # ── 引擎依赖（全部包内相对导入；这些模块均与前端无关，可安全 import 而不拉进 NiceGUI）──
 from .config import (
     MAIN_OUTPUT_DIR, UPLOAD_DIR, THUMB_DIR, logger,
-    _load_config, _save_config, GEMINI_MODEL_MAP, FAL_MODEL_MAP,
+    load_config, save_config, GEMINI_MODEL_MAP, FAL_MODEL_MAP,
     get_image_provider, save_api_key, save_provider_settings,
     get_speed_profile, save_speed_profile, get_auto_failover, save_auto_failover,
     get_tls_verify, get_tls_ca_bundle, get_proxy, get_speed_profile_params,
@@ -51,18 +51,21 @@ from .api import (
     call_image_generate, call_gemini_generate, call_gemini_edit, test_connection, analyze_style_image,
     call_omakase_scenes,
     call_fal_sd35_generate, call_fal_aura_upscale, SD35_ENDPOINT,
-    FLOOR_DESEAM_INSTRUCTION, _infer_aspect_ratio_from_b64, _match_color_to_reference,
-    match_color_global, analyze_color_region, call_image_inpaint, resolve_inpaint_engine,
+    FLOOR_DESEAM_INSTRUCTION, infer_aspect_ratio_from_b64,
+    call_image_inpaint, resolve_inpaint_engine,
     effective_inpaint_candidate_count,
+)
+from .color_match import (
+    match_color_to_reference, match_color_global, analyze_color_region,
 )
 from .prompts import save_task_files_html
 from .sd_prompts import compile_sd35_prompt
 from .records import (
     persist_jobs, load_persisted_jobs, record_usage,
-    _save_api_result_jpg, _save_api_result_png, _api_write_to_record,
-    _safe_output_path, scan_json_files, _load_records, get_record_labels,
-    reveal_prompt_fn, _list_recent_floor_swatches, _b64_to_pil,
-    _delete_record, _delete_result_image, toggle_result_favorite,
+    save_api_result_jpg, save_api_result_png, api_write_to_record,
+    safe_output_path, scan_json_files, load_records_file, get_record_labels,
+    reveal_prompt_fn, list_recent_floor_swatches, b64_to_pil,
+    delete_record_entry, delete_result_image, toggle_result_favorite,
     update_result_review, append_edited_result_to_record, load_usage_summary,
     attach_generation_context, load_review_summary, collect_review_gallery,
     export_html_from_json, export_pptx_from_json, export_favorites_pptx,
@@ -317,13 +320,13 @@ async def _generate_one_model(job: JobRecord, model_id, prompt_text, stage_key, 
     path = None
     if img is not None:
         # 图已生成 = 已计费 → 即便随后判定取消也先存盘，避免白花钱（与 webui 同序）
-        path = _save_api_result_jpg(img, model_name, pnp)
+        path = save_api_result_jpg(img, model_name, pnp)
         if not path:
             record_usage(job.workflow_mode, model_name, provider, True, job.operation)
             return None, '图片已生成，但保存到磁盘失败'
         add_model_candidate(job, stage_key, path)
         try:
-            await asyncio.to_thread(_api_write_to_record, img, model_name, jpt, rid, path)
+            await asyncio.to_thread(api_write_to_record, img, model_name, jpt, rid, path)
         except Exception as ex:
             logger.warning(f"写记录失败 job={job.job_id} {model_name}: {ex}")
 
@@ -422,7 +425,7 @@ async def _generate_sd35_model(job: JobRecord, *, fal_key: str, positive: str, n
                 # API 已成功出图即产生费用；磁盘保存失败也必须按成功调用计成本。
                 record_usage(job.workflow_mode, 'SD35', 'fal', True, job.operation)
                 sd_usage_recorded = True
-                base_path = _save_api_result_png(base, 'SD35_Base', pnp)
+                base_path = save_api_result_png(base, 'SD35_Base', pnp)
                 if not base_path:
                     update_model_run(job, key, status='failed', error='基础图保存失败', stage='')
                     return None, 'SD 基础图已生成，但保存失败'
@@ -453,7 +456,7 @@ async def _generate_sd35_model(job: JobRecord, *, fal_key: str, positive: str, n
                             (max(1, round(upscaled.width * scale)), max(1, round(upscaled.height * scale))),
                             Image.Resampling.LANCZOS,
                         )
-                    saved_upscale = _save_api_result_png(upscaled, 'SD35_4K', pnp)
+                    saved_upscale = save_api_result_png(upscaled, 'SD35_4K', pnp)
                     if saved_upscale:
                         final_image = upscaled
                         final_path = saved_upscale
@@ -470,7 +473,7 @@ async def _generate_sd35_model(job: JobRecord, *, fal_key: str, positive: str, n
                 'negative_prompt_sha256': hashlib.sha256(negative.encode()).hexdigest(),
             }
             try:
-                await asyncio.to_thread(_api_write_to_record, final_image, 'SD 3.5', jpt, rid, final_path, metadata)
+                await asyncio.to_thread(api_write_to_record, final_image, 'SD 3.5', jpt, rid, final_path, metadata)
             except Exception as ex:
                 logger.warning(f'写 SD 记录失败 job={job.job_id}: {ex}')
             update_model_run(
@@ -497,7 +500,7 @@ async def _run_job_bg(job: JobRecord, req: 'JobSubmitRequest'):
     run_pro = 'pro' in targets
     run_sd = 'sd35' in targets
     p = req.params
-    cfg = _load_config()
+    cfg = load_config()
     api_key = (req.api_key or '').strip() or cfg.get('gemini_api_key', '').strip()
     fal_key = (cfg.get('fal_api_key') or '').strip()
 
@@ -649,8 +652,8 @@ async def _run_job_bg(job: JobRecord, req: 'JobSubmitRequest'):
 async def _retry_bg(job: JobRecord):
     """重试：用 retry_ctx 只重跑还没出图的模型（移植 webui._retry_job 去 UI）。"""
     ctx = job.retry_ctx or {}
-    api_key = (ctx.get('api_key') or '').strip() or _load_config().get('gemini_api_key', '').strip()
-    fal_key = (_load_config().get('fal_api_key') or '').strip()
+    api_key = (ctx.get('api_key') or '').strip() or load_config().get('gemini_api_key', '').strip()
+    fal_key = (load_config().get('fal_api_key') or '').strip()
     targets = list(ctx.get('model_targets') or job.model_targets)
     need_b2 = 'b2' in targets and not (job.b2_path and os.path.exists(str(job.b2_path)))
     need_pro = 'pro' in targets and not (job.pro_path and os.path.exists(str(job.pro_path)))
@@ -707,7 +710,7 @@ async def _retry_bg(job: JobRecord):
 async def _retry_sd_upscale_bg(job: JobRecord):
     run = (job.model_runs or {}).get('sd35') or {}
     base_path = run.get('base_path') or ''
-    fal_key = (_load_config().get('fal_api_key') or '').strip()
+    fal_key = (load_config().get('fal_api_key') or '').strip()
     generation = _cancel_generation[0]
     try:
         update_model_run(job, 'sd35', status='running', stage='🔎 4K 超分中…', error='')
@@ -738,14 +741,14 @@ async def _retry_sd_upscale_bg(job: JobRecord):
         scale = target_long / max(out.size)
         if scale < 0.999:
             out = out.resize((round(out.width * scale), round(out.height * scale)), Image.Resampling.LANCZOS)
-        path = _save_api_result_png(out, 'SD35_4K', job.png_path or base_path)
+        path = save_api_result_png(out, 'SD35_4K', job.png_path or base_path)
         if not path:
             raise RuntimeError('超分图保存失败')
         add_model_candidate(job, 'sd35', path)
         _set_model_queue_handle(job, 'sd35', 'upscale_queue', None)
         update_model_run(job, 'sd35', status='done', stage='', error='', delivery_status='upscaled')
         try:
-            await asyncio.to_thread(_api_write_to_record, out, 'SD 3.5 · 4K重试', job.json_path, job.record_id, path)
+            await asyncio.to_thread(api_write_to_record, out, 'SD 3.5 · 4K重试', job.json_path, job.record_id, path)
         except Exception as ex:
             logger.warning(f'写超分重试记录失败 job={job.job_id}: {ex}')
         update_job(job, status=compute_runs_final_status(job), operation_status='done', operation_error='')
@@ -786,7 +789,7 @@ async def _edit_bg(job: JobRecord, *, api_key, instruction, model_id, model_labe
         buf = io.BytesIO()
         src_pil.convert('RGB').save(buf, format='JPEG', quality=95)
         b64 = base64.b64encode(buf.getvalue()).decode()
-        ar = _infer_aspect_ratio_from_b64(b64)
+        ar = infer_aspect_ratio_from_b64(b64)
         if _model_semaphores['pro'].locked():
             _on_stage('排队中')
         async with _model_semaphores['pro']:
@@ -799,10 +802,10 @@ async def _edit_bg(job: JobRecord, *, api_key, instruction, model_id, model_labe
             return
         if color_match:
             try:
-                out = await asyncio.to_thread(_match_color_to_reference, out, src_pil)
+                out = await asyncio.to_thread(match_color_to_reference, out, src_pil)
             except Exception as ex:
                 logger.warning(f"[编辑] 色彩对齐失败(用未对齐图) job={jid}: {ex}")
-        ppath = _save_api_result_jpg(out, model_label, job.png_path or src_path)
+        ppath = save_api_result_jpg(out, model_label, job.png_path or src_path)
         if not ppath:
             record_usage(job.workflow_mode, model_label, 'google', False, job.operation)
             update_job(job, status=base_status, operation_status='failed', operation_error='编辑结果保存失败')
@@ -811,7 +814,7 @@ async def _edit_bg(job: JobRecord, *, api_key, instruction, model_id, model_labe
         record_usage(job.workflow_mode, model_label, 'google', True, job.operation)
         if job.json_path and job.record_id:
             try:
-                await asyncio.to_thread(_api_write_to_record, out, model_label, job.json_path, job.record_id, ppath)
+                await asyncio.to_thread(api_write_to_record, out, model_label, job.json_path, job.record_id, ppath)
             except Exception as ex:
                 logger.warning(f"[编辑] 写记录失败 job={jid}: {ex}")
         update_job(job, status=compute_final_status(job.model_filter, job.b2_path, ppath),
@@ -963,7 +966,7 @@ class ConfigPatch(BaseModel):
 
 
 def _config_view() -> dict:
-    cfg = _load_config()
+    cfg = load_config()
     brand = get_pptx_branding()
     return {
         'has_gemini_key': bool((cfg.get('gemini_api_key') or '').strip()),
@@ -1005,7 +1008,7 @@ def _config_view() -> dict:
 async def lifespan(_app: FastAPI):
     global _model_semaphores, _task_prep_lock
     try:
-        lim = max(1, int(_load_config().get('max_concurrent_per_model', 1)))
+        lim = max(1, int(load_config().get('max_concurrent_per_model', 1)))
     except Exception as ex:
         logger.warning(f"读取 max_concurrent_per_model 失败，用默认 1: {ex}")
         lim = 1
@@ -1113,7 +1116,7 @@ def _panel_require_second_image(req):
 # ── 任务：提交 / 列表 / 详情 / SSE / 取消 / 重试 ──
 @app.post('/api/jobs')
 async def create_job(req: JobSubmitRequest):
-    cfg = _load_config()
+    cfg = load_config()
     targets = list(req.model_targets or ({'b2': ['b2'], 'pro': ['pro'], 'both': ['b2', 'pro']}[req.model_filter]))
     if not targets or len(targets) != len(set(targets)):
         raise HTTPException(422, 'model_targets 至少选择一个且不可重复')
@@ -1274,7 +1277,7 @@ async def retry_sd_upscale(jid: str):
         raise HTTPException(400, '没有可重试的 SD 基础图')
     if job.operation_status == 'running':
         raise HTTPException(409, '任务进行中')
-    if not (_load_config().get('fal_api_key') or '').strip():
+    if not (load_config().get('fal_api_key') or '').strip():
         raise HTTPException(400, '重试 SD 超分需要 Fal API Key')
     update_job(job, status='running', started_at=time.time(), operation='sd_upscale',
                operation_status='running', operation_error='')
@@ -1307,7 +1310,7 @@ async def polish_job(jid: str):
         raise HTTPException(400, '没有可磨缝的 Pro 图')
     if job.status in ('queued', 'running') or job.pro_polishing or job.operation_status == 'running':
         raise HTTPException(409, '任务正在处理，请稍后再试')
-    api_key = _load_config().get('gemini_api_key', '').strip()
+    api_key = load_config().get('gemini_api_key', '').strip()
     if not api_key:
         raise HTTPException(400, '缺少 API Key')
     # 回执前预置 active 状态（镜像 _edit_bg 开场），前端据此即刻开 SSE
@@ -1327,7 +1330,7 @@ async def edit_job(jid: str, req: EditRequest):
         raise HTTPException(404, 'job not found')
     if job.status in ('queued', 'running') or job.pro_polishing or job.operation_status == 'running':
         raise HTTPException(409, '任务正在处理，请稍后再试')
-    api_key = (req.api_key or '').strip() or _load_config().get('gemini_api_key', '').strip()
+    api_key = (req.api_key or '').strip() or load_config().get('gemini_api_key', '').strip()
     if not api_key:
         raise HTTPException(400, '缺少 API Key')
     model_id = GEMINI_MODEL_MAP.get(req.model_choice, GEMINI_MODEL_MAP['Nano Banana Pro'])
@@ -1355,7 +1358,7 @@ async def _preview_bg(pid: str, req: 'PreviewRequest'):
         _set(stage=t)
 
     should_cancel = lambda: pid in _preview_cancel
-    api_key = (req.api_key or '').strip() or _load_config().get('gemini_api_key', '').strip()
+    api_key = (req.api_key or '').strip() or load_config().get('gemini_api_key', '').strip()
     p = req.params
     try:
         if should_cancel():
@@ -1395,7 +1398,7 @@ async def _preview_bg(pid: str, req: 'PreviewRequest'):
         if img is None:
             record_usage(p.workflow_mode, 'NB2 Lite', 'google', False, 'preview')
             _set(status='failed', error=err or '预览生成失败', stage=''); return
-        path = _save_api_result_jpg(img, 'NB2Lite预览', pnp)
+        path = save_api_result_jpg(img, 'NB2Lite预览', pnp)
         if not path:
             record_usage(p.workflow_mode, 'NB2 Lite', 'google', False, 'preview')
             _set(status='failed', error='预览结果保存失败', stage=''); return
@@ -1411,7 +1414,7 @@ async def _preview_bg(pid: str, req: 'PreviewRequest'):
 
 @app.post('/api/preview')
 async def create_preview(req: PreviewRequest):
-    if not ((req.api_key or '').strip() or _load_config().get('gemini_api_key', '').strip()):
+    if not ((req.api_key or '').strip() or load_config().get('gemini_api_key', '').strip()):
         raise HTTPException(400, '缺少 API Key')
     req.image_path = _require_upload_image_path(req.image_path, '地板图', required=True)
     req.room_path = _require_upload_image_path(req.room_path, '房间图')
@@ -1540,7 +1543,7 @@ def clear_logo():
 @app.get('/api/swatches/recent')
 def recent_swatches(limit: int = 24):
     out = []
-    for p in _list_recent_floor_swatches(limit):
+    for p in list_recent_floor_swatches(limit):
         out.append({'path': p, 'url': _to_url(p), 'name': os.path.basename(p), 'thumb': _thumb_url(p)})
     return out
 
@@ -1550,7 +1553,7 @@ def recent_swatches(limit: int = 24):
 def list_records():
     out = []
     for jp in scan_json_files():
-        recs = _load_records(jp)
+        recs = load_records_file(jp)
         favorite_count = sum(
             1 for rec in recs if isinstance(rec, dict)
             for res in (rec.get('results') or []) if isinstance(res, dict) and res.get('favorite')
@@ -1571,7 +1574,7 @@ def _record_color_match_ref_path(json_path: str, record: dict) -> str:
     """
     gc = record.get('gen_context') if isinstance(record, dict) else None
     sample_rel = record.get('sample_image_file') if isinstance(record, dict) else ''
-    sample_path = _safe_output_path(sample_rel) if sample_rel else ''
+    sample_path = safe_output_path(sample_rel) if sample_rel else ''
     candidates = [
         json_path.replace('_记录.json', '_优化图.png'),
         str((gc or {}).get('image_path') or ''),
@@ -1596,7 +1599,7 @@ def load_records(json_path: str):
         migrate_record_file(json_path)
     except Exception as ex:
         logger.warning(f'[记录] 旧图文件化失败，继续读取原记录: {json_path} / {ex}')
-    recs = _load_records(json_path)
+    recs = load_records_file(json_path)
     # 结果图引用改写成 URL；内联 base64(老记录)不回传大 blob，仅标记 has_inline。
     for r in recs:
         for secret in ('prompt_en', 'prompt_en_pro', '_pe', '_pe_pro', 'sample_image_b64'):
@@ -1613,7 +1616,7 @@ def load_records(json_path: str):
         for res in r.get('results', []) if isinstance(r, dict) else []:
             rel = res.get('result_image_file')
             if rel:
-                ap = _safe_output_path(rel)
+                ap = safe_output_path(rel)
                 res['result_url'] = _to_url(ap) if ap else ''
                 res['result_thumb'] = _result_thumb_url(ap) if ap else ''
             res['has_inline'] = bool(res.pop('result_image_b64', None))
@@ -1679,7 +1682,7 @@ def classify(req: ErrRequest):
 
 @app.get('/api/connection/test')
 def connection_test(gemini: str = '', fal: str = '', proxy: str = ''):
-    cfg = _load_config()
+    cfg = load_config()
     g = gemini or cfg.get('gemini_api_key', '')
     f = fal or cfg.get('fal_api_key', '')
     p = proxy or get_proxy()
@@ -1731,7 +1734,7 @@ async def omakase_scenes(req: OmakaseRequest):
     idea = (req.idea or '').strip()
     if not idea:
         raise HTTPException(400, '请先描述你想要的画面/氛围')
-    cfg = _load_config()
+    cfg = load_config()
     gemini_key = (cfg.get('gemini_api_key') or '').strip()
     deepseek_key = get_deepseek_api_key()
     if not gemini_key and not deepseek_key:
@@ -1831,9 +1834,9 @@ async def _regen_once(job: JobRecord):
     """复用 job.retry_ctx 再跑全部模型、把新图 append 进候选（移植 webui._regen_job 去 UI）。
     返回本轮每模型错误拼接串（'B2: xx Pro: yy'，全成功为 ''），供 _regen_bg 写进 job.error。"""
     ctx = job.retry_ctx or {}
-    api_key = (ctx.get('api_key') or '').strip() or _load_config().get('gemini_api_key', '').strip()
+    api_key = (ctx.get('api_key') or '').strip() or load_config().get('gemini_api_key', '').strip()
     targets = list(ctx.get('model_targets') or job.model_targets)
-    fal_key = (_load_config().get('fal_api_key') or '').strip()
+    fal_key = (load_config().get('fal_api_key') or '').strip()
     generation = _cancel_generation[0]
     should_cancel = lambda: _is_cancelled(job.job_id, generation)
 
@@ -1918,7 +1921,7 @@ async def _record_edit_bg(job: JobRecord, *, src_pil, api_key, instruction, mode
         buf = io.BytesIO()
         src_pil.convert('RGB').save(buf, format='JPEG', quality=95)
         b64 = base64.b64encode(buf.getvalue()).decode()
-        ar = _infer_aspect_ratio_from_b64(b64)
+        ar = infer_aspect_ratio_from_b64(b64)
         if _model_semaphores['pro'].locked():
             _on_stage('排队中')
         async with _model_semaphores['pro']:
@@ -1932,10 +1935,10 @@ async def _record_edit_bg(job: JobRecord, *, src_pil, api_key, instruction, mode
         if color_match:
             try:
                 # ref 强制 RGB：老记录 b64 源图可能是 RGBA/P，Pillow LAB 只支持从 RGB 转换
-                out = await asyncio.to_thread(_match_color_to_reference, out, src_pil.convert('RGB'))
+                out = await asyncio.to_thread(match_color_to_reference, out, src_pil.convert('RGB'))
             except Exception as ex:
                 logger.warning(f"[记录二改] 色彩对齐失败(用未对齐图) job={jid}: {ex}")
-        ppath = _save_api_result_jpg(out, model_label, job.png_path or os.path.join(MAIN_OUTPUT_DIR, 'edit'))
+        ppath = save_api_result_jpg(out, model_label, job.png_path or os.path.join(MAIN_OUTPUT_DIR, 'edit'))
         if not ppath:
             record_usage(job.workflow_mode, model_label, 'google', False, 'record_edit')
             update_job(job, status='failed', error='二改结果保存失败', operation_status='failed', operation_error='二改结果保存失败')
@@ -2025,11 +2028,11 @@ async def regen_job(jid: str, n: int = Query(default=1, ge=1, le=6)):
 # ── 记录内二改 ──
 @app.post('/api/records/edit')
 async def record_edit(req: RecordEditRequest):
-    api_key = (req.api_key or '').strip() or _load_config().get('gemini_api_key', '').strip()
+    api_key = (req.api_key or '').strip() or load_config().get('gemini_api_key', '').strip()
     if not api_key:
         raise HTTPException(400, '缺少 API Key')
     json_path = _require_record_json_path(req.json_path)
-    recs = _load_records(json_path)
+    recs = load_records_file(json_path)
     rec = next((r for r in recs if r.get('id') == req.record_id), None)
     if not rec:
         raise HTTPException(404, '未找到记录')
@@ -2039,7 +2042,7 @@ async def record_edit(req: RecordEditRequest):
         raise HTTPException(404, '未找到该效果图')
     src_pil = None
     rel = res.get('result_image_file')
-    abs_src = _safe_output_path(rel) if rel else None
+    abs_src = safe_output_path(rel) if rel else None
     if abs_src:
         try:
             src_pil = Image.open(abs_src)
@@ -2047,7 +2050,7 @@ async def record_edit(req: RecordEditRequest):
         except Exception:
             src_pil = None
     if src_pil is None and res.get('result_image_b64'):
-        src_pil = _b64_to_pil(res['result_image_b64'])
+        src_pil = b64_to_pil(res['result_image_b64'])
     if src_pil is None:
         raise HTTPException(404, '该结果无可用图片')
 
@@ -2075,7 +2078,7 @@ async def record_edit(req: RecordEditRequest):
 @app.post('/api/records/result/delete')
 def delete_result(req: ResultRef):
     json_path = _require_record_json_path(req.json_path)
-    if not _delete_result_image(json_path, req.record_id, req.result_id):
+    if not delete_result_image(json_path, req.record_id, req.result_id):
         raise HTTPException(404, '未找到该效果图')
     return {'ok': True}
 
@@ -2107,7 +2110,7 @@ def review_result(req: ResultReviewRequest):
 @app.post('/api/records/delete')
 def delete_record(req: RecordRef):
     json_path = _require_record_json_path(req.json_path)
-    if not _delete_record(json_path, req.record_id):
+    if not delete_record_entry(json_path, req.record_id):
         raise HTTPException(404, '未找到该记录')
     return {'ok': True}
 
@@ -2174,7 +2177,7 @@ def review_gallery(filter: str = 'pass', limit: int = 60):
     for it in collect_review_gallery(filter, limit):
         res = it['res']
         rel = res.get('result_image_file')
-        ap = _safe_output_path(rel) if rel else ''
+        ap = safe_output_path(rel) if rel else ''
         out.append({
             'json_path': it['json_path'],
             'material': it['material'],
@@ -2201,7 +2204,7 @@ def review_gallery(filter: str = 'pass', limit: int = 60):
 # ============================================================
 def _require_output_image_rel(rel: str) -> str:
     """成图相对路径 → outputs 内绝对路径；越界/不存在 → 400。"""
-    ap = _safe_output_path(rel or '')
+    ap = safe_output_path(rel or '')
     if not ap or not os.path.isfile(ap):
         raise HTTPException(400, '成图路径无效')
     return ap
@@ -2309,7 +2312,7 @@ def _resolve_floor_source(target: FloorVisualizeTarget):
         return src, {'job': job, 'source_path': abs_src}
     if target.kind == 'record':
         json_path = _require_record_json_path(target.json_path)
-        recs = _load_records(json_path)
+        recs = load_records_file(json_path)
         rec = next((r for r in recs if r.get('id') == target.record_id), None)
         if not rec:
             raise HTTPException(404, '未找到记录')
@@ -2317,13 +2320,13 @@ def _resolve_floor_source(target: FloorVisualizeTarget):
         if result is None:
             raise HTTPException(404, '未找到该效果图')
         rel = result.get('result_image_file')
-        abs_src = _safe_output_path(rel) if rel else None
+        abs_src = safe_output_path(rel) if rel else None
         src = None
         if abs_src and os.path.isfile(abs_src):
             with Image.open(abs_src) as im:
                 src = ImageOps.exif_transpose(im).convert('RGB').copy()
         elif result.get('result_image_b64'):
-            decoded = _b64_to_pil(result['result_image_b64'])
+            decoded = b64_to_pil(result['result_image_b64'])
             if decoded is not None:
                 src = ImageOps.exif_transpose(decoded).convert('RGB').copy()
         if src is None:
@@ -2336,7 +2339,7 @@ def _resolve_floor_source(target: FloorVisualizeTarget):
 
 
 def _run_floor_visualize(req: FloorVisualizeRequest, max_side: int = 0):
-    if _load_config().get('floor_visualizer_enabled', True) is False:
+    if load_config().get('floor_visualizer_enabled', True) is False:
         raise HTTPException(503, '真实纹理投影已在配置中关闭')
     try:
         validate_calibration_quad(req.calibration_quad)
@@ -2403,14 +2406,14 @@ async def floor_visualize_apply(req: FloorVisualizeRequest):
             raise HTTPException(409, '任务卡已被清除，无法写回')
         if job.status in ('running', 'queued') or job.pro_polishing or job.operation_status == 'running':
             raise HTTPException(409, '任务状态已变化，请稍后重试')
-        ppath = await asyncio.to_thread(_save_api_result_png, out, label,
+        ppath = await asyncio.to_thread(save_api_result_png, out, label,
                                         job.png_path or context['source_path'], metadata)
         if not ppath:
             raise HTTPException(500, '结果保存失败')
         add_model_candidate(job, target.stage, ppath)
         update_job(job, status=compute_runs_final_status(job))
         if job.json_path and job.record_id:
-            await asyncio.to_thread(_api_write_to_record, out, label, job.json_path,
+            await asyncio.to_thread(api_write_to_record, out, label, job.json_path,
                                     job.record_id, ppath, metadata)
         _persist_jobs()
         logger.info(f'[真实贴地板] 任务候选已保存 job={job.job_id}, stage={target.stage}, path={ppath}')
@@ -2418,11 +2421,11 @@ async def floor_visualize_apply(req: FloorVisualizeRequest):
                 'warnings': metadata.get('warnings') or [], 'metadata': metadata}
     if target.kind == 'record':
         json_path = context['json_path']
-        ppath = await asyncio.to_thread(_save_api_result_png, out, label,
+        ppath = await asyncio.to_thread(save_api_result_png, out, label,
                                         context['source_path'], metadata)
         if not ppath:
             raise HTTPException(500, '结果保存失败')
-        result_id = await asyncio.to_thread(_api_write_to_record, out, label, json_path,
+        result_id = await asyncio.to_thread(api_write_to_record, out, label, json_path,
                                             target.record_id, ppath, metadata)
         if not result_id:
             raise HTTPException(500, '结果写入记录失败')
@@ -2569,7 +2572,7 @@ async def job_color_match(jid: str, req: JobColorMatchRequest):
                                   req.strength, req.feather,
                                   adjustments=req.adjustments,
                                   adjustment_mode=req.adjustment_mode)
-    ppath = await asyncio.to_thread(_save_api_result_jpg, out, '手动校色',
+    ppath = await asyncio.to_thread(save_api_result_jpg, out, '手动校色',
                                     job.png_path or abs_src)
     if not ppath:
         raise HTTPException(500, '校色结果保存失败')
@@ -2577,7 +2580,7 @@ async def job_color_match(jid: str, req: JobColorMatchRequest):
     update_job(job, status=compute_runs_final_status(job))
     if job.json_path and job.record_id:
         try:
-            await asyncio.to_thread(_api_write_to_record, out, '手动校色',
+            await asyncio.to_thread(api_write_to_record, out, '手动校色',
                                     job.json_path, job.record_id, ppath)
         except Exception as ex:
             logger.warning(f"[校色] 写记录失败 job={jid}: {ex}")
@@ -2602,7 +2605,7 @@ class RecordColorMatchRequest(BaseModel):
 def record_color_match(req: RecordColorMatchRequest):
     """提交（记录侧）：全分辨率处理 → 结果 append 回该记录。不碰 _job_history。"""
     json_path = _require_record_json_path(req.json_path)
-    recs = _load_records(json_path)
+    recs = load_records_file(json_path)
     rec = next((r for r in recs if r.get('id') == req.record_id), None)
     if not rec:
         raise HTTPException(404, '未找到记录')
@@ -2611,7 +2614,7 @@ def record_color_match(req: RecordColorMatchRequest):
     if res is None:
         raise HTTPException(404, '未找到该效果图')
     rel = res.get('result_image_file')
-    abs_src = _safe_output_path(rel) if rel else None
+    abs_src = safe_output_path(rel) if rel else None
     if not abs_src or not os.path.isfile(abs_src):
         raise HTTPException(404, '该结果无落盘图片，无法校色')
     ref_path = (req.ref_path or '').strip()
@@ -2623,7 +2626,7 @@ def record_color_match(req: RecordColorMatchRequest):
     out = _run_color_match(abs_src, ref, req.rect, req.strength, req.feather,
                            adjustments=req.adjustments,
                            adjustment_mode=req.adjustment_mode)
-    ppath = _save_api_result_jpg(out, '手动校色', json_path.replace('_记录.json', '_优化图.png'))
+    ppath = save_api_result_jpg(out, '手动校色', json_path.replace('_记录.json', '_优化图.png'))
     if not ppath:
         raise HTTPException(500, '校色结果保存失败')
     if req.adjustment_mode == 'auto':
@@ -2813,7 +2816,7 @@ def _resolve_inpaint_source(target: InpaintTarget):
         return src, job.workflow_mode, 'inpaint'
     if target.kind == 'record':
         json_path = _require_record_json_path(target.json_path)
-        recs = _load_records(json_path)
+        recs = load_records_file(json_path)
         rec = next((r for r in recs if r.get('id') == target.record_id), None)
         if not rec:
             raise HTTPException(404, '未找到记录')
@@ -2823,7 +2826,7 @@ def _resolve_inpaint_source(target: InpaintTarget):
             raise HTTPException(404, '未找到该效果图')
         src = None
         rel = res.get('result_image_file')
-        abs_src = _safe_output_path(rel) if rel else None
+        abs_src = safe_output_path(rel) if rel else None
         if abs_src and os.path.isfile(abs_src):
             try:
                 with Image.open(abs_src) as image:
@@ -2831,7 +2834,7 @@ def _resolve_inpaint_source(target: InpaintTarget):
             except Exception:
                 src = None
         if src is None and res.get('result_image_b64'):
-            decoded = _b64_to_pil(res['result_image_b64'])
+            decoded = b64_to_pil(res['result_image_b64'])
             src = _normalize_inpaint_source(decoded) if decoded is not None else None
         if src is None:
             raise HTTPException(404, '该结果无可用图片')
@@ -2961,21 +2964,21 @@ async def inpaint_apply(iid: str, req: InpaintApplyRequest):
                 raise HTTPException(404, '任务卡已被清除，无法写回')
             if job.status in ('running', 'queued') or job.pro_polishing or job.operation_status == 'running':
                 raise HTTPException(409, '任务进行中，请稍后提交')
-            ppath = await asyncio.to_thread(_save_api_result_png, out, label, job.png_path or cand_path)
+            ppath = await asyncio.to_thread(save_api_result_png, out, label, job.png_path or cand_path)
             if not ppath:
                 raise HTTPException(500, '结果保存失败')
             add_model_candidate(job, target.stage, ppath)
             update_job(job, status=compute_runs_final_status(job))
             if job.json_path and job.record_id:
                 try:
-                    await asyncio.to_thread(_api_write_to_record, out, label, job.json_path, job.record_id, ppath)
+                    await asyncio.to_thread(api_write_to_record, out, label, job.json_path, job.record_id, ppath)
                 except Exception as ex:
                     logger.warning(f'[修补] 写记录失败 iid={iid}: {ex}')
             _persist_jobs()
             resp = {'ok': True, 'job': _job_view(job)}
         elif target.kind == 'record':
             json_path = _require_record_json_path(target.json_path)
-            ppath = await asyncio.to_thread(_save_api_result_png, out, label,
+            ppath = await asyncio.to_thread(save_api_result_png, out, label,
                                             json_path.replace('_记录.json', '_优化图.png'))
             if not ppath:
                 raise HTTPException(500, '结果保存失败')
@@ -3072,7 +3075,7 @@ def failure_rules():
 
 
 # ============================================================
-# 静态/缩略图（移植自 webui：懒生成缩略图 + _safe_output_path 越界防护）
+# 静态/缩略图（移植自 webui：懒生成缩略图 + safe_output_path 越界防护）
 # ============================================================
 @app.get('/thumb/uploads/{name}')
 def serve_upload_thumb(name: str, s: int = 320):
@@ -3104,7 +3107,7 @@ def serve_upload_thumb(name: str, s: int = 320):
 
 @app.get('/thumb/outputs/{relpath:path}')
 def serve_output_thumb(relpath: str, s: int = 480):
-    src = _safe_output_path(relpath)   # 越界/不存在 → None
+    src = safe_output_path(relpath)   # 越界/不存在 → None
     if not src or os.path.splitext(src)[1].lower() not in _IMAGE_EXTS:
         return Response(status_code=404)
     s = max(64, min(int(s), 1600))
@@ -3131,7 +3134,7 @@ def serve_output_thumb(relpath: str, s: int = 480):
 
 @app.get('/outputs/{relpath:path}')
 def serve_output_image(relpath: str):
-    path = _safe_output_path(relpath)
+    path = safe_output_path(relpath)
     if not path or os.path.splitext(path)[1].lower() not in _IMAGE_EXTS:
         return Response(status_code=404)
     return FileResponse(path, media_type=mimetypes.guess_type(path)[0] or 'application/octet-stream')

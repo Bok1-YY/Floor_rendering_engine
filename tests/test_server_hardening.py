@@ -16,8 +16,8 @@ from Floor_engine_server.models import new_job
 def test_result_files_are_unique_even_in_same_second(tmp_path, monkeypatch):
     monkeypatch.setattr(records, "MAIN_OUTPUT_DIR", str(tmp_path))
     hint = str(tmp_path / "oak" / "oak_优化图.png")
-    first = records._save_api_result_jpg(Image.new("RGB", (2, 2), "red"), "Nano Banana 2", hint)
-    second = records._save_api_result_jpg(Image.new("RGB", (2, 2), "blue"), "Nano Banana 2", hint)
+    first = records.save_api_result_jpg(Image.new("RGB", (2, 2), "red"), "Nano Banana 2", hint)
+    second = records.save_api_result_jpg(Image.new("RGB", (2, 2), "blue"), "Nano Banana 2", hint)
 
     assert first != second
     assert os.path.exists(first) and os.path.exists(second)
@@ -27,7 +27,7 @@ def test_result_files_are_unique_even_in_same_second(tmp_path, monkeypatch):
 
 def test_record_migration_removes_plaintext_and_adds_result_ids(tmp_path):
     path = tmp_path / "oak_记录.json"
-    records._save_records(str(path), [{
+    records.save_records_file(str(path), [{
         "id": "r1",
         "prompt_en": "secret b2",
         "prompt_en_pro": "secret pro",
@@ -35,10 +35,10 @@ def test_record_migration_removes_plaintext_and_adds_result_ids(tmp_path):
     }])
 
     assert records.migrate_record_storage(str(path)) is True
-    migrated = records._load_records(str(path))[0]
+    migrated = records.load_records_file(str(path))[0]
     assert "prompt_en" not in migrated and "prompt_en_pro" not in migrated
-    assert records._deobfuscate(migrated["_pe"]) == "secret b2"
-    assert records._deobfuscate(migrated["_pe_pro"]) == "secret pro"
+    assert records.deobfuscate_text(migrated["_pe"]) == "secret b2"
+    assert records.deobfuscate_text(migrated["_pe_pro"]) == "secret pro"
     assert migrated["results"][0]["result_id"].startswith("res_")
     assert os.path.exists(str(path) + ".schema_v1.bak")
     assert records.migrate_record_storage(str(path)) is False
@@ -157,7 +157,7 @@ def test_invalid_image_payload_is_rejected(tmp_path, monkeypatch):
 def test_asgi_lifespan_health_and_origin_guard(monkeypatch):
     monkeypatch.setattr(server_api, "migrate_all_record_storage", lambda: 0)
     monkeypatch.setattr(server_api, "load_persisted_jobs", lambda: [])
-    monkeypatch.setattr(server_api, "_load_config", lambda: {"max_concurrent_per_model": 1})
+    monkeypatch.setattr(server_api, "load_config", lambda: {"max_concurrent_per_model": 1})
 
     async def exercise():
         async with server_api.lifespan(server_api.app):

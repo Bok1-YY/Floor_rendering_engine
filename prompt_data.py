@@ -9,7 +9,7 @@ from PIL import Image
 
 from .config import (
     BASE_DIR, MAIN_OUTPUT_DIR,
-    logger, _short_text, TRANSLATOR_AVAILABLE, get_proxy,
+    logger, short_text, TRANSLATOR_AVAILABLE, get_proxy,
     is_seamless_herringbone,
 )
 
@@ -1438,13 +1438,13 @@ def extract_en(text):
 def extract_zh(text):
     text_no_emoji = re.sub(r'[^\w\s\(\)（）\-:\/。，！]', '', text).strip()
     return re.sub(r'\(.*?\)', '', text_no_emoji).split(' - ')[0].strip()
-def _convert_to_srgb(img, icc_profile):
+def convert_to_srgb(img, icc_profile):
     try:
         from PIL import ImageCms; srgb_profile = ImageCms.createProfile('sRGB')
         if icc_profile: return ImageCms.profileToProfile(img, icc_profile, srgb_profile, outputMode='RGB')
         return img
     except Exception: return img
-def _get_srgb_save_kwargs():
+def get_srgb_save_kwargs():
     try:
         from PIL import ImageCms; return {"format": "PNG", "icc_profile": ImageCms.createProfile('sRGB').tobytes()}
     except Exception: return {"format": "PNG"}
@@ -1462,4 +1462,27 @@ def _validate_style_data():
 _validate_style_data()
 
 
-__all__ = [n for n in dir() if not n.startswith('__')]
+# 显式导出清单 = 当前被 prompts / sd_prompts / recipes / server_api / tests 实际消费的名字。
+# 新增数据表时:确有外部消费才加进来,别回退成 dir() 全量导出。
+__all__ = [
+    # 翻译与文本工具
+    'translate_zh_to_en', 'extract_zh', 'extract_en', 'TRANSLATOR_AVAILABLE',
+    # 基础词表/映射
+    'TECH_DICT', 'PROPERTY_TYPE_DICT', 'LOCATION_MAP',
+    'STYLES', 'STYLE_ATMOSPHERE_MAP',
+    'LIGHTINGS', 'LIGHTING_INSTRUCTION_MAP',
+    'FLOOR_TONES', 'FLOOR_TONE_CONTRAST_MAP', 'FLOOR_TONE_STYLE_RECOMMEND_MAP',
+    'MARKET_FURNITURE_MAP', 'MARKET_FURNITURE_CHOICES',
+    'ROOM_TYPES', 'CONTINENTS', 'PROPERTY_TYPES', 'VIEWS', 'ANGLES',
+    'FLOOR_SIZES', 'PANEL_SIZES', 'AVOID_LIST',
+    'PET_TYPES', 'PET_ACTIONS', 'PET_FOCUS_OPTIONS',
+    # 国内模式词表
+    'CN_ROOM_TYPES', 'CN_DEVELOPERS', 'CN_UNIT_TYPES', 'CN_TIERS',
+    'CN_DELIVERY_CHOICES', 'CN_CITIES',
+    'CN_DEVELOPER_MAP', 'CN_TIER_MAP', 'CN_UNIT_TYPE_MAP',
+    'CN_ROOM_TYPE_MAP', 'CN_DELIVERY_MAP',
+    'CN_SPACE_FEATURES', 'CN_FACILITIES',
+    # 组装辅助与图像工具
+    'build_overseas_realism_layer', 'build_cn_layout_guidance',
+    'convert_to_srgb', 'get_srgb_save_kwargs', 'analyze_floor_tone',
+]

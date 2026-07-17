@@ -12,9 +12,9 @@ from fastapi import HTTPException
 from PIL import Image
 
 from Floor_engine_server import records, server_api
-from Floor_engine_server.api import (
-    _apply_color_adjustments,
-    _apply_color_adjustments_striped,
+from Floor_engine_server.color_match import (
+    apply_color_adjustments,
+    apply_color_adjustments_striped,
     analyze_color_region,
     match_color_global,
     match_color_region,
@@ -135,23 +135,23 @@ def _mean_luma(img):
 
 def test_adjustment_defaults_are_pixel_identical():
     src = _split_lr(120, 80, (40, 90, 150), (210, 170, 80))
-    out = _apply_color_adjustments(src, {})
+    out = apply_color_adjustments(src, {})
     assert np.array_equal(np.asarray(out), np.asarray(src))
 
 
 def test_temperature_and_tint_follow_lab_directions():
     src = _solid(40, 40, (128, 128, 128))
     base = _mean_lab(src)
-    warm = _mean_lab(_apply_color_adjustments(src, {'temperature': 50}))
-    magenta = _mean_lab(_apply_color_adjustments(src, {'tint': 50}))
+    warm = _mean_lab(apply_color_adjustments(src, {'temperature': 50}))
+    magenta = _mean_lab(apply_color_adjustments(src, {'tint': 50}))
     assert warm[2] > base[2] + 8
     assert magenta[1] > base[1] + 8
 
 
 def test_exposure_and_saturation_controls():
     src = _solid(40, 40, (80, 120, 160))
-    brighter = _apply_color_adjustments(src, {'exposure': 1})
-    gray = np.asarray(_apply_color_adjustments(src, {'saturation': -100}), dtype=np.int16)
+    brighter = apply_color_adjustments(src, {'exposure': 1})
+    gray = np.asarray(apply_color_adjustments(src, {'saturation': -100}), dtype=np.int16)
     assert _mean_luma(brighter) > _mean_luma(src) * 1.25
     assert np.abs(gray[..., 0] - gray[..., 1]).max() <= 1
     assert np.abs(gray[..., 1] - gray[..., 2]).max() <= 1
@@ -160,9 +160,9 @@ def test_exposure_and_saturation_controls():
 def test_tonal_controls_target_expected_bands():
     src = Image.new('RGB', (3, 1))
     src.putdata([(32, 32, 32), (128, 128, 128), (220, 220, 220)])
-    whites = np.asarray(_apply_color_adjustments(src, {'whites': 60}), dtype=np.int16)[0, :, 0]
-    shadows = np.asarray(_apply_color_adjustments(src, {'shadows': 60}), dtype=np.int16)[0, :, 0]
-    midtones = np.asarray(_apply_color_adjustments(src, {'midtones': 60}), dtype=np.int16)[0, :, 0]
+    whites = np.asarray(apply_color_adjustments(src, {'whites': 60}), dtype=np.int16)[0, :, 0]
+    shadows = np.asarray(apply_color_adjustments(src, {'shadows': 60}), dtype=np.int16)[0, :, 0]
+    midtones = np.asarray(apply_color_adjustments(src, {'midtones': 60}), dtype=np.int16)[0, :, 0]
     base = np.array([32, 128, 220])
     assert (whites - base)[2] > (whites - base)[0]
     assert (shadows - base)[0] > (shadows - base)[2]
@@ -239,8 +239,8 @@ def test_striped_global_adjustments_match_single_pass():
         'highlights': -8, 'shadows': 13, 'whites': 6, 'blacks': -5,
         'midtones': 9, 'saturation': 18,
     }
-    expected = _apply_color_adjustments(src, adjustments)
-    striped = _apply_color_adjustments_striped(src, adjustments, strip_rows=7)
+    expected = apply_color_adjustments(src, adjustments)
+    striped = apply_color_adjustments_striped(src, adjustments, strip_rows=7)
     assert np.array_equal(np.asarray(striped), np.asarray(expected))
 
 
@@ -288,8 +288,8 @@ def test_color_analysis_extracts_three_ordered_source_patches():
 
 def test_color_analysis_warm_and_gray_advice_has_correct_signs():
     ref = _solid(160, 100, (145, 112, 82))
-    warm = _apply_color_adjustments(ref, {'temperature': 35})
-    gray = _apply_color_adjustments(ref, {'saturation': -45})
+    warm = apply_color_adjustments(ref, {'temperature': 35})
+    gray = apply_color_adjustments(ref, {'saturation': -45})
 
     warm_analysis = analyze_color_region(warm, ref, (0, 0, 1, 1))
     gray_analysis = analyze_color_region(gray, ref, (0, 0, 1, 1))
@@ -498,7 +498,7 @@ def test_record_color_match_falls_back_to_material_optimized_image(dirs):
     result = server_api.record_color_match(server_api.RecordColorMatchRequest(
         json_path=str(jp), record_id="r1", result_id="res_1", rect=_rect()))
 
-    saved = records._load_records(str(jp))[0]["results"]
+    saved = records.load_records_file(str(jp))[0]["results"]
     assert result["ok"] is True
     assert len(saved) == 2
     assert saved[-1]["model_label"] == "手动校色 Edit"

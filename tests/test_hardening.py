@@ -7,7 +7,7 @@ import pytest
 from Floor_engine_server.models import new_job
 from Floor_engine_server import config as cfg_mod
 from Floor_engine_server.config import safe_upload_path, get_tls_verify
-from Floor_engine_server.records import _load_records, _save_records, update_result_review
+from Floor_engine_server.records import load_records_file, save_records_file, update_result_review
 from Floor_engine_server import api as api_mod
 from Floor_engine_server.api import _verify_arg, call_image_generate
 
@@ -69,7 +69,7 @@ def test_verify_arg_true_when_ca_missing():
 # ── 4. 用量线路归账：自动转 Fal 后必须记 'fal'，不是配置里的 'google' ──────────
 def test_call_image_generate_reports_actual_provider_on_failover(monkeypatch):
     fake_img = object()
-    monkeypatch.setattr(api_mod, "_load_config",
+    monkeypatch.setattr(api_mod, "load_config",
                         lambda: {"image_provider": "google", "auto_failover": True, "fal_api_key": "k"})
     # google 直连返回网络类失败 → 触发自动转线
     monkeypatch.setattr(api_mod, "call_gemini_generate",
@@ -81,20 +81,20 @@ def test_call_image_generate_reports_actual_provider_on_failover(monkeypatch):
 
 def test_call_image_generate_google_success_is_google(monkeypatch):
     fake_img = object()
-    monkeypatch.setattr(api_mod, "_load_config", lambda: {"image_provider": "google"})
+    monkeypatch.setattr(api_mod, "load_config", lambda: {"image_provider": "google"})
     monkeypatch.setattr(api_mod, "call_gemini_generate", lambda *a, **k: (fake_img, None))
     img, err, provider = call_image_generate("key", "m", "p", "img.png")
     assert img is fake_img and provider == "google"
 
 def test_call_image_generate_fal_route_is_fal(monkeypatch):
     fake_img = object()
-    monkeypatch.setattr(api_mod, "_load_config", lambda: {"image_provider": "fal", "fal_api_key": "k"})
+    monkeypatch.setattr(api_mod, "load_config", lambda: {"image_provider": "fal", "fal_api_key": "k"})
     monkeypatch.setattr(api_mod, "call_fal_generate", lambda *a, **k: (fake_img, None))
     img, err, provider = call_image_generate("key", "m", "p", "img.png")
     assert img is fake_img and provider == "fal"
 
 def test_call_image_generate_google_fail_no_failover_is_google(monkeypatch):
-    monkeypatch.setattr(api_mod, "_load_config",
+    monkeypatch.setattr(api_mod, "load_config",
                         lambda: {"image_provider": "google", "auto_failover": False})
     monkeypatch.setattr(api_mod, "call_gemini_generate",
                         lambda *a, **k: (None, "网络错误: reset"))
@@ -105,7 +105,7 @@ def test_call_image_generate_google_fail_no_failover_is_google(monkeypatch):
 # ── 5. 人工评审元数据 ───────────────────────────────────────────────────
 def test_update_result_review_writes_metadata_and_single_best(tmp_path):
     jp = tmp_path / "x_记录.json"
-    _save_records(str(jp), [{
+    save_records_file(str(jp), [{
         "id": "r1",
         "results": [
             {"model_label": "B2"},
@@ -127,7 +127,7 @@ def test_update_result_review_writes_metadata_and_single_best(tmp_path):
     r2 = update_result_review(str(jp), "r1", 1, review_status="backup", best=True)
     assert r2["review_status"] == "backup"
 
-    data = _load_records(str(jp))
+    data = load_records_file(str(jp))
     assert data[0]["results"][0]["best"] is False
     assert data[0]["results"][1]["best"] is True
     assert data[0]["results"][0]["review_note"] == "颜色准"
@@ -135,6 +135,6 @@ def test_update_result_review_writes_metadata_and_single_best(tmp_path):
 
 def test_update_result_review_invalid_target_returns_none(tmp_path):
     jp = tmp_path / "x_记录.json"
-    _save_records(str(jp), [{"id": "r1", "results": []}])
+    save_records_file(str(jp), [{"id": "r1", "results": []}])
     assert update_result_review(str(jp), "missing", 0) is None
     assert update_result_review(str(jp), "r1", 0) is None

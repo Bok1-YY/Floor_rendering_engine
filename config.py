@@ -97,7 +97,7 @@ DEFAULT_IMAGE_PROVIDER = "google"
 
 # ── 工具函数 ────────────────────────────────────────────────────
 
-def _short_text(text: str, limit: int = 500) -> str:
+def short_text(text: str, limit: int = 500) -> str:
     """截断文本用于日志显示，去除多余空白。"""
     text = "" if text is None else str(text)
     text = re.sub(r'\s+', ' ', text).strip()
@@ -111,7 +111,7 @@ def is_seamless_herringbone(floor_size: str, seam_type: str) -> bool:
 
 # ── 配置文件管理 ────────────────────────────────────────────────
 
-def _load_config() -> Dict[str, str]:
+def load_config() -> Dict[str, str]:
     """加载 engine_config.json，不存在则返回默认空配置。"""
     if os.path.exists(CONFIG_FILE):
         try:
@@ -145,12 +145,12 @@ FAVICON_PATH = os.path.join(_PKG_DIR, "assets", "logo.svg")
 
 def get_bevel_ref_image() -> str:
     """返回当前圆弧倒角参考图路径(配置可覆盖);文件不存在则返回空串(自动降级为纯文字)。"""
-    cfg = _load_config()
+    cfg = load_config()
     p = (cfg.get("bevel_ref_image") or "").strip() or BEVEL_REF_IMAGE_DEFAULT
     return p if os.path.exists(p) else ""
 
 
-def _save_config(config: Dict[str, str]) -> bool:
+def save_config(config: Dict[str, str]) -> bool:
     """持久化配置到 engine_config.json。先写临时文件再原子替换：写一半崩溃/断电不会截断
     （文件里存着 Gemini/Fal/DeepSeek 三把 key，截断即全丢）。replace 撞上正在读配置的
     句柄（Windows 上会 PermissionError）时短重试。"""
@@ -181,42 +181,42 @@ def _save_config(config: Dict[str, str]) -> bool:
 def update_config(patch: dict) -> bool:
     """Atomically apply a partial config update without lost concurrent writes."""
     with _config_lock:
-        cfg = _load_config()
+        cfg = load_config()
         cfg.update(patch)
-        return _save_config(cfg)
+        return save_config(cfg)
 
 
 def save_api_key(api_key_val: str, proxy_val: str = "") -> None:
     """保存 Gemini API key 和代理设置。"""
     key = (api_key_val or "").strip()
     proxy = (proxy_val or "").strip()
-    cfg = _load_config()
+    cfg = load_config()
     cfg["gemini_api_key"] = key
     cfg["proxy"] = proxy
-    _save_config(cfg)
+    save_config(cfg)
 
 
 def get_proxy() -> str:
     """读取本地代理地址（engine_config.json 的 proxy 字段）；为空 → 默认走软路由(透明代理)。
     生图侧到处用 cfg.get("proxy","").strip() 这同一个值；翻译也复用它。"""
-    return (_load_config().get("proxy") or "").strip()
+    return (load_config().get("proxy") or "").strip()
 
 
 def save_provider_settings(fal_api_key_val: Optional[str] = None,
                            image_provider_val: Optional[str] = None) -> None:
     """保存 Fal API key 和生图线路选择(google / fal)。传 None 的字段不改动。"""
-    cfg = _load_config()
+    cfg = load_config()
     if fal_api_key_val is not None:
         cfg["fal_api_key"] = (fal_api_key_val or "").strip()
     if image_provider_val is not None:
         prov = (image_provider_val or "").strip().lower()
         cfg["image_provider"] = prov if prov in ("google", "fal") else "google"
-    _save_config(cfg)
+    save_config(cfg)
 
 
 def get_image_provider() -> str:
     """读取当前生图线路；非法值回落到 google。"""
-    prov = (_load_config().get("image_provider") or DEFAULT_IMAGE_PROVIDER).strip().lower()
+    prov = (load_config().get("image_provider") or DEFAULT_IMAGE_PROVIDER).strip().lower()
     return prov if prov in ("google", "fal") else "google"
 
 
@@ -233,7 +233,7 @@ def get_inpaint_provider() -> str:
     扩展位（第三轮，暂未实现）：'comfyui_fal' = 在 fal 网页端(comfy.new)把 workflow
     部署成私有 app 后经 queue.fal.run 调用——fal 不支持 API 直提任意 workflow JSON，
     届时新增 inpaint_fal_comfy_endpoint 键 + api.py 薄封装即可，队列层零改动。"""
-    prov = (_load_config().get("inpaint_provider") or DEFAULT_INPAINT_PROVIDER).strip().lower()
+    prov = (load_config().get("inpaint_provider") or DEFAULT_INPAINT_PROVIDER).strip().lower()
     return prov if prov in ("fal", "comfyui") else DEFAULT_INPAINT_PROVIDER
 
 
@@ -252,7 +252,7 @@ INPAINT_ADD_MODELS = ("flux-fill", "qwen-inpaint", "gemini-mark")
 def get_inpaint_models() -> dict:
     """返回 {'remove': str, 'add': str}；非法值回落默认。仅 provider=fal 时生效
     （comfyui 引擎不分模式，模型由 workflow 模板自带）。"""
-    cfg = _load_config()
+    cfg = load_config()
     remove = (str(cfg.get("inpaint_remove_model") or "")).strip().lower()
     add = (str(cfg.get("inpaint_add_model") or "")).strip().lower()
     return {
@@ -264,7 +264,7 @@ def get_inpaint_models() -> dict:
 def get_comfyui_settings() -> dict:
     """ComfyUI 引擎连接配置。base_url 形如 http://127.0.0.1:8188（仅可信内网地址，
     ComfyUI 无鉴权）；workflow_path 空 = 用内置默认 inpaint 模板；timeout 钳 [60, 3600] 秒。"""
-    cfg = _load_config()
+    cfg = load_config()
     try:
         timeout = max(60, min(3600, int(cfg.get("comfyui_timeout", 600))))
     except (TypeError, ValueError):
@@ -280,7 +280,7 @@ def get_comfyui_settings() -> dict:
 def get_inpaint_remove_prompt() -> str:
     """『生成式移除』模式下用户留空 prompt 时的替补提示词；空 = 用 api.py 内置默认。
     （FLUX Fill 的 prompt 为必填项，移除场景必须注入一句描述背景延续的文本。）"""
-    return (str(_load_config().get("inpaint_remove_prompt") or "")).strip()
+    return (str(load_config().get("inpaint_remove_prompt") or "")).strip()
 
 
 # ── HTTPS 证书校验（可配置；2026-06-18 连通性自检证实本网络 verify=True 能通过，默认改为开启）──
@@ -289,7 +289,7 @@ def get_inpaint_remove_prompt() -> str:
 # 在 engine_config.json 设 tls_verify=false 关闭，或把代理根证书路径填到 tls_ca_bundle。
 def get_tls_verify() -> bool:
     """是否启用 HTTPS 证书校验。默认 True（已实测本网络可过）；坏网络可设 false 关闭。"""
-    v = _load_config().get("tls_verify", True)
+    v = load_config().get("tls_verify", True)
     if isinstance(v, str):
         return v.strip().lower() not in ("false", "0", "no", "off")
     return bool(v)
@@ -297,7 +297,7 @@ def get_tls_verify() -> bool:
 
 def get_tls_ca_bundle() -> str:
     """自定义 CA 证书路径（如软路由/代理的根证书）；为空 → 用系统/requests 默认 CA。"""
-    return (_load_config().get("tls_ca_bundle") or "").strip()
+    return (load_config().get("tls_ca_bundle") or "").strip()
 
 
 # ── 上传文件名安全化 ────────────────────────────────────────────────────
@@ -353,24 +353,24 @@ SPEED_PROFILES = {
 
 def get_speed_profile() -> str:
     """读取当前重试策略名；非法值回落到默认(fast)。"""
-    p = (_load_config().get("speed_profile") or DEFAULT_SPEED_PROFILE).strip().lower()
+    p = (load_config().get("speed_profile") or DEFAULT_SPEED_PROFILE).strip().lower()
     return p if p in SPEED_PROFILES else DEFAULT_SPEED_PROFILE
 
 
 def get_speed_profile_params(cfg: Optional[Dict] = None) -> Dict:
     """返回当前 profile 的一组基础参数(retry_attempts/retry_backoffs/idle/total)。
-    传入 cfg 可复用同一次 _load_config，避免重复读盘。"""
-    cfg = cfg if cfg is not None else _load_config()
+    传入 cfg 可复用同一次 load_config，避免重复读盘。"""
+    cfg = cfg if cfg is not None else load_config()
     name = (cfg.get("speed_profile") or DEFAULT_SPEED_PROFILE).strip().lower()
     return dict(SPEED_PROFILES.get(name, SPEED_PROFILES[DEFAULT_SPEED_PROFILE]))
 
 
 def save_speed_profile(profile_val: str) -> None:
     """保存重试策略(fast / resilient)；非法值回落到默认。"""
-    cfg = _load_config()
+    cfg = load_config()
     p = (profile_val or "").strip().lower()
     cfg["speed_profile"] = p if p in SPEED_PROFILES else DEFAULT_SPEED_PROFILE
-    _save_config(cfg)
+    save_config(cfg)
 
 
 # ── 直连失败自动转 Fal 备用线路（开关，默认关）─────────────────
@@ -379,12 +379,12 @@ def save_speed_profile(profile_val: str) -> None:
 # 内容/请求级错误(安全拦截、HTTP 400/403)不转线——换线也会失败，白烧 Fal 钱。
 def get_auto_failover() -> bool:
     """读取『直连失败自动转 Fal』开关；缺省关闭。"""
-    return bool(_load_config().get("auto_failover", False))
+    return bool(load_config().get("auto_failover", False))
 
 
 def get_pptx_branding() -> dict:
     """PPTX 导出品牌配置：公司名/联系方式/logo 路径。全部可空（空=保持无品牌旧样式）。"""
-    cfg = _load_config()
+    cfg = load_config()
     return {
         'company': (str(cfg.get('pptx_company') or '')).strip(),
         'contact': (str(cfg.get('pptx_contact') or '')).strip(),
@@ -395,7 +395,7 @@ def get_pptx_branding() -> dict:
 def get_usage_prices() -> dict:
     """每张成功图的估算单价（元）。key=模型短标签（'B2'/'Pro'/'Lite'，可带线路后缀如 'B2:fal'），
     value=非负数字。缺省空 dict（用量页成本列显示 —）。脏值（非数字/负数）静默丢弃。"""
-    raw = _load_config().get("usage_prices")
+    raw = load_config().get("usage_prices")
     if not isinstance(raw, dict):
         return {}
     out = {}
@@ -411,9 +411,9 @@ def get_usage_prices() -> dict:
 
 def save_auto_failover(enabled) -> None:
     """保存『直连失败自动转 Fal』开关。"""
-    cfg = _load_config()
+    cfg = load_config()
     cfg["auto_failover"] = bool(enabled)
-    _save_config(cfg)
+    save_config(cfg)
 
 
 # ── Omakase 模式：Gemini 主线路 + DeepSeek 可选备用────────
@@ -421,33 +421,33 @@ def save_auto_failover(enabled) -> None:
 # omakase_enabled 默认关；关闭时仍可手写场景定稿。
 def get_deepseek_api_key() -> str:
     """读取 DeepSeek 备用 API Key；为空时 Omakase 仍可走 Gemini。"""
-    return (_load_config().get("deepseek_api_key") or "").strip()
+    return (load_config().get("deepseek_api_key") or "").strip()
 
 
 def get_deepseek_base_url() -> str:
     """DeepSeek(或任意 OpenAI 兼容)基址；缺省官方端点，去掉末尾斜杠便于拼 /chat/completions。"""
-    return (_load_config().get("deepseek_base_url") or "https://api.deepseek.com").strip().rstrip("/") or "https://api.deepseek.com"
+    return (load_config().get("deepseek_base_url") or "https://api.deepseek.com").strip().rstrip("/") or "https://api.deepseek.com"
 
 
 def get_deepseek_model() -> str:
     """DeepSeek 模型名；缺省 deepseek-chat。"""
-    return (_load_config().get("deepseek_model") or "deepseek-chat").strip() or "deepseek-chat"
+    return (load_config().get("deepseek_model") or "deepseek-chat").strip() or "deepseek-chat"
 
 
 def get_omakase_enabled() -> bool:
     """Omakase 模式开关；缺省关闭。"""
-    return bool(_load_config().get("omakase_enabled", False))
+    return bool(load_config().get("omakase_enabled", False))
 
 
 def get_omakase_gemini_model() -> str:
     """Omakase 主线路使用的稳定 Gemini 文本模型。"""
-    return ((_load_config().get("omakase_gemini_model") or "gemini-2.5-flash").strip()
+    return ((load_config().get("omakase_gemini_model") or "gemini-2.5-flash").strip()
             or "gemini-2.5-flash")
 
 
 def save_deepseek_settings(api_key=None, base_url=None, model=None, enabled=None) -> None:
     """保存 DeepSeek / Omakase 配置；传 None 的字段不改动(照 save_provider_settings 现式)。"""
-    cfg = _load_config()
+    cfg = load_config()
     if api_key is not None:
         cfg["deepseek_api_key"] = (api_key or "").strip()
     if base_url is not None:
@@ -456,7 +456,7 @@ def save_deepseek_settings(api_key=None, base_url=None, model=None, enabled=None
         cfg["deepseek_model"] = (model or "").strip()
     if enabled is not None:
         cfg["omakase_enabled"] = bool(enabled)
-    _save_config(cfg)
+    save_config(cfg)
 
 
 # ── 图像生成采样旋钮（opt-in，缺省不传 → 行为与现状逐字节一致）─────────
@@ -466,7 +466,7 @@ def save_deepseek_settings(api_key=None, base_url=None, model=None, enabled=None
 # 先验证不报错再看是否影响输出。Fal 路径不接（保持 Fal 现状）。
 def get_gen_sampling() -> dict:
     """返回要并入 generationConfig 的采样字段；键缺省 → 返回 {} (不改任何行为)。"""
-    cfg = _load_config()
+    cfg = load_config()
     out: dict = {}
     t = cfg.get("gen_temperature", None)
     if t is not None:
@@ -496,7 +496,7 @@ DEFAULT_TEXT_MODELS = [
 
 def get_text_models() -> list:
     """风格分析备选模型列表；engine_config.json 的 text_models 可覆盖，非法/缺省回落默认。"""
-    v = _load_config().get("text_models")
+    v = load_config().get("text_models")
     if isinstance(v, list) and v:
         return [str(x) for x in v if str(x).strip()]
     return list(DEFAULT_TEXT_MODELS)
@@ -504,7 +504,7 @@ def get_text_models() -> list:
 
 def get_ping_model() -> str:
     """连通性自检用的便宜文字模型；engine_config.json 的 ping_model 可覆盖。"""
-    return (_load_config().get("ping_model") or "gemini-2.0-flash").strip() or "gemini-2.0-flash"
+    return (load_config().get("ping_model") or "gemini-2.0-flash").strip() or "gemini-2.0-flash"
 
 
 def extract_clean_prompt(prompt_combined: str) -> str:
