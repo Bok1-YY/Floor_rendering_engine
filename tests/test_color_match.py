@@ -11,6 +11,7 @@ import pytest
 from fastapi import HTTPException
 from PIL import Image
 
+from Floor_engine_server import server_state, server_helpers, server_schemas, routes_tools
 from Floor_engine_server import records, server_api
 from Floor_engine_server.color_match import (
     apply_color_adjustments,
@@ -246,13 +247,13 @@ def test_striped_global_adjustments_match_single_pass():
 
 
 def test_adjustment_request_defaults_and_bounds():
-    req = server_api.ColorMatchPreviewRequest(
+    req = server_schemas.ColorMatchPreviewRequest(
         image_rel='result.jpg', ref_path='ref.jpg', rect=_rect())
     assert not any(req.adjustments.model_dump().values())
     with pytest.raises(ValueError):
-        server_api.ColorMatchAdjustments(exposure=2.1)
+        server_schemas.ColorMatchAdjustments(exposure=2.1)
     with pytest.raises(ValueError):
-        server_api.ColorMatchAdjustments(temperature=-101)
+        server_schemas.ColorMatchAdjustments(temperature=-101)
 
 
 def test_auto_profile_is_relative_to_source_and_bounded():
@@ -343,7 +344,7 @@ def test_auto_mode_ignores_manual_values_and_preserves_legacy_auto():
 
 def test_adjustment_mode_validation():
     with pytest.raises(ValueError):
-        server_api.ColorMatchPreviewRequest(
+        server_schemas.ColorMatchPreviewRequest(
             image_rel='result.jpg', ref_path='ref.jpg', rect=_rect(),
             adjustment_mode='invalid')
 
@@ -356,19 +357,19 @@ def dirs(tmp_path, monkeypatch):
     out_dir.mkdir(exist_ok=True)
     up_dir.mkdir(exist_ok=True)
     monkeypatch.setattr(records, "MAIN_OUTPUT_DIR", str(out_dir))
-    monkeypatch.setattr(server_api, "MAIN_OUTPUT_DIR", str(out_dir))
-    monkeypatch.setattr(server_api, "UPLOAD_DIR", str(up_dir))
+    monkeypatch.setattr(server_helpers, "MAIN_OUTPUT_DIR", str(out_dir))
+    monkeypatch.setattr(server_helpers, "UPLOAD_DIR", str(up_dir))
     return out_dir, up_dir
 
 
 def _rect():
-    return server_api.ColorMatchRect(x=0.1, y=0.1, w=0.8, h=0.8)
+    return server_schemas.ColorMatchRect(x=0.1, y=0.1, w=0.8, h=0.8)
 
 
 def test_output_rel_rejects_escape(dirs, tmp_path):
     (tmp_path / "evil.jpg").write_bytes(b"x")
     with pytest.raises(HTTPException) as ei:
-        server_api._require_output_image_rel("../evil.jpg")
+        server_helpers.require_output_image_rel("../evil.jpg")
     assert ei.value.status_code == 400
 
 
@@ -376,7 +377,7 @@ def test_ref_path_outside_allowed_dirs_rejected(dirs, tmp_path):
     evil = tmp_path / "evil.jpg"
     _solid(8, 8, (1, 2, 3)).save(evil)
     with pytest.raises(HTTPException) as ei:
-        server_api._require_ref_image_path(str(evil))
+        server_helpers.require_ref_image_path(str(evil))
     assert ei.value.status_code == 400
 
 
@@ -384,7 +385,7 @@ def test_ref_path_inside_upload_dir_ok(dirs):
     _, up_dir = dirs
     ref = up_dir / "swatch.jpg"
     _solid(8, 8, (1, 2, 3)).save(ref)
-    assert server_api._require_ref_image_path(str(ref)) == os.path.realpath(str(ref))
+    assert server_helpers.require_ref_image_path(str(ref)) == os.path.realpath(str(ref))
 
 
 def test_preview_returns_original_based_auto_profile(dirs):
@@ -393,10 +394,10 @@ def test_preview_returns_original_based_auto_profile(dirs):
     ref = up_dir / "swatch.jpg"
     _solid(80, 60, (70, 90, 140)).save(src)
     _solid(30, 30, (180, 140, 70)).save(ref)
-    req = server_api.ColorMatchPreviewRequest(
+    req = server_schemas.ColorMatchPreviewRequest(
         image_rel="result.jpg", ref_path=str(ref), rect=_rect(),
         adjustment_mode="auto")
-    result = server_api.color_match_preview(req)
+    result = routes_tools.color_match_preview(req)
     assert result['preview'].startswith('data:image/jpeg;base64,')
     assert result['auto_adjustments']['temperature'] > 0
     assert set(result['auto_adjustments']) == {
@@ -415,11 +416,11 @@ def test_preview_optionally_returns_serialized_zone_analysis(dirs):
     image.save(src)
     _solid(80, 60, (145, 108, 72)).save(ref)
 
-    with_analysis = server_api.color_match_preview(server_api.ColorMatchPreviewRequest(
-        image_rel="result.jpg", ref_path=str(ref), rect=server_api.ColorMatchRect(x=0, y=0, w=1, h=1),
+    with_analysis = routes_tools.color_match_preview(server_schemas.ColorMatchPreviewRequest(
+        image_rel="result.jpg", ref_path=str(ref), rect=server_schemas.ColorMatchRect(x=0, y=0, w=1, h=1),
         adjustment_mode="manual", include_analysis=True))
-    without_analysis = server_api.color_match_preview(server_api.ColorMatchPreviewRequest(
-        image_rel="result.jpg", ref_path=str(ref), rect=server_api.ColorMatchRect(x=0, y=0, w=1, h=1),
+    without_analysis = routes_tools.color_match_preview(server_schemas.ColorMatchPreviewRequest(
+        image_rel="result.jpg", ref_path=str(ref), rect=server_schemas.ColorMatchRect(x=0, y=0, w=1, h=1),
         adjustment_mode="manual"))
 
     assert with_analysis['analysis']['status'] == 'ok'
@@ -436,11 +437,11 @@ def test_preview_manual_adjustments_are_applied_outside_analysis_rect(dirs):
     source.save(src, quality=95)
     _solid(40, 40, (145, 110, 75)).save(ref)
 
-    result = server_api.color_match_preview(server_api.ColorMatchPreviewRequest(
+    result = routes_tools.color_match_preview(server_schemas.ColorMatchPreviewRequest(
         image_rel="result.jpg", ref_path=str(ref),
-        rect=server_api.ColorMatchRect(x=0.5, y=0, w=0.5, h=1),
+        rect=server_schemas.ColorMatchRect(x=0.5, y=0, w=0.5, h=1),
         adjustment_mode="manual",
-        adjustments=server_api.ColorMatchAdjustments(temperature=35, saturation=20)))
+        adjustments=server_schemas.ColorMatchAdjustments(temperature=35, saturation=20)))
     encoded = result['preview'].split(',', 1)[1]
     preview = Image.open(io.BytesIO(base64.b64decode(encoded))).convert('RGB')
     saved_source = Image.open(src).convert('RGB')
@@ -461,13 +462,13 @@ def test_job_color_match_rejects_foreign_candidate(dirs, monkeypatch):
     job = new_job("oak", "now")
     job.status = "done"
     jobs = TaskRegistry("jobs", max_entries=60,
-                        is_terminal=server_api._job_is_terminal, newest_first=True)
+                        is_terminal=server_state.job_is_terminal, newest_first=True)
     jobs.add(job.job_id, job)
-    monkeypatch.setattr(server_api, "JOBS", jobs)
-    req = server_api.JobColorMatchRequest(
+    monkeypatch.setattr(server_state, "JOBS", jobs)
+    req = server_schemas.JobColorMatchRequest(
         image_rel="foreign.jpg", ref_path=str(ref), rect=_rect(), stage="pro")
     with pytest.raises(HTTPException) as ei:
-        asyncio.run(server_api.job_color_match(job.job_id, req))
+        asyncio.run(routes_tools.job_color_match(job.job_id, req))
     assert ei.value.status_code == 400
 
 
@@ -478,10 +479,10 @@ def test_record_color_match_b64_only_404(dirs):
         "id": "r1",
         "results": [{"result_id": "res_1", "result_image_b64": "abc"}],
     }]), encoding="utf-8")
-    req = server_api.RecordColorMatchRequest(
+    req = server_schemas.RecordColorMatchRequest(
         json_path=str(jp), record_id="r1", result_id="res_1", rect=_rect())
     with pytest.raises(HTTPException) as ei:
-        server_api.record_color_match(req)
+        routes_tools.record_color_match(req)
     assert ei.value.status_code == 404
 
 
@@ -499,7 +500,7 @@ def test_record_color_match_falls_back_to_material_optimized_image(dirs):
         "results": [{"result_id": "res_1", "result_image_file": "result.jpg"}],
     }]), encoding="utf-8")
 
-    result = server_api.record_color_match(server_api.RecordColorMatchRequest(
+    result = routes_tools.record_color_match(server_schemas.RecordColorMatchRequest(
         json_path=str(jp), record_id="r1", result_id="res_1", rect=_rect()))
 
     saved = records.load_records_file(str(jp))[0]["results"]

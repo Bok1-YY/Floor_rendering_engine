@@ -4,6 +4,7 @@ import json
 import pytest
 from fastapi import HTTPException
 
+from Floor_engine_server import server_schemas, routes_config
 from Floor_engine_server import api, server_api
 from Floor_engine_server.failure_kb import classify_failure
 
@@ -110,19 +111,19 @@ def test_omakase_endpoint_exposes_fallback_notice(monkeypatch):
     async def immediate(fn, *args, **kwargs):
         return fn(*args, **kwargs)
 
-    monkeypatch.setattr(server_api.asyncio, "to_thread", immediate)
-    monkeypatch.setattr(server_api, "get_omakase_enabled", lambda: True)
-    monkeypatch.setattr(server_api, "load_config", lambda: {"gemini_api_key": "g"})
-    monkeypatch.setattr(server_api, "get_deepseek_api_key", lambda: "d")
-    monkeypatch.setattr(server_api, "get_omakase_gemini_model", lambda: "gemini-2.5-flash")
-    monkeypatch.setattr(server_api, "get_deepseek_base_url", lambda: "https://api.deepseek.com")
-    monkeypatch.setattr(server_api, "get_deepseek_model", lambda: "deepseek-chat")
+    monkeypatch.setattr(routes_config.asyncio, "to_thread", immediate)
+    monkeypatch.setattr(routes_config, "get_omakase_enabled", lambda: True)
+    monkeypatch.setattr(routes_config, "load_config", lambda: {"gemini_api_key": "g"})
+    monkeypatch.setattr(routes_config, "get_deepseek_api_key", lambda: "d")
+    monkeypatch.setattr(routes_config, "get_omakase_gemini_model", lambda: "gemini-2.5-flash")
+    monkeypatch.setattr(routes_config, "get_deepseek_base_url", lambda: "https://api.deepseek.com")
+    monkeypatch.setattr(routes_config, "get_deepseek_model", lambda: "deepseek-chat")
     monkeypatch.setattr(
-        server_api, "call_omakase_scenes",
+        routes_config, "call_omakase_scenes",
         lambda *a, **k: (OPTIONS, None, "deepseek", True),
     )
 
-    response = asyncio.run(server_api.omakase_scenes(server_api.OmakaseRequest(idea="idea")))
+    response = asyncio.run(routes_config.omakase_scenes(server_schemas.OmakaseRequest(idea="idea")))
 
     assert response["provider"] == "deepseek"
     assert response["fallback_used"] is True
@@ -130,12 +131,12 @@ def test_omakase_endpoint_exposes_fallback_notice(monkeypatch):
 
 
 def test_omakase_endpoint_rejects_when_no_text_provider_key(monkeypatch):
-    monkeypatch.setattr(server_api, "get_omakase_enabled", lambda: True)
-    monkeypatch.setattr(server_api, "load_config", lambda: {})
-    monkeypatch.setattr(server_api, "get_deepseek_api_key", lambda: "")
+    monkeypatch.setattr(routes_config, "get_omakase_enabled", lambda: True)
+    monkeypatch.setattr(routes_config, "load_config", lambda: {})
+    monkeypatch.setattr(routes_config, "get_deepseek_api_key", lambda: "")
 
     with pytest.raises(HTTPException) as exc:
-        asyncio.run(server_api.omakase_scenes(server_api.OmakaseRequest(idea="idea")))
+        asyncio.run(routes_config.omakase_scenes(server_schemas.OmakaseRequest(idea="idea")))
 
     assert exc.value.status_code == 400
     assert "Gemini API Key" in exc.value.detail

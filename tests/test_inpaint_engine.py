@@ -11,6 +11,7 @@ import pytest
 from fastapi import HTTPException
 from PIL import Image
 
+from Floor_engine_server import server_state, image_ops
 from Floor_engine_server import api as api_mod
 from Floor_engine_server import config as config_mod
 from Floor_engine_server import server_api
@@ -239,7 +240,7 @@ def test_inpaint_candidate_png_is_pixel_exact(tmp_path):
             src.putpixel((x, y), ((x * 17) % 256, (y * 23) % 256, ((x + y) * 29) % 256))
     path = tmp_path / "candidate.png"
 
-    server_api._save_inpaint_candidate_png(src, str(path))
+    image_ops.save_inpaint_candidate_png(src, str(path))
     saved = Image.open(path)
     saved.load()
 
@@ -251,19 +252,19 @@ def test_inpaint_queue_rejects_when_active_limit_reached():
     """达到运行中上限后背压判断必须拒绝新付费任务。"""
     entries = {
         f"busy-{i}": {"status": "running", "ts": i, "candidates": []}
-        for i in range(server_api._MAX_ACTIVE_INPAINTS)
+        for i in range(server_state.MAX_ACTIVE_INPAINTS)
     }
-    assert server_api._inpaint_queue_is_full(entries) is True
+    assert server_state.inpaint_queue_is_full(entries) is True
 
 
 def test_inpaint_trim_frees_slot_at_exact_capacity():
-    reg = TaskRegistry("inpaints", max_entries=server_api._MAX_INPAINTS,
-                       is_terminal=server_api._inpaint_is_terminal,
-                       on_evict=server_api._delete_inpaint_files)
+    reg = TaskRegistry("inpaints", max_entries=server_state.MAX_INPAINTS,
+                       is_terminal=server_state.inpaint_is_terminal,
+                       on_evict=server_state.delete_inpaint_files)
     reg.replace((f"done-{i}", {"status": "cancelled", "ts": i, "candidates": []})
-                for i in range(server_api._MAX_INPAINTS))
+                for i in range(server_state.MAX_INPAINTS))
     reg.trim(reserve=1)
-    assert len(reg) == server_api._MAX_INPAINTS - 1
+    assert len(reg) == server_state.MAX_INPAINTS - 1
     assert reg.get("done-0") is None
 
 
@@ -277,7 +278,7 @@ def _rect_mask(size=(400, 300), box=(150, 100, 249, 199)):
 
 def test_add_mask_default_is_strict_and_binary():
     raw = _rect_mask()
-    engine, blend = server_api._prepare_inpaint_masks(raw, raw.size, 0, 0.01, "add")
+    engine, blend = image_ops.prepare_inpaint_masks(raw, raw.size, 0, 0.01, "add")
 
     assert set(engine.get_flattened_data()) <= {0, 255}
     assert engine.getbbox() == raw.getbbox()
@@ -286,7 +287,7 @@ def test_add_mask_default_is_strict_and_binary():
 
 def test_remove_mask_auto_expands_beyond_brush():
     raw = _rect_mask()
-    engine, blend = server_api._prepare_inpaint_masks(raw, raw.size, 0, 0.01, "remove")
+    engine, blend = image_ops.prepare_inpaint_masks(raw, raw.size, 0, 0.01, "remove")
     rl, rt, rr, rb = raw.getbbox()
     el, et, er, eb = engine.getbbox()
 
@@ -298,7 +299,7 @@ def test_add_composite_keeps_every_pixel_outside_brush():
     original = Image.new("RGB", (400, 300), (20, 40, 60))
     generated = Image.new("RGB", original.size, (240, 20, 10))
     raw = _rect_mask(size=original.size)
-    _, blend = server_api._prepare_inpaint_masks(raw, original.size, 0, 0.01, "add")
+    _, blend = image_ops.prepare_inpaint_masks(raw, original.size, 0, 0.01, "add")
 
     result = api_mod._composite_inpaint_result(original, generated, blend)
     assert result.getpixel((149, 150)) == original.getpixel((149, 150))
@@ -361,7 +362,7 @@ def test_inpaint_source_applies_exif_orientation():
     raw.save(buf, format="JPEG", exif=exif)
     opened = Image.open(io.BytesIO(buf.getvalue()))
 
-    normalized = server_api._normalize_inpaint_source(opened)
+    normalized = image_ops.normalize_inpaint_source(opened)
     assert normalized.size == (20, 40)
     assert normalized.mode == "RGB"
 
@@ -371,7 +372,7 @@ def test_inpaint_mask_decoder_rejects_non_png():
     Image.new("RGB", (8, 8)).save(buf, format="JPEG")
     import base64
     with pytest.raises(HTTPException) as exc:
-        server_api._decode_inpaint_mask(base64.b64encode(buf.getvalue()).decode())
+        image_ops.decode_inpaint_mask(base64.b64encode(buf.getvalue()).decode())
     assert exc.value.status_code == 400
     assert "PNG" in exc.value.detail
 

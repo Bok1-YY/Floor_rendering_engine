@@ -81,11 +81,22 @@ EXPECTED_ROUTES = [
 ]
 
 
+def _iter_api_routes(routes):
+    """递归展开:FastAPI 0.139 的 include_router 把子路由包成 _IncludedRouter
+    (经 original_router 暴露),不平铺进 app.routes。"""
+    for r in routes:
+        if isinstance(r, APIRoute):
+            yield r
+        elif hasattr(r, 'original_router'):
+            yield from _iter_api_routes(r.original_router.routes)
+        else:
+            yield from _iter_api_routes(getattr(r, 'routes', []) or [])
+
+
 def _actual_routes():
     return sorted(
         (r.path, m)
-        for r in app.routes
-        if isinstance(r, APIRoute)
+        for r in _iter_api_routes(app.routes)
         for m in r.methods
     )
 

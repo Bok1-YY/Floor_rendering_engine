@@ -11,7 +11,7 @@ from Floor_engine_server.models import (
     ensure_model_runs,
 )
 from Floor_engine_server.sd_prompts import compile_sd35_prompt
-from Floor_engine_server.server_api import _job_view
+from Floor_engine_server.server_helpers import job_view as _job_view
 
 
 def _params(**overrides):

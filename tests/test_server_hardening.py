@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from fastapi.responses import Response
 from PIL import Image
 
+from Floor_engine_server import server_state, server_helpers, routes_jobs, routes_library
 from Floor_engine_server import records
 from Floor_engine_server import server_api
 from Floor_engine_server.models import new_job
@@ -66,9 +67,9 @@ def test_record_api_response_redacts_prompt_fields(tmp_path, monkeypatch):
         "_pe": "encoded", "_pe_pro": "encoded pro", "sample_image_b64": "large",
         "results": [{"result_id": "res_1"}],
     }]), encoding="utf-8")
-    monkeypatch.setattr(server_api, "MAIN_OUTPUT_DIR", str(tmp_path))
+    monkeypatch.setattr(server_helpers, "MAIN_OUTPUT_DIR", str(tmp_path))
 
-    response = server_api.load_records(str(path))[0]
+    response = routes_library.load_records(str(path))[0]
     assert not ({"prompt_en", "prompt_en_pro", "_pe", "_pe_pro", "sample_image_b64"} & response.keys())
 
 
@@ -80,9 +81,9 @@ def test_record_api_exposes_legacy_color_match_reference(tmp_path, monkeypatch):
     path.write_text(json.dumps([{"id": "r1", "results": []}]), encoding="utf-8")
     ref = material_dir / "oak_优化图.png"
     Image.new("RGB", (8, 8), "tan").save(ref)
-    monkeypatch.setattr(server_api, "MAIN_OUTPUT_DIR", str(out_dir))
+    monkeypatch.setattr(server_helpers, "MAIN_OUTPUT_DIR", str(out_dir))
 
-    response = server_api.load_records(str(path))[0]
+    response = routes_library.load_records(str(path))[0]
 
     assert response["color_match_ref_path"] == os.path.realpath(ref)
     assert response["color_match_ref_url"] == "/outputs/oak/oak_优化图.png"
@@ -98,9 +99,9 @@ def test_record_list_includes_favorite_count(tmp_path, monkeypatch):
             {"result_id": "res_3", "favorite": True},
         ],
     }]), encoding="utf-8")
-    monkeypatch.setattr(server_api, "scan_json_files", lambda: [str(path)])
+    monkeypatch.setattr(routes_library, "scan_json_files", lambda: [str(path)])
 
-    response = server_api.list_records()
+    response = routes_library.list_records()
 
     assert response == [{
         "json_path": str(path),
@@ -124,10 +125,10 @@ def test_client_image_paths_must_stay_in_upload_dir(tmp_path, monkeypatch):
     uploads.mkdir()
     outside = tmp_path / "outside.jpg"
     Image.new("RGB", (2, 2)).save(outside)
-    monkeypatch.setattr(server_api, "UPLOAD_DIR", str(uploads))
+    monkeypatch.setattr(server_helpers, "UPLOAD_DIR", str(uploads))
 
     with pytest.raises(HTTPException) as exc:
-        server_api._require_upload_image_path(str(outside), "参照图")
+        server_helpers.require_upload_image_path(str(outside), "参照图")
     assert exc.value.status_code == 400
 
 
@@ -136,24 +137,24 @@ def test_running_job_cannot_be_deleted(monkeypatch):
     job.status = "running"
     # 独立注册表:不带 on_persist → persist() 空操作,天然隔离落盘
     jobs = TaskRegistry("jobs", max_entries=60,
-                        is_terminal=server_api._job_is_terminal, newest_first=True)
+                        is_terminal=server_state.job_is_terminal, newest_first=True)
     jobs.add(job.job_id, job)
-    monkeypatch.setattr(server_api, "JOBS", jobs)
+    monkeypatch.setattr(server_state, "JOBS", jobs)
 
     with pytest.raises(HTTPException) as exc:
-        server_api.delete_job(job.job_id)
+        routes_jobs.delete_job(job.job_id)
     assert exc.value.status_code == 409
 
 
 def test_invalid_image_payload_is_rejected(tmp_path, monkeypatch):
     uploads = tmp_path / "uploads"
     uploads.mkdir()
-    monkeypatch.setattr(server_api, "UPLOAD_DIR", str(uploads))
+    monkeypatch.setattr(server_helpers, "UPLOAD_DIR", str(uploads))
     monkeypatch.setattr("Floor_engine_server.config.UPLOAD_DIR", str(uploads))
-    upload = server_api.UploadFile(filename="fake.jpg", file=io.BytesIO(b"not an image"))
+    upload = server_helpers.UploadFile(filename="fake.jpg", file=io.BytesIO(b"not an image"))
 
     with pytest.raises(HTTPException) as exc:
-        server_api._save_upload(upload, "")
+        server_helpers.save_upload(upload, "")
     assert exc.value.status_code == 400
     assert list(uploads.iterdir()) == []
 

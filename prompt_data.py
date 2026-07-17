@@ -1462,6 +1462,19 @@ def _validate_style_data():
 _validate_style_data()
 
 
+# ── 工作流/工艺选项词表(前端下拉的候选全集;prompts 按子串匹配分支)──────
+WORKFLOW_MODES = [
+    '纯效果图 (生成全新空间)', '地板替换 (保持原图换地板)',
+    '宠物友好 (动物独处/主宠互动)', '参照模式 (风格参照图生新图)',
+    'Omakase (AI 代笔场景)',
+    '墙板模式 (护墙板/木饰面：再设计/替换/原创)',
+]
+SEAM_TYPES = ['无缝拼接 (SPC/LVT专用)', '常规倒角缝 (如强化/木地板)', '圆弧倒角 (Pressed Bevel)']
+GLOSSINESS = ['超哑光 (0-3°)', '哑光 (3-5°)', '高光 (High Gloss)']
+RESOLUTIONS = ['4K', '2K']
+ASPECT_RATIOS = ['4:3 (横向)', '16:9 (超宽)', '3:4 (竖向)', '9:16 (手机)']
+
+
 # 显式导出清单 = 当前被 prompts / sd_prompts / recipes / server_api / tests 实际消费的名字。
 # 新增数据表时:确有外部消费才加进来,别回退成 dir() 全量导出。
 __all__ = [
@@ -1475,6 +1488,7 @@ __all__ = [
     'MARKET_FURNITURE_MAP', 'MARKET_FURNITURE_CHOICES',
     'ROOM_TYPES', 'CONTINENTS', 'PROPERTY_TYPES', 'VIEWS', 'ANGLES',
     'FLOOR_SIZES', 'PANEL_SIZES', 'AVOID_LIST',
+    'WORKFLOW_MODES', 'SEAM_TYPES', 'GLOSSINESS', 'RESOLUTIONS', 'ASPECT_RATIOS',
     'PET_TYPES', 'PET_ACTIONS', 'PET_FOCUS_OPTIONS',
     # 国内模式词表
     'CN_ROOM_TYPES', 'CN_DEVELOPERS', 'CN_UNIT_TYPES', 'CN_TIERS',

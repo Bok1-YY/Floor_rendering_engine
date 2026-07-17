@@ -8,6 +8,7 @@ from PIL import Image
 from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 
+from Floor_engine_server import server_schemas, server_helpers, routes_config, routes_library
 from Floor_engine_server import config, records, server_api
 
 
@@ -81,7 +82,7 @@ def test_usage_prices_reject_non_finite_values(tmp_path, monkeypatch):
 
     assert config.get_usage_prices() == {"Lite": 0.2}
     with pytest.raises(HTTPException) as exc:
-        server_api.put_config(server_api.ConfigPatch(usage_prices={"B2": math.inf}))
+        routes_config.put_config(server_schemas.ConfigPatch(usage_prices={"B2": math.inf}))
     assert exc.value.status_code == 400
 
 
@@ -91,14 +92,14 @@ def test_clear_logo_removes_only_managed_upload(tmp_path, monkeypatch):
     logo = uploads / "logo_old.png"
     logo.write_bytes(b"old")
     patches = []
-    monkeypatch.setattr(server_api, "UPLOAD_DIR", str(uploads))
+    monkeypatch.setattr(server_helpers, "UPLOAD_DIR", str(uploads))
     monkeypatch.setattr(
-        server_api,
+        routes_library,
         "get_pptx_branding",
         lambda: {"company": "", "contact": "", "logo_path": str(logo)},
     )
-    monkeypatch.setattr(server_api, "update_config", lambda patch: patches.append(patch) or True)
+    monkeypatch.setattr(routes_library, "update_config", lambda patch: patches.append(patch) or True)
 
-    assert server_api.clear_logo() == {"ok": True}
+    assert routes_library.clear_logo() == {"ok": True}
     assert patches == [{"pptx_logo_path": ""}]
     assert not os.path.exists(logo)

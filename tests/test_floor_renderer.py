@@ -7,6 +7,7 @@ import numpy as np
 import pytest
 from PIL import Image, ImageDraw
 
+from Floor_engine_server import server_schemas, server_helpers, routes_tools
 from Floor_engine_server.floor_renderer import (
     RenderRecipe,
     render_floor,
@@ -109,15 +110,15 @@ def test_record_apply_saves_lossless_png_and_generation_metadata(tmp_path, monke
     output.mkdir(exist_ok=True)
     uploads.mkdir(exist_ok=True)
     monkeypatch.setattr(records, "MAIN_OUTPUT_DIR", str(output))
-    monkeypatch.setattr(server_api, "MAIN_OUTPUT_DIR", str(output))
-    monkeypatch.setattr(server_api, "UPLOAD_DIR", str(uploads))
-    monkeypatch.setattr(server_api, "load_config", lambda: {})
+    monkeypatch.setattr(server_helpers, "MAIN_OUTPUT_DIR", str(output))
+    monkeypatch.setattr(server_helpers, "UPLOAD_DIR", str(uploads))
+    monkeypatch.setattr(routes_tools, "load_config", lambda: {})
     # Unit-test the endpoint orchestration inline.  Production FastAPI keeps one
     # long-lived event loop; short-lived asyncio.run() executors are unreliable
     # in the packaged test interpreter during executor shutdown.
     async def inline_to_thread(function, *args, **kwargs):
         return function(*args, **kwargs)
-    monkeypatch.setattr(server_api.asyncio, "to_thread", inline_to_thread)
+    monkeypatch.setattr(routes_tools.asyncio, "to_thread", inline_to_thread)
 
     scene_path = output / "scene.png"
     texture_path = uploads / "texture.png"
@@ -133,14 +134,14 @@ def test_record_apply_saves_lossless_png_and_generation_metadata(tmp_path, monke
     ImageDraw.Draw(mask).polygon([(18, 44), (142, 44), (159, 119), (0, 119)], fill=255)
     buffer = io.BytesIO()
     mask.save(buffer, format="PNG")
-    request = server_api.FloorVisualizeRequest(
-        target=server_api.FloorVisualizeTarget(
+    request = server_schemas.FloorVisualizeRequest(
+        target=server_schemas.FloorVisualizeTarget(
             kind="record", json_path=str(record_path), record_id="r1", result_id="source"),
         texture_path=str(texture_path),
         mask_b64=base64.b64encode(buffer.getvalue()).decode(),
-        calibration_quad=[server_api.FloorPoint(x=x, y=y) for x, y in QUAD],
+        calibration_quad=[server_schemas.FloorPoint(x=x, y=y) for x, y in QUAD],
     )
-    response = asyncio.run(server_api.floor_visualize_apply(request))
+    response = asyncio.run(routes_tools.floor_visualize_apply(request))
     assert response["ok"] is True
     assert response["result_url"].startswith("/outputs/")
 
