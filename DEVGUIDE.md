@@ -69,14 +69,19 @@ cd Floor_engine_server/web && npm install
                  └─────────────────────────┼───────────────────┘
                                            ▼
                  ┌─────────────────────────────────────────────┐
-                 │  FastAPI 无头后端 (server_api.py, :7870) ★    │  唯一新增的服务端源码
-                 │   作业队列 / SSE 进度 / 静态图 / 缩略图        │
+                 │  FastAPI 无头后端 (:7870)                     │
+                 │   server_api.py＝组装器；业务在 routes_* ×6   │
+                 │   状态 server_state · 工具 server_helpers     │
+                 │   请求模型 server_schemas · 图像 image_ops    │
                  └─────────────────────────┬───────────────────┘
                                            ▼ 复用（零改动）
                  ┌─────────────────────────────────────────────┐
-                 │  引擎模块（headless，新旧版共用）             │
-                 │  config·models·prompt_data·prompts·recipes   │
-                 │  ·api·records·custom_recipes·failure_kb       │
+                 │  引擎模块（headless）                         │
+                 │  config·models·task_registry·prompt_data     │
+                 │  ·prompts·image_prep·sd_prompts·recipes      │
+                 │  ·api·color_match·records·usage_stats        │
+                 │  ·exports·reveal_security·custom_recipes     │
+                 │  ·failure_kb·floor_renderer                  │
                  └─────────────────────────────────────────────┘
                                            ▲ 同样复用
                  ┌─────────────────────────────────────────────┐
@@ -86,7 +91,7 @@ cd Floor_engine_server/web && npm install
 
 三条铁律：
 1. **引擎保持 headless**：所有重逻辑（提示词组装、模型调用、记录持久化、识色、配方、校色、导出…）都在无 UI 的引擎模块里。改业务逻辑优先落引擎模块（新仓库这份）。
-2. **新功能只往 `server_api.py` + `web/` 加**。旧 `webui.py` 已于 2026-06-29 退役删除，不再有第二套 UI 需要维护。
+2. **新功能只往后端模块群（`routes_*` 等，见 §4.4）+ `web/` 加**。旧 `webui.py` 已于 2026-06-29 退役删除，不再有第二套 UI 需要维护。
 3. **长请求改异步作业**：出 4K 图很慢、还会被公司软路由 reset 长连接。新设计是 `POST /api/jobs` **秒回 `job_id`** → `GET /api/jobs/{id}/stream`（SSE）看进度。触发请求立刻返回，根治 reset。
 
 **迁移进度**：STEP1（FastAPI 无头层）/ STEP2（Next.js 前端）/ STEP2.5（webui 功能全量 parity）/ 视觉重设计（Claude Design 整站换皮 + 侧栏外壳）**均已完成**。**STEP3（退役 webui + 去 nicegui 依赖）已于 2026-06-29 执行**：删除 `webui.py`、`requirements.txt` 去掉 `nicegui`、`__main__.py` 改为退役提示桩。日常兜底改由冻结原型 `test/floor_engine/` 承担（同源、共享数据，见 §八）。
@@ -97,26 +102,44 @@ cd Floor_engine_server/web && npm install
 
 ```
 Floor_engine_server/
-├── server_api.py        ★ 新增：无头 FastAPI 层（端点 + 作业队列 + SSE + 静态/缩略图）
+│   ── Web 层（2026-07 拆包：server_api 只组装，业务在 routes_*）──
+├── server_api.py        FastAPI app 组装器：lifespan、CORS/同源守卫、healthz、include_router ×6、静态/缩略图、前端挂载
+├── routes_jobs.py       任务队列端点 + 全部生图后台协程（4K 主编排 _run_job_bg/_edit_bg 在此，改动务必人工冒烟）
+├── routes_previews.py   快速预览（NB2 Lite 1K，不进队列不写记录）
+├── routes_library.py    上传/历史小样、记录列表与揭示、收藏/评审、导出、用量
+├── routes_config.py     配方/失败库/连通性/配置/Omakase/模型与选项词表
+├── routes_tools.py      识色 + 地板可视化渲染 + 全图校色
+├── routes_inpaint.py    生成式修补（两段式抽卡）
+├── server_state.py      全部可变运行时状态：JOBS/PREVIEWS/INPAINTS 注册表、按模型信号量、spawn；路由经 `state.X` 访问（测试注入唯一入口）
+├── server_schemas.py    27 个 Pydantic 请求模型（前端契约，改字段先确认前端）
+├── server_helpers.py    路由共享工具：URL 映射、job_view、路径守卫(require_*)、上传落盘、导出响应
+├── image_ops.py         纯 PIL：mask 解码/羽化、EXIF 归一化、修补候选落盘
+├── task_registry.py     泛型 TaskRegistry：dict+锁+取消集合+trim 四件套的统一容器（jobs/previews/inpaints 共用）
 ├── __main__.py          `python -m Floor_engine_server` → 退役提示桩（旧 webui 入口已退役；打印新启动方式后 exit 1）
 ├── __init__.py          包说明 / 公共导出指引
 │
-│   ── 引擎模块（全部 headless，import 不会拉起 nicegui，新旧共用）──
+│   ── 引擎模块（全部 headless，import 不会拉起任何 UI 框架）──
 ├── config.py            路径/配置中心：BASE_DIR、目录常量、engine_config.json 读写、key/proxy/provider/速度档/failover/TLS/Omakase
 ├── models.py            纯数据：JobRecord(作业)、TaskParams(参数)、compute_final_status、候选图导航(add/nav_candidate)
-├── prompt_data.py       海量选项表（STYLES/LIGHTINGS/ANGLES/FLOOR_TONES/ROOM_TYPES/CN_*…）+ 识色 analyze_floor_tone + 中英翻译
-├── prompts.py           提示词组装：save_task_files_html(35+ 参数 → 英文 prompt + 落 JSON/PNG)，4 种工作流各一个 builder
+├── prompt_data.py       纯数据层：海量选项表（STYLES/LIGHTINGS/ANGLES/FLOOR_TONES/ROOM_TYPES/CN_*/工作流词表…）+ 中英翻译
+├── prompts.py           提示词组装：save_task_files_html(兼容签名) → 五阶段流水线（翻译推导→材质指令→四模式组装→Pro 派生→落盘）
+├── image_prep.py        提示词管线图像预处理：小样 ICC→sRGB 落盘 + 识色 analyze_floor_tone
 ├── sd_prompts.py        SD 3.5 专属正/负提示词编译器；只读 TaskParams，不读取/改写 Gemini prompt
 ├── recipes.py           智能配方：recommend_recipes(按色调推荐) + pick_option_key(关键词→具体选项)
 ├── custom_recipes.py    “我的配方”：运行期 JSON 存储及增删改查
-├── api.py               模型调用：Google/Fal 生图、FAL 持久队列、SD3.5 IP-Adapter、AuraSR、磨缝二改与本地颜色处理
-├── records.py           持久化：队列、记录、生成上下文、收藏/评审、复盘聚合、用量成本、HTML/PPTX 导出
+├── api.py               外部模型客户端：Google/Fal 生图、FAL 持久队列、SD3.5 IP-Adapter、AuraSR、磨缝二改、生成式修补调度
+├── color_match.py       本地色彩算法（纯 numpy/PIL）：LAB Reinhard 迁移、区域识色诊断、高级校色及 4K 分片变体
+├── records.py           记录持久化核心：队列状态、记录 CRUD、结果图落盘、收藏/评审、复盘聚合、迁移/揭示
+├── usage_stats.py       用量统计：模式×模型×线路计数 + 成本估算（全程吞异常，绝不拖垮生图）
+├── exports.py           导出层：记录 HTML 对照文档、客户提案 PPTX（单记录/收藏夹）
+├── reveal_security.py   提示词混淆(XOR，非加密) + 揭示密码校验；records 单向依赖它
 ├── failure_kb.py        失败知识库：FAILURE_RULES + classify_failure(错误串→{title,cause,action})
+├── floor_renderer.py    本地地板透视渲染引擎（OpenCV，供 /api/floor-visualize）
 ├── themes.py            旧 UI 主题 CSS 生成（曾供 NiceGUI；webui 退役后已无运行期消费者，留待后续清理）
 ├── logging_setup.py     logger（输出到 test/app_local_save.log）
 │
 ├── web/                 ★ Next.js 前端（见 §五）
-├── tests/               pytest：golden 提示词、安全硬化、校色与非校色新功能回归
+├── tests/               pytest：golden 提示词、66 端点路由契约快照、TaskRegistry/用量直测、安全硬化、校色回归
 ├── assets/              bevel_ref*.jpg（倒角参考图）、logo.svg —— 入库
 ├── requirements.txt     Python 依赖
 ├── 开发日志.md          每次会话改了啥、为什么（最新在最上，接手前先读）
@@ -149,23 +172,23 @@ Floor_engine_server/
 
 ---
 
-## 四、后端：`server_api.py`
+## 四、后端：`server_api.py` 组装的模块群
 
 ### 4.1 运行约束
-- **必须单 worker**：`_job_history`、并发信号量都是**进程内**状态，多 worker 不共享。直接 `uvicorn.run(app, ...)`（不传 workers）即单进程。
+- **必须单 worker**：`server_state` 里的 JOBS 注册表、并发信号量都是**进程内**状态，多 worker 不共享。直接 `uvicorn.run(app, ...)`（不传 workers）即单进程。
 - 端口可用 `FLOOR_API_PORT` 覆盖；host 仅支持本机 `127.0.0.1`，本版本不提供远程认证。
 - **CORS**：`FLOOR_API_CORS` 默认放行 `http://localhost:3000,http://127.0.0.1:3000`。**换前端端口必须改这个环境变量**，否则浏览器跨域被拦（后端能 200，但 JS fetch 拿不到）。
 
 ### 4.2 作业生命周期
 ```
-POST /api/jobs ──秒回 job_id──▶ 后台 asyncio task(_run_job_bg)
-                                  │  _task_prep_lock 内 save_task_files_html 组装提示词
-                                  │  _model_semaphores 按 b2/pro/sd35 分模型限并发
+POST /api/jobs ──秒回 job_id──▶ 后台 asyncio task(routes_jobs._run_job_bg)
+                                  │  state.task_prep_lock 内 save_task_files_html 组装提示词
+                                  │  state.model_semaphores 按 b2/pro/sd35 分模型限并发
                                   │  B2/Pro → call_image_generate；SD → FAL queue + IP-Adapter + AuraSR
-                                  │  出一张 _api_write_to_record 落盘一张；stage 文本实时更新
-前端 GET /api/jobs/{id}/stream ◀─ SSE 每秒推 _job_view 快照，进终态推 done 事件并关闭
+                                  │  出一张 api_write_to_record 落盘一张；stage 文本实时更新
+前端 GET /api/jobs/{id}/stream ◀─ SSE 每秒推 job_view 快照，进终态推 done 事件并关闭
 ```
-进程内状态（都在 `_job_lock` 下读写）：`_job_history`(列表，新在前)、`_model_semaphores`(b2/pro/sd35 各一把，lifespan 里按配置建)、`_cancel_jobs`(单作业取消集合)、`_cancel_generation`(全局取消计数器)。新任务以 `model_targets` + `model_runs` 为真源，旧 `model_filter`/B2/Pro 固定字段仅作兼容；终态由 `compute_runs_final_status` 汇总。
+进程内状态全部在 `server_state.py`：`JOBS`/`PREVIEWS`/`INPAINTS` 三个 `TaskRegistry` 实例（成员管理内部加锁；单任务取消集合 + 全局取消代次是 JOBS 的方法）、`model_semaphores`(b2/pro/sd35/inpaint 各一把，lifespan 里 `init_runtime()` 建)。新任务以 `model_targets` + `model_runs` 为真源，旧 `model_filter`/B2/Pro 固定字段仅作兼容；终态由 `compute_runs_final_status` 汇总。
 
 ### 4.3 端点目录（50+ API 路由）
 - **作业** `/api/jobs`：`POST`建（`model_targets` 可多选 b2/pro/sd35）· `GET`列 · `GET {id}` · `GET {id}/stream`(SSE) · `POST {id}/cancel` · `POST cancel-all` · `POST clear-completed`(清完成) · `POST {id}/delete`(删单条) · `POST {id}/retry` · `POST {id}/sd-upscale`(仅重试 AuraSR) · `GET {id}/result?model=&idx=`(候选切换) · `POST {id}/polish`(磨缝) · `POST {id}/edit`(二改) · `POST {id}/regen?n=`(重抽/多抽)。
@@ -181,7 +204,10 @@ POST /api/jobs ──秒回 job_id──▶ 后台 asyncio task(_run_job_bg)
 - **静态/缩略图**：`GET /thumb/{uploads,outputs}`(懒生成 JPEG)；`/outputs`、`/uploads` 挂目录服原图。
 
 ### 4.4 加新端点的范式
-仿 `cancel_all` / `clear_completed`：改 `_job_history` 要持 `_job_lock`；**`_persist_jobs()` 必须在锁外调**（它内部会再取同一把锁，threading.Lock 不可重入，锁内调会死锁）。业务逻辑能复用引擎就复用（导出→`records.export_*`、识色→`prompt_data.analyze_floor_tone`、配方→`recipes.*`）。
+1. 选对应的 `routes_*.py` 加 `@router.xxx` 端点（server_api.py 不加业务端点）;请求模型放 `server_schemas.py`。
+2. 队列状态经 `state.JOBS` 的方法走（add/get/pop/snapshot/request_cancel…);复合操作（检查+改状态必须原子）用 `state.JOBS.locked()`，**块内禁止再调 persist()/add() 等加锁方法**（threading.Lock 不可重入，会死锁）——`JOBS.persist()` 一律在 locked() 外调。
+3. 新端点会让 `tests/test_route_contract.py` 报"未入册"，把 (path, method) 加进 EXPECTED_ROUTES 即完成登记。
+4. 业务逻辑能复用引擎就复用（导出→`exports.export_*`、识色→`image_prep.analyze_floor_tone`、配方→`recipes.*`、校色→`color_match.*`）。
 
 ### 4.5 SD 3.5 独立线路
 - 仅“纯效果图”，必须开启 `sd_enabled` 且配置 Fal Key。
@@ -192,7 +218,7 @@ POST /api/jobs ──秒回 job_id──▶ 后台 asyncio task(_run_job_bg)
 
 ### 4.6 生成式修补（移除已可用；添加仍为实验能力）
 - **能力**：画笔涂抹 mask → 移除自动外扩覆盖边缘/阴影；添加默认 grow=0，内部羽化确保涂抹区外逐像素不变。三处入口：任务结果、历史记录、房间图生成前清理家具；房间 JPEG 先按 EXIF 方向归一化，避免选区错位。
-- **管线**（`api.call_image_inpaint` 统一调度）：`_prepare_inpaint_masks` 拆出二值 `engine_mask` 与最终 `blend_mask` → 按模式裁上下文（移除偏局部清晰度，添加扩大透视上下文，长边上限 2048）→ 引擎 → `_stitch_inpaint_result` 贴回 → 独立 blend mask 合成。默认 ComfyUI 模板不再重复 GrowMask；自定义 workflow 收到的也是已处理二值 mask。
+- **管线**（`api.call_image_inpaint` 统一调度）：`image_ops.prepare_inpaint_masks` 拆出二值 `engine_mask` 与最终 `blend_mask` → 按模式裁上下文（移除偏局部清晰度，添加扩大透视上下文，长边上限 2048）→ 引擎 → `_stitch_inpaint_result` 贴回 → 独立 blend mask 合成。默认 ComfyUI 模板不再重复 GrowMask；自定义 workflow 收到的也是已处理二值 mask。
 - **引擎**：移除默认 `bria-eraser`（可选 finegrain/lama/flux-fill/gemini-mark）；添加默认 `flux-fill`（可选 qwen-inpaint/gemini-mark）。**qwen-inpaint 实测无法做移除**（指令编辑类模型强条件于原图，mask 对模型不可见），只保留在添加列表。`inpaint_provider=comfyui` 时全部走本地 ComfyUI 实例（workflow 模板占位符注入，内置模板在 `assets/comfy_workflows/`）。
 - **提示词与计费**：FLUX/Qwen/Gemini/ComfyUI 使用按模式编译的边界、透视、光照和材质保持指令；BRIA/Finegrain/LaMa 不读取提示词且没有可控 seed，服务端把多候选请求降为 1 次。usage 按实际候选调用数记录，取消不记失败、已出图仍记成功，本地 ComfyUI 归 `local` 且默认 API 成本为 0；apply 不计费。候选以无损 PNG 存 `output_files/_inpaint_candidates/`，apply/cancel/trim/关闭弹窗时清理；同时最多 3 个 running/applying 会话，总表最多 20 条，超限返回 429。
 - **恢复边界**：修补会话仍是进程内临时状态，不承诺服务重启恢复；需要持久恢复的是主作业与 SD/AuraSR Fal 队列句柄。
@@ -271,8 +297,8 @@ web/src/
 ## 七、开发工作流
 
 **加一个功能**（典型全链路）：
-1. （如需）引擎逻辑落 `records.py`/`prompts.py`/`api.py` 等（headless，别引 nicegui）。
-2. `server_api.py` 加端点（复用引擎；改队列持锁、`_persist_jobs` 在锁外）。
+1. （如需）引擎逻辑落 `records.py`/`prompts.py`/`api.py`/`color_match.py` 等（headless，别引 UI 框架）。
+2. 对应 `routes_*.py` 加端点（范式见 §4.4：schemas 进 `server_schemas.py`、队列走 `state.JOBS`、契约测试登记新端点）。
 3. `web/src/lib/api.ts` 加封装 + `types.ts` 加类型。
 4. 在对应页面/组件接 UI（沿用 `dc-ui` 基元与 `globals.css` 令牌）。
 5. **验证**：`cd web && npm run lint && npm run build`；后端 `.venv/bin/python -m pytest`；必要时再做 `python -c "import Floor_engine_server.server_api"` 冒烟与无头截图比对（§六.6）。注意 `next build` 不替你跑 ESLint。
@@ -302,4 +328,4 @@ web/src/
 
 ## 十、一句话回顾
 
-**改业务** → 引擎模块（headless，新仓库这份）；**改接口** → `server_api.py`；**改界面** → `web/`；**换主题** → `web/.../globals.css` + `ThemeProvider.tsx`。旧 `webui.py` 已退役，UI 只有 `web/` 一套。启动就一句：跑 `test/` 下的一键启动脚本（Windows `.bat` / Linux·macOS `.sh`）。
+**改业务** → 引擎模块（headless，新仓库这份）；**改接口** → `routes_*.py`（server_api.py 只组装）；**改界面** → `web/`；**换主题** → `web/.../globals.css` + `ThemeProvider.tsx`。旧 `webui.py` 已退役，UI 只有 `web/` 一套。启动就一句：跑 `test/` 下的一键启动脚本（Windows `.bat` / Linux·macOS `.sh`）。

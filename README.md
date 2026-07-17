@@ -37,8 +37,8 @@
                  └────────────────────────────┼─────────────────┘
                                               ▼
                  ┌──────────────────────────────────────────────┐
-                 │  FastAPI 无头后端 (server_api.py, :7870)       │  作业队列 / SSE
-                 │  作业队列 · SSE 进度 · 静态图 · 缩略图           │  静态图 / 缩略图
+                 │  FastAPI 无头后端 (:7870, server_api.py 组装)   │  作业队列 / SSE
+                 │  业务路由 routes_* · 作业队列 · SSE · 缩略图     │  静态图 / 缩略图
                  └────────────────────────────┬─────────────────┘
                                               ▼
                  ┌──────────────────────────────────────────────┐
@@ -171,19 +171,30 @@ cd Floor_engine_server/web && npm run dev        # → http://localhost:3000
 
 ```
 Floor_engine_server/            # 后端 Python 包（= 本仓库根）
-├── server_api.py               # FastAPI 无头服务：端点 + 作业队列 + SSE + 静态/缩略图
+│  ── Web 层 ──
+├── server_api.py               # FastAPI app 组装器（lifespan/CORS/静态图/前端挂载 + include_router）
+├── routes_*.py                 # 六个业务路由：jobs(队列+生图协程)/previews/library/config/tools/inpaint
+├── server_state.py             # 进程内状态：任务注册表 ×3、按模型并发信号量
+├── server_schemas.py           # 全部 HTTP 请求模型（前端契约）
+├── server_helpers.py           # 路由共享工具：URL 映射、路径守卫、上传落盘
+├── image_ops.py / task_registry.py  # 纯 PIL mask 处理 / 泛型任务注册表容器
+│  ── 引擎层（headless）──
 ├── config.py                   # 路径/配置中心（BASE_DIR、engine_config.json 读写）
 ├── models.py                   # 数据模型：作业、参数、状态
-├── prompt_data.py              # 选项表（风格/灯光/机位/房型/色调…）+ 识色 + 中英翻译
-├── prompts.py                  # 提示词组装（参数 → 英文 prompt + 落 JSON/PNG）
+├── prompt_data.py              # 纯数据：选项表（风格/灯光/机位/房型/色调…）+ 中英翻译
+├── prompts.py                  # 提示词组装：五阶段流水线（参数 → 英文 prompt + 落 JSON/PNG）
+├── image_prep.py               # 小样 ICC→sRGB 预处理 + 识色 analyze_floor_tone
 ├── sd_prompts.py               # SD 3.5 独立正/负提示词编译器（不改 Gemini 资产）
 ├── recipes.py                  # 智能配方推荐
 ├── custom_recipes.py           # “我的配方”运行期 CRUD
-├── api.py                      # 图像模型调用（Gemini / Fal / 磨缝二改 / 生成式修补 / 本地校色 / 连通测试）
-├── records.py                  # 记录持久化、生成上下文、评审聚合、用量成本、导出 HTML/PPTX
+├── api.py                      # 外部模型调用（Gemini / Fal / 磨缝二改 / 生成式修补 / 连通测试）
+├── color_match.py              # 本地色彩算法（LAB 迁移 / 识色诊断 / 高级校色）
+├── records.py                  # 记录持久化核心：队列状态、记录 CRUD、收藏/评审
+├── usage_stats.py / exports.py / reveal_security.py  # 用量统计 / HTML·PPTX 导出 / 提示词混淆与揭示
 ├── failure_kb.py               # 失败知识库（错误分类与建议）
+├── floor_renderer.py           # 本地地板透视渲染（OpenCV）
 ├── web/                        # Next.js 前端
-├── tests/                      # pytest（提示词回归 + 安全硬化 + 新功能回归）
+├── tests/                      # pytest（golden 提示词 + 66 端点契约快照 + 安全硬化 + 回归）
 └── requirements.txt
 ```
 
@@ -199,7 +210,7 @@ Floor_engine_server/            # 后端 Python 包（= 本仓库根）
 
 常用命令：
 ```bash
-# 后端测试（当前 132 项）
+# 后端测试（当前 170 项）
 .venv/bin/python -m pytest
 
 # 前端 lint + 类型/生产构建
