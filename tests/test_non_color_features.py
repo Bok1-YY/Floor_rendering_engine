@@ -9,7 +9,7 @@ from pptx import Presentation
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 
 from Floor_engine_server import server_schemas, server_helpers, routes_config, routes_library
-from Floor_engine_server import config, records, server_api
+from Floor_engine_server import config, records, server_api, usage_stats, exports
 
 
 def test_pptx_brand_logo_uses_real_slide_units(tmp_path):
@@ -17,7 +17,7 @@ def test_pptx_brand_logo_uses_real_slide_units(tmp_path):
     output = tmp_path / "branded.pptx"
     Image.new("RGB", (1000, 400), (180, 40, 30)).save(logo)
 
-    msg = records._build_pptx([], str(output), "测试", {"logo_path": str(logo)})
+    msg = exports._build_pptx([], str(output), "测试", {"logo_path": str(logo)})
 
     assert msg.startswith("✅")
     prs = Presentation(output)
@@ -46,12 +46,12 @@ def test_usage_prices_lite_separately_and_marks_partial_total(tmp_path, monkeypa
             },
         },
     }), encoding="utf-8")
-    monkeypatch.setattr(records, "_USAGE_STATS_FILE", str(usage_file))
+    monkeypatch.setattr(usage_stats, "_USAGE_STATS_FILE", str(usage_file))
 
-    summary = records.load_usage_summary({"B2": 1.0, "Lite": 0.1})
+    summary = usage_stats.load_usage_summary({"B2": 1.0, "Lite": 0.1})
     rows = {(row["operation"], row["model"]): row for row in summary["rows"]}
 
-    assert records._short_model_label("NB2 Lite") == "Lite"
+    assert usage_stats._short_model_label("NB2 Lite") == "Lite"
     assert rows[("preview", "Lite")]["cost"] == 0.5
     assert rows[("generate", "B2")]["cost"] == 2.0
     assert rows[("generate", "Pro")]["cost"] is None
@@ -62,10 +62,10 @@ def test_usage_prices_lite_separately_and_marks_partial_total(tmp_path, monkeypa
 
 def test_local_inpaint_usage_is_not_charged_as_google(tmp_path, monkeypatch):
     usage_file = tmp_path / "usage.json"
-    monkeypatch.setattr(records, "_USAGE_STATS_FILE", str(usage_file))
+    monkeypatch.setattr(usage_stats, "_USAGE_STATS_FILE", str(usage_file))
 
-    records.record_usage("纯效果图", "ComfyUI", "comfyui", True, "inpaint")
-    summary = records.load_usage_summary({})
+    usage_stats.record_usage("纯效果图", "ComfyUI", "comfyui", True, "inpaint")
+    summary = usage_stats.load_usage_summary({})
 
     assert summary["rows"] == [{
         "mode": "纯效果图", "operation": "inpaint", "model": "ComfyUI",

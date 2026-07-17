@@ -18,8 +18,9 @@ from .image_ops import (
 from .models import (
     update_job, ensure_model_runs, add_model_candidate, compute_runs_final_status,
 )
+from .usage_stats import record_usage
 from .records import (
-    record_usage, save_api_result_png, api_write_to_record,
+    save_api_result_png, api_write_to_record,
     append_edited_result_to_record, load_records_file, safe_output_path, b64_to_pil,
 )
 from .server_helpers import (

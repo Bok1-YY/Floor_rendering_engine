@@ -25,8 +25,9 @@ from .prompt_data import (
 from .image_prep import prepare_swatch_png
 from .records import (
     get_json_path, load_records_file, save_records_file,
-    img_to_b64, obfuscate_text, record_file_lock,
+    img_to_b64, record_file_lock,
 )
+from .reveal_security import obfuscate_text
 
 # 地板整体颜色锁定指令：强制生成图地板的整体颜色与上传小样完全一致。
 # 取代旧的"提取色码注入 + 生成后自动校色"方案，改由提示词直接、人眼可校地约束模型。

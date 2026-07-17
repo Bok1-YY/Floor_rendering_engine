@@ -5,14 +5,15 @@ import os
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
 from .config import MAIN_OUTPUT_DIR, logger, update_config, get_usage_prices, get_pptx_branding
+from .exports import export_html_from_json, export_pptx_from_json, export_favorites_pptx
 from .records import (
     scan_json_files, load_records_file, get_record_labels, reveal_prompt_fn,
     list_recent_floor_swatches, delete_record_entry, delete_result_image,
     toggle_result_favorite, update_result_review, safe_output_path,
-    load_usage_summary, load_review_summary, collect_review_gallery,
-    export_html_from_json, export_pptx_from_json, export_favorites_pptx,
+    load_review_summary, collect_review_gallery,
     migrate_record_file,
 )
+from .usage_stats import load_usage_summary
 from .server_helpers import (
     to_url, thumb_url, result_thumb_url, serve_export, PPTX_MIME,
     require_record_json_path, save_upload, remove_managed_logo,

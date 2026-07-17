@@ -34,8 +34,9 @@ from .models import (
     compute_runs_final_status, legacy_filter_from_targets,
 )
 from .prompts import save_task_files_html
+from .usage_stats import record_usage
 from .records import (
-    record_usage, save_api_result_jpg, save_api_result_png, api_write_to_record,
+    save_api_result_jpg, save_api_result_png, api_write_to_record,
     safe_output_path, load_records_file, b64_to_pil,
     append_edited_result_to_record, attach_generation_context,
 )

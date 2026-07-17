@@ -11,7 +11,8 @@ from .api import call_gemini_generate, analyze_style_image
 from .config import logger, load_config, LITE_PREVIEW_MODEL, get_bevel_ref_image, extract_clean_prompt
 from .models import TaskParams, task_params_to_kwargs
 from .prompts import save_task_files_html
-from .records import record_usage, save_api_result_jpg
+from .records import save_api_result_jpg
+from .usage_stats import record_usage
 from .server_helpers import to_url, result_thumb_url, require_upload_image_path, panel_require_second_image
 from .server_schemas import PreviewRequest
 

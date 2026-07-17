@@ -262,7 +262,8 @@ web/src/
 5. **环境文件**：`.env.development` 默认指向后端 7870，`.env.production` 留空以使用同源 API。
 6. **无头截图自检法**（验证视觉时用；实测）：dev 服务器在无头浏览器里因 HMR 握手失败**不 hydrate**，截不到数据态；要截带数据的页面需 **prod build + 隔离后端(改 `FLOOR_API_CORS` 放行测试端口) + Node（v22+，内置 WebSocket）走 CDP 真等几秒再 captureScreenshot**。隔离后端与正式实例共享 `.queue_state.json`，测试时**只读、别触发清除/删除**，免得误删真实任务。
 7. **设计稿落地**：照 mockup 的**实际视觉**还原（配色/胶囊/卡片/分段），别只搬报告文字；落地后无头截图比对设计稿。
-8. **`webui.py` 已退役删除**：UI 只有 `web/` 一套，新功能只加 `server_api.py` + `web/`。
+8. **`webui.py` 已退役删除**：UI 只有 `web/` 一套。2026-07 重构后新端点加对应 `routes_*.py`（server_api.py 只做组装），共享状态进 `server_state.py`、请求模型进 `server_schemas.py`。
+10. **TODO（技术债记账）**：records/prompt_data 等逻辑层仍直接返回带 emoji 的 UI 文案（`✅/❌/⚠️` 前缀是前端契约的一部分）；彻底"逻辑层去 UI 化"需要前端同步改判定逻辑，未排期。`_compose_prompt`（prompts.py，~330 行）保留为单函数是刻意决定：按工作流分支再拆会给每个分支挂大量解包样板，收益为负。
 9. **Canvas 跨源污染**：开发前端 `:3000` 画入后端 `:7870` 图片后，Canvas 可能能显示却不能 `toDataURL()`/`getImageData()`；结果放大必须复用 `ImageZoom` 的原图+结果图层，不要重新引入 Canvas 导出。生产同源也要保持这条，避免 `file://` 调试再次崩溃。
 
 ---

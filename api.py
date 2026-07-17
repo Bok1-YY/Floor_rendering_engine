@@ -35,6 +35,16 @@ from .records import (
     img_to_b64, b64_to_pil, save_api_result_jpg, api_write_to_record,
 )
 
+
+def _notify_stage(on_stage, txt) -> None:
+    """进度回调守护:回调只是 UI 装饰性通知,它抛任何异常都不允许拖垮付费生图主流程。"""
+    if on_stage:
+        try:
+            on_stage(txt)
+        except Exception as ex:
+            logger.debug(f"[进度回调] 忽略回调异常: {ex}")
+
+
 _IMAGE_MIME = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png", "webp": "image/webp"}
 
 # 上传前压缩默认参数：大图转 JPEG 并限制长边，避免走代理时上传体积过大导致写超时
@@ -154,9 +164,7 @@ def call_gemini_generate(api_key: str, model_id: str, prompt_text: str, image_pa
     - 返回 (PIL.Image, None) 或 (None, 错误字符串)，契约与旧版一致。
     """
     def _stage(txt):
-        if on_stage:
-            try: on_stage(txt)
-            except Exception: pass
+        _notify_stage(on_stage, txt)
 
     logger.info(
         f"[API生成] start model={model_id}, size={image_size}, ar={aspect_ratio}, "
@@ -461,10 +469,7 @@ def _call_fal_json(api_key: str, endpoint: str, payload: dict, *, on_stage=None,
         if should_cancel and should_cancel():
             return None, "已取消"
         if on_stage:
-            try:
-                on_stage("📡 连接中…" if attempt == 0 else f"🔁 网络重试 {attempt}/{max_attempts - 1}")
-            except Exception:
-                pass
+            _notify_stage(on_stage, "📡 连接中…" if attempt == 0 else f"🔁 网络重试 {attempt}/{max_attempts - 1}")
         try:
             response = _req.post(
                 f"https://fal.run/{endpoint}", json=payload, headers=headers,
@@ -522,9 +527,7 @@ def _call_fal_queue_json(api_key: str, endpoint: str, payload: dict, *, on_stage
 
     queued = dict(resume_handle or {})
     if queued:
-        if on_stage:
-            try: on_stage("🔄 恢复已有 Fal 队列任务…")
-            except Exception: pass
+        _notify_stage(on_stage, "🔄 恢复已有 Fal 队列任务…")
     else:
         try:
             # 提交响应丢失时无法判断服务器是否已接单，因此绝不自动重交；由用户显式重试。
@@ -567,8 +570,8 @@ def _call_fal_queue_json(api_key: str, endpoint: str, payload: dict, *, on_stage
             if cancel_url.startswith("https://queue.fal.run/"):
                 try:
                     session.post(cancel_url, headers=headers, timeout=(10, 30), verify=verify)
-                except Exception:
-                    pass
+                except Exception as ex:
+                    logger.debug(f"[Fal队列] 取消请求发送失败(尽力而为): {ex}")
             return None, "已取消"
         try:
             status_response = session.get(
@@ -584,8 +587,7 @@ def _call_fal_queue_json(api_key: str, endpoint: str, payload: dict, *, on_stage
             if status != last_status and on_stage:
                 label = {"IN_QUEUE": "⏳ Fal 排队中…", "IN_PROGRESS": "🎨 Fal 推理中…"}.get(status)
                 if label:
-                    try: on_stage(label)
-                    except Exception: pass
+                    _notify_stage(on_stage, label)
             last_status = status
             if status == "COMPLETED":
                 result_response = session.get(
@@ -658,9 +660,7 @@ def call_fal_sd35_generate(api_key: str, positive_prompt: str, negative_prompt: 
     }
     if seed is not None:
         payload["seed"] = int(seed)
-    if on_stage:
-        try: on_stage("🎨 SD 3.5 生成中…")
-        except Exception: pass
+    _notify_stage(on_stage, "🎨 SD 3.5 生成中…")
     data, err = _call_fal_queue_json(
         api_key, SD35_ENDPOINT, payload, on_stage=on_stage, should_cancel=should_cancel,
         resume_handle=queue_handle, on_submitted=on_queue_submitted)
@@ -673,9 +673,7 @@ def call_fal_sd35_generate(api_key: str, positive_prompt: str, negative_prompt: 
 def call_fal_aura_upscale(api_key: str, image, *, on_stage=None, should_cancel=None,
                           queue_handle=None, on_queue_submitted=None):
     """AuraSR 4× 保守超分。返回 (PIL, error)。"""
-    if on_stage:
-        try: on_stage("🔎 4K 超分中…")
-        except Exception: pass
+    _notify_stage(on_stage, "🔎 4K 超分中…")
     payload = {
         "image_url": _pil_to_data_uri(image),
         "upscale_factor": 4,
@@ -804,9 +802,7 @@ def call_fal_qwen_inpaint(api_key: str, image, mask, prompt: str, *, mode: str =
     schema 已经 OpenAPI 核实：prompt/image_url/mask_url 必填，输出复数 images[]。
     remove 模式注入移除指令（用户 prompt 作补充说明拼在后面）。
     """
-    if on_stage:
-        try: on_stage("🖌️ Qwen 修补中…")
-        except Exception: pass
+    _notify_stage(on_stage, "🖌️ Qwen 修补中…")
     text = (prompt or "").strip()
     if mode == "remove":
         text = DEFAULT_QWEN_REMOVE_INSTRUCTION + (f" Additional guidance: {text}" if text else "")
@@ -838,9 +834,7 @@ def call_gemini_mark_inpaint(api_key: str, image, mask, prompt: str, *, mode: st
     输出是整图重生成——选区外漂移由调度器的羽化合成回贴消除，两者恰好互补。
     复用 call_gemini_edit 的完整重试/取消机制。返回 (PIL, error)。
     """
-    if on_stage:
-        try: on_stage("🖌️ Gemini 标记修补中…")
-        except Exception: pass
+    _notify_stage(on_stage, "🖌️ Gemini 标记修补中…")
     # 标记图：mask≥128 处叠 α≈0.45 的红色
     overlay = Image.new("RGB", image.size, (255, 40, 40))
     alpha = mask.convert("L").point(lambda v: 115 if v >= 128 else 0)
@@ -882,9 +876,7 @@ def call_fal_mask_eraser(api_key: str, image, mask, *, model_key: str = "bria-er
     羽化灰度 mask 只用于本地合成回贴，不发给 eraser。
     """
     endpoint, mask_field, extra = _FAL_ERASER_MODELS.get(model_key, _FAL_ERASER_MODELS["bria-eraser"])
-    if on_stage:
-        try: on_stage("🧹 生成式移除中…")
-        except Exception: pass
+    _notify_stage(on_stage, "🧹 生成式移除中…")
     binary_mask = mask.convert("L").point(lambda v: 255 if v >= 128 else 0)
     payload = {
         "image_url": _pil_to_data_uri(image, fmt="JPEG"),
@@ -905,9 +897,7 @@ def call_fal_inpaint(api_key: str, image, mask, prompt: str, *, seed=None,
     image/mask 均为 PIL 且尺寸一致（FLUX Fill 硬性要求，由调用方 _prepare_inpaint_mask 保证）。
     image 走 JPEG q95 data URI 控制 POST 体积（4K PNG data URI 太大）；mask 黑白 PNG 压缩后极小。
     """
-    if on_stage:
-        try: on_stage("🖌️ 生成式修补中…")
-        except Exception: pass
+    _notify_stage(on_stage, "🖌️ 生成式修补中…")
     payload = {
         "prompt": prompt,
         "image_url": _pil_to_data_uri(image, fmt="JPEG"),
@@ -965,9 +955,7 @@ def call_comfyui_inpaint(base_url: str, image, mask, prompt: str, *, negative_pr
     session.trust_env=False 防内网请求被系统代理劫持（同 Fal 队列的处理）。
     """
     def _stage(txt):
-        if on_stage:
-            try: on_stage(txt)
-            except Exception: pass
+        _notify_stage(on_stage, txt)
 
     base = (base_url or "").strip().rstrip("/")
     if not base:
@@ -1048,8 +1036,8 @@ def call_comfyui_inpaint(base_url: str, image, mask, prompt: str, *, negative_pr
             try:
                 session.post(f"{base}/interrupt", timeout=(10, 30))
                 session.post(f"{base}/queue", json={"delete": [prompt_id]}, timeout=(10, 30))
-            except Exception:
-                pass
+            except Exception as ex:
+                logger.debug(f"[ComfyUI] 取消请求发送失败(尽力而为): {ex}")
             return None, "已取消", the_seed
         try:
             hist = session.get(f"{base}/history/{prompt_id}", timeout=(15, 45))
@@ -1200,9 +1188,7 @@ def call_fal_generate(api_key: str, model_id: str, prompt_text: str, image_path:
       不再发起新的(会计费的)Fal 请求。已在途的那一次无法召回,但本次若已拿到图仍会正常返回。
     """
     def _stage(txt):
-        if on_stage:
-            try: on_stage(txt)
-            except Exception: pass
+        _notify_stage(on_stage, txt)
 
     cfg = load_config()
     fal_map = cfg.get("fal_model_map") or FAL_MODEL_MAP
@@ -1402,9 +1388,7 @@ def call_image_generate(api_key: str, model_id: str, prompt_text: str, image_pat
     cancelled = bool(should_cancel and should_cancel())
     if auto and fal_key and not cancelled and _is_network_class_error(err):
         logger.warning(f"[生图调度] Google 直连网络类失败，自动转 Fal 备用线路 model={model_id}: {_redact_api_key(err)}")
-        if on_stage:
-            try: on_stage("🔁 直连失败，转 Fal 备用线路…")
-            except Exception: pass
+        _notify_stage(on_stage, "🔁 直连失败，转 Fal 备用线路…")
         fb_img, fb_err = call_fal_generate(fal_key, model_id, prompt_text, image_path, image_size,
                                            aspect_ratio, room_image_path, style_ref_image_path, on_stage, should_cancel,
                                            bevel_ref_image_path=bevel_ref_image_path)
@@ -1426,9 +1410,7 @@ def call_gemini_edit(api_key: str, model_id: str, edit_instruction: str, source_
     - should_cancel()：返回 True 表示任务已取消 → 立即停止后续重试，不再发起新的计费请求。
     """
     def _stage(txt):
-        if on_stage:
-            try: on_stage(txt)
-            except Exception: pass
+        _notify_stage(on_stage, txt)
     logger.info(
         f"[API二改] start model={model_id}, size={image_size}, ar={aspect_ratio}, "
         f"source_b64_len={len(source_image_b64 or '')}, instruction_len={len(edit_instruction or '')}"
@@ -1572,21 +1554,44 @@ _STYLE_ANALYZE_TIMEOUT = 60  # 单个文字模型的请求超时（秒）
 # 版本前缀随分析 prompt 走：改了 prompt 就 bump _STYLE_CACHE_VERSION，旧缓存自动失效。
 _STYLE_CACHE_FILE = os.path.join(MAIN_OUTPUT_DIR, ".style_analysis_cache.json")
 _STYLE_CACHE_VERSION = "v2"  # v2: 分析 prompt 改"如实描述照片本身"(去高端国际词偏置)+参照图改直接喂模型
-_style_cache_lock = threading.Lock()
-_style_cache = None  # 懒加载
 
 
-def _load_style_cache() -> dict:
-    global _style_cache
-    if _style_cache is None:
-        try:
-            with open(_STYLE_CACHE_FILE, "r", encoding="utf-8") as f:
-                _style_cache = json.load(f)
-            if not isinstance(_style_cache, dict):
-                _style_cache = {}
-        except Exception:
-            _style_cache = {}
-    return _style_cache
+class _StyleCache:
+    """磁盘风格分析缓存:懒加载 + 锁保护 + 原子写(收敛原先的模块级 global 状态)。"""
+
+    def __init__(self, path: str):
+        self._path = path
+        self._lock = threading.Lock()
+        self._data = None  # 懒加载
+
+    def _load(self) -> dict:
+        if self._data is None:
+            try:
+                with open(self._path, "r", encoding="utf-8") as f:
+                    self._data = json.load(f)
+                if not isinstance(self._data, dict):
+                    self._data = {}
+            except Exception:
+                self._data = {}
+        return self._data
+
+    def get(self, key: str) -> Optional[str]:
+        with self._lock:
+            return self._load().get(key)
+
+    def put(self, key: str, text: str) -> None:
+        with self._lock:
+            c = self._load(); c[key] = text
+            try:
+                tmp = self._path + ".tmp"
+                with open(tmp, "w", encoding="utf-8") as f:
+                    json.dump(c, f, ensure_ascii=False)
+                os.replace(tmp, self._path)
+            except Exception as e:
+                logger.warning(f"[参照模式] 风格分析缓存写入失败: {e}")
+
+
+_style_cache = _StyleCache(_STYLE_CACHE_FILE)
 
 
 def _style_cache_key(raw_bytes: bytes) -> str:
@@ -1594,20 +1599,11 @@ def _style_cache_key(raw_bytes: bytes) -> str:
 
 
 def _style_cache_get(key: str) -> Optional[str]:
-    with _style_cache_lock:
-        return _load_style_cache().get(key)
+    return _style_cache.get(key)
 
 
 def _style_cache_put(key: str, text: str) -> None:
-    with _style_cache_lock:
-        c = _load_style_cache(); c[key] = text
-        try:
-            tmp = _STYLE_CACHE_FILE + ".tmp"
-            with open(tmp, "w", encoding="utf-8") as f:
-                json.dump(c, f, ensure_ascii=False)
-            os.replace(tmp, _STYLE_CACHE_FILE)
-        except Exception as e:
-            logger.warning(f"[参照模式] 风格分析缓存写入失败: {e}")
+    return _style_cache.put(key, text)
 
 
 def analyze_style_image(api_key: str, image_path: str) -> Tuple[str, Optional[str]]:
