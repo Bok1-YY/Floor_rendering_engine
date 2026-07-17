@@ -18,9 +18,9 @@ from .image_ops import decode_floor_mask, FLOOR_PREVIEW_MAX_SIDE
 from .models import (
     update_job, ensure_model_runs, add_model_candidate, compute_runs_final_status,
 )
+from .image_prep import analyze_floor_tone
 from .prompt_data import (
     FLOOR_TONES, STYLES, LIGHTINGS, ANGLES, RESOLUTIONS, ASPECT_RATIOS,
-    analyze_floor_tone,
 )
 from .recipes import recommend_recipes, pick_option_key
 from .records import (

@@ -2,8 +2,8 @@ import os
 import re
 import time
 import uuid
+from types import SimpleNamespace
 
-from PIL import Image
 
 from .config import (
     BASE_DIR, MAIN_OUTPUT_DIR,
@@ -20,8 +20,9 @@ from .prompt_data import (
     CN_ROOM_TYPE_MAP, CN_DELIVERY_MAP,
     CN_SPACE_FEATURES, CN_FACILITIES,
     build_overseas_realism_layer, build_cn_layout_guidance,
-    convert_to_srgb, get_srgb_save_kwargs,
+
 )
+from .image_prep import prepare_swatch_png
 from .records import (
     get_json_path, load_records_file, save_records_file,
     img_to_b64, obfuscate_text, record_file_lock,
@@ -169,42 +170,38 @@ PANEL_NEGATIVE = (
     "underexposed lighting"
 )
 
-def save_task_files_html(workflow_mode, model_choice, image_path, continent, country, city, neighborhood, property_type, style_type, room_type, view, lighting, pet_type, pet_action, pet_focus, angle, aspect_ratio, resolution, glossiness, seam_type, avoid_items, floor_size, custom_addition, floor_tone, market_furniture, last_image_path,
-                         cn_mode=False, cn_developer="── 不指定 ──", cn_city="上海",
-                         cn_tier="── 不指定 ──", cn_unit_type="── 不指定 ──",
-                         cn_delivery="🏆 样板间 / 展示单位",
-                         cn_room_type="客餐厅一体", cn_view="自然通透景观",
-                         cn_space_features=None, cn_facilities=None,
-                         style_ref_correction="", style_analysis_text="", scene_override="",
-                         panel_submode="再设计", panel_size="", persist=True):
-    if not image_path: return None, "⚠️ 请上传图片", "", "", "", "", "", ""
-    json_path, base_name, target_dir = get_json_path(image_path)
-    png_path = os.path.join(target_dir, f"{base_name}_优化图.png")
+def _derive_translations(p, v):
+    """翻译与指令推导:位置/房型/风格/工艺/光影/镜头/避免项 → 全部 en_* 中间变量。
 
-    # ── 图片预处理（含 ICC 色彩空间转换）──────────────────────────────
-    if image_path != last_image_path or not os.path.exists(png_path):
-        try:
-            img = Image.open(image_path)
-            icc_profile = img.info.get('icc_profile')
-            if img.mode in ('RGBA', 'LA'):
-                bg = Image.new('RGB', img.size, (255, 255, 255))
-                bg.paste(img, mask=img.split()[3] if img.mode == 'RGBA' else img.split()[1]); img = bg
-            elif img.mode == 'P':
-                img = img.convert('RGBA')
-                bg = Image.new('RGB', img.size, (255, 255, 255)); bg.paste(img, mask=img.split()[3]); img = bg
-            elif img.mode not in ('RGB', 'L', 'CMYK'):
-                img = img.convert('RGB')
-            img = convert_to_srgb(img, icc_profile)
-            # 兜底：PNG 不支持 CMYK 等模式，保存前强制转为 RGB（无 ICC 的 CMYK 图会走到这里）
-            if img.mode not in ('RGB', 'L'):
-                img = img.convert('RGB')
-            img.thumbnail((4096, 4096), Image.Resampling.LANCZOS)
-            img.save(png_path, **get_srgb_save_kwargs())
-            processed_img = img; msg_prefix = "✅ 新图片已处理并"
-        except Exception as e:
-            return None, f"❌ 图片处理失败: {e}", "", last_image_path, "", "", "", ""
-    else:
-        processed_img = Image.open(png_path); msg_prefix = "⚡ 图片未改变，秒速"
+    机械拆分自 save_task_files_html;段内正文与拆分前逐字一致。
+    """
+    angle = p.angle
+    aspect_ratio = p.aspect_ratio
+    avoid_items = p.avoid_items
+    city = p.city
+    cn_city = p.cn_city
+    cn_delivery = p.cn_delivery
+    cn_developer = p.cn_developer
+    cn_facilities = p.cn_facilities
+    cn_mode = p.cn_mode
+    cn_room_type = p.cn_room_type
+    cn_space_features = p.cn_space_features
+    cn_tier = p.cn_tier
+    cn_unit_type = p.cn_unit_type
+    cn_view = p.cn_view
+    country = p.country
+    custom_addition = p.custom_addition
+    floor_size = p.floor_size
+    floor_tone = p.floor_tone
+    glossiness = p.glossiness
+    lighting = p.lighting
+    market_furniture = p.market_furniture
+    neighborhood = p.neighborhood
+    property_type = p.property_type
+    room_type = p.room_type
+    seam_type = p.seam_type
+    style_type = p.style_type
+    view = p.view
 
     # ── 动态翻译与映射 ────────────────────────────────────────────────
     # 国内模式：覆盖位置、房间参数；风格始终使用顶部全局 Style
@@ -454,6 +451,27 @@ def save_task_files_html(workflow_mode, model_choice, image_path, continent, cou
 
     en_quality = "**[Quality Requirements]** Ultra-sharp texture details at pixel level. Physically accurate, true-to-swatch colors with clean, faithful white balance and natural, consistent tone across the entire floor."
 
+    _loc = locals()
+    v.update({n: _loc[n] for n in ('_mandatory_block', '_optional_block', '_prohibitions_block', 'ar_value', 'avoid_en', 'effective_room_type', 'en_angle', 'en_atmosphere', 'en_cn_context', 'en_composition', 'en_env', 'en_floor_extra', 'en_floor_sz', 'en_floor_visibility', 'en_furniture_contrast', 'en_gloss', 'en_light_inst', 'en_light_key', 'en_light_name', 'en_location', 'en_market_furniture', 'en_overseas_realism', 'en_plank_direction', 'en_property', 'en_quality', 'en_room', 'en_seam', 'en_seam_bevel_pro', 'en_style_raw', 'en_view_trans', 'extra_cmd_en', 'floor_size', 'floor_tone', 'glossiness', 'is_pressed_bevel', 'no_sofa_note', 'seam_type') if n in _loc})
+
+
+def _build_material_instructions(p, v):
+    """核心材质指令与无缝拼法变体(B2/Pro 分词),末尾无条件追加颜色锁定。
+
+    机械拆分自 save_task_files_html;段内正文与拆分前逐字一致。
+    """
+    en_floor_extra = v.get('en_floor_extra')
+    en_floor_sz = v.get('en_floor_sz')
+    en_gloss = v.get('en_gloss')
+    en_plank_direction = v.get('en_plank_direction')
+    en_seam = v.get('en_seam')
+    en_seam_bevel_pro = v.get('en_seam_bevel_pro')
+    extra_cmd_en = v.get('extra_cmd_en')
+    floor_size = v.get('floor_size')
+    is_pressed_bevel = v.get('is_pressed_bevel')
+    seam_type = v.get('seam_type')
+
+
     # 核心材质指令
     CORE_MATERIAL_INSTRUCTION = (
         "🔥 CRITICAL MATERIAL INSTRUCTION 🔥 "
@@ -698,6 +716,57 @@ def save_task_files_html(workflow_mode, model_choice, image_path, continent, cou
     CORE_MATERIAL_INSTRUCTION = CORE_MATERIAL_INSTRUCTION + "\n\n" + FLOOR_COLOR_MATCH_INSTRUCTION
     if CORE_MATERIAL_INSTRUCTION_PRO is not None:
         CORE_MATERIAL_INSTRUCTION_PRO = CORE_MATERIAL_INSTRUCTION_PRO + "\n\n" + FLOOR_COLOR_MATCH_INSTRUCTION
+
+
+    _loc = locals()
+    v.update({n: _loc[n] for n in ('CORE_MATERIAL_INSTRUCTION', 'CORE_MATERIAL_INSTRUCTION_PRO', 'SEAMLESS_NEGATIVE', 'SEAMLESS_NEGATIVE_PRO', 'en_floor_spec_line', 'en_floor_spec_line_inpaint', 'en_floor_spec_line_inpaint_pro', 'en_floor_spec_line_pro', 'extra_cmd_en') if n in _loc})
+
+
+def _compose_prompt(p, v):
+    """四模式提示词组装(SCHEMA 顺序: Style→Composition→Lighting→Floor→Output)+ 中文包装。
+
+    机械拆分自 save_task_files_html;段内正文与拆分前逐字一致。
+    """
+    cn_mode = p.cn_mode
+    custom_addition = p.custom_addition
+    panel_size = p.panel_size
+    panel_submode = p.panel_submode
+    pet_action = p.pet_action
+    pet_focus = p.pet_focus
+    pet_type = p.pet_type
+    resolution = p.resolution
+    scene_override = p.scene_override
+    style_analysis_text = p.style_analysis_text
+    style_ref_correction = p.style_ref_correction
+    workflow_mode = p.workflow_mode
+    CORE_MATERIAL_INSTRUCTION = v.get('CORE_MATERIAL_INSTRUCTION')
+    _mandatory_block = v.get('_mandatory_block')
+    _optional_block = v.get('_optional_block')
+    _prohibitions_block = v.get('_prohibitions_block')
+    ar_value = v.get('ar_value')
+    avoid_en = v.get('avoid_en')
+    en_angle = v.get('en_angle')
+    en_atmosphere = v.get('en_atmosphere')
+    en_cn_context = v.get('en_cn_context')
+    en_composition = v.get('en_composition')
+    en_env = v.get('en_env')
+    en_floor_spec_line = v.get('en_floor_spec_line')
+    en_floor_spec_line_inpaint = v.get('en_floor_spec_line_inpaint')
+    en_floor_visibility = v.get('en_floor_visibility')
+    en_furniture_contrast = v.get('en_furniture_contrast')
+    en_light_inst = v.get('en_light_inst')
+    en_light_key = v.get('en_light_key')
+    en_light_name = v.get('en_light_name')
+    en_location = v.get('en_location')
+    en_market_furniture = v.get('en_market_furniture')
+    en_overseas_realism = v.get('en_overseas_realism')
+    en_property = v.get('en_property')
+    en_quality = v.get('en_quality')
+    en_room = v.get('en_room')
+    en_style_raw = v.get('en_style_raw')
+    en_view_trans = v.get('en_view_trans')
+    extra_cmd_en = v.get('extra_cmd_en')
+    no_sofa_note = v.get('no_sofa_note')
 
     # ── 四模式提示词组装 (SCHEMA 顺序: Style→Composition→Lighting→Floor→Output) ──
     if "地板替换" in workflow_mode:
@@ -957,6 +1026,27 @@ Professional photorealistic interior architectural photography. {en_property}, {
         f"━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     )
 
+    _loc = locals()
+    v.update({n: _loc[n] for n in ('final_prompt_combined', 'final_prompt_en') if n in _loc})
+
+
+def _derive_pro_prompt(p, v):
+    """Pro 模型专属提示词派生:仅"无缝拼法"时与 B2 不同,其余完全一致。
+
+    机械拆分自 save_task_files_html;段内正文与拆分前逐字一致。
+    """
+    workflow_mode = p.workflow_mode
+    CORE_MATERIAL_INSTRUCTION = v.get('CORE_MATERIAL_INSTRUCTION')
+    CORE_MATERIAL_INSTRUCTION_PRO = v.get('CORE_MATERIAL_INSTRUCTION_PRO')
+    SEAMLESS_NEGATIVE = v.get('SEAMLESS_NEGATIVE')
+    SEAMLESS_NEGATIVE_PRO = v.get('SEAMLESS_NEGATIVE_PRO')
+    en_floor_spec_line = v.get('en_floor_spec_line')
+    en_floor_spec_line_inpaint = v.get('en_floor_spec_line_inpaint')
+    en_floor_spec_line_inpaint_pro = v.get('en_floor_spec_line_inpaint_pro')
+    en_floor_spec_line_pro = v.get('en_floor_spec_line_pro')
+    en_seam_bevel_pro = v.get('en_seam_bevel_pro')
+    final_prompt_en = v.get('final_prompt_en')
+
     # ── Pro 模型专属提示词：仅"无缝人字拼"时与 B2 不同；其余情况完全一致 ──
     # 把 B2 版地板三段替换成 Pro 版（终极版，去 herringbone/chevron 词、纯几何描述）。
     if "墙板" in workflow_mode:
@@ -978,6 +1068,34 @@ Professional photorealistic interior architectural photography. {en_property}, {
         )
     else:
         final_prompt_en_pro = final_prompt_en
+
+    _loc = locals()
+    v.update({n: _loc[n] for n in ('final_prompt_en_pro',) if n in _loc})
+
+
+def _persist_task_record(p, v):
+    """组装 JSON 记录并落盘(persist=False 时只组装不落盘,供快速预览借用)。
+
+    机械拆分自 save_task_files_html;段内正文与拆分前逐字一致。
+    """
+    aspect_ratio = p.aspect_ratio
+    city = p.city
+    continent = p.continent
+    country = p.country
+    json_path = p.json_path
+    persist = p.persist
+    processed_img = p.processed_img
+    property_type = p.property_type
+    resolution = p.resolution
+    style_type = p.style_type
+    workflow_mode = p.workflow_mode
+    effective_room_type = v.get('effective_room_type')
+    final_prompt_en = v.get('final_prompt_en')
+    final_prompt_en_pro = v.get('final_prompt_en_pro')
+    floor_size = v.get('floor_size')
+    floor_tone = v.get('floor_tone')
+    glossiness = v.get('glossiness')
+    seam_type = v.get('seam_type')
 
     # ── 写入 JSON 记录 ────────────────────────────────────────────────
     # 附毫秒后缀防撞：批量并发(同款地板的多个场景在同一秒落记录)时，秒级 record_id 会重复，
@@ -1016,9 +1134,59 @@ Professional photorealistic interior architectural photography. {en_property}, {
             records = load_records_file(json_path)
             records.append(new_record)
             save_records_file(json_path, records)
-    return processed_img, f"{msg_prefix}生成成功！当前模式：{workflow_mode}", final_prompt_combined, image_path, json_path, record_id, png_path, final_prompt_en_pro
+
+    _loc = locals()
+    v.update({n: _loc[n] for n in ('record_id',) if n in _loc})
 
 
+def save_task_files_html(workflow_mode, model_choice, image_path, continent, country, city, neighborhood, property_type, style_type, room_type, view, lighting, pet_type, pet_action, pet_focus, angle, aspect_ratio, resolution, glossiness, seam_type, avoid_items, floor_size, custom_addition, floor_tone, market_furniture, last_image_path,
+                         cn_mode=False, cn_developer="── 不指定 ──", cn_city="上海",
+                         cn_tier="── 不指定 ──", cn_unit_type="── 不指定 ──",
+                         cn_delivery="🏆 样板间 / 展示单位",
+                         cn_room_type="客餐厅一体", cn_view="自然通透景观",
+                         cn_space_features=None, cn_facilities=None,
+                         style_ref_correction="", style_analysis_text="", scene_override="",
+                         panel_submode="再设计", panel_size="", persist=True):
+    """提示词编排入口(兼容签名,26+ 参数原样保留;golden 快照按 8 元组逐字节回归)。
+
+    实际工作由五个阶段函数流水完成:图片预处理 → 翻译推导 → 材质指令 →
+    四模式组装 → Pro 派生 → 记录落盘;p 携带原始参数,v 携带阶段间中间变量。
+    """
+    if not image_path: return None, "⚠️ 请上传图片", "", "", "", "", "", ""
+    json_path, base_name, target_dir = get_json_path(image_path)
+    png_path = os.path.join(target_dir, f"{base_name}_优化图.png")
+
+    try:
+        processed_img, msg_prefix = prepare_swatch_png(image_path, png_path, last_image_path)
+    except Exception as e:
+        return None, f"❌ 图片处理失败: {e}", "", last_image_path, "", "", "", ""
+
+    p = SimpleNamespace(
+        workflow_mode=workflow_mode, model_choice=model_choice, image_path=image_path,
+        continent=continent, country=country, city=city, neighborhood=neighborhood,
+        property_type=property_type, style_type=style_type, room_type=room_type, view=view,
+        lighting=lighting, pet_type=pet_type, pet_action=pet_action, pet_focus=pet_focus,
+        angle=angle, aspect_ratio=aspect_ratio, resolution=resolution, glossiness=glossiness,
+        seam_type=seam_type, avoid_items=avoid_items, floor_size=floor_size,
+        custom_addition=custom_addition, floor_tone=floor_tone, market_furniture=market_furniture,
+        last_image_path=last_image_path, cn_mode=cn_mode, cn_developer=cn_developer,
+        cn_city=cn_city, cn_tier=cn_tier, cn_unit_type=cn_unit_type, cn_delivery=cn_delivery,
+        cn_room_type=cn_room_type, cn_view=cn_view, cn_space_features=cn_space_features,
+        cn_facilities=cn_facilities, style_ref_correction=style_ref_correction,
+        style_analysis_text=style_analysis_text, scene_override=scene_override,
+        panel_submode=panel_submode, panel_size=panel_size, persist=persist,
+        json_path=json_path, base_name=base_name, png_path=png_path,
+        processed_img=processed_img, msg_prefix=msg_prefix,
+    )
+    v = {}
+    _derive_translations(p, v)
+    _build_material_instructions(p, v)
+    _compose_prompt(p, v)
+    _derive_pro_prompt(p, v)
+    _persist_task_record(p, v)
+    return (processed_img, f"{msg_prefix}生成成功！当前模式：{workflow_mode}",
+            v['final_prompt_combined'], image_path, json_path, v['record_id'],
+            png_path, v['final_prompt_en_pro'])
 
 
 # 对外契约只有提示词组装入口;其余全部是内部实现。
