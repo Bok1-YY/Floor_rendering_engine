@@ -20,6 +20,7 @@ from Floor_engine_server.color_match import (
     match_color_region,
 )
 from Floor_engine_server.models import new_job
+from Floor_engine_server.task_registry import TaskRegistry
 
 
 def _solid(w, h, color):
@@ -459,7 +460,10 @@ def test_job_color_match_rejects_foreign_candidate(dirs, monkeypatch):
 
     job = new_job("oak", "now")
     job.status = "done"
-    monkeypatch.setattr(server_api, "_job_history", [job])
+    jobs = TaskRegistry("jobs", max_entries=60,
+                        is_terminal=server_api._job_is_terminal, newest_first=True)
+    jobs.add(job.job_id, job)
+    monkeypatch.setattr(server_api, "JOBS", jobs)
     req = server_api.JobColorMatchRequest(
         image_rel="foreign.jpg", ref_path=str(ref), rect=_rect(), stage="pro")
     with pytest.raises(HTTPException) as ei:

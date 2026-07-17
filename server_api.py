@@ -7,7 +7,7 @@
 # 运行(在 test/ 目录下，把本包当包导入)：
 #   python -m Floor_engine_server.server_api
 #   或  uvicorn Floor_engine_server.server_api:app --host 127.0.0.1 --port 7870 --workers 1
-# 必须单 worker：_job_history / 信号量是【进程内】状态，多 worker 不共享。
+# 必须单 worker：JOBS 注册表 / 信号量是【进程内】状态，多 worker 不共享。
 # ==========================================
 """Headless FastAPI layer over the floor_engine package (no NiceGUI)."""
 
@@ -71,6 +71,7 @@ from .records import (
     export_html_from_json, export_pptx_from_json, export_favorites_pptx,
     migrate_all_record_storage, migrate_record_file,
 )
+from .task_registry import TaskRegistry
 from .models import (
     JobRecord, new_job, update_job, compute_final_status,
     job_time_text, running_model_status_text, add_candidate, ensure_candidate_lists,
@@ -96,41 +97,29 @@ from .prompt_data import (
 # ============================================================
 # 模块级编排状态（移植自 webui.py：注册表 + 按模型并发槽 + 取消标志）
 # ============================================================
-_job_history: List[JobRecord] = []
-_job_lock = threading.Lock()
 # 每个模型最多 max_concurrent_per_model(默认 1) 个进行中任务；B2 / Pro 各一把信号量。
 # 在 lifespan 启动钩子里、于本服务事件循环上惰性创建（绝不在 import 期建，否则绑错 loop）。
 _model_semaphores: dict = {}
 # prep 串行锁：save_task_files_html 按小样路径派生 png/json 输出路径，同图并发首处理会抢写同一 png。
 _task_prep_lock: Optional[asyncio.Lock] = None
-# 取消：单任务用集合(stop this one)；全局用单调计数器(stop all：in-flight 任务捕获的旧值 < 新值即自行退出)。
-_cancel_jobs: set = set()
-_cancel_generation = [0]
 # 后台任务强引用：asyncio 事件循环只对 task 持弱引用，无强引用者可能在完成前被 GC。
 # 所有后台 task 统一经 _spawn() 排程并收进此集合，done 回调里自动清理（见 _spawn）。
 _bg_tasks: set = set()
 # 内存里最多保留 N 条任务卡（与磁盘 QUEUE_PERSIST_MAX 对齐）；超出丢最旧的【终态】卡，
-# in-flight(queued/running/磨缝中) 永不删。见 _trim_history。
+# in-flight(queued/running/磨缝中) 永不删。
 _MAX_RESIDENT_JOBS = 60
 
 
-def _is_cancelled(job_id: str, generation: Optional[int] = None) -> bool:
-    """与 webui 同义：本任务被单独停 → True；或全局计数器已超过任务捕获的代次 → True。"""
-    return job_id in _cancel_jobs or (generation is not None and generation < _cancel_generation[0])
+def _job_is_terminal(j: JobRecord) -> bool:
+    """终态 = 已出结果且不在磨缝;queued/running/磨缝中 in-flight 永不被 trim。"""
+    return j.status in ('done', 'partial', 'failed') and not j.pro_polishing
 
 
-def _persist_jobs() -> None:
-    with _job_lock:
-        jobs = list(_job_history)
-    persist_jobs(jobs)   # records.persist_jobs 内部会剥掉 retry_ctx 里的 api_key，不存明文
-
-
-def _get_job(jid: str) -> Optional[JobRecord]:
-    with _job_lock:
-        for j in _job_history:
-            if j.job_id == jid:
-                return j
-    return None
+# 任务队列注册表:取消语义与 webui 同义 —— 单任务用取消集合(stop this one);
+# 全局用单调代次(stop all:in-flight 任务捕获的旧代次 < 新代次即自行退出)。
+# persist 经 records.persist_jobs 落盘(内部会剥掉 retry_ctx 里的 api_key,不存明文)。
+JOBS = TaskRegistry('jobs', max_entries=_MAX_RESIDENT_JOBS, is_terminal=_job_is_terminal,
+                    on_persist=persist_jobs, newest_first=True)
 
 
 def _spawn(coro):
@@ -146,39 +135,16 @@ def _spawn(coro):
     return t
 
 
-def _trim_history() -> None:
-    """把 _job_history 收口到 _MAX_RESIDENT_JOBS：只删最旧的【终态】任务卡；
-    queued/running/磨缝中(in-flight) 永不删（删了就丢用户在等的进度/结果）。
-    新任务用 insert(0)、最旧在列表尾，故从尾向前扫。调用方须持 _job_lock。"""
-    over = len(_job_history) - _MAX_RESIDENT_JOBS
-    i = len(_job_history) - 1
-    while over > 0 and i >= 0:
-        job = _job_history[i]
-        if job.status in ('done', 'partial', 'failed') and not job.pro_polishing:
-            _cancel_jobs.discard(job.job_id)
-            del _job_history[i]
-            over -= 1
-        i -= 1
-
-
 # ── 快速预览（Nano Banana 2 Lite · 1K · 仅 Google 直连）───────────────────────────
-# 与 4K 队列完全解耦：不进 _job_history、不占 b2/pro 信号量、不写记录。pid → 状态快照，前端短轮询。
-_previews: dict = {}          # pid → {status, stage, url, thumb, error, ts}
-_preview_lock = threading.Lock()
-_preview_cancel: set = set()
+# 与 4K 队列完全解耦：不进 JOBS、不占 b2/pro 信号量、不写记录。pid → 状态快照，前端短轮询。
 _MAX_PREVIEWS = 20            # 预览是临时草稿，只留最近 N 条终态
 
 
-def _trim_previews() -> None:
-    """收口 _previews 到 _MAX_PREVIEWS：按 ts 删最旧的终态项（running 不删）。调用方须持 _preview_lock。"""
-    if len(_previews) <= _MAX_PREVIEWS:
-        return
-    done = sorted(((pid, v) for pid, v in _previews.items()
-                   if v.get('status') in ('done', 'failed')),
-                  key=lambda kv: kv[1].get('ts', 0))
-    for pid, _ in done[:len(_previews) - _MAX_PREVIEWS]:
-        _previews.pop(pid, None)
-        _preview_cancel.discard(pid)
+def _preview_is_terminal(v: dict) -> bool:
+    return v.get('status') in ('done', 'failed')
+
+
+PREVIEWS = TaskRegistry('previews', max_entries=_MAX_PREVIEWS, is_terminal=_preview_is_terminal)
 
 
 # ── URL 工具（移植自 webui，realpath+commonpath 归属校验，拒绝 ../ 逃逸）──
@@ -357,7 +323,7 @@ def _set_model_queue_handle(job: JobRecord, key: str, name: str, handle) -> None
     else:
         settings.pop(name, None)
     update_model_run(job, key, settings=settings)
-    _persist_jobs()
+    JOBS.persist()
 
 
 def _fal_queue_is_terminal_error(err: str) -> bool:
@@ -430,7 +396,7 @@ async def _generate_sd35_model(job: JobRecord, *, fal_key: str, positive: str, n
                     update_model_run(job, key, status='failed', error='基础图保存失败', stage='')
                     return None, 'SD 基础图已生成，但保存失败'
                 update_model_run(job, key, base_path=base_path, delivery_status='base_ready')
-                _persist_jobs()  # AuraSR 前先确保基础图可在重启后恢复
+                JOBS.persist()  # AuraSR 前先确保基础图可在重启后恢复
                 _set_model_queue_handle(job, key, 'sd_queue', None)
 
             final_image = base
@@ -493,7 +459,7 @@ async def _generate_sd35_model(job: JobRecord, *, fal_key: str, positive: str, n
 async def _run_job_bg(job: JobRecord, req: 'JobSubmitRequest'):
     """主生图编排（移植自 webui._run_job 去 UI）：prep 串行 → 接缝/倒角规则 → 按模型并发生成 → 终态判定。"""
     jid = job.job_id
-    generation = _cancel_generation[0]
+    generation = JOBS.generation
     mf = job.model_filter
     targets = list(job.model_targets or [])
     run_b2 = 'b2' in targets
@@ -504,11 +470,11 @@ async def _run_job_bg(job: JobRecord, req: 'JobSubmitRequest'):
     api_key = (req.api_key or '').strip() or cfg.get('gemini_api_key', '').strip()
     fal_key = (cfg.get('fal_api_key') or '').strip()
 
-    if _is_cancelled(jid, generation):
+    if JOBS.is_cancelled(jid, generation):
         update_job(job, status='failed', error='已取消（用户停止）',
                    operation='generate', operation_status='cancelled', operation_error='已取消')
-        _cancel_jobs.discard(jid)
-        _persist_jobs()
+        JOBS.clear_cancelled(jid)
+        JOBS.persist()
         return
 
     update_job(job, status='running', started_at=time.time(), operation='generate',
@@ -584,11 +550,11 @@ async def _run_job_bg(job: JobRecord, req: 'JobSubmitRequest'):
         except Exception as ex:
             logger.warning(f"[API任务] gen_context 写入失败 job={jid}: {ex}")
 
-        if _is_cancelled(jid, generation):
+        if JOBS.is_cancelled(jid, generation):
             update_job(job, status='failed', error='已取消（用户停止）')
             return
 
-        should_cancel = lambda: _is_cancelled(jid, generation)
+        should_cancel = lambda: JOBS.is_cancelled(jid, generation)
 
         def _gen_one(model_id, prompt_text, stage_key, model_name):
             return _generate_one_model(job, model_id, prompt_text, stage_key, model_name,
@@ -622,7 +588,7 @@ async def _run_job_bg(job: JobRecord, req: 'JobSubmitRequest'):
                 if _e:
                     errors.append(f'{k.upper()}: {_e}')
 
-        if _is_cancelled(jid, generation):
+        if JOBS.is_cancelled(jid, generation):
             # 取消后：已返回的图(已计费)已在 _gen_one 里存盘，这里据实标注，不丢弃
             final = compute_runs_final_status(job)
             if final in ('done', 'partial'):
@@ -645,8 +611,8 @@ async def _run_job_bg(job: JobRecord, req: 'JobSubmitRequest'):
         update_job(job, status=compute_runs_final_status(job), b2_path=b2j, pro_path=proj, error=str(e),
                    operation_status='failed', operation_error=str(e))
     finally:
-        _cancel_jobs.discard(jid)
-        _persist_jobs()
+        JOBS.clear_cancelled(jid)
+        JOBS.persist()
 
 
 async def _retry_bg(job: JobRecord):
@@ -660,14 +626,14 @@ async def _retry_bg(job: JobRecord):
     need_sd = 'sd35' in targets and not model_run_current_path(job, 'sd35')
     if not (need_b2 or need_pro or need_sd):
         update_job(job, status=compute_runs_final_status(job), operation='retry', operation_status='done')
-        _persist_jobs()
+        JOBS.persist()
         return
-    _cancel_jobs.discard(job.job_id)   # 清掉残留取消标记，否则 should_cancel 恒 True
-    generation = _cancel_generation[0]
+    JOBS.clear_cancelled(job.job_id)   # 清掉残留取消标记，否则 should_cancel 恒 True
+    generation = JOBS.generation
     update_job(job, status='running', started_at=time.time(), error='', b2_stage='', pro_stage='',
                operation='retry', operation_status='running', operation_error='')
     try:
-        should_cancel = lambda: _is_cancelled(job.job_id, generation)
+        should_cancel = lambda: JOBS.is_cancelled(job.job_id, generation)
 
         def _retry_one(model_id, prompt_text, stage_key, model_name):
             return _generate_one_model(job, model_id, prompt_text, stage_key, model_name,
@@ -694,7 +660,7 @@ async def _retry_bg(job: JobRecord):
                 errs.append(f'{k.upper()}: {e}')
         final = compute_runs_final_status(job)
         op_error = ('；'.join(errs)).strip()
-        cancelled = _is_cancelled(job.job_id, generation)
+        cancelled = JOBS.is_cancelled(job.job_id, generation)
         update_job(job, status=final, error=op_error,
                    operation_status=('cancelled' if cancelled else ('failed' if op_error else 'done')),
                    operation_error=('已取消' if cancelled else op_error))
@@ -703,15 +669,15 @@ async def _retry_bg(job: JobRecord):
         update_job(job, status=compute_runs_final_status(job), error=str(e),
                    operation_status='failed', operation_error=str(e))
     finally:
-        _cancel_jobs.discard(job.job_id)
-        _persist_jobs()
+        JOBS.clear_cancelled(job.job_id)
+        JOBS.persist()
 
 
 async def _retry_sd_upscale_bg(job: JobRecord):
     run = (job.model_runs or {}).get('sd35') or {}
     base_path = run.get('base_path') or ''
     fal_key = (load_config().get('fal_api_key') or '').strip()
-    generation = _cancel_generation[0]
+    generation = JOBS.generation
     try:
         update_model_run(job, 'sd35', status='running', stage='🔎 4K 超分中…', error='')
         base = Image.open(base_path); base.load()
@@ -719,14 +685,14 @@ async def _retry_sd_upscale_bg(job: JobRecord):
             out, err = await asyncio.to_thread(
                 call_fal_aura_upscale, fal_key, base,
                 on_stage=lambda t: update_model_run(job, 'sd35', stage=t),
-                should_cancel=lambda: _is_cancelled(job.job_id, generation),
+                should_cancel=lambda: JOBS.is_cancelled(job.job_id, generation),
                 queue_handle=_model_queue_handle(job, 'sd35', 'upscale_queue'),
                 on_queue_submitted=lambda h: _set_model_queue_handle(job, 'sd35', 'upscale_queue', h),
             )
         if out is None:
             if _fal_queue_is_terminal_error(err) or '取消' in str(err or ''):
                 _set_model_queue_handle(job, 'sd35', 'upscale_queue', None)
-            cancelled = '取消' in str(err or '') or _is_cancelled(job.job_id, generation)
+            cancelled = '取消' in str(err or '') or JOBS.is_cancelled(job.job_id, generation)
             if not cancelled:
                 record_usage(job.workflow_mode, 'AuraSR', 'fal', False, 'upscale')
             label = '已取消' if cancelled else f'SD 超分失败：{err}'
@@ -757,8 +723,8 @@ async def _retry_sd_upscale_bg(job: JobRecord):
         update_model_run(job, 'sd35', status='partial', stage='', error=str(ex), delivery_status='upscale_failed')
         update_job(job, status='partial', operation_status='failed', operation_error=str(ex))
     finally:
-        _cancel_jobs.discard(job.job_id)
-        _persist_jobs()
+        JOBS.clear_cancelled(job.job_id)
+        JOBS.persist()
 
 
 async def _edit_bg(job: JobRecord, *, api_key, instruction, model_id, model_label,
@@ -766,14 +732,14 @@ async def _edit_bg(job: JobRecord, *, api_key, instruction, model_id, model_labe
     """对 job 现有 Pro(或 B2)成图做一次图生图编辑/磨缝（移植 webui._polish_pro 去 UI）。
     color_match=True 时把结果色彩对齐回原图（磨缝消偏色）；自定义编辑保留模型输出色彩。"""
     jid = job.job_id
-    generation = _cancel_generation[0]
+    generation = JOBS.generation
     src_path = job.pro_path or job.b2_path
     base_status = compute_final_status(job.model_filter, job.b2_path, job.pro_path)
     if not src_path or not os.path.exists(str(src_path)):
         update_job(job, status=base_status, operation_status='failed',
                    operation_error='没有可编辑的成图', pro_polishing=False, pro_stage='')
-        _cancel_jobs.discard(jid)
-        _persist_jobs()
+        JOBS.clear_cancelled(jid)
+        JOBS.persist()
         return
     update_job(job, started_at=time.time(), pro_polishing=True, pro_stage='', operation_status='running')
 
@@ -795,7 +761,7 @@ async def _edit_bg(job: JobRecord, *, api_key, instruction, model_id, model_labe
         async with _model_semaphores['pro']:
             out, err = await asyncio.to_thread(
                 call_gemini_edit, api_key, model_id, instruction, b64,
-                image_size, ar, preserve, _on_stage, lambda: _is_cancelled(jid, generation))
+                image_size, ar, preserve, _on_stage, lambda: JOBS.is_cancelled(jid, generation))
         if out is None:
             record_usage(job.workflow_mode, model_label, 'google', False, job.operation)
             update_job(job, status=base_status, operation_status='failed', operation_error=f'编辑失败：{err}')
@@ -825,8 +791,8 @@ async def _edit_bg(job: JobRecord, *, api_key, instruction, model_id, model_labe
         update_job(job, status=base_status, operation_status='failed', operation_error=str(e))
     finally:
         update_job(job, pro_polishing=False, pro_stage='')
-        _cancel_jobs.discard(jid)
-        _persist_jobs()
+        JOBS.clear_cancelled(jid)
+        JOBS.persist()
 
 
 # ============================================================
@@ -1017,10 +983,8 @@ async def lifespan(_app: FastAPI):
     _model_semaphores['inpaint'] = asyncio.Semaphore(1)
     _task_prep_lock = asyncio.Lock()
     migrated = migrate_all_record_storage()
-    with _job_lock:
-        _job_history.clear()
-        _job_history.extend(load_persisted_jobs())   # 启动恢复；中断态已被修正为 partial/failed
-    logger.info(f"[server_api] 启动完成：迁移 {migrated} 个记录文件，恢复 {len(_job_history)} 条历史任务，每模型并发 {lim}")
+    JOBS.replace((j.job_id, j) for j in load_persisted_jobs())   # 启动恢复；中断态已被修正为 partial/failed
+    logger.info(f"[server_api] 启动完成：迁移 {migrated} 个记录文件，恢复 {len(JOBS)} 条历史任务，每模型并发 {lim}")
     yield
 
 
@@ -1142,17 +1106,14 @@ async def create_job(req: JobSubmitRequest):
     job.model_targets = targets
     ensure_model_runs(job)
     job.workflow_mode = req.params.workflow_mode
-    with _job_lock:
-        _job_history.insert(0, job)
-        _trim_history()   # 收口最旧的终态卡，防长会话内存缓涨
+    JOBS.add(job.job_id, job)   # 登记并顺手收口最旧的终态卡，防长会话内存缓涨
     _spawn(_run_job_bg(job, req))   # 立即返回，不为整个 4K 生成挂起 HTTP
     return _job_view(job)
 
 
 @app.get('/api/jobs')
 def list_jobs(status: str = '', limit: int = 50):
-    with _job_lock:
-        jobs = list(_job_history)
+    jobs = JOBS.snapshot()
     if status:
         jobs = [j for j in jobs if j.status == status]
     return [_job_view(j) for j in jobs[:max(1, limit)]]
@@ -1160,7 +1121,7 @@ def list_jobs(status: str = '', limit: int = 50):
 
 @app.get('/api/jobs/{jid}')
 def get_job(jid: str):
-    job = _get_job(jid)
+    job = JOBS.get(jid)
     if not job:
         raise HTTPException(404, 'job not found')
     return _job_view(job)
@@ -1173,7 +1134,7 @@ async def stream_job(jid: str, request: Request):
         while True:
             if await request.is_disconnected():
                 break
-            job = _get_job(jid)
+            job = JOBS.get(jid)
             if job is None:
                 yield f"event: error\ndata: {json.dumps({'error': 'job not found'})}\n\n"
                 break
@@ -1191,12 +1152,12 @@ async def stream_job(jid: str, request: Request):
 
 @app.post('/api/jobs/{jid}/cancel')
 def cancel_job(jid: str):
-    job = _get_job(jid)
+    job = JOBS.get(jid)
     if not job:
         raise HTTPException(404, 'job not found')
     if job.status not in ('queued', 'running') and job.operation_status != 'running':
         raise HTTPException(409, '任务当前不在运行')
-    _cancel_jobs.add(jid)   # 终态由 worker finally 据「是否已出图」判定（已计费的图保留）
+    JOBS.request_cancel(jid)   # 终态由 worker finally 据「是否已出图」判定（已计费的图保留）
     if not job.error:
         update_job(job, error='已取消（用户停止）')
     return {'cancelled': True}
@@ -1204,54 +1165,47 @@ def cancel_job(jid: str):
 
 @app.post('/api/jobs/cancel-all')
 def cancel_all():
-    _cancel_generation[0] += 1
+    JOBS.bump_generation()
     n = 0
-    with _job_lock:
-        for job in _job_history:
-            if job.status in ('queued', 'running') or job.operation_status == 'running':
-                _cancel_jobs.add(job.job_id)
-                n += 1
+    for job in JOBS.snapshot():
+        if job.status in ('queued', 'running') or job.operation_status == 'running':
+            JOBS.request_cancel(job.job_id)
+            n += 1
     return {'stopped': n}
 
 
 @app.post('/api/jobs/clear-completed')
 def clear_completed():
-    """清掉「完成」状态的任务卡（保留 部分/失败 供逐卡删/重试）。改 _job_history 后落盘，
+    """清掉「完成」状态的任务卡（保留 部分/失败 供逐卡删/重试）。改注册表后落盘，
     否则前端 2.5s 轮询或重启会把它们读回来。只清队列列表，不动出图文件与「记录」。"""
     removed = 0
-    with _job_lock:
-        keep = []
-        for job in _job_history:
-            if job.status == 'done' and job.operation_status != 'running' and not job.pro_polishing:
-                _cancel_jobs.discard(job.job_id)
-                removed += 1
-            else:
-                keep.append(job)
-        _job_history[:] = keep
-    _persist_jobs()  # 必须在锁外：_persist_jobs 内部会再取 _job_lock（不可重入）
+    with JOBS.locked() as entries:
+        victims = [jid for jid, job in entries.items()
+                   if job.status == 'done' and job.operation_status != 'running' and not job.pro_polishing]
+        for jid in victims:
+            del entries[jid]
+            JOBS.clear_cancelled(jid)
+            removed += 1
+    JOBS.persist()  # 必须在 locked() 外：persist 内部会再取同一把锁（不可重入）
     return {'cleared': removed}
 
 
 @app.post('/api/jobs/{jid}/delete')
 def delete_job(jid: str):
     """从队列移除单条任务卡（任意状态；运行中的建议先停止）。仅移除列表项，不动出图/记录。"""
-    job = _get_job(jid)
+    job = JOBS.get(jid)
     if not job:
         raise HTTPException(404, 'job not found')
     if job.status in ('queued', 'running') or job.operation_status == 'running' or job.pro_polishing:
         raise HTTPException(409, '任务仍在运行，请先停止并等待结束后再清除')
-    with _job_lock:
-        before = len(_job_history)
-        _job_history[:] = [j for j in _job_history if j.job_id != jid]
-        removed = before - len(_job_history)
-    _cancel_jobs.discard(jid)
-    _persist_jobs()  # 锁外
+    removed = 1 if JOBS.pop(jid) is not None else 0   # pop 连带清取消标记
+    JOBS.persist()  # 锁外
     return {'deleted': removed}
 
 
 @app.post('/api/jobs/{jid}/retry')
 async def retry_job(jid: str):
-    job = _get_job(jid)
+    job = JOBS.get(jid)
     if not job:
         raise HTTPException(404, 'job not found')
     if not job.retry_ctx:
@@ -1267,7 +1221,7 @@ async def retry_job(jid: str):
 
 @app.post('/api/jobs/{jid}/sd-upscale')
 async def retry_sd_upscale(jid: str):
-    job = _get_job(jid)
+    job = JOBS.get(jid)
     if not job:
         raise HTTPException(404, 'job not found')
     ensure_model_runs(job)
@@ -1287,7 +1241,7 @@ async def retry_sd_upscale(jid: str):
 
 @app.get('/api/jobs/{jid}/result')
 def job_result(jid: str, model: str = 'pro', idx: int = -1):
-    job = _get_job(jid)
+    job = JOBS.get(jid)
     if not job:
         raise HTTPException(404, 'job not found')
     ensure_model_runs(job)
@@ -1303,7 +1257,7 @@ def job_result(jid: str, model: str = 'pro', idx: int = -1):
 # ── 编辑 / 磨缝（对 job 现有成图）──
 @app.post('/api/jobs/{jid}/polish')
 async def polish_job(jid: str):
-    job = _get_job(jid)
+    job = JOBS.get(jid)
     if not job:
         raise HTTPException(404, 'job not found')
     if not job.pro_path or not os.path.exists(str(job.pro_path)):
@@ -1325,7 +1279,7 @@ async def polish_job(jid: str):
 
 @app.post('/api/jobs/{jid}/edit')
 async def edit_job(jid: str, req: EditRequest):
-    job = _get_job(jid)
+    job = JOBS.get(jid)
     if not job:
         raise HTTPException(404, 'job not found')
     if job.status in ('queued', 'running') or job.pro_polishing or job.operation_status == 'running':
@@ -1350,14 +1304,12 @@ async def _preview_bg(pid: str, req: 'PreviewRequest'):
     prep(rp/sref/bevel_ref) 是 _run_job_bg(约 269-274 行) 的精简版；预览只用 Pro 提示词、无 retry_ctx。
     刻意在预览侧写精简副本、不重构 4K 热路径（4K 主编排是命脉，本仓库测试覆盖不到它）。"""
     def _set(**kw):
-        with _preview_lock:
-            if pid in _previews:
-                _previews[pid].update(kw)
+        PREVIEWS.update_fields(pid, **kw)
 
     def _on_stage(t):
         _set(stage=t)
 
-    should_cancel = lambda: pid in _preview_cancel
+    should_cancel = lambda: PREVIEWS.is_cancelled(pid)
     api_key = (req.api_key or '').strip() or load_config().get('gemini_api_key', '').strip()
     p = req.params
     try:
@@ -1409,7 +1361,7 @@ async def _preview_bg(pid: str, req: 'PreviewRequest'):
         logger.exception(f"[快速预览] 异常 pid={pid}")
         _set(status='failed', error=str(e), stage='')
     finally:
-        _preview_cancel.discard(pid)
+        PREVIEWS.clear_cancelled(pid)
 
 
 @app.post('/api/preview')
@@ -1421,17 +1373,14 @@ async def create_preview(req: PreviewRequest):
     req.ref_path = _require_upload_image_path(req.ref_path, '参照图')
     _panel_require_second_image(req)
     pid = f'pv_{uuid.uuid4().hex}'
-    with _preview_lock:
-        _previews[pid] = {'status': 'running', 'stage': '', 'url': '', 'thumb': '', 'error': '', 'ts': time.time()}
-        _trim_previews()
+    PREVIEWS.add(pid, {'status': 'running', 'stage': '', 'url': '', 'thumb': '', 'error': '', 'ts': time.time()})
     _spawn(_preview_bg(pid, req))   # 秒回 pid，前端轮询 /api/preview/{pid}
     return {'preview_id': pid, 'status': 'running'}
 
 
 @app.get('/api/preview/{pid}')
 def get_preview(pid: str):
-    with _preview_lock:
-        snap = dict(_previews.get(pid) or {})
+    snap = PREVIEWS.view(pid) or {}
     if not snap:
         raise HTTPException(404, 'preview not found')
     return {'preview_id': pid, **snap}
@@ -1439,7 +1388,7 @@ def get_preview(pid: str):
 
 @app.post('/api/preview/{pid}/cancel')
 def cancel_preview(pid: str):
-    _preview_cancel.add(pid)   # _preview_bg 与底层 call_gemini_generate 均会读 should_cancel
+    PREVIEWS.request_cancel(pid)   # _preview_bg 与底层 call_gemini_generate 均会读 should_cancel
     return {'cancelled': True}
 
 
@@ -1837,8 +1786,8 @@ async def _regen_once(job: JobRecord):
     api_key = (ctx.get('api_key') or '').strip() or load_config().get('gemini_api_key', '').strip()
     targets = list(ctx.get('model_targets') or job.model_targets)
     fal_key = (load_config().get('fal_api_key') or '').strip()
-    generation = _cancel_generation[0]
-    should_cancel = lambda: _is_cancelled(job.job_id, generation)
+    generation = JOBS.generation
+    should_cancel = lambda: JOBS.is_cancelled(job.job_id, generation)
 
     def gen_one(model_id, prompt_text, sk, name):
         return _generate_one_model(job, model_id, prompt_text, sk, name, api_key=api_key,
@@ -1870,12 +1819,12 @@ async def _regen_once(job: JobRecord):
 
 
 async def _regen_bg(job: JobRecord, n: int):
-    """一键多抽 ×n：串行重抽 n 次（每次 append 候选）；用户停止(加入 _cancel_jobs)即跑完当前后停。
+    """一键多抽 ×n：串行重抽 n 次（每次 append 候选）；用户停止(JOBS.request_cancel)即跑完当前后停。
     保留最后一轮的每模型错误串写进 job.error（用户主动取消不算失败原因，过滤掉）。"""
     if not job.retry_ctx:
         update_job(job, error='缺少重抽上下文')
         return
-    _cancel_jobs.discard(job.job_id)
+    JOBS.clear_cancelled(job.job_id)
     # 整批期间保持 running（不在迭代间置终态）——否则 SSE 见终态即关流，多抽第二张起就断了。
     update_job(job, status='running', started_at=time.time(), error='',
                operation='regen', operation_status='running', operation_error='')
@@ -1883,24 +1832,24 @@ async def _regen_bg(job: JobRecord, n: int):
     last_err = ''
     try:
         for _i in range(max(1, n)):
-            if _is_cancelled(job.job_id, _cancel_generation[0]):
+            if JOBS.is_cancelled(job.job_id, JOBS.generation):
                 break
             round_err = ((await _regen_once(job)) or '').strip()
             if round_err and '取消' not in round_err:
                 last_err = round_err
-            _persist_jobs()
+            JOBS.persist()
     except Exception as e:
         logger.exception(f"[API多抽] 异常 job={job.job_id}")
         err = str(e)
     finally:
         final = compute_runs_final_status(job)
         op_error = err or last_err
-        cancelled = _is_cancelled(job.job_id, _cancel_generation[0])
+        cancelled = JOBS.is_cancelled(job.job_id, JOBS.generation)
         update_job(job, status=final, error=op_error,
                    operation_status=('cancelled' if cancelled else ('failed' if op_error else 'done')),
                    operation_error=op_error or ('已取消' if cancelled else ''))
-        _cancel_jobs.discard(job.job_id)
-        _persist_jobs()
+        JOBS.clear_cancelled(job.job_id)
+        JOBS.persist()
 
 
 async def _record_edit_bg(job: JobRecord, *, src_pil, api_key, instruction, model_id, model_label,
@@ -1908,7 +1857,7 @@ async def _record_edit_bg(job: JobRecord, *, src_pil, api_key, instruction, mode
     """记录内二改：对已存记录的某张结果做图生图编辑，结果 append 回该记录（移植 webui._do_edit 去 UI）。
     color_match=True 时把结果色彩对齐回原图（镜像 _edit_bg 的防偏色分支）。"""
     jid = job.job_id
-    generation = _cancel_generation[0]
+    generation = JOBS.generation
     update_job(job, status='running', started_at=time.time(), pro_polishing=True)
 
     def _on_stage(t):
@@ -1927,7 +1876,7 @@ async def _record_edit_bg(job: JobRecord, *, src_pil, api_key, instruction, mode
         async with _model_semaphores['pro']:
             out, err = await asyncio.to_thread(
                 call_gemini_edit, api_key, model_id, instruction, b64,
-                image_size, ar, preserve, _on_stage, lambda: _is_cancelled(jid, generation))
+                image_size, ar, preserve, _on_stage, lambda: JOBS.is_cancelled(jid, generation))
         if out is None:
             record_usage(job.workflow_mode, model_label, 'google', False, 'record_edit')
             update_job(job, status='failed', error=f'二改失败：{err}', operation_status='failed', operation_error=str(err or ''))
@@ -1957,8 +1906,8 @@ async def _record_edit_bg(job: JobRecord, *, src_pil, api_key, instruction, mode
         update_job(job, status='failed', error=str(e), operation_status='failed', operation_error=str(e))
     finally:
         update_job(job, pro_polishing=False, pro_stage='')
-        _cancel_jobs.discard(jid)
-        _persist_jobs()
+        JOBS.clear_cancelled(jid)
+        JOBS.persist()
 
 
 # ── 请求模型 ──
@@ -2011,7 +1960,7 @@ _PPTX_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.prese
 # ── 重抽/多抽 ──
 @app.post('/api/jobs/{jid}/regen')
 async def regen_job(jid: str, n: int = Query(default=1, ge=1, le=6)):
-    job = _get_job(jid)
+    job = JOBS.get(jid)
     if not job:
         raise HTTPException(404, 'job not found')
     if not job.retry_ctx:
@@ -2062,9 +2011,7 @@ async def record_edit(req: RecordEditRequest):
     job.png_path = abs_src or os.path.join(MAIN_OUTPUT_DIR, 'edit')
     job.operation = 'record_edit'
     job.operation_status = 'running'
-    with _job_lock:
-        _job_history.insert(0, job)
-        _trim_history()   # 收口最旧的终态卡（新建的二改 job 是 queued/in-flight，不会被删）
+    JOBS.add(job.job_id, job)   # 顺手收口最旧的终态卡（新建的二改 job 是 queued/in-flight，不会被删）
     model_id = GEMINI_MODEL_MAP.get(req.model_choice, GEMINI_MODEL_MAP['Nano Banana Pro'])
     _spawn(_record_edit_bg(
         job, src_pil=src_pil, api_key=api_key, instruction=req.instruction, model_id=model_id,
@@ -2163,7 +2110,7 @@ def usage():
     return load_usage_summary(get_usage_prices())
 
 
-# ── 评审复盘：聚合统计 + 好图样本库（均只读，不碰 _job_history）──
+# ── 评审复盘：聚合统计 + 好图样本库（均只读，不碰 JOBS 队列）──
 @app.get('/api/review/summary')
 def review_summary():
     return load_review_summary()
@@ -2296,7 +2243,7 @@ def _decode_floor_mask(value: str) -> Image.Image:
 def _resolve_floor_source(target: FloorVisualizeTarget):
     """Return detached RGB image plus the validated write-back context."""
     if target.kind == 'job':
-        job = _get_job(target.jid)
+        job = JOBS.get(target.jid)
         if not job:
             raise HTTPException(404, 'job not found')
         if job.status in ('running', 'queued') or job.pro_polishing or job.operation_status == 'running':
@@ -2401,7 +2348,7 @@ async def floor_visualize_apply(req: FloorVisualizeRequest):
     target = req.target
     if target.kind == 'job':
         job = context['job']
-        current = _get_job(job.job_id)
+        current = JOBS.get(job.job_id)
         if current is not job:
             raise HTTPException(409, '任务卡已被清除，无法写回')
         if job.status in ('running', 'queued') or job.pro_polishing or job.operation_status == 'running':
@@ -2415,7 +2362,7 @@ async def floor_visualize_apply(req: FloorVisualizeRequest):
         if job.json_path and job.record_id:
             await asyncio.to_thread(api_write_to_record, out, label, job.json_path,
                                     job.record_id, ppath, metadata)
-        _persist_jobs()
+        JOBS.persist()
         logger.info(f'[真实贴地板] 任务候选已保存 job={job.job_id}, stage={target.stage}, path={ppath}')
         return {'ok': True, 'job': _job_view(job), 'url': _to_url(ppath),
                 'warnings': metadata.get('warnings') or [], 'metadata': metadata}
@@ -2556,7 +2503,7 @@ class JobColorMatchRequest(ColorMatchPreviewRequest):
 @app.post('/api/jobs/{jid}/color-match')
 async def job_color_match(jid: str, req: JobColorMatchRequest):
     """提交（任务侧）：全分辨率处理 → 落盘 → 并入该 stage 候选（‹n/N› 可切回原图）→ 写记录。"""
-    job = _get_job(jid)
+    job = JOBS.get(jid)
     if not job:
         raise HTTPException(404, 'job not found')
     if job.status in ('running', 'queued') or job.pro_polishing or job.operation_status == 'running':
@@ -2584,7 +2531,7 @@ async def job_color_match(jid: str, req: JobColorMatchRequest):
                                     job.json_path, job.record_id, ppath)
         except Exception as ex:
             logger.warning(f"[校色] 写记录失败 job={jid}: {ex}")
-    _persist_jobs()   # 锁外调（内部自取锁）
+    JOBS.persist()   # 锁外调（内部自取锁）
     logger.info(f"[校色] 完成 job={jid}, stage={req.stage}, strength={req.strength}, path={ppath}")
     return _job_view(job)
 
@@ -2603,7 +2550,7 @@ class RecordColorMatchRequest(BaseModel):
 
 @app.post('/api/records/color-match')
 def record_color_match(req: RecordColorMatchRequest):
-    """提交（记录侧）：全分辨率处理 → 结果 append 回该记录。不碰 _job_history。"""
+    """提交（记录侧）：全分辨率处理 → 结果 append 回该记录。不碰 JOBS 队列。"""
     json_path = _require_record_json_path(req.json_path)
     recs = load_records_file(json_path)
     rec = next((r for r in recs if r.get('id') == req.record_id), None)
@@ -2720,12 +2667,9 @@ def _normalize_inpaint_source(image: Image.Image) -> Image.Image:
 
 
 # ── 通用修补流：生成候选 → 挑选 → 提交（Lightroom 式抽卡体验）────────────
-# 三种目标（job 候选 / 记录结果 / 房间图）统一走 _inpaints 轮询表：
+# 三种目标（job 候选 / 记录结果 / 房间图）统一走 INPAINTS 轮询表：
 #   POST /api/inpaint → 后台并发生成 n 个候选（临时目录，前端轮询挑选）
 #   → POST /api/inpaint/{iid}/apply 才落到目标。usage 在生成时记（n 张记 n 次），apply 不计费。
-_inpaints: dict = {}          # iid → {status, stage, candidates, error, ts, target, mode, prompt}
-_inpaint_lock = threading.Lock()
-_inpaint_cancel: set = set()
 _MAX_INPAINTS = 20
 _MAX_ACTIVE_INPAINTS = 3       # 1 个执行 + 最多 2 个等待，避免付费任务无限堆积
 _INPAINT_TMP_DIR = os.path.join(MAIN_OUTPUT_DIR, '_inpaint_candidates')
@@ -2739,6 +2683,15 @@ def _delete_inpaint_files(entry) -> None:
                 os.remove(p)
         except Exception:
             pass
+
+
+def _inpaint_is_terminal(v: dict) -> bool:
+    return v.get('status') in ('done', 'failed', 'cancelled')
+
+
+# iid → {status, stage, candidates, error, ts, target, mode, prompt};trim 连带删临时候选文件
+INPAINTS = TaskRegistry('inpaints', max_entries=_MAX_INPAINTS,
+                        is_terminal=_inpaint_is_terminal, on_evict=_delete_inpaint_files)
 
 
 def _save_inpaint_candidate_png(image: Image.Image, path: str) -> None:
@@ -2757,25 +2710,10 @@ def _save_inpaint_candidate_png(image: Image.Image, path: str) -> None:
                 pass
 
 
-def _trim_inpaints(*, reserve: int = 0) -> None:
-    """收口 _inpaints 并为新会话预留槽位：按 ts 删最旧的终态项（活动项不删），
-    连带删临时候选文件。调用方须持 _inpaint_lock。"""
-    limit = max(0, _MAX_INPAINTS - max(0, reserve))
-    if len(_inpaints) <= limit:
-        return
-    done = sorted(((iid, v) for iid, v in _inpaints.items()
-                   if v.get('status') in ('done', 'failed', 'cancelled')),
-                  key=lambda kv: kv[1].get('ts', 0))
-    for iid, entry in done[:len(_inpaints) - limit]:
-        _delete_inpaint_files(entry)
-        _inpaints.pop(iid, None)
-        _inpaint_cancel.discard(iid)
-
-
-def _inpaint_queue_is_full() -> bool:
-    """调用方持有 _inpaint_lock 时检查运行中背压与会话表硬上限。"""
-    active = sum(v.get('status') in ('running', 'applying') for v in _inpaints.values())
-    return active >= _MAX_ACTIVE_INPAINTS or len(_inpaints) >= _MAX_INPAINTS
+def _inpaint_queue_is_full(entries) -> bool:
+    """在 INPAINTS.locked() 块内检查运行中背压与会话表硬上限。"""
+    active = sum(v.get('status') in ('running', 'applying') for v in entries.values())
+    return active >= _MAX_ACTIVE_INPAINTS or len(entries) >= _MAX_INPAINTS
 
 
 class InpaintTarget(BaseModel):
@@ -2801,7 +2739,7 @@ class InpaintApplyRequest(BaseModel):
 def _resolve_inpaint_source(target: InpaintTarget):
     """按 target 定位源图，校验逻辑与旧三端点一致。返回 (src_pil, workflow_mode, operation)。"""
     if target.kind == 'job':
-        job = _get_job(target.jid)
+        job = JOBS.get(target.jid)
         if not job:
             raise HTTPException(404, 'job not found')
         if job.status in ('running', 'queued') or job.pro_polishing or job.operation_status == 'running':
@@ -2849,11 +2787,9 @@ async def _generic_inpaint_bg(iid: str, src_pil, engine_mask, blend_mask, prompt
                               workflow_mode, operation, resolved_engine):
     """并发生成 n 个候选（信号量整体持有一次=一次用户操作），部分失败仍交付成功的候选。"""
     def _set(**kw):
-        with _inpaint_lock:
-            if iid in _inpaints:
-                _inpaints[iid].update(kw)
+        INPAINTS.update_fields(iid, **kw)
 
-    should_cancel = lambda: iid in _inpaint_cancel
+    should_cancel = lambda: INPAINTS.is_cancelled(iid)
     try:
         async with _model_semaphores['inpaint']:
             async def one(i: int):
@@ -2906,7 +2842,7 @@ async def _generic_inpaint_bg(iid: str, src_pil, engine_mask, blend_mask, prompt
         logger.exception(f'[修补] 异常 iid={iid}')
         _set(status='failed', error=str(e), stage='')
     finally:
-        _inpaint_cancel.discard(iid)
+        INPAINTS.clear_cancelled(iid)
 
 
 @app.post('/api/inpaint')
@@ -2922,11 +2858,11 @@ async def create_inpaint(req: GenericInpaintRequest):
     effective_n, notice = effective_inpaint_candidate_count(
         req.mode, req.n, resolved_engine=resolved_engine)
     iid = f'ip_{uuid.uuid4().hex}'
-    with _inpaint_lock:
-        _trim_inpaints(reserve=1)
-        if _inpaint_queue_is_full():
+    with INPAINTS.locked() as entries:
+        INPAINTS.trim_locked(reserve=1)
+        if _inpaint_queue_is_full(entries):
             raise HTTPException(429, '修补队列已满，请等待当前任务完成后再试')
-        _inpaints[iid] = {'status': 'running', 'stage': '', 'candidates': [], 'error': '',
+        entries[iid] = {'status': 'running', 'stage': '', 'candidates': [], 'error': '',
                           'ts': time.time(), 'target': req.target.model_dump(),
                           'mode': req.mode, 'prompt': (req.prompt or '').strip(),
                           'requested_n': req.n, 'effective_n': effective_n, 'notice': notice,
@@ -2939,8 +2875,8 @@ async def create_inpaint(req: GenericInpaintRequest):
 @app.post('/api/inpaint/{iid}/apply')
 async def inpaint_apply(iid: str, req: InpaintApplyRequest):
     """把选中的候选提交到目标（apply 不计费；成功后清理该次全部临时候选）。"""
-    with _inpaint_lock:
-        entry = _inpaints.get(iid)
+    with INPAINTS.locked() as entries:
+        entry = entries.get(iid)
         if not entry:
             raise HTTPException(404, 'inpaint task not found')
         if entry.get('status') != 'done':
@@ -2959,7 +2895,7 @@ async def inpaint_apply(iid: str, req: InpaintApplyRequest):
         prompt = entry.get('prompt') or ''
         label = '生成式移除' if mode == 'remove' else '生成式添加'
         if target.kind == 'job':
-            job = _get_job(target.jid)
+            job = JOBS.get(target.jid)
             if not job:
                 raise HTTPException(404, '任务卡已被清除，无法写回')
             if job.status in ('running', 'queued') or job.pro_polishing or job.operation_status == 'running':
@@ -2974,7 +2910,7 @@ async def inpaint_apply(iid: str, req: InpaintApplyRequest):
                     await asyncio.to_thread(api_write_to_record, out, label, job.json_path, job.record_id, ppath)
                 except Exception as ex:
                     logger.warning(f'[修补] 写记录失败 iid={iid}: {ex}')
-            _persist_jobs()
+            JOBS.persist()
             resp = {'ok': True, 'job': _job_view(job)}
         elif target.kind == 'record':
             json_path = _require_record_json_path(target.json_path)
@@ -2995,14 +2931,12 @@ async def inpaint_apply(iid: str, req: InpaintApplyRequest):
             await asyncio.to_thread(lambda: out.convert('RGB').save(dest, format='PNG', optimize=True))
             resp = {'ok': True, 'path': dest, 'url': _to_url(dest), 'thumb': _thumb_url(dest)}
     except Exception:
-        with _inpaint_lock:
-            if _inpaints.get(iid) is entry:
+        with INPAINTS.locked() as entries:
+            if entries.get(iid) is entry:
                 entry['status'] = 'done'
         raise
-    with _inpaint_lock:
-        entry = _inpaints.pop(iid, None)
+    entry = INPAINTS.pop(iid)   # pop 连带清取消标记
     _delete_inpaint_files(entry)
-    _inpaint_cancel.discard(iid)
     logger.info(f'[修补] 已提交候选 iid={iid}, kind={target.kind}, index={req.index}')
     return resp
 
@@ -3029,8 +2963,8 @@ def comfyui_ping(url: str = ''):
 
 @app.get('/api/inpaint/{iid}')
 def inpaint_status(iid: str):
-    with _inpaint_lock:
-        v = _inpaints.get(iid)
+    with INPAINTS.locked() as entries:
+        v = entries.get(iid)
         if not v:
             raise HTTPException(404, 'inpaint task not found')
         # 只回传前端需要的字段（path 是服务端内部路径，target/prompt 前端已知）
@@ -3044,18 +2978,18 @@ def inpaint_status(iid: str):
 @app.post('/api/inpaint/{iid}/cancel')
 def inpaint_cancel(iid: str):
     """running 中 = 标记取消(引擎轮询停止)；终态 = 直接清理（前端「再抽」前废弃旧候选）。"""
-    with _inpaint_lock:
-        entry = _inpaints.get(iid)
+    with INPAINTS.locked() as entries:
+        entry = entries.get(iid)
         if not entry:
             raise HTTPException(404, 'inpaint task not found')
         if entry.get('status') == 'applying':
             raise HTTPException(409, '候选正在写入，无法取消')
         if entry.get('status') != 'running':
             _delete_inpaint_files(entry)
-            _inpaints.pop(iid, None)
-            _inpaint_cancel.discard(iid)
+            entries.pop(iid, None)
+            INPAINTS.clear_cancelled(iid)
             return {'cancelled': True}
-    _inpaint_cancel.add(iid)
+    INPAINTS.request_cancel(iid)
     return {'cancelled': True}
 
 
@@ -3191,5 +3125,5 @@ if __name__ == '__main__':
     if host not in ('127.0.0.1', 'localhost', '::1'):
         raise SystemExit('Floor Engine 当前仅支持本机监听，请使用 FLOOR_API_HOST=127.0.0.1')
     port = int(os.environ.get('FLOOR_API_PORT', '7870'))
-    # 传 app 对象 = 单进程单 worker（_job_history/信号量是进程内状态，必须单 worker）
+    # 传 app 对象 = 单进程单 worker（JOBS 注册表/信号量是进程内状态，必须单 worker）
     uvicorn.run(app, host=host, port=port)

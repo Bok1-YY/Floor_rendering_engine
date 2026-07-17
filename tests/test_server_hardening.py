@@ -11,6 +11,7 @@ from PIL import Image
 from Floor_engine_server import records
 from Floor_engine_server import server_api
 from Floor_engine_server.models import new_job
+from Floor_engine_server.task_registry import TaskRegistry
 
 
 def test_result_files_are_unique_even_in_same_second(tmp_path, monkeypatch):
@@ -133,8 +134,11 @@ def test_client_image_paths_must_stay_in_upload_dir(tmp_path, monkeypatch):
 def test_running_job_cannot_be_deleted(monkeypatch):
     job = new_job("oak", "now")
     job.status = "running"
-    monkeypatch.setattr(server_api, "_job_history", [job])
-    monkeypatch.setattr(server_api, "_persist_jobs", lambda: None)
+    # 独立注册表:不带 on_persist → persist() 空操作,天然隔离落盘
+    jobs = TaskRegistry("jobs", max_entries=60,
+                        is_terminal=server_api._job_is_terminal, newest_first=True)
+    jobs.add(job.job_id, job)
+    monkeypatch.setattr(server_api, "JOBS", jobs)
 
     with pytest.raises(HTTPException) as exc:
         server_api.delete_job(job.job_id)

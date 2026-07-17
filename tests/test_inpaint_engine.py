@@ -14,6 +14,7 @@ from PIL import Image
 from Floor_engine_server import api as api_mod
 from Floor_engine_server import config as config_mod
 from Floor_engine_server import server_api
+from Floor_engine_server.task_registry import TaskRegistry
 
 
 def _patch_config(monkeypatch, cfg: dict):
@@ -248,33 +249,22 @@ def test_inpaint_candidate_png_is_pixel_exact(tmp_path):
 
 def test_inpaint_queue_rejects_when_active_limit_reached():
     """达到运行中上限后背压判断必须拒绝新付费任务。"""
-    old = dict(server_api._inpaints)
-    try:
-        server_api._inpaints.clear()
-        server_api._inpaints.update({
-            f"busy-{i}": {"status": "running", "ts": i, "candidates": []}
-            for i in range(server_api._MAX_ACTIVE_INPAINTS)
-        })
-        assert server_api._inpaint_queue_is_full() is True
-    finally:
-        server_api._inpaints.clear()
-        server_api._inpaints.update(old)
+    entries = {
+        f"busy-{i}": {"status": "running", "ts": i, "candidates": []}
+        for i in range(server_api._MAX_ACTIVE_INPAINTS)
+    }
+    assert server_api._inpaint_queue_is_full(entries) is True
 
 
 def test_inpaint_trim_frees_slot_at_exact_capacity():
-    old = dict(server_api._inpaints)
-    try:
-        server_api._inpaints.clear()
-        server_api._inpaints.update({
-            f"done-{i}": {"status": "cancelled", "ts": i, "candidates": []}
-            for i in range(server_api._MAX_INPAINTS)
-        })
-        server_api._trim_inpaints(reserve=1)
-        assert len(server_api._inpaints) == server_api._MAX_INPAINTS - 1
-        assert "done-0" not in server_api._inpaints
-    finally:
-        server_api._inpaints.clear()
-        server_api._inpaints.update(old)
+    reg = TaskRegistry("inpaints", max_entries=server_api._MAX_INPAINTS,
+                       is_terminal=server_api._inpaint_is_terminal,
+                       on_evict=server_api._delete_inpaint_files)
+    reg.replace((f"done-{i}", {"status": "cancelled", "ts": i, "candidates": []})
+                for i in range(server_api._MAX_INPAINTS))
+    reg.trim(reserve=1)
+    assert len(reg) == server_api._MAX_INPAINTS - 1
+    assert reg.get("done-0") is None
 
 
 def _rect_mask(size=(400, 300), box=(150, 100, 249, 199)):
