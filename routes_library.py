@@ -111,6 +111,8 @@ def load_records(json_path: str):
                 gc['room_url'] = to_url(gc['room_path'])
             if gc.get('image_path'):
                 gc['image_url'] = to_url(gc['image_path'])
+            if isinstance(gc.get('free_image_paths'), list):
+                gc['free_image_urls'] = [to_url(path) for path in gc['free_image_paths']]
         color_ref = record_color_match_ref_path(json_path, r)
         r['color_match_ref_path'] = color_ref
         r['color_match_ref_url'] = to_url(color_ref)
@@ -231,4 +233,3 @@ def review_gallery(filter: str = 'pass', limit: int = 60):
             'result_thumb': result_thumb_url(ap) if ap else '',
         })
     return out
-

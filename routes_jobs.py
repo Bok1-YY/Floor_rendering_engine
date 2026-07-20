@@ -39,13 +39,14 @@ from .records import (
     save_api_result_jpg, save_api_result_png, api_write_to_record,
     safe_output_path, load_records_file, b64_to_pil,
     append_edited_result_to_record, attach_generation_context,
+    create_free_generation_record,
 )
 from .sd_prompts import compile_sd35_prompt
 from .server_helpers import (
     to_url, result_thumb_url, job_view,
     require_record_json_path, require_upload_image_path, panel_require_second_image,
 )
-from .server_schemas import EditRequest, JobSubmitRequest, RecordEditRequest
+from .server_schemas import EditRequest, FreeJobSubmitRequest, JobSubmitRequest, RecordEditRequest
 
 router = APIRouter()
 
@@ -54,7 +55,8 @@ router = APIRouter()
 # 生成 worker（移植自 webui._generate_one_model / _run_job，删去所有 UI 调用）
 # ============================================================
 async def _generate_one_model(job: JobRecord, model_id, prompt_text, stage_key, model_name, *,
-                              api_key, pnp, ims, ar, rp, sref, bevel_ref, jpt, rid, should_cancel):
+                              api_key, pnp, ims, ar, rp, sref, bevel_ref, jpt, rid, should_cancel,
+                              input_image_paths=None):
     """单模型生成：占本模型并发槽 → 调引擎 → 存盘 → 写记录 → 记用量。返回 (jpg路径或None, 错误串)。
     与 webui 版逐行一致，仅删去 _refresh_job_card(UI 刷新)——进度改由 SSE 读 job.{key}_stage。"""
     _t0 = time.time()
@@ -75,7 +77,7 @@ async def _generate_one_model(job: JobRecord, model_id, prompt_text, stage_key, 
             _t0 = time.time()      # 计时从真正开跑算起，不含排队等待
             img, err, provider = await asyncio.to_thread(
                 call_image_generate, api_key, model_id, prompt_text,
-                pnp, ims, ar, rp, sref, _on_stage, should_cancel, bevel_ref)
+                pnp, ims, ar, rp, sref, _on_stage, should_cancel, bevel_ref, input_image_paths)
     except Exception as e:
         img, err, provider = None, str(e), get_image_provider()
     finally:
@@ -355,7 +357,8 @@ async def _run_job_bg(job: JobRecord, req: 'JobSubmitRequest'):
             logger.warning(f"[API任务] gen_context 写入失败 job={jid}: {ex}")
 
         if state.JOBS.is_cancelled(jid, generation):
-            update_job(job, status='failed', error='已取消（用户停止）')
+            update_job(job, status='failed', error='已取消（用户停止）',
+                       operation_status='cancelled', operation_error='已取消')
             return
 
         should_cancel = lambda: state.JOBS.is_cancelled(jid, generation)
@@ -419,6 +422,86 @@ async def _run_job_bg(job: JobRecord, req: 'JobSubmitRequest'):
         state.JOBS.persist()
 
 
+async def _run_free_job_bg(job: JobRecord, req: 'FreeJobSubmitRequest'):
+    """自由创作编排：不识色、不分析风格、不编译提示词，只按 Slot 顺序透传。"""
+    jid = job.job_id
+    generation = state.JOBS.generation
+    targets = list(job.model_targets)
+    cfg = load_config()
+    api_key = (req.api_key or '').strip() or cfg.get('gemini_api_key', '').strip()
+    b2j = proj = None
+    try:
+        if state.JOBS.is_cancelled(jid, generation):
+            update_job(job, status='failed', error='已取消（用户停止）',
+                       operation='generate', operation_status='cancelled', operation_error='已取消')
+            return
+        update_job(job, status='running', started_at=time.time(), operation='generate',
+                   operation_status='running', operation_error='')
+
+        primary = req.image_paths[0]
+        jpt, rid = await asyncio.to_thread(
+            create_free_generation_record, primary, req.prompt, req.image_paths,
+            targets, req.aspect_ratio, req.resolution)
+        job.retry_ctx = dict(
+            api_key=api_key, pnp=primary, cpt=req.prompt, cpt_pro=req.prompt,
+            ims=req.resolution, ar=req.aspect_ratio, rp=None, sref=None, bevel_ref=None,
+            input_image_paths=list(req.image_paths), jpt=jpt, rid=rid,
+            model_filter=job.model_filter, model_targets=targets,
+        )
+        update_job(job, json_path=jpt, record_id=rid, png_path='')
+
+        if state.JOBS.is_cancelled(jid, generation):
+            update_job(job, status='failed', error='已取消（用户停止）',
+                       operation_status='cancelled', operation_error='已取消')
+            return
+        should_cancel = lambda: state.JOBS.is_cancelled(jid, generation)
+
+        def gen_one(model_id, stage_key, model_name):
+            return _generate_one_model(
+                job, model_id, req.prompt, stage_key, model_name,
+                api_key=api_key, pnp=primary, ims=req.resolution, ar=req.aspect_ratio,
+                rp=None, sref=None, bevel_ref=None, jpt=jpt, rid=rid,
+                should_cancel=should_cancel, input_image_paths=list(req.image_paths))
+
+        tasks = []
+        if 'b2' in targets:
+            tasks.append(('b2', gen_one(GEMINI_MODEL_MAP['Nano Banana 2'], 'b2', 'Nano Banana 2')))
+        if 'pro' in targets:
+            tasks.append(('pro', gen_one(GEMINI_MODEL_MAP['Nano Banana Pro'], 'pro', 'Nano Banana Pro')))
+        results = await asyncio.gather(*[c for _, c in tasks], return_exceptions=True)
+        errors = []
+        for (key, _), result in zip(tasks, results):
+            if isinstance(result, Exception):
+                path, err = None, str(result)
+                update_model_run(job, key, status='failed', error=err, stage='')
+            else:
+                path, err = result
+            if key == 'b2':
+                b2j = path
+            elif key == 'pro':
+                proj = path
+            if err:
+                errors.append(f'{key.upper()}: {err}')
+
+        final = compute_runs_final_status(job)
+        err_msg = ' '.join(errors).strip()
+        cancelled = state.JOBS.is_cancelled(jid, generation)
+        update_job(
+            job, status=final, b2_path=b2j, pro_path=proj,
+            error=('已取消，但已出图已保留（已付费）' if cancelled and final in ('done', 'partial') else err_msg),
+            operation_status=('cancelled' if cancelled else ('done' if final in ('done', 'partial') else 'failed')),
+            operation_error=('已取消' if cancelled else err_msg),
+        )
+        logger.info(f"[自由创作] finished job={jid}, status={final}, slots={len(req.image_paths)}")
+    except Exception as ex:
+        logger.exception(f"[自由创作] unhandled job={jid}")
+        update_job(job, status=compute_runs_final_status(job), b2_path=b2j, pro_path=proj,
+                   error=str(ex), operation_status='failed', operation_error=str(ex))
+    finally:
+        state.JOBS.clear_cancelled(jid)
+        state.JOBS.persist()
+
+
 async def _retry_bg(job: JobRecord):
     """重试：用 retry_ctx 只重跑还没出图的模型（移植 webui._retry_job 去 UI）。"""
     ctx = job.retry_ctx or {}
@@ -443,7 +526,8 @@ async def _retry_bg(job: JobRecord):
             return _generate_one_model(job, model_id, prompt_text, stage_key, model_name,
                                        api_key=api_key, pnp=ctx['pnp'], ims=ctx['ims'], ar=ctx['ar'],
                                        rp=ctx['rp'], sref=ctx['sref'], bevel_ref=ctx.get('bevel_ref'),
-                                       jpt=ctx['jpt'], rid=ctx['rid'], should_cancel=should_cancel)
+                                       jpt=ctx['jpt'], rid=ctx['rid'], should_cancel=should_cancel,
+                                       input_image_paths=ctx.get('input_image_paths'))
 
         tasks = []
         if need_b2:
@@ -603,6 +687,8 @@ async def _edit_bg(job: JobRecord, *, api_key, instruction, model_id, model_labe
 # ── 任务：提交 / 列表 / 详情 / SSE / 取消 / 重试 ──
 @router.post('/api/jobs')
 async def create_job(req: JobSubmitRequest):
+    if '自由创作' in (req.params.workflow_mode or ''):
+        raise HTTPException(422, '自由创作请使用 /api/jobs/free')
     cfg = load_config()
     targets = list(req.model_targets or ({'b2': ['b2'], 'pro': ['pro'], 'both': ['b2', 'pro']}[req.model_filter]))
     if not targets or len(targets) != len(set(targets)):
@@ -631,6 +717,33 @@ async def create_job(req: JobSubmitRequest):
     job.workflow_mode = req.params.workflow_mode
     state.JOBS.add(job.job_id, job)   # 登记并顺手收口最旧的终态卡，防长会话内存缓涨
     state.spawn(_run_job_bg(job, req))   # 立即返回，不为整个 4K 生成挂起 HTTP
+    return job_view(job)
+
+
+@router.post('/api/jobs/free')
+async def create_free_job(req: FreeJobSubmitRequest):
+    cfg = load_config()
+    targets = list(req.model_targets)
+    if not targets or len(targets) != len(set(targets)):
+        raise HTTPException(422, 'model_targets 至少选择一个且不可重复')
+    if not ((req.api_key or '').strip() or cfg.get('gemini_api_key', '').strip()):
+        raise HTTPException(400, '所选 B2/Pro 缺少 Gemini API Key')
+    req.image_paths = [
+        require_upload_image_path(path, f'Slot {index}', required=True)
+        for index, path in enumerate(req.image_paths, start=1)
+    ]
+    if len(req.image_paths) != len(set(req.image_paths)):
+        raise HTTPException(422, '自由创作的图片槽不可重复')
+    labels = {'b2': 'B2', 'pro': 'Pro'}
+    label = '[' + '+'.join(labels[key] for key in targets) + ']'
+    primary_name = os.path.splitext(os.path.basename(req.image_paths[0]))[0]
+    job = new_job(f'{primary_name} · 自由创作 {label}', time.strftime('%H:%M:%S'),
+                  legacy_filter_from_targets(targets))
+    job.model_targets = targets
+    ensure_model_runs(job)
+    job.workflow_mode = '自由创作 (自定义提示词/多图)'
+    state.JOBS.add(job.job_id, job)
+    state.spawn(_run_free_job_bg(job, req))
     return job_view(job)
 
 
@@ -838,7 +951,8 @@ async def _regen_once(job: JobRecord):
         return _generate_one_model(job, model_id, prompt_text, sk, name, api_key=api_key,
                                    pnp=ctx['pnp'], ims=ctx['ims'], ar=ctx['ar'], rp=ctx['rp'],
                                    sref=ctx['sref'], bevel_ref=ctx.get('bevel_ref'),
-                                   jpt=ctx['jpt'], rid=ctx['rid'], should_cancel=should_cancel)
+                                   jpt=ctx['jpt'], rid=ctx['rid'], should_cancel=should_cancel,
+                                   input_image_paths=ctx.get('input_image_paths'))
 
     tasks = []
     if 'b2' in targets:
@@ -1018,4 +1132,3 @@ async def record_edit(req: RecordEditRequest):
         preserve=req.preserve_floor_geometry, json_path=json_path,
         record_id=req.record_id, source_ref=req.result_id, color_match=req.color_match))
     return job_view(job)
-

@@ -153,7 +153,8 @@ def call_gemini_generate(api_key: str, model_id: str, prompt_text: str, image_pa
                          room_image_path: Optional[str] = None,
                          style_ref_image_path: Optional[str] = None,
                          on_stage=None, should_cancel=None,
-                         bevel_ref_image_path: Optional[str] = None) -> Tuple[Optional[object], Optional[str]]:
+                         bevel_ref_image_path: Optional[str] = None,
+                         input_image_paths: Optional[list[str]] = None) -> Tuple[Optional[object], Optional[str]]:
     """流式文生图/图生图。
 
     - Pro 模型(model_id 含 'pro')额外请求 includeThoughts，实时回传思考标题。
@@ -171,20 +172,31 @@ def call_gemini_generate(api_key: str, model_id: str, prompt_text: str, image_pa
         f"floor={image_path}, room_ref={bool(room_image_path)}, style_ref={bool(style_ref_image_path)}, "
         f"prompt_len={len(prompt_text or '')}, prompt_sha256={hashlib.sha256((prompt_text or '').encode()).hexdigest()[:12]}"
     )
-    if not os.path.exists(image_path):
-        logger.error(f"[API生成] 素材图不存在: {image_path}")
-        return None, f"素材图不存在: {image_path}"
-    floor_b64, floor_mime = _read_image_b64(image_path)
-    room_b64, room_mime = _read_image_b64(room_image_path)
-    sref_b64, sref_mime = _read_image_b64(style_ref_image_path)
-    # 圆弧倒角参考图：只供模型参考板边倒角形状(颜色/木纹仍取地板小样)。放在地板小样之前。
-    bevel_b64, bevel_mime = _read_image_b64(bevel_ref_image_path)
-
     parts = [{"text": prompt_text}]
-    if sref_b64: parts.append({"inlineData": {"mimeType": sref_mime, "data": sref_b64}})
-    if room_b64: parts.append({"inlineData": {"mimeType": room_mime, "data": room_b64}})
-    if bevel_b64: parts.append({"inlineData": {"mimeType": bevel_mime, "data": bevel_b64}})
-    parts.append({"inlineData": {"mimeType": floor_mime, "data": floor_b64}})
+    if input_image_paths is not None:
+        ordered = list(input_image_paths)
+        missing = [p for p in ordered if not p or not os.path.exists(p)]
+        if missing:
+            logger.error(f"[API生成] 自由素材图不存在: {missing[0]}")
+            return None, f"素材图不存在: {missing[0]}"
+        for path in ordered:
+            data, mime = _read_image_b64(path)
+            if not data:
+                return None, f"素材图读取失败: {path}"
+            parts.append({"inlineData": {"mimeType": mime, "data": data}})
+    else:
+        if not os.path.exists(image_path):
+            logger.error(f"[API生成] 素材图不存在: {image_path}")
+            return None, f"素材图不存在: {image_path}"
+        floor_b64, floor_mime = _read_image_b64(image_path)
+        room_b64, room_mime = _read_image_b64(room_image_path)
+        sref_b64, sref_mime = _read_image_b64(style_ref_image_path)
+        # 圆弧倒角参考图：只供模型参考板边倒角形状。放在地板小样之前。
+        bevel_b64, bevel_mime = _read_image_b64(bevel_ref_image_path)
+        if sref_b64: parts.append({"inlineData": {"mimeType": sref_mime, "data": sref_b64}})
+        if room_b64: parts.append({"inlineData": {"mimeType": room_mime, "data": room_b64}})
+        if bevel_b64: parts.append({"inlineData": {"mimeType": bevel_mime, "data": bevel_b64}})
+        parts.append({"inlineData": {"mimeType": floor_mime, "data": floor_b64}})
 
     cfg = load_config(); proxy = cfg.get("proxy", "").strip()
     proxies = {"http": proxy, "https": proxy} if proxy else None
@@ -1177,7 +1189,8 @@ def call_fal_generate(api_key: str, model_id: str, prompt_text: str, image_path:
                       room_image_path: Optional[str] = None,
                       style_ref_image_path: Optional[str] = None,
                       on_stage=None, should_cancel=None,
-                      bevel_ref_image_path: Optional[str] = None) -> Tuple[Optional[object], Optional[str]]:
+                      bevel_ref_image_path: Optional[str] = None,
+                      input_image_paths: Optional[list[str]] = None) -> Tuple[Optional[object], Optional[str]]:
     """经 Fal 路由调用 Nano Banana 系列(图生图 /edit 端点)。
 
     与 call_gemini_generate 同契约:返回 (PIL.Image, None) 或 (None, 错误字符串),并支持 on_stage 回调。
@@ -1202,13 +1215,19 @@ def call_fal_generate(api_key: str, model_id: str, prompt_text: str, image_path:
         f"floor={image_path}, room_ref={bool(room_image_path)}, style_ref={bool(style_ref_image_path)}, "
         f"prompt_len={len(prompt_text or '')}, prompt_sha256={hashlib.sha256((prompt_text or '').encode()).hexdigest()[:12]}"
     )
-    if not os.path.exists(image_path):
+    if input_image_paths is None and not os.path.exists(image_path):
         logger.error(f"[Fal生成] 素材图不存在: {image_path}")
         return None, f"素材图不存在: {image_path}"
 
-    # image_urls 顺序与 Gemini 直连保持一致:风格参考 → 房间参考 → 倒角参考 → 地板小样(地板最后/最关键)
+    # 自由模式严格按 Slot 顺序；旧模式保持既有顺序。
     image_urls = []
-    for p in (style_ref_image_path, room_image_path, bevel_ref_image_path, image_path):
+    ordered_paths = (list(input_image_paths) if input_image_paths is not None else
+                     [style_ref_image_path, room_image_path, bevel_ref_image_path, image_path])
+    if input_image_paths is not None:
+        missing = [p for p in ordered_paths if not p or not os.path.exists(p)]
+        if missing:
+            return None, f"素材图不存在: {missing[0]}"
+    for p in ordered_paths:
         uri = _file_to_data_uri(p)
         if uri:
             image_urls.append(uri)
@@ -1351,7 +1370,8 @@ def call_image_generate(api_key: str, model_id: str, prompt_text: str, image_pat
                         room_image_path: Optional[str] = None,
                         style_ref_image_path: Optional[str] = None,
                         on_stage=None, should_cancel=None,
-                        bevel_ref_image_path: Optional[str] = None) -> Tuple[Optional[object], Optional[str], str]:
+                        bevel_ref_image_path: Optional[str] = None,
+                        input_image_paths: Optional[list[str]] = None) -> Tuple[Optional[object], Optional[str], str]:
     """生图调度器:按 engine_config.json 的 image_provider 选线路,两条线路同契约。
 
     返回 (PIL.Image|None, 错误字符串|None, provider)——provider∈{'google','fal'} 是【实际】出图/尝试
@@ -1372,13 +1392,15 @@ def call_image_generate(api_key: str, model_id: str, prompt_text: str, image_pat
             return None, "未配置 Fal API Key(请在 API 设置里填写 Fal Key)", "fal"
         img, err = call_fal_generate(fal_key, model_id, prompt_text, image_path, image_size,
                                      aspect_ratio, room_image_path, style_ref_image_path, on_stage, should_cancel,
-                                     bevel_ref_image_path=bevel_ref_image_path)
+                                     bevel_ref_image_path=bevel_ref_image_path,
+                                     input_image_paths=input_image_paths)
         return img, err, "fal"
 
     # ── 线路=google：先走直连 ──
     img, err = call_gemini_generate(api_key, model_id, prompt_text, image_path, image_size,
                                     aspect_ratio, room_image_path, style_ref_image_path, on_stage, should_cancel,
-                                    bevel_ref_image_path=bevel_ref_image_path)
+                                    bevel_ref_image_path=bevel_ref_image_path,
+                                    input_image_paths=input_image_paths)
     if img is not None:
         return img, err, "google"
 
@@ -1391,7 +1413,8 @@ def call_image_generate(api_key: str, model_id: str, prompt_text: str, image_pat
         _notify_stage(on_stage, "🔁 直连失败，转 Fal 备用线路…")
         fb_img, fb_err = call_fal_generate(fal_key, model_id, prompt_text, image_path, image_size,
                                            aspect_ratio, room_image_path, style_ref_image_path, on_stage, should_cancel,
-                                           bevel_ref_image_path=bevel_ref_image_path)
+                                           bevel_ref_image_path=bevel_ref_image_path,
+                                           input_image_paths=input_image_paths)
         if fb_img is not None:
             logger.info(f"[生图调度] Fal 备用线路出图成功 model={model_id}")
             return fb_img, fb_err, "fal"   # 实际出图线路=Fal，用量记 Fal

@@ -139,7 +139,7 @@ Floor_engine_server/
 ├── logging_setup.py     logger（输出到 test/app_local_save.log）
 │
 ├── web/                 ★ Next.js 前端（见 §五）
-├── tests/               pytest：golden 提示词、66 端点路由契约快照、TaskRegistry/用量直测、安全硬化、校色回归
+├── tests/               pytest：golden 提示词、67 端点路由契约快照、TaskRegistry/用量直测、安全硬化、校色回归
 ├── assets/              bevel_ref*.jpg（倒角参考图）、logo.svg —— 入库
 ├── requirements.txt     Python 依赖
 ├── 开发日志.md          每次会话改了啥、为什么（最新在最上，接手前先读）
@@ -188,10 +188,13 @@ POST /api/jobs ──秒回 job_id──▶ 后台 asyncio task(routes_jobs._run
                                   │  出一张 api_write_to_record 落盘一张；stage 文本实时更新
 前端 GET /api/jobs/{id}/stream ◀─ SSE 每秒推 job_view 快照，进终态推 done 事件并关闭
 ```
+自由创作走独立 `POST /api/jobs/free`：`prompt` 原样透传，`image_paths` 保持 Slot 1–3 顺序，
+且只允许 B2 / Pro。它复用同一任务注册表、SSE、取消、重试和重抽，但不进入 `prompts.py` 的地板提示词管线。
+
 进程内状态全部在 `server_state.py`：`JOBS`/`PREVIEWS`/`INPAINTS` 三个 `TaskRegistry` 实例（成员管理内部加锁；单任务取消集合 + 全局取消代次是 JOBS 的方法）、`model_semaphores`(b2/pro/sd35/inpaint 各一把，lifespan 里 `init_runtime()` 建)。新任务以 `model_targets` + `model_runs` 为真源，旧 `model_filter`/B2/Pro 固定字段仅作兼容；终态由 `compute_runs_final_status` 汇总。
 
 ### 4.3 端点目录（50+ API 路由）
-- **作业** `/api/jobs`：`POST`建（`model_targets` 可多选 b2/pro/sd35）· `GET`列 · `GET {id}` · `GET {id}/stream`(SSE) · `POST {id}/cancel` · `POST cancel-all` · `POST clear-completed`(清完成) · `POST {id}/delete`(删单条) · `POST {id}/retry` · `POST {id}/sd-upscale`(仅重试 AuraSR) · `GET {id}/result?model=&idx=`(候选切换) · `POST {id}/polish`(磨缝) · `POST {id}/edit`(二改) · `POST {id}/regen?n=`(重抽/多抽)。
+- **作业** `/api/jobs`：`POST`建（`model_targets` 可多选 b2/pro/sd35）· `POST /free` 建自由多图任务 · `GET`列 · `GET {id}` · `GET {id}/stream`(SSE) · `POST {id}/cancel` · `POST cancel-all` · `POST clear-completed`(清完成) · `POST {id}/delete`(删单条) · `POST {id}/retry` · `POST {id}/sd-upscale`(仅重试 AuraSR) · `GET {id}/result?model=&idx=`(候选切换) · `POST {id}/polish`(磨缝) · `POST {id}/edit`(二改) · `POST {id}/regen?n=`(重抽/多抽)。
 - **预览** `/api/preview`：`POST` 创建轻量预览 · `GET {pid}` 查询 · `POST {pid}/cancel` 取消。
 - **记录** `/api/records`：`GET`列文件 · `GET load` · `POST reveal`(解密) · `POST edit`(记录内二改) · `POST result/delete` · `POST result/favorite` · `POST result/review`(人工评审：通过/备选/淘汰、标签、备注、最佳图) · `POST delete`(删整条) · `GET export/{html,pptx,favorites-pptx}`(FileResponse 下载)。
 - **上传** `POST /api/uploads/{floor,room,ref}`；品牌 Logo 为 `POST /api/uploads/logo` 与 `POST /api/uploads/logo/clear`。

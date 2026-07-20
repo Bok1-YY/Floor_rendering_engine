@@ -14,7 +14,7 @@ from typing import List, Tuple, Optional
 from PIL import Image, PngImagePlugin
 
 from .config import MAIN_OUTPUT_DIR, UPLOAD_DIR, logger
-from .models import JobRecord, ensure_candidate_lists
+from .models import JobRecord, ensure_candidate_lists, legacy_filter_from_targets
 from .reveal_security import obfuscate_text, deobfuscate_text, load_reveal_hash
 
 # ── 记录文件并发保护 ──────────────────────────────────────────────
@@ -37,6 +37,49 @@ def get_json_path(image_path):
     target_dir = os.path.join(MAIN_OUTPUT_DIR, base_name)
     os.makedirs(target_dir, exist_ok=True)
     return os.path.join(target_dir, f"{base_name}_记录.json"), base_name, target_dir
+
+
+def create_free_generation_record(primary_image_path: str, prompt: str, image_paths: List[str],
+                                  model_targets: List[str], aspect_ratio: str,
+                                  resolution: str) -> Tuple[str, str]:
+    """为自由创作建立记录。
+
+    用 Slot 1 只做文件分组锚点，不做地板小样处理。用户明确选择了
+    「自由提示词可见」，因此 user_prompt 故意明文落在自由记录中；
+    既有工作流的 _pe/_pe_pro 保护机制不受影响。
+    """
+    json_path, _base_name, _target_dir = get_json_path(primary_image_path)
+    record_id = time.strftime("%Y%m%d_%H%M%S") + f"_{uuid.uuid4().hex[:12]}"
+    paths = list(image_paths)
+    targets = list(model_targets)
+    new_record = {
+        'id': record_id,
+        'timestamp': time.strftime("%Y-%m-%d %H:%M:%S"),
+        'workflow_mode': '自由创作 (自定义提示词/多图)',
+        'room_type': '自由创作',
+        'property_type': '',
+        'style': '',
+        'location': '',
+        'seam': '',
+        'params_summary': f'自由创作 · {len(paths)} 张参考图 · {aspect_ratio} · {resolution}',
+        'user_prompt': prompt,
+        '_schema_version': 2,
+        'gen_context': {
+            'free_image_paths': paths,
+            'model_filter': legacy_filter_from_targets(targets),
+            'model_targets': targets,
+            'free_options': {
+                'aspect_ratio': aspect_ratio,
+                'resolution': resolution,
+            },
+        },
+        'results': [],
+    }
+    with record_file_lock(json_path):
+        records = load_records_file(json_path)
+        records.append(new_record)
+        save_records_file(json_path, records)
+    return json_path, record_id
 
 
 # ── 渲染队列持久化：重启后恢复已完成的卡片（图片本就在盘上）──────────────
@@ -754,5 +797,6 @@ __all__ = [
     'toggle_result_favorite', 'update_result_review',
     'attach_generation_context', 'load_review_summary', 'collect_review_gallery',
     'persist_jobs', 'load_persisted_jobs', 'list_recent_floor_swatches',
+    'create_free_generation_record',
     'safe_output_path', 'save_api_result_png', 'room_type_counts',
 ]

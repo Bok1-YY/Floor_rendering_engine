@@ -1,9 +1,11 @@
 import io
+import base64
 import json
 import os
 import asyncio
 
 import pytest
+from pydantic import ValidationError
 from fastapi import HTTPException
 from fastapi.responses import Response
 from PIL import Image
@@ -12,6 +14,7 @@ from Floor_engine_server import server_state, server_helpers, routes_jobs, route
 from Floor_engine_server import records
 from Floor_engine_server import server_api
 from Floor_engine_server.models import new_job
+from Floor_engine_server.server_schemas import FreeJobSubmitRequest
 from Floor_engine_server.task_registry import TaskRegistry
 
 
@@ -181,3 +184,100 @@ def test_asgi_lifespan_health_and_origin_guard(monkeypatch):
             assert blocked.status_code == 403
 
     asyncio.run(exercise())
+
+
+def test_free_job_schema_enforces_prompt_slots_and_models():
+    valid = FreeJobSubmitRequest(prompt="  按第一张图的构图生成  ", image_paths=["a.png"])
+    assert valid.prompt.startswith("  ")  # 验空用 strip，真正发送保留原文
+    with pytest.raises(ValidationError):
+        FreeJobSubmitRequest(prompt="   ", image_paths=["a.png"])
+    with pytest.raises(ValidationError):
+        FreeJobSubmitRequest(prompt="x", image_paths=[])
+    with pytest.raises(ValidationError):
+        FreeJobSubmitRequest(prompt="x", image_paths=["1", "2", "3", "4"])
+    with pytest.raises(ValidationError):
+        FreeJobSubmitRequest(prompt="x", image_paths=["1"], model_targets=["sd35"])
+
+
+def test_free_record_keeps_user_prompt_visible_and_slot_order(tmp_path, monkeypatch):
+    monkeypatch.setattr(records, "MAIN_OUTPUT_DIR", str(tmp_path))
+    slots = [str(tmp_path / "slot2.png"), str(tmp_path / "slot1.png")]
+    json_path, record_id = records.create_free_generation_record(
+        slots[0], "使用第二张图的色彩", slots, ["b2", "pro"], "16:9", "4K")
+
+    record = records.load_records_file(json_path)[0]
+    assert record["id"] == record_id
+    assert record["user_prompt"] == "使用第二张图的色彩"
+    assert record["gen_context"]["free_image_paths"] == slots
+    assert "_pe" not in record and "prompt_en" not in record
+
+
+def test_google_and_fal_free_inputs_keep_slot_order(tmp_path, monkeypatch):
+    from Floor_engine_server import api as api_mod
+
+    paths = []
+    for index, color in enumerate(("red", "green", "blue"), start=1):
+        path = tmp_path / f"slot{index}.png"
+        Image.new("RGB", (2, 2), color).save(path)
+        paths.append(str(path))
+
+    captured = []
+
+    class RejectedResponse:
+        status_code = 400
+        text = "stop"
+
+        def json(self):
+            return {}
+
+    def fake_post(_url, **kwargs):
+        captured.append(kwargs["json"])
+        return RejectedResponse()
+
+    monkeypatch.setattr(api_mod, "load_config", lambda: {"retry_attempts": 1})
+    monkeypatch.setattr(api_mod._req, "post", fake_post)
+    api_mod.call_gemini_generate("k", "m", " exact prompt ", paths[0], input_image_paths=paths)
+    google_parts = captured[-1]["contents"][0]["parts"]
+    assert google_parts[0] == {"text": " exact prompt "}
+    assert [base64.b64decode(part["inlineData"]["data"]) for part in google_parts[1:]] == [
+        open(path, "rb").read() for path in paths
+    ]
+
+    api_mod.call_fal_generate("k", "gemini-3-pro-image-preview", " exact prompt ", paths[0],
+                              input_image_paths=paths)
+    fal_payload = captured[-1]
+    assert fal_payload["prompt"] == " exact prompt "
+    assert [uri.split(",", 1)[1] for uri in fal_payload["image_urls"]] == [
+        base64.b64encode(open(path, "rb").read()).decode("ascii") for path in paths
+    ]
+
+
+def test_create_free_job_registers_queue_without_starting_network(tmp_path, monkeypatch):
+    uploads = tmp_path / "uploads"
+    uploads.mkdir()
+    slot = uploads / "slot.png"
+    Image.new("RGB", (2, 2), "red").save(slot)
+    jobs = TaskRegistry("jobs", max_entries=60,
+                        is_terminal=server_state.job_is_terminal, newest_first=True)
+    spawned = []
+
+    def capture(coro):
+        spawned.append(coro)
+
+    monkeypatch.setattr(server_helpers, "UPLOAD_DIR", str(uploads))
+    monkeypatch.setattr(server_state, "JOBS", jobs)
+    monkeypatch.setattr(server_state, "spawn", capture)
+    monkeypatch.setattr(routes_jobs, "load_config", lambda: {"gemini_api_key": "k"})
+    request = FreeJobSubmitRequest(prompt="原样指令", image_paths=[str(slot)], model_targets=["pro"])
+
+    view = asyncio.run(routes_jobs.create_free_job(request))
+    assert view["workflow_mode"].startswith("自由创作")
+    assert view["model_targets"] == ["pro"]
+    assert len(jobs.snapshot()) == 1 and len(spawned) == 1
+    spawned[0].close()  # 本测试只验证入队回执，不启动付费 worker
+
+    duplicate = FreeJobSubmitRequest(
+        prompt="x", image_paths=[str(slot), str(uploads / "." / "slot.png")], model_targets=["b2"])
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(routes_jobs.create_free_job(duplicate))
+    assert exc.value.status_code == 422

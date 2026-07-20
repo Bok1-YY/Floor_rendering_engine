@@ -2,6 +2,7 @@
 import type {
   JobView,
   JobSubmit,
+  FreeJobSubmit,
   EditRequest,
   Swatch,
   ConfigView,
@@ -87,6 +88,7 @@ export const api = {
   uploadRef: (f: File) => upload("/api/uploads/ref", f),
 
   createJob: (req: JobSubmit) => jsend<JobView>("/api/jobs", "POST", req),
+  createFreeJob: (req: FreeJobSubmit) => jsend<JobView>("/api/jobs/free", "POST", req),
   listJobs: (limit = 50) => jget<JobView[]>(`/api/jobs?limit=${limit}`),
   getJob: (id: string) => jget<JobView>(`/api/jobs/${id}`),
   cancelJob: (id: string) =>

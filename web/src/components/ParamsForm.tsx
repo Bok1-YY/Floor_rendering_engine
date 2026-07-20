@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/select";
 import { SectionHeader, Segmented } from "@/components/dc-ui";
 import { InpaintDialog } from "@/components/InpaintDialog";
+import { FreeModePanel } from "@/components/FreeModePanel";
 
 const short = (s: string) => s.split(" (")[0];
 
@@ -26,6 +27,7 @@ const WF_SUB: Record<string, string> = {
   地板替换: "保留原图空间，仅替换原地面",
   Omakase: "AI 代笔场景，配置精简",
   墙板模式: "护墙板/木饰面：再设计 / 替换 / 原创",
+  自由创作: "自己写完整指令，按顺序上传 1–3 张图",
 };
 
 function Check() {
@@ -178,6 +180,10 @@ export function ParamsForm({
   onRefPick,
   roomValue,
   onRoomPick,
+  freePrompt,
+  freeImages,
+  onFreePrompt,
+  onFreeImages,
 }: {
   options: OptionsView;
   params: GenParams;
@@ -191,6 +197,10 @@ export function ParamsForm({
   onRefPick: (s: Swatch) => void;
   roomValue: Swatch | null;
   onRoomPick: (s: Swatch) => void;
+  freePrompt: string;
+  freeImages: Swatch[];
+  onFreePrompt: (value: string) => void;
+  onFreeImages: (value: Swatch[]) => void;
 }) {
   const cnMode = !!params.cn_mode;
   const isRef = params.workflow_mode.includes("参照模式");
@@ -198,6 +208,7 @@ export function ParamsForm({
   const isPet = params.workflow_mode.includes("宠物友好");
   const isOmakase = params.workflow_mode.includes("Omakase");
   const isPanel = params.workflow_mode.includes("墙板");
+  const isFree = params.workflow_mode.includes("自由创作");
   const panelSub = params.panel_submode || "再设计";
   const isPanelScene = isPanel && !panelSub.includes("替换"); // 再设计/纯原创：暴露场景控件；替换保留原图
   const [advOpen, setAdvOpen] = useState(false);
@@ -279,7 +290,12 @@ export function ParamsForm({
             <button
               key={m}
               type="button"
-              onClick={() => onParams({ workflow_mode: m })}
+              onClick={() => {
+                onParams({ workflow_mode: m });
+                if (m.includes("自由创作")) {
+                  onModelTargets(modelTargets.filter((key) => key !== "sd35"));
+                }
+              }}
               className={cn(
                 "rounded-xl border p-[12px] text-left transition",
                 active
@@ -314,6 +330,15 @@ export function ParamsForm({
           );
         })}
       </div>
+
+      {isFree && (
+        <FreeModePanel
+          prompt={freePrompt}
+          images={freeImages}
+          onPrompt={onFreePrompt}
+          onImages={onFreeImages}
+        />
+      )}
 
       {/* ── 源图上传：随工作流出现（地板替换=房间原图 / 参照模式=参照图）── */}
       {(isReplace || isRef) && (
@@ -483,7 +508,7 @@ export function ParamsForm({
 
       {/* ── 市场 + 模型线路 ── */}
       <div className="mt-[18px] flex gap-4">
-        {!isOmakase && !isPanel && (
+        {!isOmakase && !isPanel && !isFree && (
         <div className="w-40 flex-none">
           <div className="mb-[7px] text-[11.5px] font-semibold text-muted-foreground">市场</div>
           <Segmented
@@ -498,12 +523,12 @@ export function ParamsForm({
         )}
         <div className="flex-1">
           <div className="mb-[7px] text-[11.5px] font-semibold text-muted-foreground">模型线路</div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className={cn("grid gap-2", isFree ? "grid-cols-2" : "grid-cols-3")}>
             {([
               ["b2", "B2"],
               ["pro", "Pro"],
               ["sd35", "SD 3.5"],
-            ] as const).map(([key, label]) => {
+            ] as const).filter(([key]) => !isFree || key !== "sd35").map(([key, label]) => {
               const active = modelTargets.includes(key);
               const disabled = key === "sd35" && !active && (!sdEnabled || !params.workflow_mode.includes("纯效果图"));
               return (
@@ -529,7 +554,9 @@ export function ParamsForm({
             })}
           </div>
           <div className="mt-1.5 text-[10.5px] text-muted-foreground">
-            可同时选择多个模型并行生成；SD 3.5 使用独立提示词与地板参考图。
+            {isFree
+              ? "B2 / Pro 会收到完全相同的自由指令与 Slot 顺序。"
+              : "可同时选择多个模型并行生成；SD 3.5 使用独立提示词与地板参考图。"}
           </div>
         </div>
       </div>
@@ -606,7 +633,7 @@ export function ParamsForm({
         </div>
       )}
 
-      {!isOmakase && !isPanel && (<>
+      {!isOmakase && !isPanel && !isFree && (<>
       {/* ── 位置 ── */}
       <SectionHeader className="mx-0.5 mb-[11px] mt-[22px]">
         {cnMode ? "位置 / 国内市场" : "位置 / 海外市场"}
@@ -717,7 +744,7 @@ export function ParamsForm({
       </>)}
 
       {/* ── 板材与工艺（墙板模式不适用：木纹/竖纹/哑光已由墙板模板固化，隐藏地板专用字段）── */}
-      {!isPanel && (<>
+      {!isPanel && !isFree && (<>
       <SectionHeader className="mx-0.5 mb-[11px] mt-[22px]">
         板材与工艺 / MATERIAL
       </SectionHeader>
@@ -824,7 +851,7 @@ export function ParamsForm({
         </>
       )}
 
-      {!isOmakase && !(isPanel && panelSub.includes("替换")) && (<>
+      {!isOmakase && !isFree && !(isPanel && panelSub.includes("替换")) && (<>
       {/* ── 风格与镜头（墙板·替换保留原图风格/光影/镜头，故隐藏）── */}
       <SectionHeader className="mx-0.5 mb-[11px] mt-[22px]">
         风格与镜头 / STYLE
@@ -894,7 +921,7 @@ export function ParamsForm({
         />
       </div>
 
-      {!isOmakase && (<>
+      {!isOmakase && !isFree && (<>
       {/* ── 高级：回避清单 / 自定义补充 ── */}
       <button
         type="button"

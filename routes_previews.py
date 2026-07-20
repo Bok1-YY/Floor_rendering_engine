@@ -87,6 +87,8 @@ async def _preview_bg(pid: str, req: 'PreviewRequest'):
 
 @router.post('/api/preview')
 async def create_preview(req: PreviewRequest):
+    if '自由创作' in (req.params.workflow_mode or ''):
+        raise HTTPException(422, '自由创作首版不支持快速预览')
     if not ((req.api_key or '').strip() or load_config().get('gemini_api_key', '').strip()):
         raise HTTPException(400, '缺少 API Key')
     req.image_path = require_upload_image_path(req.image_path, '地板图', required=True)
@@ -111,4 +113,3 @@ def get_preview(pid: str):
 def cancel_preview(pid: str):
     state.PREVIEWS.request_cancel(pid)   # _preview_bg 与底层 call_gemini_generate 均会读 should_cancel
     return {'cancelled': True}
-

@@ -6,7 +6,7 @@
 """
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # ── 任务提交/预览/二改 ──────────────────────────────────────
@@ -75,6 +75,25 @@ class JobSubmitRequest(BaseModel):
     room_path: Optional[str] = None       # 房间替换图（地板替换流程）
     ref_path: Optional[str] = None        # 参照模式参考图
     params: GenParams
+
+
+class FreeJobSubmitRequest(BaseModel):
+    """自由创作任务：用户提示词原样透传，图片按列表顺序交给模型。"""
+    model_config = {'protected_namespaces': ()}
+
+    prompt: str = Field(min_length=1, max_length=10_000)
+    image_paths: List[str] = Field(min_length=1, max_length=3)
+    model_targets: List[Literal['b2', 'pro']] = Field(default_factory=lambda: ['b2', 'pro'])
+    aspect_ratio: Literal['4:3', '16:9', '3:4', '9:16'] = '4:3'
+    resolution: Literal['2K', '4K'] = '4K'
+    api_key: str = ''
+
+    @field_validator('prompt')
+    @classmethod
+    def prompt_must_contain_text(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError('自由提示词不能为空')
+        return value
 
 
 class PreviewRequest(BaseModel):
@@ -312,4 +331,3 @@ class GenericInpaintRequest(InpaintPayload):
 
 class InpaintApplyRequest(BaseModel):
     index: int = Field(ge=0, le=2)
-

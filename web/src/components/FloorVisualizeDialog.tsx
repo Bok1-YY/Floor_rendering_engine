@@ -346,12 +346,14 @@ function FloorVisualizeSession({
     }
   }, [requestPayload]);
 
+  const hasPreview = preview.length > 0;
+
   // 首次点击预览后，参数/遮罩改动自动刷新；避免初次打开就发大图请求。
   useEffect(() => {
-    if (!preview) return;
+    if (!hasPreview) return;
     const timer = window.setTimeout(() => void runPreview(), 550);
     return () => window.clearTimeout(timer);
-  }, [preview ? 1 : 0, revision, scale, rotation, offsetX, offsetY, illumination, shadow, feather, runPreview]);
+  }, [hasPreview, revision, scale, rotation, offsetX, offsetY, illumination, shadow, feather, runPreview]);
 
   useEffect(() => () => previewAbort.current?.abort(), []);
 

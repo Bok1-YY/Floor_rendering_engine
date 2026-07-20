@@ -17,6 +17,8 @@ export interface GenerateDraft {
   refImg: Swatch | null;
   roomImg: Swatch | null;
   recipes: ResolvedRecipe[];
+  freePrompt: string;
+  freeImages: Swatch[];
 }
 
 /** 读草稿；无 / 损坏 / 非浏览器环境一律返回 null（调用方回落默认）。 */
@@ -62,6 +64,12 @@ export interface ReuseRequest {
   floorPath?: string;
   roomPath?: string;
   refPath?: string;
+  freePrompt?: string;
+  freeImagePaths?: string[];
+  freeOptions?: {
+    aspect_ratio?: string;
+    resolution?: string;
+  };
 }
 
 export function saveReuseRequest(r: ReuseRequest): void {

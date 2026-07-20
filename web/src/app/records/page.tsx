@@ -287,6 +287,23 @@ export default function RecordsPage() {
   // 老记录（无 gen_context）不显示入口。floor_tone 沿用快照值，不重新识色。
   function doReuse(r: RecordEntry) {
     const gc = r.gen_context;
+    if (r.user_prompt && gc?.free_image_paths?.length) {
+      saveReuseRequest({
+        params: {
+          workflow_mode: "自由创作 (自定义提示词/多图)",
+          aspect_ratio: gc.free_options?.aspect_ratio,
+          resolution: gc.free_options?.resolution,
+        },
+        modelFilter: gc.model_filter,
+        modelTargets: gc.model_targets,
+        freePrompt: r.user_prompt,
+        freeImagePaths: gc.free_image_paths,
+        freeOptions: gc.free_options,
+      });
+      toast.success("自由提示词与 Slot 顺序已载入生成页");
+      router.push("/");
+      return;
+    }
     if (!gc?.params) return;
     saveReuseRequest({
       params: gc.params,
@@ -520,7 +537,7 @@ export default function RecordsPage() {
                           {r.workflow_mode ? ` · ${String(r.workflow_mode)}` : ""}
                         </span>
                         <div className="flex flex-none gap-2.5 text-[14px] text-muted-foreground">
-                          {r.gen_context?.params && (
+                          {(r.gen_context?.params || (r.user_prompt && r.gen_context?.free_image_paths?.length)) && (
                             <button
                               title="用这套参数再生成"
                               onClick={() => doReuse(r)}
@@ -529,13 +546,15 @@ export default function RecordsPage() {
                               ⟳
                             </button>
                           )}
-                          <button
-                            title="解密提示词"
-                            onClick={() => setReveal({ open: true, rid, pw: "", text: "" })}
-                            className="hover:text-foreground"
-                          >
-                            🔑
-                          </button>
+                          {!r.user_prompt && (
+                            <button
+                              title="解密提示词"
+                              onClick={() => setReveal({ open: true, rid, pw: "", text: "" })}
+                              className="hover:text-foreground"
+                            >
+                              🔑
+                            </button>
+                          )}
                           <button
                             title="删除记录"
                             onClick={() => doDeleteRecord(rid)}
@@ -545,6 +564,26 @@ export default function RecordsPage() {
                           </button>
                         </div>
                       </div>
+
+                      {r.user_prompt && (
+                        <div className="mb-3 rounded-[10px] border border-border bg-panel px-3 py-2.5">
+                          <div className="mb-1.5 flex items-center justify-between gap-3">
+                            <span className="text-[11px] font-bold text-secondary-foreground">自由指令词</span>
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(r.user_prompt || "");
+                                toast.success("指令词已复制");
+                              }}
+                              className="text-[11px] font-semibold text-muted-foreground hover:text-foreground"
+                            >
+                              复制
+                            </button>
+                          </div>
+                          <p className="whitespace-pre-wrap break-words text-[11.5px] leading-relaxed text-secondary-foreground">
+                            {r.user_prompt}
+                          </p>
+                        </div>
+                      )}
 
                       <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-[11px]">
                         {(r.results || []).map((res, j) => {

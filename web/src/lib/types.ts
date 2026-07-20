@@ -130,6 +130,15 @@ export interface JobSubmit {
   params: GenParams;
 }
 
+export interface FreeJobSubmit {
+  prompt: string;
+  image_paths: string[];
+  model_targets: Array<"b2" | "pro">;
+  aspect_ratio: "4:3" | "16:9" | "3:4" | "9:16";
+  resolution: "2K" | "4K";
+  api_key?: string;
+}
+
 export interface EditRequest {
   instruction: string;
   api_key?: string;
@@ -334,12 +343,19 @@ export interface GenContext {
   model_targets?: ModelKey[];
   sd_options?: SDOptions;
   params?: GenParams;
+  free_image_paths?: string[];
+  free_image_urls?: string[];
+  free_options?: {
+    aspect_ratio?: string;
+    resolution?: string;
+  };
 }
 
 export interface RecordEntry {
   id?: string;
   room_type?: string;
   workflow_mode?: string;
+  user_prompt?: string;
   results?: RecordResult[];
   gen_context?: GenContext;
   color_match_ref_url?: string;  // 后端从记录同目录优化图/历史小样解析

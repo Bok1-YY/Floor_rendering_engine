@@ -197,6 +197,7 @@ export function JobCard({
   const terminal =
     !active &&
     (job.status === "done" || job.status === "partial" || job.status === "failed");
+  const isFree = job.workflow_mode.includes("自由创作");
 
   // 前后对比：仅替换类工作流有房间原图（room_url）；效果图优先取当前浏览中的 Pro 候选，无 Pro 用 B2
   const compareAfter =
@@ -391,7 +392,7 @@ export function JobCard({
               重试
             </button>
           )}
-        {terminal && job.pro_url && (
+        {terminal && job.pro_url && !isFree && (
           <button
             className={actBtn}
             onClick={() => act(() => api.polishJob(job.job_id), "已提交磨缝")}

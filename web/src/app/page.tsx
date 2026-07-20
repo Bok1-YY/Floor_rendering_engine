@@ -100,6 +100,8 @@ export default function GeneratePage() {
   const [floor, setFloor] = useState<Swatch | null>(null);
   const [refImg, setRefImg] = useState<Swatch | null>(null);
   const [roomImg, setRoomImg] = useState<Swatch | null>(null);
+  const [freePrompt, setFreePrompt] = useState("");
+  const [freeImages, setFreeImages] = useState<Swatch[]>([]);
   const [modelTargets, setModelTargets] = useState<ModelKey[]>(["b2", "pro"]);
   const [sdOptions, setSdOptions] = useState<SDOptions>(DEFAULT_SD_OPTIONS);
   const [sdEnabled, setSdEnabled] = useState(false);
@@ -147,11 +149,22 @@ export default function GeneratePage() {
         const reuse = takeReuseRequest();
         if (reuse?.params) {
           setParams(() => ({ ...buildDefaultParams(o), ...reuse.params }));
-          setModelTargets(reuse.modelTargets || targetsFromLegacy(reuse.modelFilter));
+          const reuseTargets = reuse.modelTargets || targetsFromLegacy(reuse.modelFilter);
+          setModelTargets(
+            reuse.params.workflow_mode?.includes("自由创作")
+              ? reuseTargets.filter((key) => key !== "sd35")
+              : reuseTargets,
+          );
           if (reuse.sdOptions) setSdOptions({ ...DEFAULT_SD_OPTIONS, ...reuse.sdOptions });
           setFloor(swatchFromPath(reuse.floorPath));
           setRefImg(swatchFromPath(reuse.refPath));
           setRoomImg(swatchFromPath(reuse.roomPath));
+          setFreePrompt(reuse.freePrompt || "");
+          setFreeImages(
+            (reuse.freeImagePaths || [])
+              .map((path) => swatchFromPath(path))
+              .filter((value): value is Swatch => value !== null),
+          );
           setRecipes([]);
           toast.success("已回填历史参数，可直接生成或微调");
           return;
@@ -167,8 +180,15 @@ export default function GeneratePage() {
           if (draft.floor) setFloor(draft.floor);
           if (draft.refImg) setRefImg(draft.refImg);
           if (draft.roomImg) setRoomImg(draft.roomImg);
+          if (typeof draft.freePrompt === "string") setFreePrompt(draft.freePrompt);
+          if (draft.freeImages) setFreeImages(draft.freeImages.slice(0, 3));
           if (draft.recipes) setRecipes(draft.recipes);
-          setModelTargets(draft.modelTargets || targetsFromLegacy(draft.modelFilter));
+          const draftTargets = draft.modelTargets || targetsFromLegacy(draft.modelFilter);
+          setModelTargets(
+            draft.params?.workflow_mode?.includes("自由创作")
+              ? draftTargets.filter((key) => key !== "sd35")
+              : draftTargets,
+          );
           if (draft.sdOptions) setSdOptions({ ...DEFAULT_SD_OPTIONS, ...draft.sdOptions });
         }
       })
@@ -191,8 +211,10 @@ export default function GeneratePage() {
       refImg,
       roomImg,
       recipes,
+      freePrompt,
+      freeImages,
     });
-  }, [options, params, modelTargets, sdOptions, floor, refImg, roomImg, recipes]);
+  }, [options, params, modelTargets, sdOptions, floor, refImg, roomImg, recipes, freePrompt, freeImages]);
 
   // 队列整体进度：轮询任务列表（卡片各自走 SSE，这里只为聚合进度/新任务出现）
   useEffect(() => {
@@ -286,12 +308,25 @@ export default function GeneratePage() {
 
   async function generate() {
     if (submitLock.current) return;
-    if (!floor) {
+    const isFree = params.workflow_mode.includes("自由创作");
+    if (isFree && !freePrompt.trim()) {
+      toast.warning("请先输入自由指令词");
+      return;
+    }
+    if (isFree && freeImages.length === 0) {
+      toast.warning("自由创作至少需要上传一张图片");
+      return;
+    }
+    if (!isFree && !floor) {
       toast.warning("请先上传地板图");
       return;
     }
     if (modelTargets.length === 0) {
       toast.warning("请至少选择一个生图模型");
+      return;
+    }
+    if (isFree && !modelTargets.some((key) => key === "b2" || key === "pro")) {
+      toast.warning("自由创作请至少选择 B2 或 Pro");
       return;
     }
     if (modelTargets.includes("sd35") && !params.workflow_mode.includes("纯效果图")) {
@@ -319,15 +354,29 @@ export default function GeneratePage() {
     requestNotifyPermission();
     setSubmitting(true);
     try {
-      const job = await api.createJob({
-        image_path: floor.path,
-        model_filter: legacyFromTargets(modelTargets),
-        model_targets: modelTargets,
-        sd_options: sdOptions,
-        room_path: roomImg?.path ?? null,
-        ref_path: refImg?.path ?? null,
-        params: omakaseSafeParams(params),
-      });
+      const job = isFree
+        ? await api.createFreeJob({
+            prompt: freePrompt,
+            image_paths: freeImages.map((image) => image.path),
+            model_targets: modelTargets.filter(
+              (key): key is "b2" | "pro" => key === "b2" || key === "pro",
+            ),
+            aspect_ratio: ((params.aspect_ratio || "4:3").split(" ")[0] || "4:3") as
+              | "4:3"
+              | "16:9"
+              | "3:4"
+              | "9:16",
+            resolution: ((params.resolution || "4K").split(" ")[0] || "4K") as "2K" | "4K",
+          })
+        : await api.createJob({
+            image_path: floor!.path,
+            model_filter: legacyFromTargets(modelTargets),
+            model_targets: modelTargets,
+            sd_options: sdOptions,
+            room_path: roomImg?.path ?? null,
+            ref_path: refImg?.path ?? null,
+            params: omakaseSafeParams(params),
+          });
       setJobs((j) => [job, ...j]);
       toast.success("任务已提交");
     } catch (e) {
@@ -573,6 +622,7 @@ export default function GeneratePage() {
   }
 
   const total = jobs.length;
+  const isFreeMode = params.workflow_mode.includes("自由创作");
   const activeCount = jobs.filter(
     (j) =>
       j.status === "queued" ||
@@ -594,12 +644,16 @@ export default function GeneratePage() {
       {/* ── 左：参数列 ── */}
       <section className="flex w-[600px] flex-none flex-col border-r border-border bg-panel">
         <div className="flex-1 space-y-0 overflow-y-auto px-5 pb-2.5 pt-4">
-          <SectionHeader className="mx-0.5 mb-[11px] mt-1">
-            地板小样 / SWATCH
-          </SectionHeader>
-          <FloorUploader value={floor} onPick={pickFloor} />
+          {!isFreeMode && (
+            <>
+              <SectionHeader className="mx-0.5 mb-[11px] mt-1">
+                地板小样 / SWATCH
+              </SectionHeader>
+              <FloorUploader value={floor} onPick={pickFloor} />
+            </>
+          )}
 
-          {recipes.length > 0 && (
+          {!isFreeMode && recipes.length > 0 && (
             <>
               <SectionHeader className="mx-0.5 mb-[11px] mt-[22px]">
                 智能配方 / 按色调推荐
@@ -631,6 +685,7 @@ export default function GeneratePage() {
             </>
           )}
 
+          {!isFreeMode && (<>
           <SectionHeader className="mx-0.5 mb-[11px] mt-[22px]">
             我的配方 / MY RECIPES
           </SectionHeader>
@@ -684,6 +739,7 @@ export default function GeneratePage() {
               存为配方
             </button>
           </div>
+          </>)}
 
           {options ? (
             <ParamsForm
@@ -699,6 +755,10 @@ export default function GeneratePage() {
               onRefPick={setRefImg}
               roomValue={roomImg}
               onRoomPick={setRoomImg}
+              freePrompt={freePrompt}
+              freeImages={freeImages}
+              onFreePrompt={setFreePrompt}
+              onFreeImages={setFreeImages}
             />
           ) : (
             <div className="mt-4 text-sm text-muted-foreground">加载选项中…</div>
@@ -710,14 +770,18 @@ export default function GeneratePage() {
         <div className="flex flex-none gap-2.5 border-t border-border bg-card px-[18px] py-[13px]">
           <button
             onClick={generate}
-            disabled={submitting || !floor}
+            disabled={
+              submitting ||
+              (isFreeMode ? !freePrompt.trim() || freeImages.length === 0 : !floor)
+            }
             className="flex h-[46px] flex-1 items-center justify-center gap-2 rounded-xl bg-primary text-[14.5px] font-bold text-primary-foreground shadow-[0_6px_16px_rgba(193,95,60,.32)] transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
           >
             <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
               <path d="M13 2L4.5 13.5H11l-1 8.5L19.5 10H13l0-8z" />
             </svg>
-            {submitting ? "提交中…" : "生成效果图"}
+            {submitting ? "提交中…" : isFreeMode ? "生成图片" : "生成效果图"}
           </button>
+          {!isFreeMode && (<>
           <button
             onClick={runPreview}
             disabled={!floor || previewOpen}
@@ -740,6 +804,7 @@ export default function GeneratePage() {
           >
             批量
           </button>
+          </>)}
         </div>
       </section>
 
