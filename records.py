@@ -505,7 +505,8 @@ def save_api_result_png(pil_img, model_key: str, source_path: str,
             try: os.remove(tmp_path)
             except OSError: pass
 
-def append_edited_result_to_record(json_path, record_id, source_ref, pil_img, edit_prompt, model_label, image_file=None):
+def append_edited_result_to_record(json_path, record_id, source_ref, pil_img, edit_prompt,
+                                   model_label, image_file=None, metadata: Optional[dict] = None):
     if pil_img is None:
         return "❌ 没有可写入的二次修改图片"
     if not json_path or not record_id:
@@ -531,6 +532,8 @@ def append_edited_result_to_record(json_path, record_id, source_ref, pil_img, ed
                         'source_result_id': str(source_ref),
                         'edit_prompt': str(edit_prompt).strip(),
                     }
+                    if metadata:
+                        entry['generation_metadata'] = dict(metadata)
                     if rel:
                         entry['result_image_file'] = rel
                     else:

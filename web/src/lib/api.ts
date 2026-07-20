@@ -28,6 +28,8 @@ import type {
   ColorMatchPreviewView,
   JobColorMatchRequest,
   RecordColorMatchRequest,
+  ColorMatchSegmentRequest,
+  ColorMatchSegmentView,
   ModelKey,
   GenericInpaintRequest,
   InpaintSubmitView,
@@ -210,6 +212,8 @@ export const api = {
   // ── 手动校色（区域化 Reinhard）──
   colorMatchPreview: (b: ColorMatchPreviewRequest, signal?: AbortSignal) =>
     jsend<ColorMatchPreviewView>(`/api/color-match/preview`, "POST", b, signal),
+  colorMatchSegment: (b: ColorMatchSegmentRequest, signal?: AbortSignal) =>
+    jsend<ColorMatchSegmentView>(`/api/color-match/segment`, "POST", b, signal),
   jobColorMatch: (id: string, b: JobColorMatchRequest) =>
     jsend<JobView>(`/api/jobs/${id}/color-match`, "POST", b),
   recordColorMatch: (b: RecordColorMatchRequest) =>

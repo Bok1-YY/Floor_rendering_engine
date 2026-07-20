@@ -270,6 +270,14 @@ class ColorMatchAdjustments(BaseModel):
     saturation: float = Field(default=0, ge=-100, le=100)
 
 
+class ColorMatchSegmentRequest(BaseModel):
+    image_rel: str = Field(min_length=1)
+    positive_mask_b64: str = Field(default='', max_length=12_000_000)
+    negative_mask_b64: str = Field(default='', max_length=12_000_000)
+    previous_mask_b64: str = Field(default='', max_length=12_000_000)
+    auto_seed: bool = True
+
+
 class ColorMatchPreviewRequest(BaseModel):
     image_rel: str = Field(min_length=1)   # 成图相对 /outputs 路径
     ref_path: str = Field(min_length=1)    # 参照小样绝对路径
@@ -279,6 +287,9 @@ class ColorMatchPreviewRequest(BaseModel):
     adjustments: ColorMatchAdjustments = Field(default_factory=ColorMatchAdjustments)
     adjustment_mode: Literal['auto', 'manual'] = 'auto'
     include_analysis: bool = False
+    scope: Literal['global', 'floor_mask'] = 'global'
+    mask_b64: str = Field(default='', max_length=12_000_000)
+    mask_feather: float = Field(default=0.003, ge=0, le=0.02)
 
 
 
@@ -298,6 +309,9 @@ class RecordColorMatchRequest(BaseModel):
     feather: float = Field(default=0.05, ge=0, le=0.3)  # 兼容字段，全图校色忽略
     adjustments: ColorMatchAdjustments = Field(default_factory=ColorMatchAdjustments)
     adjustment_mode: Literal['auto', 'manual'] = 'auto'
+    scope: Literal['global', 'floor_mask'] = 'global'
+    mask_b64: str = Field(default='', max_length=12_000_000)
+    mask_feather: float = Field(default=0.003, ge=0, le=0.02)
 
 
 

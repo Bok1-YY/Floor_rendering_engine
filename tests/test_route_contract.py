@@ -1,6 +1,6 @@
 """HTTP 路由契约快照 —— 重构安全网。
 
-Next.js 前端(web/)依赖这 67 个端点的 (path, method) 契约。
+Next.js 前端(web/)依赖这 68 个端点的 (path, method) 契约。
 本测试固化端点全集:任何拆分/搬移导致端点丢失、路径改动、方法改动都会在此失败。
 
 新增端点属正常演进 —— 把新条目加进 EXPECTED_ROUTES 即可;
@@ -12,6 +12,7 @@ from fastapi.routing import APIRoute
 from Floor_engine_server.server_api import app
 
 EXPECTED_ROUTES = [
+    ("/api/color-match/segment", "POST"),
     ("/api/color-match/preview", "POST"),
     ("/api/config", "GET"),
     ("/api/config", "PUT"),
@@ -112,4 +113,4 @@ def test_route_contract_unchanged():
 
 
 def test_route_count():
-    assert len(_actual_routes()) == 67
+    assert len(_actual_routes()) == 68

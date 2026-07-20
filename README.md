@@ -19,7 +19,7 @@
 - **SD 地板参考与超分**：SD 3.5 使用专属正/负提示词和 InstantX IP-Adapter 强制参考地板小样，约 1MP 扩散后由 AuraSR 交付 2K/4K；超分失败保留基础图并可单独重试。
 - **4K 出图**：面向商用提案的高分辨率输出。
 - **批量生成**：同一地板批量套用多个房间，或同一参数批量处理多个地板小样。
-- **磨缝 / 二次编辑 / 全图校色**：框选地板只用于自动提取受光、半阴影和阴影截图，并对照小样计算偏暖/偏冷/偏灰/偏饱和等建议；高级滑块、建议参数与 1% 自动校准都作用于整张效果图。初始不修改预览，仍支持原图基准高级参数、实时预览与多候选切换。
+- **AI 地板局部校色 / 兼容全图校色**：默认由离线 MobileSAM 自动识别地板，可用绿色/红色画笔补选或排除复杂边界；稳健 LAB 算法只修正蒙版内色度、保留地板明暗，墙面与家具逐像素保持原样。旧的框选取样 + 全图校准仍可切换使用。
 - **生成式移除（已可用）/添加（实验）**：类 Lightroom 画笔涂抹局部处理——移除自动适度外扩以覆盖边缘和阴影，已通过本地真实工作图验收；添加默认严格限制在涂抹区。推理二值 mask 与最终羽化 mask 分离，支持无损 PNG 候选挑选后写回；不支持可控变体的专职 Eraser 自动降为 1 张，避免重复计费。任务结果、历史记录、房间图三处入口均可使用；超大选区或生成式添加的质量仍取决于模型与本地显存。
 - **异步作业队列**：`POST` 秒回 `job_id`，`SSE` 推送实时进度；长请求不再被网络中间层 reset。
 - **记录复用与对比**：生成入参随记录落盘，可一键复用参数；替换类工作流支持前后拖动对比。
@@ -62,7 +62,7 @@
 | 前端 | Next.js 16（App Router + Turbopack）· React 19 · Tailwind v4 · shadcn/ui · lucide · sonner |
 | 后端 | Python · FastAPI · Uvicorn · SSE |
 | 图像模型 | Google Gemini（image）· Fal（可选） |
-| 图像/数据 | Pillow · NumPy · python-pptx（导出 deck） |
+| 图像/数据 | Pillow · NumPy · OpenCV · ONNX Runtime / MobileSAM（离线分割）· python-pptx（导出 deck） |
 
 ---
 
@@ -163,7 +163,7 @@ cd Floor_engine_server/web && npm run dev        # → http://localhost:3000
 2. 系统自动识色；可套用智能推荐，或保存和复用「我的配方」。
 3. 选择工作流、市场地区、模型与档位，按需展开高级参数；也可选“自由创作”原样输入指令并上传 1–3 张有序参考图。
 4. 点击生成 → 任务进入右侧队列，SSE 实时显示进度；出图后可预览、切换候选和查看前后对比。
-5. 对结果可**磨缝 / 二次编辑 / 重抽 / 手动校色**；满意的可**收藏**或标为**最佳图**。
+5. 对结果可**磨缝 / 二次编辑 / 重抽 / AI 地板局部校色**；复杂地板边界可用正负画笔修蒙版，满意的可**收藏**或标为**最佳图**。
 6. 到「**记录**」页筛选、复用参数、人工标注**通过 / 备选 / 淘汰**并导出提案；「**评审复盘**」看聚合表现和好图样本，「**用量**」页看数量与估算成本。
 
 ---
@@ -189,13 +189,14 @@ Floor_engine_server/            # 后端 Python 包（= 本仓库根）
 ├── recipes.py                  # 智能配方推荐
 ├── custom_recipes.py           # “我的配方”运行期 CRUD
 ├── api.py                      # 外部模型调用（Gemini / Fal / 磨缝二改 / 生成式修补 / 连通测试）
-├── color_match.py              # 本地色彩算法（LAB 迁移 / 识色诊断 / 高级校色）
+├── color_match.py              # 本地色彩算法（全图兼容模式 / 蒙版内稳健 LAB 色度校正）
+├── floor_segmentation.py       # 离线 MobileSAM + 正负笔触 + GrabCut 地板蒙版
 ├── records.py                  # 记录持久化核心：队列状态、记录 CRUD、收藏/评审
 ├── usage_stats.py / exports.py / reveal_security.py  # 用量统计 / HTML·PPTX 导出 / 提示词混淆与揭示
 ├── failure_kb.py               # 失败知识库（错误分类与建议）
 ├── floor_renderer.py           # 本地地板透视渲染（OpenCV）
 ├── web/                        # Next.js 前端
-├── tests/                      # pytest（golden 提示词 + 67 端点契约快照 + 安全硬化 + 回归）
+├── tests/                      # pytest（golden 提示词 + 68 端点契约快照 + 安全硬化 + 回归）
 └── requirements.txt
 ```
 
@@ -211,7 +212,7 @@ Floor_engine_server/            # 后端 Python 包（= 本仓库根）
 
 常用命令：
 ```bash
-# 后端测试（当前 174 项）
+# 后端测试（当前 178 项）
 .venv/bin/python -m pytest
 
 # 前端 lint + 类型/生产构建

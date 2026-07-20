@@ -18,8 +18,10 @@ from Floor_engine_server.color_match import (
     apply_color_adjustments_striped,
     analyze_color_region,
     match_color_global,
+    match_color_masked,
     match_color_region,
 )
+from Floor_engine_server.floor_segmentation import encode_mask_png, segment_floor
 from Floor_engine_server.models import new_job
 from Floor_engine_server.task_registry import TaskRegistry
 
@@ -232,6 +234,53 @@ def test_global_auto_changes_full_image_and_strength_is_global_blend():
     assert np.array_equal(np.asarray(manual_zero), np.asarray(src))
 
 
+def test_masked_auto_changes_floor_only_and_preserves_scene_luminance():
+    src = _split_lr(240, 120, (80, 105, 150), (175, 135, 85))
+    ref = _solid(80, 60, (120, 155, 90))
+    mask = Image.new('L', src.size, 0)
+    mask.paste(255, (120, 0, 240, 120))
+    out = match_color_masked(src, ref, mask, strength=1, mask_feather=0)
+    base = np.asarray(src)
+    changed = np.asarray(out)
+    assert np.array_equal(changed[:, :120], base[:, :120])
+    assert np.abs(changed[:, 140:].astype(np.int16) - base[:, 140:].astype(np.int16)).max() > 5
+    before_l = np.asarray(src.convert('LAB'), dtype=np.int16)[:, 140:, 0]
+    after_l = np.asarray(out.convert('LAB'), dtype=np.int16)[:, 140:, 0]
+    assert np.abs(after_l - before_l).mean() < 2.0
+
+
+def test_masked_manual_never_touches_pixels_outside_mask():
+    src = _solid(160, 100, (90, 110, 130))
+    ref = _solid(40, 40, (130, 95, 65))
+    mask = Image.new('L', src.size, 0)
+    mask.paste(255, (30, 20, 130, 80))
+    out = match_color_masked(
+        src, ref, mask, adjustment_mode='manual', mask_feather=0,
+        adjustments={'temperature': 40, 'saturation': 25})
+    base = np.asarray(src)
+    changed = np.asarray(out)
+    outside = np.ones((100, 160), dtype=bool)
+    outside[20:80, 30:130] = False
+    assert np.array_equal(changed[outside], base[outside])
+    assert np.abs(changed[40, 60].astype(np.int16) - base[40, 60].astype(np.int16)).max() > 5
+
+
+def test_segmentation_manual_fallback_uses_positive_strokes(monkeypatch):
+    from Floor_engine_server import floor_segmentation
+    monkeypatch.setattr(floor_segmentation._RUNTIME, '_error', 'test model unavailable')
+    monkeypatch.setattr(floor_segmentation._RUNTIME, '_encoder', None)
+    monkeypatch.setattr(floor_segmentation._RUNTIME, '_decoder', None)
+    positive = np.zeros((80, 120), dtype=bool)
+    positive[45:75, 15:105] = True
+    working, result = segment_floor(
+        _solid(120, 80, (170, 135, 90)), 'test',
+        positive_b64=encode_mask_png(positive), auto_seed=False)
+    assert working.size == (120, 80)
+    assert result.mask is not None
+    assert result.mask[55, 50]
+    assert not result.mask[10, 10]
+
+
 def test_striped_global_adjustments_match_single_pass():
     src = Image.new('RGB', (97, 53))
     pixels = np.arange(97 * 53 * 3, dtype=np.uint32).reshape(53, 97, 3)
@@ -403,6 +452,24 @@ def test_preview_returns_original_based_auto_profile(dirs):
     assert set(result['auto_adjustments']) == {
         'temperature', 'tint', 'exposure', 'contrast', 'highlights',
         'shadows', 'whites', 'blacks', 'midtones', 'saturation'}
+
+
+def test_local_preview_requires_mask_and_returns_lossless_png(dirs):
+    out_dir, up_dir = dirs
+    src = out_dir / 'result.jpg'
+    ref = up_dir / 'swatch.jpg'
+    _solid(80, 60, (90, 105, 135)).save(src)
+    _solid(30, 30, (155, 125, 80)).save(ref)
+    common = dict(image_rel='result.jpg', ref_path=str(ref), rect=_rect(),
+                  adjustment_mode='auto', scope='floor_mask')
+    with pytest.raises(HTTPException) as error:
+        routes_tools.color_match_preview(server_schemas.ColorMatchPreviewRequest(**common))
+    assert error.value.status_code == 422
+    mask = np.zeros((60, 80), dtype=bool)
+    mask[30:, :] = True
+    result = routes_tools.color_match_preview(server_schemas.ColorMatchPreviewRequest(
+        **common, mask_b64=encode_mask_png(mask)))
+    assert result['preview'].startswith('data:image/png;base64,')
 
 
 def test_preview_optionally_returns_serialized_zone_analysis(dirs):

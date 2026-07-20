@@ -505,6 +505,9 @@ export interface ColorMatchPreviewRequest {
   adjustments?: ColorMatchAdjustments;
   adjustment_mode?: "auto" | "manual"; // auto=框选取样后全图校准；manual=以 Gemini 原图为零点全图调整
   include_analysis?: boolean; // 仅首帧/重新框选/更换小样时请求三区诊断
+  scope?: "global" | "floor_mask";
+  mask_b64?: string;
+  mask_feather?: number;
 }
 export interface ColorMatchPreviewView {
   preview: string; // data URL
@@ -526,6 +529,25 @@ export interface RecordColorMatchRequest {
   feather?: number; // 兼容字段，全图校色忽略
   adjustments?: ColorMatchAdjustments;
   adjustment_mode?: "auto" | "manual"; // 两种模式均作用于全图
+  scope?: "global" | "floor_mask";
+  mask_b64?: string;
+  mask_feather?: number;
+}
+export interface ColorMatchSegmentRequest {
+  image_rel: string;
+  positive_mask_b64?: string;
+  negative_mask_b64?: string;
+  previous_mask_b64?: string;
+  auto_seed?: boolean;
+}
+export interface ColorMatchSegmentView {
+  mask_b64: string;
+  width: number;
+  height: number;
+  confidence: number;
+  status: "ok" | "needs_guidance";
+  warnings: string[];
+  model: string;
 }
 
 export interface RecordEditRequest {

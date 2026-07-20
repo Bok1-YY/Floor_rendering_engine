@@ -4,6 +4,7 @@ import asyncio
 import base64
 import io
 import os
+import tempfile
 import threading
 from typing import Literal, Optional
 
@@ -11,10 +12,11 @@ from fastapi import APIRouter, HTTPException
 from PIL import Image, ImageOps
 
 from . import server_state as state
-from .color_match import match_color_global, analyze_color_region
+from .color_match import match_color_global, match_color_masked, analyze_color_region
 from .config import logger, load_config, safe_upload_path
 from .floor_renderer import RenderRecipe, image_sha256, render_floor, validate_calibration_quad
 from .image_ops import decode_floor_mask, FLOOR_PREVIEW_MAX_SIDE
+from .floor_segmentation import segment_floor, encode_mask_png
 from .models import (
     update_job, ensure_model_runs, add_model_candidate, compute_runs_final_status,
 )
@@ -35,7 +37,7 @@ from .server_helpers import (
     record_color_match_ref_path,
 )
 from .server_schemas import (
-    ColorMatchAdjustments, ColorMatchPreviewRequest, ColorMatchRect,
+    ColorMatchAdjustments, ColorMatchPreviewRequest, ColorMatchRect, ColorMatchSegmentRequest,
     FloorVisualizeRequest, FloorVisualizeTarget,
     JobColorMatchRequest, RecordColorMatchRequest,
 )
@@ -224,6 +226,8 @@ def _run_color_match(abs_src: str, ref_path: str, rect: ColorMatchRect,
                      strength: float, feather: float, max_side: int = 0,
                      adjustments: Optional[ColorMatchAdjustments] = None,
                      adjustment_mode: Literal['auto', 'manual'] = 'auto',
+                     scope: Literal['global', 'floor_mask'] = 'global',
+                     mask_b64: str = '', mask_feather: float = 0.003,
                      return_auto_adjustments: bool = False,
                      return_analysis: bool = False):
     """读图 → （可选缩到 max_side 长边）→ 全图校色。
@@ -234,15 +238,26 @@ def _run_color_match(abs_src: str, ref_path: str, rect: ColorMatchRect,
         src.thumbnail((max_side, max_side), Image.LANCZOS)
     ref = Image.open(ref_path)
     ref.load()
-    result = match_color_global(src, ref, (rect.x, rect.y, rect.w, rect.h),
-                                strength=strength, feather=feather,
-                                adjustments=(adjustments.model_dump() if adjustments else None),
-                                adjustment_mode=adjustment_mode,
-                                return_auto_adjustments=return_auto_adjustments)
+    mask = None
+    if scope == 'floor_mask':
+        if not mask_b64:
+            raise HTTPException(422, '地板局部校色需要有效蒙版')
+        mask = decode_floor_mask(mask_b64)
+        result = match_color_masked(
+            src, ref, mask, strength=strength,
+            adjustments=(adjustments.model_dump() if adjustments else None),
+            adjustment_mode=adjustment_mode, mask_feather=mask_feather,
+            return_auto_adjustments=return_auto_adjustments)
+    else:
+        result = match_color_global(src, ref, (rect.x, rect.y, rect.w, rect.h),
+                                    strength=strength, feather=feather,
+                                    adjustments=(adjustments.model_dump() if adjustments else None),
+                                    adjustment_mode=adjustment_mode,
+                                    return_auto_adjustments=return_auto_adjustments)
     if not return_analysis:
         return result
     out, auto_adjustments = result
-    analysis = analyze_color_region(src, ref, (rect.x, rect.y, rect.w, rect.h))
+    analysis = analyze_color_region(src, ref, (rect.x, rect.y, rect.w, rect.h), mask)
     return out, auto_adjustments, analysis
 
 
@@ -265,6 +280,27 @@ def _serialize_color_analysis(analysis: dict) -> dict:
     return serialized
 
 
+def _save_color_mask(mask_b64: str, result_path: str, size: tuple[int, int]) -> str:
+    """Persist the exact local-edit mask beside a result for audit/re-edit."""
+    mask = decode_floor_mask(mask_b64).convert('L')
+    if mask.size != size:
+        mask = mask.resize(size, Image.Resampling.NEAREST)
+    root, _ = os.path.splitext(result_path)
+    target = root + '_mask.png'
+    fd, tmp = tempfile.mkstemp(prefix='.color_mask_', suffix='.png', dir=os.path.dirname(target))
+    os.close(fd)
+    try:
+        mask.save(tmp, format='PNG', optimize=True)
+        os.replace(tmp, target)
+        return os.path.basename(target)
+    finally:
+        if os.path.exists(tmp):
+            try:
+                os.remove(tmp)
+            except OSError:
+                pass
+
+
 @router.post('/api/color-match/preview')
 def color_match_preview(req: ColorMatchPreviewRequest):
     """预览：缩图处理，返回 data URL（1600 长边 JPEG，无临时文件、无状态）。
@@ -274,7 +310,9 @@ def color_match_preview(req: ColorMatchPreviewRequest):
     result = _run_color_match(
         abs_src, ref, req.rect, req.strength, req.feather,
         max_side=_PREVIEW_MAX_SIDE, adjustments=req.adjustments,
-        adjustment_mode=req.adjustment_mode, return_auto_adjustments=True,
+        adjustment_mode=req.adjustment_mode, scope=req.scope,
+        mask_b64=req.mask_b64, mask_feather=req.mask_feather,
+        return_auto_adjustments=True,
         return_analysis=req.include_analysis)
     if req.include_analysis:
         out, auto_adjustments, analysis = result
@@ -282,14 +320,49 @@ def color_match_preview(req: ColorMatchPreviewRequest):
         out, auto_adjustments = result
         analysis = None
     buf = io.BytesIO()
-    out.save(buf, format='JPEG', quality=85)
+    if req.scope == 'floor_mask':
+        out.save(buf, format='PNG', optimize=True)
+        mime = 'image/png'
+    else:
+        out.save(buf, format='JPEG', quality=85)
+        mime = 'image/jpeg'
     b64 = base64.b64encode(buf.getvalue()).decode()
-    response = {'preview': f'data:image/jpeg;base64,{b64}',
+    response = {'preview': f'data:{mime};base64,{b64}',
                 'width': out.size[0], 'height': out.size[1],
                 'auto_adjustments': auto_adjustments}
     if analysis is not None:
         response['analysis'] = _serialize_color_analysis(analysis)
     return response
+
+
+@router.post('/api/color-match/segment')
+def color_match_segment(req: ColorMatchSegmentRequest):
+    """Generate/refine a local floor mask using offline MobileSAM and brush prompts."""
+    abs_src = require_output_image_rel(req.image_rel)
+    try:
+        stat = os.stat(abs_src)
+        cache_key = f'{os.path.realpath(abs_src)}:{stat.st_size}:{stat.st_mtime_ns}'
+        with Image.open(abs_src) as image:
+            working, result = segment_floor(
+                image, cache_key,
+                positive_b64=req.positive_mask_b64,
+                negative_b64=req.negative_mask_b64,
+                previous_b64=req.previous_mask_b64,
+                auto_seed=req.auto_seed)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception('[AI蒙版] 分割失败')
+        raise HTTPException(500, f'AI 地板蒙版失败：{exc}')
+    return {
+        'mask_b64': encode_mask_png(result.mask) if result.mask is not None else '',
+        'width': working.width,
+        'height': working.height,
+        'confidence': round(float(result.confidence), 4),
+        'status': result.status,
+        'warnings': result.warnings,
+        'model': result.model,
+    }
 
 
 
@@ -311,17 +384,34 @@ async def job_color_match(jid: str, req: JobColorMatchRequest):
     out = await asyncio.to_thread(_run_color_match, abs_src, ref, req.rect,
                                   req.strength, req.feather,
                                   adjustments=req.adjustments,
-                                  adjustment_mode=req.adjustment_mode)
-    ppath = await asyncio.to_thread(save_api_result_jpg, out, '手动校色',
-                                    job.png_path or abs_src)
+                                  adjustment_mode=req.adjustment_mode,
+                                  scope=req.scope, mask_b64=req.mask_b64,
+                                  mask_feather=req.mask_feather)
+    save_result = save_api_result_png if req.scope == 'floor_mask' else save_api_result_jpg
+    metadata = ({'operation': 'color_match', 'scope': req.scope,
+                 'adjustment_mode': req.adjustment_mode,
+                 'strength': req.strength, 'mask_feather': req.mask_feather}
+                if req.scope == 'floor_mask' else None)
+    if req.scope == 'floor_mask':
+        ppath = await asyncio.to_thread(save_result, out, '局部校色',
+                                        job.png_path or abs_src, metadata)
+    else:
+        ppath = await asyncio.to_thread(save_result, out, '手动校色',
+                                        job.png_path or abs_src)
     if not ppath:
         raise HTTPException(500, '校色结果保存失败')
+    if metadata is not None:
+        try:
+            metadata['mask_file'] = await asyncio.to_thread(
+                _save_color_mask, req.mask_b64, ppath, out.size)
+        except Exception as ex:
+            logger.warning(f'[校色] 蒙版留档失败 job={jid}: {ex}')
     add_model_candidate(job, req.stage, ppath)
     update_job(job, status=compute_runs_final_status(job))
     if job.json_path and job.record_id:
         try:
             await asyncio.to_thread(api_write_to_record, out, '手动校色',
-                                    job.json_path, job.record_id, ppath)
+                                    job.json_path, job.record_id, ppath, metadata)
         except Exception as ex:
             logger.warning(f"[校色] 写记录失败 job={jid}: {ex}")
     state.JOBS.persist()   # 锁外调（内部自取锁）
@@ -354,18 +444,37 @@ def record_color_match(req: RecordColorMatchRequest):
     ref = require_ref_image_path(ref_path)
     out = _run_color_match(abs_src, ref, req.rect, req.strength, req.feather,
                            adjustments=req.adjustments,
-                           adjustment_mode=req.adjustment_mode)
-    ppath = save_api_result_jpg(out, '手动校色', json_path.replace('_记录.json', '_优化图.png'))
+                           adjustment_mode=req.adjustment_mode,
+                           scope=req.scope, mask_b64=req.mask_b64,
+                           mask_feather=req.mask_feather)
+    if req.scope == 'floor_mask':
+        ppath = save_api_result_png(
+            out, '局部校色', json_path.replace('_记录.json', '_优化图.png'),
+            {'operation': 'color_match', 'scope': req.scope,
+             'adjustment_mode': req.adjustment_mode,
+             'strength': req.strength, 'mask_feather': req.mask_feather})
+    else:
+        ppath = save_api_result_jpg(out, '手动校色', json_path.replace('_记录.json', '_优化图.png'))
     if not ppath:
         raise HTTPException(500, '校色结果保存失败')
-    if req.adjustment_mode == 'auto':
+    metadata = None
+    if req.scope == 'floor_mask':
+        metadata = {'operation': 'color_match', 'scope': req.scope,
+                    'adjustment_mode': req.adjustment_mode,
+                    'strength': req.strength, 'mask_feather': req.mask_feather}
+        try:
+            metadata['mask_file'] = _save_color_mask(req.mask_b64, ppath, out.size)
+        except Exception as ex:
+            logger.warning(f'[校色] 蒙版留档失败 record={req.record_id}: {ex}')
+    if req.scope == 'floor_mask' and req.adjustment_mode == 'auto':
+        label = f'地板局部自动{req.strength:.2f}'
+    elif req.adjustment_mode == 'auto':
         label = f'自动强度{req.strength:.2f}'
     else:
         label = ('原图基准 · 手动微调' if any(req.adjustments.model_dump().values())
                  else 'Gemini 原图')
     msg = append_edited_result_to_record(json_path, req.record_id, req.result_id,
-                                         out, label, '手动校色', ppath)
+                                         out, label, '手动校色', ppath, metadata)
     if not str(msg).startswith('✅'):
         raise HTTPException(500, str(msg))
     return {'ok': True, 'result_url': to_url(ppath)}
-

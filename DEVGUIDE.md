@@ -108,7 +108,7 @@ Floor_engine_server/
 ├── routes_previews.py   快速预览（NB2 Lite 1K，不进队列不写记录）
 ├── routes_library.py    上传/历史小样、记录列表与揭示、收藏/评审、导出、用量
 ├── routes_config.py     配方/失败库/连通性/配置/Omakase/模型与选项词表
-├── routes_tools.py      识色 + 地板可视化渲染 + 全图校色
+├── routes_tools.py      识色 + 地板可视化渲染 + AI 蒙版/局部与兼容全图校色
 ├── routes_inpaint.py    生成式修补（两段式抽卡）
 ├── server_state.py      全部可变运行时状态：JOBS/PREVIEWS/INPAINTS 注册表、按模型信号量、spawn；路由经 `state.X` 访问（测试注入唯一入口）
 ├── server_schemas.py    27 个 Pydantic 请求模型（前端契约，改字段先确认前端）
@@ -128,7 +128,8 @@ Floor_engine_server/
 ├── recipes.py           智能配方：recommend_recipes(按色调推荐) + pick_option_key(关键词→具体选项)
 ├── custom_recipes.py    “我的配方”：运行期 JSON 存储及增删改查
 ├── api.py               外部模型客户端：Google/Fal 生图、FAL 持久队列、SD3.5 IP-Adapter、AuraSR、磨缝二改、生成式修补调度
-├── color_match.py       本地色彩算法（纯 numpy/PIL）：LAB Reinhard 迁移、区域识色诊断、高级校色及 4K 分片变体
+├── color_match.py       本地色彩算法：全图 Reinhard、区域诊断、蒙版内稳健 a/b 校正及 4K 分片变体
+├── floor_segmentation.py 离线 MobileSAM ONNX、正负点提示、GrabCut 边缘细化与严格手绘降级
 ├── records.py           记录持久化核心：队列状态、记录 CRUD、结果图落盘、收藏/评审、复盘聚合、迁移/揭示
 ├── usage_stats.py       用量统计：模式×模型×线路计数 + 成本估算（全程吞异常，绝不拖垮生图）
 ├── exports.py           导出层：记录 HTML 对照文档、客户提案 PPTX（单记录/收藏夹）
@@ -139,8 +140,8 @@ Floor_engine_server/
 ├── logging_setup.py     logger（输出到 test/app_local_save.log）
 │
 ├── web/                 ★ Next.js 前端（见 §五）
-├── tests/               pytest：golden 提示词、67 端点路由契约快照、TaskRegistry/用量直测、安全硬化、校色回归
-├── assets/              bevel_ref*.jpg（倒角参考图）、logo.svg —— 入库
+├── tests/               pytest：golden 提示词、68 端点路由契约快照、TaskRegistry/用量直测、安全硬化、校色回归
+├── assets/              倒角参考图、logo、MobileSAM ONNX 与模型许可证 —— 入库
 ├── requirements.txt     Python 依赖
 ├── 开发日志.md          每次会话改了啥、为什么（最新在最上，接手前先读）
 ├── README.md / DEVGUIDE.md
@@ -199,7 +200,7 @@ POST /api/jobs ──秒回 job_id──▶ 后台 asyncio task(routes_jobs._run
 - **记录** `/api/records`：`GET`列文件 · `GET load` · `POST reveal`(解密) · `POST edit`(记录内二改) · `POST result/delete` · `POST result/favorite` · `POST result/review`(人工评审：通过/备选/淘汰、标签、备注、最佳图) · `POST delete`(删整条) · `GET export/{html,pptx,favorites-pptx}`(FileResponse 下载)。
 - **上传** `POST /api/uploads/{floor,room,ref}`；品牌 Logo 为 `POST /api/uploads/logo` 与 `POST /api/uploads/logo/clear`。
 - **小样与配方**：`GET /api/swatches/recent` · `GET /api/recipes` · `/api/recipes/custom` 列表/新增/更新/删除。
-- **识色与校色**：`GET /api/floor/analyze`；`POST /api/color-match/preview` 生成本地缩图预览并返回满强度 `auto_adjustments`，首帧/重新框选可用 `include_analysis=true` 同时取回受光、半阴影、阴影截图与偏色建议；`POST /api/jobs/{id}/color-match` 或 `/api/records/color-match` 全分辨率落为新候选。`rect` 只用于地板统计/诊断，`adjustment_mode=auto|manual` 均作用于整张效果图；`feather` 仅为旧客户端兼容保留。
+- **识色与校色**：`GET /api/floor/analyze`；`POST /api/color-match/segment` 用离线 MobileSAM 自动生成地板蒙版，并接受正/负画笔与上一版蒙版做增量细化；`POST /api/color-match/preview` 支持 `scope=floor_mask|global`。默认局部模式只在 mask 内校正 LAB 的 a/b 色度、保留 L 明暗并向内羽化，区外逐像素不变；旧 `global` 模式仍以 `rect` 取样并作用全图。`POST /api/jobs/{id}/color-match` 与 `/api/records/color-match` 以 PNG 落局部结果，并在旁边留存 `_mask.png` 及记录元数据。
 - **生成式修补** `/api/inpaint`（两段式，实验）：`POST /api/inpaint`（target 三种 kind=job/record/room + mask + n=1~3；响应含 requested_n/effective_n/notice，专职 Eraser 强制 effective_n=1）· `GET {iid}`(轮询候选) · `POST {iid}/apply`(挑中才落目标) · `POST {iid}/cancel` · `GET comfyui/ping`(后端代理探测本地实例)。
 - **评审复盘**：`GET /api/review/summary` 聚合维度统计 · `GET /api/review/gallery?filter=pass|best` 好图样本库。
 - **失败** `POST /api/failure/classify` · `GET /api/failure/rules`；**连通** `GET /api/connection/test`。
@@ -251,7 +252,8 @@ web/src/
 │   ├── JobCard.tsx       通用模型任务卡（model_runs / 候选 / SD Seed·基础图·超分重试 / 既有编辑操作）
 │   ├── FloorUploader.tsx 地板上传 + 最近小样网格 + 历史弹窗
 │   ├── CompareSlider.tsx 前后图拖动对比
-│   ├── ColorMatchDialog.tsx 手动校色区域、1% 自动强度、原图基准高级参数、双重置与竞态安全预览
+│   ├── ColorMatchDialog.tsx 局部/全图模式、1% 自动强度、高级参数与竞态安全预览
+│   ├── ColorMaskEditor.tsx  MobileSAM 初始蒙版、正负画笔、撤销/清空/重新识别
 │   ├── InpaintDialog.tsx 生成式修补（画笔/橡皮/撤销 canvas、1~3 候选抽卡、CompareSlider 对比、apply 落盘）
 │   ├── ThemeProvider.tsx next-themes 接线（浅色/深色/跟随系统）
 │   ├── ImageZoom.tsx     全屏看图；支持原图+结果透明图层，滚轮缩放/拖动/双击复位/Esc
@@ -271,11 +273,11 @@ web/src/
 ### 5.4 数据流
 页面 `useEffect` 调 `api.*` 取数；活动作业用 `useJobStream`(EventSource) 看 SSE 实时进度；生成页另有 2.5s 轮询 `listJobs` 做队列聚合进度。每次生成把不含密钥的 `gen_context` 写入记录，记录页通过 `draft.ts` 将参数一次性回填到生成页。`api.imgUrl()` 把后端相对图 URL 拼成绝对地址。
 
-### 5.5 手动校色数据流
-1. 弹窗初始以 `manual` 全零请求 `/api/color-match/preview`，请求体带 `include_analysis=true`：右栏保持 Gemini 原图，后端在框选的地板中按亮度分位提取受光/半阴影/阴影截图，并用有符号 LAB 对照小样判断冷暖、色调和饱和度偏差。
-2. 诊断只生成色温/色调/饱和度建议，不主动改曝光与明暗层次；点击「应用建议参数」后才填入滑杆并对全图请求手动预览，不会自动落盘。
-3. 全图自动校准滑杆从 `0%` 开始：后端用框选地板与小样计算 Reinhard LAB 变换，并将它应用到整张图；前端按 `0%~100%`、`1%` 步进即时混合原图/满强度结果。
-4. 拖动高级参数后切换 `manual`：后端从 Gemini 原图对整张图应用绝对参数。4K 全图使用 256 行水平分片处理以控制内存；高级请求 180ms 防抖，旧响应按序号丢弃，保存仍是独立动作。
+### 5.5 地板校色数据流
+1. 弹窗默认 `floor_mask`：图片加载后请求 `/api/color-match/segment`，MobileSAM 在本机 CPU 生成初稿；绿色笔作为前景约束、红色笔作为背景约束，随后用 GrabCut 贴合边缘。模型不可用时只采用明确的绿色笔触，不扩散、不回退成全图修改。
+2. 有效蒙版触发 `/api/color-match/preview`。后端在 mask 内用 median/MAD 抑制家具与高光离群点，只对 LAB a/b 做受限迁移，L 通道保持原场景光影；合成 mask 只向内部羽化，区外像素不变。
+3. 前端缓存满强度预览，自动强度 `0%~100%` 以 1% 步进在 canvas 即时混合；笔触、参照、高级参数或羽化变化才防抖请求后端，序号机制丢弃过期响应。
+4. 切到 `global` 即恢复旧流程：矩形只作取样/诊断，自动与手动参数作用整张图。局部结果无损 PNG 落盘并保存配套 mask；保存始终是独立动作。
 
 ---
 
@@ -308,7 +310,7 @@ web/src/
 6. 在 **`开发日志.md` 顶部追加一条**（改了啥、为什么）。
 7. 提交（见 §九）。
 
-**测试**：`cd Floor_engine_server && python -m pytest`（引擎层 golden 提示词、安全硬化、人工评审元数据、三区诊断与全图自动/手动校色、SD 提示词/IP-Adapter/FAL 队列恢复、生成式修补的模式化 mask/提示词/EXIF/候选计费/无损落盘和非校色新功能回归；当前 **149 项**）。本机若系统 `python` 无 pytest，可用项目虚拟环境：`.venv/bin/python -m pytest`。`tests/golden/` 基准入库，缓存不入。
+**测试**：`cd Floor_engine_server && python -m pytest`（引擎层 golden 提示词、安全硬化、人工评审元数据、AI/手绘蒙版与局部/全图校色、SD 提示词/IP-Adapter/FAL 队列恢复、生成式修补的模式化 mask/提示词/EXIF/候选计费/无损落盘和非校色新功能回归；当前 **178 项**）。本机若系统 `python` 无 pytest，可用项目虚拟环境：`.venv/bin/python -m pytest`。`tests/golden/` 基准入库，缓存不入。
 
 ---
 
@@ -323,7 +325,7 @@ web/src/
 ## 九、构建 / 打包 / Git
 
 - **前端生产静态站**：`cd web && npm run build` 生成 `web/out/`；本项目配置了 `output: "export"`，不使用 `next start`。从 `test/` 运行 `python Floor_engine_server/serve.py`，FastAPI 会把 `web/out` 挂到 `/`，前后端同源跑在 7870。
-- **当前商业主线 exe**（Windows 专属）：运行 `Floor_engine_server/build_windows.bat`。脚本先 `npm ci && npm run build`，再用独立 `.buildenv` 安装依赖并以 Nuitka `--onefile` 编译 `serve.py`，产物为 `test/dist/FloorEngine.exe`。完整说明见上级 `test/PACKAGING.md` 与仓库内 `打包说明.md`。
+- **当前商业主线 exe**（Windows 专属）：运行 `Floor_engine_server/build_windows.bat`。脚本先 `npm ci && npm run build`，再用独立 `.buildenv` 安装依赖并以 Nuitka `--onefile` 编译 `serve.py`；`assets/mobile_sam/*.onnx` 和 ONNX Runtime 会一并进入单文件，运行校色分割不联网。产物为 `test/dist/FloorEngine.exe`。完整说明见上级 `test/PACKAGING.md` 与仓库内 `打包说明.md`。
 - **不要误用旧脚本**：上级 `test/build.bat`、`floor_engine.spec`、`run_app.py` 是冻结 NiceGUI 原型 `floor_engine/` 的 PyInstaller/pywebview 打包链，不包含当前 Next.js 商业前端和最新功能。
 - **Git**：本仓库是独立 git 仓（分支 `main`，提交后 push 到远程 `origin`）。运行期产物与密钥已被 `.gitignore` + `web/.gitignore`（node_modules/.next）排除；`engine_config.json` 在 `test/` 不入库。提交信息沿用 `feat/fix/docs(scope): 说明` 风格，并保持「改完追加 `开发日志.md`」的习惯。
 

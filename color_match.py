@@ -181,7 +181,7 @@ def _color_bias_hints(zone_values, ref_values):
     return hints
 
 
-def analyze_color_region(src_img, ref_img, rect):
+def analyze_color_region(src_img, ref_img, rect, mask_img=None):
     """Analyze representative floor patches in highlight/penumbra/shadow zones.
 
     The caller supplies the user-selected floor rectangle.  Analysis remains
@@ -221,6 +221,12 @@ def analyze_color_region(src_img, ref_img, rect):
     scale = np.maximum(np.median(np.abs(flat - center), axis=0) * 1.4826, (2.0, 1.5, 1.5))
     distance = np.sqrt((((flat - center) / scale) ** 2).mean(axis=1))
     floor_mask = (distance <= 3.2).reshape(lab.shape[:2])
+    if mask_img is not None:
+        selected = mask_img.convert('L')
+        if selected.size != src.size:
+            selected = selected.resize(src.size, Image.Resampling.NEAREST)
+        selected_crop = np.asarray(selected.crop((x0, y0, x1, y1)), dtype=np.uint8) >= 128
+        floor_mask &= selected_crop
     floor_count = int(floor_mask.sum())
     if floor_count < max(512, int(0.05 * floor_mask.size)):
         return unavailable('未找到足够的地板像素，请避开地毯和家具重新框选')
@@ -654,11 +660,136 @@ def match_color_global(src_img, ref_img, rect, strength=1.0, feather=0.05,
     return out
 
 
+def _robust_lab_profile(pixels):
+    """Return robust mean/std after median-MAD outlier rejection."""
+    import numpy as np
+
+    if len(pixels) < 64:
+        return None
+    center = np.median(pixels, axis=0)
+    scale = np.maximum(np.median(np.abs(pixels - center), axis=0) * 1.4826,
+                       (2.0, 1.5, 1.5))
+    distance = np.sqrt((((pixels - center) / scale) ** 2).mean(axis=1))
+    inliers = pixels[distance <= 3.2]
+    if len(inliers) < max(64, int(0.05 * len(pixels))):
+        inliers = pixels
+    return inliers.mean(axis=0), np.maximum(inliers.std(axis=0), (2.0, 1.5, 1.5))
+
+
+def _masked_color_profile(src_img, ref_img, mask_img):
+    """Estimate a chroma-only floor-to-swatch profile from a painted mask."""
+    import numpy as np
+
+    src = src_img.convert('RGB')
+    mask = mask_img.convert('L')
+    if mask.size != src.size:
+        mask = mask.resize(src.size, Image.Resampling.BILINEAR)
+    selected = np.asarray(mask, dtype=np.uint8) >= 128
+    if selected.sum() < max(256, int(0.0005 * selected.size)):
+        return None, dict(_COLOR_ADJUSTMENT_DEFAULTS)
+    # Avoid boundary pixels where furniture antialiasing contaminates statistics.
+    try:
+        import cv2
+        interior = cv2.erode(selected.astype(np.uint8), np.ones((3, 3), np.uint8), iterations=1) > 0
+        if interior.sum() >= 256:
+            selected = interior
+    except Exception:
+        pass
+    source_pixels = _signed_lab_array(src)[selected]
+    reference = ref_img.convert('RGB').copy()
+    reference.thumbnail((1200, 1200), Image.Resampling.LANCZOS)
+    reference_pixels = _signed_lab_array(reference).reshape(-1, 3)
+    source_profile = _robust_lab_profile(source_pixels)
+    reference_profile = _robust_lab_profile(reference_pixels)
+    if source_profile is None or reference_profile is None:
+        return None, dict(_COLOR_ADJUSTMENT_DEFAULTS)
+    source_mean, source_std = source_profile
+    ref_mean, ref_std = reference_profile
+    ratio = np.clip(ref_std / source_std, 0.85, 1.15)
+    # L is deliberately preserved in local mode; only a/b drive the transform.
+    ratio[0] = 1.0
+    ref_mean[0] = source_mean[0]
+    auto_adjustments = _estimate_auto_color_adjustments(
+        source_mean, source_std, ref_mean, ref_std)
+    auto_adjustments['exposure'] = 0.0
+    auto_adjustments['contrast'] = 0.0
+    return {
+        'source_mean': source_mean.astype(np.float32),
+        'ratio': ratio.astype(np.float32),
+        'ref_mean': ref_mean.astype(np.float32),
+    }, auto_adjustments
+
+
+def _inward_soft_mask(mask_img, size, feather):
+    import cv2
+    import numpy as np
+
+    mask = mask_img.convert('L')
+    if mask.size != size:
+        mask = mask.resize(size, Image.Resampling.BILINEAR)
+    binary = np.asarray(mask, dtype=np.uint8) >= 128
+    if not binary.any():
+        return Image.new('L', size, 0)
+    feather_px = max(0.0, float(feather)) * min(size)
+    if feather_px <= 0:
+        alpha = binary.astype(np.float32)
+    else:
+        distance = cv2.distanceTransform(binary.astype(np.uint8), cv2.DIST_L2, 5)
+        alpha = np.clip(distance / max(1.0, feather_px), 0.0, 1.0)
+    return Image.fromarray(np.rint(alpha * 255.0).astype(np.uint8), mode='L')
+
+
+def match_color_masked(src_img, ref_img, mask_img, strength=0.7,
+                       adjustments=None, adjustment_mode='auto', mask_feather=0.003,
+                       return_auto_adjustments=False, strip_rows=256):
+    """Correct only the painted floor; decoded pixels outside remain unchanged.
+
+    Auto mode performs robust a/b-only LAB transfer and preserves scene
+    luminance. Manual editor controls are also composited through the same
+    inward-feathered mask.
+    """
+    import numpy as np
+
+    src = src_img.convert('RGB')
+    normalized = _normalize_color_adjustments(adjustments)
+    profile, auto_adjustments = _masked_color_profile(src, ref_img, mask_img)
+    if adjustment_mode == 'manual':
+        transferred = apply_color_adjustments_striped(src, normalized, strip_rows)
+        blend_strength = 1.0
+    elif profile is None or strength <= 0:
+        out = src.copy()
+        return (out, auto_adjustments) if return_auto_adjustments else out
+    else:
+        rows = max(1, int(strip_rows))
+        transferred = Image.new('RGB', src.size)
+        for y0 in range(0, src.height, rows):
+            y1 = min(src.height, y0 + rows)
+            lab = _signed_lab_array(src.crop((0, y0, src.width, y1)))
+            # Preserve L exactly; transform signed a/b only.
+            lab[..., 1:] = ((lab[..., 1:] - profile['source_mean'][1:])
+                            * profile['ratio'][1:] + profile['ref_mean'][1:])
+            lab[..., 1:] = np.clip(lab[..., 1:], -128, 127)
+            encoded = lab.copy()
+            encoded[..., 1:] = np.where(encoded[..., 1:] < 0,
+                                        encoded[..., 1:] + 256, encoded[..., 1:])
+            strip = Image.fromarray(np.rint(encoded).astype(np.uint8), mode='LAB').convert('RGB')
+            transferred.paste(strip, (0, y0))
+        blend_strength = float(min(max(strength, 0.0), 1.0))
+    alpha = _inward_soft_mask(mask_img, src.size, mask_feather)
+    if blend_strength < 1.0:
+        alpha = alpha.point(lambda value: round(value * blend_strength))
+    out = Image.composite(transferred, src, alpha)
+    if return_auto_adjustments:
+        return out, auto_adjustments
+    return out
+
+
 __all__ = [
     'match_color_to_reference',
     'analyze_color_region',
     'match_color_region',
     'match_color_global',
+    'match_color_masked',
     'apply_color_adjustments',
     'apply_color_adjustments_striped',
 ]

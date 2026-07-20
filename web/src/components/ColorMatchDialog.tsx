@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Slider } from "@/components/ui/slider";
 import { ImageZoom } from "@/components/ImageZoom";
+import { ColorMaskEditor } from "@/components/ColorMaskEditor";
 
 /** 校色目标：任务候选（并入该 stage 候选列表）或记录结果（append 回记录）。 */
 export type ColorMatchTarget =
@@ -36,6 +37,7 @@ const DEFAULT_ADJUSTMENTS: ColorMatchAdjustments = {
 
 type AdjustmentKey = keyof ColorMatchAdjustments;
 type AdjustmentMode = "auto" | "manual";
+type ColorScope = "floor_mask" | "global";
 type AdjustmentControl = {
   key: AdjustmentKey;
   label: string;
@@ -119,7 +121,11 @@ function ColorMatchSession({
   onDone,
 }: ColorMatchDialogProps) {
   const [rect, setRect] = useState<ColorMatchRect>(DEFAULT_RECT);
-  const [strength, setStrength] = useState(0);
+  const [strength, setStrength] = useState(0.7);
+  const [scope, setScope] = useState<ColorScope>("floor_mask");
+  const [maskB64, setMaskB64] = useState("");
+  const [maskFeather, setMaskFeather] = useState(0.003);
+  const [maskBusy, setMaskBusy] = useState(true);
   const [ref, setRef] = useState<{ url: string; path: string }>({ url: refUrl, path: refPath });
   const [adjustments, setAdjustments] = useState<ColorMatchAdjustments>(() => ({ ...DEFAULT_ADJUSTMENTS }));
   const [adjustmentMode, setAdjustmentMode] = useState<AdjustmentMode>("manual");
@@ -150,9 +156,12 @@ function ColorMatchSession({
   const previewSeq = useRef(0);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortPreview = useRef<AbortController | null>(null);
-  const strengthRef = useRef(0);
+  const strengthRef = useRef(0.7);
   const lastAutoStrengthRef = useRef(0.8);
   const adjustmentModeRef = useRef<AdjustmentMode>("manual");
+  const scopeRef = useRef<ColorScope>("floor_mask");
+  const maskRef = useRef("");
+  const maskFeatherRef = useRef(0.003);
 
   // canvas 重绘：原图打底 + fullPreview 按当前强度 alpha 叠加（即时，无网络）
   const redraw = useCallback(() => {
@@ -186,6 +195,7 @@ function ColorMatchSession({
       includeAnalysis = false,
     ) => {
       if (!refPathNow || r.w < 0.02 || r.h < 0.02) return;
+      if (scopeRef.current === "floor_mask" && !maskRef.current) return;
       const controller = new AbortController();
       abortPreview.current = controller;
       api
@@ -198,6 +208,9 @@ function ColorMatchSession({
             adjustments: nextAdjustments,
             adjustment_mode: nextMode,
             include_analysis: includeAnalysis,
+            scope: scopeRef.current,
+            mask_b64: maskRef.current,
+            mask_feather: maskFeatherRef.current,
           },
           controller.signal,
         )
@@ -279,8 +292,8 @@ function ColorMatchSession({
     src.src = api.imgUrl(srcUrl);
     src.onload = () => redraw();
     srcImgRef.current = src;
-    const seq = ++seqRef.current;
-    if (refPath) requestPreview(DEFAULT_RECT, refPath, DEFAULT_ADJUSTMENTS, "manual", seq, true);
+    seqRef.current++;
+    // 局部模式先等待自动蒙版；旧全图模式切换后再主动请求预览。
     return () => {
       seqRef.current++;
       if (timerRef.current) clearTimeout(timerRef.current);
@@ -288,6 +301,51 @@ function ColorMatchSession({
       src.onload = null;
     };
   }, [refPath, requestPreview, redraw, srcUrl]);
+
+  const onLocalMaskChange = useCallback((nextMask: string, bounds: ColorMatchRect) => {
+    maskRef.current = nextMask;
+    setMaskB64(nextMask);
+    rectRef.current = bounds;
+    setRect(bounds);
+    if (!nextMask || !ref.path) {
+      setReady(false);
+      setHasPreview(false);
+      return;
+    }
+    const nextStrength = strengthRef.current || 0.7;
+    strengthRef.current = nextStrength;
+    setStrength(nextStrength);
+    adjustmentModeRef.current = "auto";
+    setAdjustmentMode("auto");
+    setAnalysis(null);
+    autoPreviewRef.current = null;
+    schedulePreview(bounds, ref.path, DEFAULT_ADJUSTMENTS, "auto", 80, true);
+  }, [ref.path, schedulePreview]);
+
+  function changeScope(nextScope: ColorScope) {
+    if (nextScope === scopeRef.current) return;
+    scopeRef.current = nextScope;
+    setScope(nextScope);
+    autoPreviewRef.current = null;
+    fullPreviewRef.current = null;
+    setHasPreview(false);
+    setReady(false);
+    setAnalysis(null);
+    if (nextScope === "global") {
+      strengthRef.current = 0;
+      setStrength(0);
+      adjustmentModeRef.current = "manual";
+      setAdjustmentMode("manual");
+      setAdjustments({ ...DEFAULT_ADJUSTMENTS });
+      schedulePreview(rectRef.current, ref.path, DEFAULT_ADJUSTMENTS, "manual", 50, true);
+    } else if (maskRef.current) {
+      strengthRef.current = 0.7;
+      setStrength(0.7);
+      adjustmentModeRef.current = "auto";
+      setAdjustmentMode("auto");
+      schedulePreview(rectRef.current, ref.path, DEFAULT_ADJUSTMENTS, "auto", 50, true);
+    }
+  }
 
   function norm(e: React.PointerEvent): { x: number; y: number } | null {
     const el = box.current;
@@ -355,6 +413,9 @@ function ColorMatchSession({
           strength,
           adjustments,
           adjustment_mode: adjustmentMode,
+          scope,
+          mask_b64: maskB64,
+          mask_feather: maskFeather,
           stage: target.stage,
         });
         toast.success("已保存为新候选（‹n/N› 可切回原图对比）");
@@ -369,6 +430,9 @@ function ColorMatchSession({
           strength,
           adjustments,
           adjustment_mode: adjustmentMode,
+          scope,
+          mask_b64: maskB64,
+          mask_feather: maskFeather,
         });
         toast.success("校色结果已追加到该记录");
         onDone?.();
@@ -390,13 +454,17 @@ function ColorMatchSession({
       setRef({ url: s.url, path: s.path }); // 用原图 URL：贴片点开放大要看全尺寸小样
       autoPreviewRef.current = null;
       const next = { ...DEFAULT_ADJUSTMENTS };
-      strengthRef.current = 0;
-      setStrength(0);
+      const nextStrength = scopeRef.current === "floor_mask" ? 0.7 : 0;
+      strengthRef.current = nextStrength;
+      setStrength(nextStrength);
       setAdjustments(next);
-      adjustmentModeRef.current = "manual";
-      setAdjustmentMode("manual");
+      const nextMode: AdjustmentMode = scopeRef.current === "floor_mask" ? "auto" : "manual";
+      adjustmentModeRef.current = nextMode;
+      setAdjustmentMode(nextMode);
       setAnalysis(null);
-      schedulePreview(rect, s.path, next, "manual", 350, true);
+      if (scopeRef.current === "global" || maskRef.current) {
+        schedulePreview(rect, s.path, next, nextMode, 350, true);
+      }
       toast.success("已更换参照图");
     } catch (err) {
       toast.error((err as Error).message);
@@ -476,9 +544,17 @@ function ColorMatchSession({
       <DialogContent className="max-h-[94vh] max-w-[96vw] overflow-y-auto sm:max-w-[min(96vw,1500px)]">
         <div className="space-y-3">
           <div>
-            <div className="text-[15.5px] font-bold">手动校色</div>
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="text-[15.5px] font-bold">地板校色</div>
+              <div className="inline-flex rounded-lg border border-border bg-panel p-0.5">
+                <button type="button" onClick={() => changeScope("floor_mask")} className={`rounded-md px-2.5 py-1 text-[11px] font-bold ${scope === "floor_mask" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"}`}>地板局部（默认）</button>
+                <button type="button" onClick={() => changeScope("global")} className={`rounded-md px-2.5 py-1 text-[11px] font-bold ${scope === "global" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"}`}>全图校准（兼容）</button>
+              </div>
+            </div>
             <div className="mt-0.5 text-[12px] text-muted-foreground">
-              左图框选尽量纯的地板只用于分析和生成建议；所有滑块、建议参数和自动校准都作用于整张效果图，墙面与家具也会同步变化。
+              {scope === "floor_mask"
+                ? "AI 先识别地板；绿色笔补选、红色笔排除。校色严格限制在绿色蒙版内，墙面和家具保持原样。"
+                : "兼容旧方式：左图框选地板作为取样，校色参数作用于整张效果图。"}
             </div>
           </div>
 
@@ -486,7 +562,7 @@ function ColorMatchSession({
             {/* 左栏：原图 + 框选 */}
             <div className="min-w-0">
               <div className={paneTitle}>
-                原图 · 拖动框选地板
+                {scope === "floor_mask" ? "原图 · AI 蒙版与画笔修正" : "原图 · 拖动框选地板"}
                 <button
                   title="放大原图"
                   onClick={() => setZoom({ url: api.imgUrl(srcUrl) })}
@@ -495,15 +571,16 @@ function ColorMatchSession({
                   🔍
                 </button>
               </div>
-              <div
-                ref={box}
-                className="relative cursor-crosshair select-none overflow-hidden rounded-[10px] border border-border bg-black/5"
-                style={{ touchAction: "none" }}
-                onPointerDown={onDown}
-                onPointerMove={onMove}
-                onPointerUp={onUp}
-                onPointerCancel={onUp}
-              >
+              {scope === "floor_mask" ? (
+                <ColorMaskEditor
+                  imageUrl={srcUrl}
+                  imageRel={imageRel}
+                  compact={advancedOpen}
+                  onMaskChange={onLocalMaskChange}
+                  onBusyChange={setMaskBusy}
+                />
+              ) : (
+              <div ref={box} className="relative cursor-crosshair select-none overflow-hidden rounded-[10px] border border-border bg-black/5" style={{ touchAction: "none" }} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}>
                 <img
                   src={api.imgUrl(srcUrl)}
                   alt="原图"
@@ -519,6 +596,7 @@ function ColorMatchSession({
                   style={{ left: pct(rect.x), top: pct(rect.y), width: pct(rect.w), height: pct(rect.h) }}
                 />
               </div>
+              )}
             </div>
 
             {/* 右栏：实时校色结果（canvas） */}
@@ -564,6 +642,8 @@ function ColorMatchSession({
                       ? "首次预览生成中…"
                       : !ref.path
                       ? "请先在下方选择参照小样"
+                      : scope === "floor_mask"
+                      ? "等待有效地板蒙版"
                       : "框选地板区域后自动出结果"}
                   </div>
                 )}
@@ -693,7 +773,7 @@ function ColorMatchSession({
               </>
             ) : (
               <div className="rounded-[9px] border border-dashed border-border py-7 text-center text-[11px] text-muted-foreground">
-                框选地板后自动生成三区截图和调色建议
+                {scope === "floor_mask" ? "生成有效地板蒙版后自动诊断" : "框选地板后自动生成三区截图和调色建议"}
               </div>
             )}
           </div>
@@ -717,13 +797,13 @@ function ColorMatchSession({
 
               {/* 自动校准强度（客户端即时混合，1% 步进） */}
               <div className="flex min-w-[260px] flex-1 items-center gap-3">
-                <span className="flex-none text-[12px] font-semibold text-secondary-foreground" title="使用框选地板计算偏差，对整张图做 Reinhard 自动校准">全图自动校准</span>
+                <span className="flex-none text-[12px] font-semibold text-secondary-foreground" title={scope === "floor_mask" ? "仅在地板蒙版内做稳健色度校准" : "使用框选地板计算偏差，对整张图做自动校准"}>{scope === "floor_mask" ? "地板自动校准" : "全图自动校准"}</span>
                 <Slider
                   value={strength}
                   min={0}
                   max={1}
                   step={0.01}
-                  disabled={!ref.path}
+                  disabled={!ref.path || (scope === "floor_mask" && !maskB64)}
                   onValueChange={(v) => {
                     const s = Array.isArray(v) ? v[0] : (v as number);
                     restoreAuto(s);
@@ -745,7 +825,7 @@ function ColorMatchSession({
 
               <button
                 onClick={doSave}
-                disabled={!ready || saving}
+                disabled={!ready || saving || maskBusy || (scope === "floor_mask" && !maskB64)}
                 title={!ref.path ? "请先选择参照图" : !ready ? "预览更新中…" : undefined}
                 className="h-9 flex-none rounded-[9px] bg-primary px-4 text-[13px] font-bold text-primary-foreground hover:bg-primary-hover disabled:opacity-50"
               >
@@ -767,7 +847,9 @@ function ColorMatchSession({
                       以 Gemini 原图为零点的专业调色
                     </div>
                     <div className="text-[10.5px] text-muted-foreground">
-                      框选地板只用于计算偏差；自动校准、建议参数和手动滑块均作用于整张效果图
+                      {scope === "floor_mask"
+                        ? "自动校准与手动滑块都只作用于地板蒙版；地板明暗保留，只修正偏色"
+                        : "框选地板只用于计算偏差；自动校准、建议参数和手动滑块均作用于整张效果图"}
                     </div>
                   </div>
                   <div className="flex flex-none items-center gap-1.5">
@@ -788,6 +870,24 @@ function ColorMatchSession({
                     </button>
                   </div>
                 </div>
+                {scope === "floor_mask" && (
+                  <div className="mb-3 flex items-center gap-3 rounded-lg border border-border bg-card px-3 py-2">
+                    <span className="w-[74px] flex-none text-[11.5px] font-semibold text-secondary-foreground">蒙版内羽化</span>
+                    <Slider
+                      value={maskFeather}
+                      min={0}
+                      max={0.02}
+                      step={0.001}
+                      onValueChange={(value) => {
+                        const next = Array.isArray(value) ? value[0] : value as number;
+                        maskFeatherRef.current = next;
+                        setMaskFeather(next);
+                        schedulePreview(rectRef.current, ref.path, adjustments, adjustmentMode);
+                      }}
+                    />
+                    <span className="w-12 flex-none text-right text-[11px] tabular-nums text-muted-foreground">{(maskFeather * 100).toFixed(1)}%</span>
+                  </div>
+                )}
                 <div className="grid grid-cols-2 gap-x-6 gap-y-2 max-[850px]:grid-cols-1">
                   {ADJUSTMENT_CONTROLS.map((control) => {
                     const value = adjustments[control.key];

@@ -70,6 +70,7 @@ python -m nuitka ^
   --include-package=anyio ^
   --include-package=PIL ^
   --include-package=cv2 ^
+  --include-package=onnxruntime ^
   --include-package=multipart ^
   --include-package-data=certifi ^
   --include-package-data=pptx ^

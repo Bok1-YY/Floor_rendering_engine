@@ -30,5 +30,6 @@
 *.pdf   binary
 *.pptx  binary
 *.xlsx  binary
+*.onnx  binary
 *.woff  binary
 *.woff2 binary
