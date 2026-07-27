@@ -223,4 +223,15 @@ cd web && npm run lint && npm run build
 
 ## 📄 许可证
 
-> 尚未选择开源许可证。正式开源前，请在此处声明许可证（如 MIT / Apache-2.0），并在仓库根添加对应 `LICENSE` 文件。
+Copyright © 2026 Boki.
+
+本项目的原创代码采用 [GNU Affero General Public License v3.0 only](./LICENSE)
+（`AGPL-3.0-only`）授权。AGPL 允许商业使用，但修改、分发或通过网络向用户提供
+修改版时，必须遵守 AGPL 对应源码、许可证和修改声明等要求。
+
+如果你希望将本项目用于不遵守 AGPL 的闭源产品或服务，需要向版权所有者申请
+[单独的商业许可证](./COMMERCIAL_LICENSING.md)。商业授权请通过本仓库的
+[GitHub Issues](https://github.com/Bok1-YY/Floor_engine_Linux/issues) 联系。
+
+MobileSAM 模型资产及其他第三方组件继续遵循各自的许可证，详见
+[第三方声明](./THIRD_PARTY_NOTICES.md)。

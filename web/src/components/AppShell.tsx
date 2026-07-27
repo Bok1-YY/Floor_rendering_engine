@@ -139,15 +139,38 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        <div className="mt-2 flex items-center gap-[10px] border-t border-border pt-3 pl-1.5">
-          <div className="flex h-[30px] w-[30px] items-center justify-center rounded-[9px] bg-success text-[13px] font-bold text-white">
-            运
-          </div>
-          <div className="min-w-0 leading-tight">
-            <div className="text-[12.5px] font-bold">运营工作台</div>
-            <div className="text-[10.5px] text-muted-foreground">
-              {online === null ? "正在检查服务" : online ? "本机服务在线" : "本机服务离线"}
+        <div className="mt-2 border-t border-border pt-3 pl-1.5">
+          <div className="flex items-center gap-[10px]">
+            <div className="flex h-[30px] w-[30px] items-center justify-center rounded-[9px] bg-success text-[13px] font-bold text-white">
+              运
             </div>
+            <div className="min-w-0 leading-tight">
+              <div className="text-[12.5px] font-bold">运营工作台</div>
+              <div className="text-[10.5px] text-muted-foreground">
+                {online === null ? "正在检查服务" : online ? "本机服务在线" : "本机服务离线"}
+              </div>
+            </div>
+          </div>
+          <div className="mt-2 text-[9.5px] leading-relaxed text-muted-foreground">
+            © 2026 Boki ·{" "}
+            <a
+              href="https://github.com/Bok1-YY/Floor_engine_Linux/blob/main/LICENSE"
+              target="_blank"
+              rel="noreferrer"
+              className="underline-offset-2 hover:text-foreground hover:underline"
+            >
+              AGPL-3.0
+            </a>{" "}
+            · 无担保{" "}
+            ·{" "}
+            <a
+              href="https://github.com/Bok1-YY/Floor_engine_Linux"
+              target="_blank"
+              rel="noreferrer"
+              className="underline-offset-2 hover:text-foreground hover:underline"
+            >
+              源码
+            </a>
           </div>
         </div>
       </aside>
