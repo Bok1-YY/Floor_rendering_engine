@@ -1,244 +1,285 @@
-# Floor AI · 地板效果图生成引擎
+<div align="center">
+  <img src="./assets/logo.svg" width="112" alt="Floor Rendering Engine logo">
 
-**在线展示：** [bokiframe.com](https://bokiframe.com)
+  # Floor Rendering Engine
 
-> 面向**地板行业**的 AI 效果图生成工具：上传地板小样 → 自动识色 + 智能配方 → 配置场景参数 → 调用 Gemini / Fal 图像模型出图，支持 **4K**、快出（B2）与精修（Pro）双模式。
->
-> 后端 **FastAPI 无头服务** + 前端 **Next.js**，前后端解耦、异步作业队列、SSE 实时进度。
+  **为地板行业打造的 AI 空间效果图生产工作台**
 
----
+  从地板小样出发，完成识色、场景规划、电影感生图、自动校色、评审与提案导出。
 
-## ✨ 功能特性
+  [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-8b5a3c.svg)](./LICENSE)
+  [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+  [![Next.js 16](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](./web)
+  [![FastAPI](https://img.shields.io/badge/FastAPI-headless-009688?logo=fastapi&logoColor=white)](./server_api.py)
+  [![Windows](https://img.shields.io/badge/Windows-one--click-0078D4?logo=windows)](#快速开始)
 
-- **地板小样识色**：上传地板图，自动分析主色调，驱动后续提示词与配方。
-- **智能配方与我的配方**：按色调/风格自动推荐场景搭配，也可保存、更新和删除自己的参数配方。
-- **35+ 参数化提示词**：风格、灯光、机位、房型、地区市场等多维选项，组装为高质量英文提示词。
-- **多工作流**：纯出图 / 参照图 / 替换 / 宠物友好 / Omakase / 墙板模式等多种生成工作流；Omakase 复用 Gemini Key 生成场景，可配 DeepSeek 自动备用。
-- **自由创作**：用户可原样输入中/英文完整指令，按 Slot 1–3 的顺序上传多张参考图，并行交给 B2 / Pro；不经过地板提示词模板。
-- **多模型并行**：B2 快出 + Pro 精修，并可启用独立的 SD 3.5 Large 实验线路；多模型可同时选择，统一进入同一任务卡。
-- **SD 地板参考与超分**：SD 3.5 使用专属正/负提示词和 InstantX IP-Adapter 强制参考地板小样，约 1MP 扩散后由 AuraSR 交付 2K/4K；超分失败保留基础图并可单独重试。
-- **4K 出图**：面向商用提案的高分辨率输出。
-- **批量生成**：同一地板批量套用多个房间，或同一参数批量处理多个地板小样。
-- **AI 地板局部校色 / 兼容全图校色**：默认由离线 MobileSAM 自动识别地板，可用绿色/红色画笔补选或排除复杂边界；稳健 LAB 算法只修正蒙版内色度、保留地板明暗，墙面与家具逐像素保持原样。旧的框选取样 + 全图校准仍可切换使用。
-- **生成式移除（已可用）/添加（实验）**：类 Lightroom 画笔涂抹局部处理——移除自动适度外扩以覆盖边缘和阴影，已通过本地真实工作图验收；添加默认严格限制在涂抹区。推理二值 mask 与最终羽化 mask 分离，支持无损 PNG 候选挑选后写回；不支持可控变体的专职 Eraser 自动降为 1 张，避免重复计费。任务结果、历史记录、房间图三处入口均可使用；超大选区或生成式添加的质量仍取决于模型与本地显存。
-- **异步作业队列**：`POST` 秒回 `job_id`，`SSE` 推送实时进度；长请求不再被网络中间层 reset。
-- **记录复用与对比**：生成入参随记录落盘，可一键复用参数；替换类工作流支持前后拖动对比。
-- **记录、评审与导出**：历史记录持久化、收藏、最佳图、评审标签/备注；独立复盘页聚合通过率与好图样本，导出 HTML / 带品牌信息的 PPTX 提案 deck。
-- **用量与成本**：统计出图数量、成功率和明细，可按模型配置单价并估算成本。
-- **深色模式**：支持浅色、深色和跟随系统主题。
+  [在线展示](https://bokiframe.com) ·
+  [快速开始](#快速开始) ·
+  [开发文档](./DEVGUIDE.md) ·
+  [提交问题](https://github.com/Bok1-YY/Floor_rendering_engine/issues)
+</div>
 
 ---
 
-## 🏗️ 架构
+## 它解决什么问题
 
-```
-                 ┌──────────────────────────────────────────────┐
-  浏览器  ─────▶ │  Next.js 前端 (web/, :3000)                   │  React 渲染
-                 │    └─ api.ts ──HTTP / SSE──┐                  │
-                 └────────────────────────────┼─────────────────┘
-                                              ▼
-                 ┌──────────────────────────────────────────────┐
-                 │  FastAPI 无头后端 (:7870, server_api.py 组装)   │  作业队列 / SSE
-                 │  业务路由 routes_* · 作业队列 · SSE · 缩略图     │  静态图 / 缩略图
-                 └────────────────────────────┬─────────────────┘
-                                              ▼
-                 ┌──────────────────────────────────────────────┐
-                 │  引擎模块（headless）                          │
-                 │  提示词组装 · 模型调用 · 识色 · 配方 ·          │
-                 │  记录持久化 · 人工评审 · 导出                    │
-                 └──────────────────────────────────────────────┘
+通用生图工具擅长“生成一张漂亮图片”，但地板业务真正关心的是另一组问题：
+
+- 小样颜色能不能准确进入场景，而不是被模型随意改色？
+- 板型、铺法、倒角、缝隙和光泽能不能稳定表达？
+- 替换地板时，原房间结构、家具和光影能不能保留？
+- 人物或宠物入镜时，画面能不能更真实、更像电影而不是摆拍或 CG？
+- API 返回的原图、校色版本、评审结论和客户提案能不能形成完整记录？
+
+Floor Rendering Engine 把这些步骤做成一条面向地板行业的生产管线，而不是在通用聊天框里反复手写提示词。
+
+```text
+地板小样
+   ↓  自动识色 / 配方推荐
+场景与材质参数
+   ↓  电影感导演规划 / 多模型生成
+API 原图
+   ↓  MobileSAM 地板分割 / LAB 自动校色
+交付候选
+   ↓  评审 / 收藏 / 复用 / PPTX
+客户提案
 ```
 
-- **前端**只负责渲染与交互，所有业务经 HTTP/SSE 调后端。
-- **后端**是唯一服务端，把耗时的出图封装成**异步作业**（秒回 `job_id`，SSE 推进度）。
-- **引擎模块**是 headless 的核心逻辑（提示词、模型调用、识色、配方、记录、人工评审、导出），可独立复用。
+## 核心能力
 
----
-
-## 🧰 技术栈
-
-| 层 | 技术 |
+| 能力 | 说明 |
 |---|---|
-| 前端 | Next.js 16（App Router + Turbopack）· React 19 · Tailwind v4 · shadcn/ui · lucide · sonner |
-| 后端 | Python · FastAPI · Uvicorn · SSE |
-| 图像模型 | Google Gemini（image）· Fal（可选） |
-| 图像/数据 | Pillow · NumPy · OpenCV · ONNX Runtime / MobileSAM（离线分割）· python-pptx（导出 deck） |
+| **行业化提示词引擎** | 将房型、市场、风格、灯光、机位、铺法、尺寸、光泽和避让项编译为稳定的英文生图指令。 |
+| **多工作流** | 支持纯效果图、地板替换、参照模式、宠物友好、Omakase、墙板模式和自由创作。 |
+| **电影真实感规划** | 在正式生图前规划可信机位、现实光源、主体动作与视线关系，改善人物和宠物的摆拍感、塑料感与 CG 感。 |
+| **B2 / Pro 双模型** | B2 用于快速探索，Pro 用于高质量交付；可并行运行，也可追加 SD 3.5 实验线路。 |
+| **自动地板校色** | B2 / Pro 出图后，用离线 MobileSAM 识别地板区域，只校正蒙版内色度并保留明暗。 |
+| **API 原图双版本保留** | 自动校色图作为当前结果，同时在队列、候选和历史记录中保留未经处理的 API 原图。 |
+| **局部修补与二改** | 支持生成式移除、实验性添加、磨缝、二次编辑、重抽，以及正负画笔修正地板蒙版。 |
+| **生产记录闭环** | 保存生成参数、候选图和来源关系；支持收藏、最佳图、通过/备选/淘汰评审、HTML 与 PPTX 导出。 |
+| **异步任务队列** | 生图请求秒回 `job_id`，通过 SSE 展示阶段进度；长耗时 4K 任务不阻塞界面。 |
+| **线路与成本治理** | Google / Fal 路由、失败自动切线、FAL 持久队列、用量统计和按模型成本估算。 |
 
----
+## 工作流
 
-## 🚀 快速开始
+| 工作流 | 主要输入 | 适用场景 |
+|---|---|---|
+| **纯效果图** | 地板小样 + 场景参数 | 从零生成完整空间 |
+| **地板替换** | 地板小样 + 房间原图 | 保留房间，只替换地面 |
+| **参照模式** | 地板小样 + 风格参照图 | 复用参照图的空间语言与氛围 |
+| **宠物友好** | 地板小样 + 宠物设定 | 生成自然、可信的宠物生活场景 |
+| **Omakase** | 地板小样 + 简短创意 | 由 AI 完成场景散文与电影感规划 |
+| **墙板模式** | 木纹小样 + 可选场景图 | 墙板再设计、替换或原创 |
+| **自由创作** | 完整指令 + 1–3 张有序参考图 | 绕过地板模板，直接控制模型 |
+
+> 自动校色只应用于 B2 / Pro 的地板类工作流。墙板、自由创作、SD 3.5、Lite 预览、二改和磨缝不会被自动处理。分割或校色失败时任务仍然成功，并安全保留 API 原图。
+
+## 快速开始
 
 ### 环境要求
-- **Python** 3.10+（推荐 3.12）
-- **Node.js** 20.9+
-- 一个 **Google Gemini API Key**（出图必需；[申请入口](https://aistudio.google.com/apikey)）
-- 若你所在网络无法直连 Google，需准备可用**代理**（见 [配置说明](#️-配置说明)）
 
-### 1. 获取代码
-仓库可直接使用 GitHub 默认目录名，Windows 与 Linux 均不再要求手工重命名：
-```bash
-git clone https://github.com/Bok1-YY/Floor_engine_Linux.git
-cd Floor_engine_Linux
-```
+- Python 3.10+，推荐 Python 3.12
+- Node.js 20.9+
+- Google Gemini API Key
+- 可选：Fal API Key、DeepSeek API Key、ComfyUI
 
-### 2. 安装后端依赖（建议用虚拟环境）
-```bash
-python -m venv .venv
-source .venv/bin/activate          # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-# 开发与测试：pip install -r requirements-dev.txt
-```
+主生图线路使用云端 API，不要求本机具备高端显卡；MobileSAM 校色分割在本地通过 ONNX Runtime 运行。
 
-### 3. 安装前端依赖
-```bash
-cd web && npm install && cd ..
-```
+### Windows
 
-### 4. 启动
+```powershell
+git clone https://github.com/Bok1-YY/Floor_rendering_engine.git
+cd Floor_rendering_engine
 
-Windows 完成依赖安装后，可双击：
+py -3.12 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 
-- `start-windows.bat`：构建后的前后端一体运行，入口为 <http://127.0.0.1:7870>；
-- `dev-windows.bat`：后端与 Next.js 开发服务器分开运行，入口为 <http://localhost:3000>。
-
-Linux 手动启动仍可按包方式运行：
-
-```bash
-# 后端（在仓库的【上一级】目录）
+cd web
+npm ci
+npm run build
 cd ..
-python -m Floor_engine_Linux.server_api          # → http://127.0.0.1:7870
 
-# 前端（另开一个终端，在 web/ 下）
-cd Floor_engine_Linux/web && npm run dev          # → http://localhost:3000
+.\start-windows.bat
 ```
 
-浏览器打开 **http://localhost:3000**。后端健康检查：`GET http://127.0.0.1:7870/api/healthz` → `{"ok":true}`。
+浏览器将打开 <http://127.0.0.1:7870>。首次使用时，在「设置」页填写 Gemini API Key。
 
-首次使用请到前端「**设置**」页填入 Gemini API Key（没有 key 也能打开界面，但无法出图）。
+开发模式使用：
 
----
+```powershell
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\dev-windows.bat
+```
 
-## ⚙️ 配置说明
+前端开发服务器位于 <http://localhost:3000>，FastAPI 位于 <http://127.0.0.1:7870>。
 
-配置存于 `engine_config.json`，可在前端「设置」页可视化编辑，或直接写文件。常用字段：
+### Linux / macOS
 
-| 字段 | 说明 |
-|---|---|
-| `gemini_api_key` | Google Gemini 密钥（出图必需） |
-| `fal_api_key` | Fal 密钥（选用 Fal 提供方时需要） |
-| `deepseek_api_key` | 可选：Omakase 的 DeepSeek 备用线路 Key |
-| `omakase_enabled` | 是否启用 AI 场景代笔（Gemini 主线路） |
-| `sd_enabled` | 是否启用 SD 3.5 实验线路（默认关闭，仅纯效果图） |
-| `omakase_gemini_model` | Omakase/电影规划文本模型，默认 `gemini-3.6-flash`；旧 `gemini-2.5-flash` 自动升级 |
-| `image_provider` | `google`（默认）或 `fal` |
-| `inpaint_provider` 等 | 生成式修补引擎组：提供方（`fal`/`comfyui`）、移除模型 `inpaint_remove_model`、添加模型 `inpaint_add_model`、ComfyUI 地址/超时/自定义 workflow；均可在设置页可视化配置 |
-| `proxy` | HTTP 代理，如 `http://127.0.0.1:7897/`；网络无法直连 Google 时填写 |
-| `fal_queue_proxy` | SD/AuraSR 队列专用代理；默认留空并忽略系统代理直接连接 FAL |
-| `speed_profile` | `fast`（快速失败）/ `resilient`（死磕重试） |
-| `auto_failover` | Google 失败时是否自动切到 Fal |
-| `tls_verify` / `tls_ca_bundle` | HTTPS 证书校验开关 / 自定义 CA |
-| `max_concurrent_per_model` | 每个模型的并发上限 |
-| `usage_prices` | 各模型成功出图的单价，用于用量页估算成本 |
-| `pptx_company` / `pptx_contact` | PPTX 提案中的公司名与联系方式 |
+```bash
+git clone https://github.com/Bok1-YY/Floor_rendering_engine.git
+cd Floor_rendering_engine
 
-> ⚠️ `engine_config.json` 含密钥，已被 `.gitignore` 排除，**不会进入版本库**。请勿把密钥提交到仓库。
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
 
-前端开发默认由 `web/.env.development` 指向 `http://127.0.0.1:7870`；生产静态站由 `web/.env.production` 使用同源 API。
-后端可用环境变量：`FLOOR_API_PORT`(7870) / `FLOOR_API_HOST`(仅支持 127.0.0.1) / `FLOOR_API_CORS`（放行的开发前端源）。本版本是客户本机程序，不提供无认证的局域网或公网部署。
-Windows 启动脚本还会设置 `FLOOR_DATA_DIR=项目目录\data`，让配置、输出、上传和日志集中保存在项目内。
+cd web
+npm ci
+npm run build
+cd ..
 
-### 📁 数据目录
-后端会把**配置与运行期数据**写在仓库目录的**上一级**（`config.py` 中 `BASE_DIR = 仓库上级目录`）。因此运行时会在上级目录生成：
+FLOOR_DATA_DIR="$PWD/data" python serve.py
+```
+
+健康检查：
+
+```text
+GET http://127.0.0.1:7870/api/healthz
+```
+
+成功时返回 `{"ok": true}`。FastAPI 接口文档位于 <http://127.0.0.1:7870/docs>。
+
+## 从小样到交付
+
+1. 上传地板小样，系统识别主色调并推荐场景配方。
+2. 选择工作流、模型和场景参数；人物或宠物场景可启用电影真实感。
+3. B2 / Pro 并行生成，任务卡通过 SSE 显示实时阶段。
+4. 地板类结果自动完成局部校色，校色图成为当前图，API 原图仍可随时打开。
+5. 使用重抽、磨缝、二改、局部修补或手工蒙版继续优化。
+6. 将满意结果收藏或标为最佳图，在记录页复用参数、完成评审并导出提案。
+
+## 模型与提供方
+
+| 模块 | 默认/可选线路 | 用途 |
+|---|---|---|
+| **Nano Banana 2** | Google Gemini / Fal | 快速探索与批量出图 |
+| **Nano Banana Pro** | Google Gemini / Fal | 高质量交付 |
+| **Nano Banana Lite** | Google Gemini | 1K 快速预览，不进入正式队列 |
+| **SD 3.5 Large** | Fal + IP-Adapter | 实验性地板参考生成，可接 AuraSR |
+| **Omakase / 电影规划** | Gemini，DeepSeek 可备用 | 场景文本与导演规划 |
+| **生成式修补** | Fal 或自备 ComfyUI | 移除、添加和局部重绘 |
+| **地板分割与校色** | 本地 MobileSAM + OpenCV | 不增加生图 API 调用 |
+
+> 云模型的可用性、计费和内容政策由对应提供方决定。启用自动切线前，请先配置相应提供方的 Key。
+
+## 配置与数据
+
+推荐在前端「设置」页管理配置。密钥和运行数据不会提交到 Git：
 
 | 路径 | 内容 |
 |---|---|
-| `output_files/` | 出图、每个素材的 `*_记录.json`、优化图、候选图 |
-| `output_files/.queue_state.json` | 作业队列及 SD/AuraSR Fal 请求句柄持久化（重启后按原 request 恢复） |
-| `engine_config.json` | 密钥与线路配置（含敏感信息，已 gitignore） |
-| `custom_recipes.json` | 用户保存的“我的配方”（位于仓库上级，不进入本仓库） |
-| `_ng_uploads/logo_*` | PPTX 提案品牌 Logo（由程序上传和清理） |
-| `_ng_uploads/` · `_ng_thumbs/` | 上传素材 · 缩略图缓存 |
-| `app_local_save.log` | 运行日志 |
+| `data/engine_config.json` | API Key、线路、并发、代理与功能开关 |
+| `data/output_files/` | API 原图、校色图、候选图和记录 JSON |
+| `data/_ng_uploads/` | 上传素材与品牌 Logo |
+| `data/_ng_thumbs/` | 缩略图缓存 |
+| `data/app_local_save.log` | 运行日志 |
 
-把仓库整体挪到别处，`BASE_DIR` 会自动指向新位置，得到**独立**的数据目录，无需改代码。
+Windows 启动脚本会自动把 `FLOOR_DATA_DIR` 指向项目内的 `data/`。手动启动时建议显式设置同名环境变量。
 
----
+<details>
+<summary><strong>常用配置项</strong></summary>
 
-## 📖 使用流程
+| 字段 | 说明 |
+|---|---|
+| `gemini_api_key` | Gemini 生图与文本规划 Key |
+| `fal_api_key` | Fal 生图、SD 3.5、AuraSR 或修补 Key |
+| `deepseek_api_key` | Omakase 文本备用线路 |
+| `image_provider` | `google` 或 `fal` |
+| `auto_failover` | Google 网络类失败时自动转 Fal |
+| `auto_color_match_enabled` | B2 / Pro 地板工作流出图后自动校色，默认开启 |
+| `omakase_enabled` | 启用 AI 场景代笔 |
+| `sd_enabled` | 启用 SD 3.5 实验线路 |
+| `inpaint_provider` | `fal` 或 `comfyui` |
+| `proxy` | Gemini/通用 HTTP 代理 |
+| `fal_queue_proxy` | FAL 持久队列专用代理 |
+| `speed_profile` | `fast` 或 `resilient` |
+| `max_concurrent_per_model` | 每个模型的并发上限 |
+| `usage_prices` | 用量页成本估算单价 |
 
-1. 在「**生成**」页上传一张地板小样（或从最近小样里选）。
-2. 系统自动识色；可套用智能推荐，或保存和复用「我的配方」。
-3. 选择工作流、市场地区、模型与档位，按需展开高级参数；也可选“自由创作”原样输入指令并上传 1–3 张有序参考图。
-4. 点击生成 → 任务进入右侧队列，SSE 实时显示进度；出图后可预览、切换候选和查看前后对比。
-5. 对结果可**磨缝 / 二次编辑 / 重抽 / AI 地板局部校色**；复杂地板边界可用正负画笔修蒙版，满意的可**收藏**或标为**最佳图**。
-6. 到「**记录**」页筛选、复用参数、人工标注**通过 / 备选 / 淘汰**并导出提案；「**评审复盘**」看聚合表现和好图样本，「**用量**」页看数量与估算成本。
+</details>
 
----
+## 架构
 
-## 🗂️ 项目结构
+```mermaid
+flowchart LR
+    UI["Next.js 16<br/>React 19 · Tailwind v4"]
+    API["FastAPI<br/>HTTP · SSE · 路径守卫"]
+    JOB["任务编排<br/>队列 · 重试 · 候选"]
+    ENGINE["地板引擎<br/>提示词 · 配方 · 记录"]
+    CLOUD["Gemini / Fal<br/>DeepSeek / ComfyUI"]
+    LOCAL["本地图像管线<br/>MobileSAM · OpenCV · LAB"]
 
+    UI -->|HTTP / SSE| API
+    API --> JOB
+    JOB --> ENGINE
+    ENGINE --> CLOUD
+    ENGINE --> LOCAL
+    CLOUD --> JOB
+    LOCAL --> JOB
 ```
-Floor_engine_server/            # 后端 Python 包（= 本仓库根）
-│  ── Web 层 ──
-├── server_api.py               # FastAPI app 组装器（lifespan/CORS/静态图/前端挂载 + include_router）
-├── routes_*.py                 # 六个业务路由：jobs(队列+生图协程)/previews/library/config/tools/inpaint
-├── server_state.py             # 进程内状态：任务注册表 ×3、按模型并发信号量
-├── server_schemas.py           # 全部 HTTP 请求模型（前端契约）
-├── server_helpers.py           # 路由共享工具：URL 映射、路径守卫、上传落盘
-├── image_ops.py / task_registry.py  # 纯 PIL mask 处理 / 泛型任务注册表容器
-│  ── 引擎层（headless）──
-├── config.py                   # 路径/配置中心（BASE_DIR、engine_config.json 读写）
-├── models.py                   # 数据模型：作业、参数、状态
-├── prompt_data.py              # 纯数据：选项表（风格/灯光/机位/房型/色调…）+ 中英翻译
-├── prompts.py                  # 提示词组装：五阶段流水线（参数 → 英文 prompt + 落 JSON/PNG）
-├── image_prep.py               # 小样 ICC→sRGB 预处理 + 识色 analyze_floor_tone
-├── sd_prompts.py               # SD 3.5 独立正/负提示词编译器（不改 Gemini 资产）
-├── recipes.py                  # 智能配方推荐
-├── custom_recipes.py           # “我的配方”运行期 CRUD
-├── api.py                      # 外部模型调用（Gemini / Fal / 磨缝二改 / 生成式修补 / 连通测试）
-├── color_match.py              # 本地色彩算法（全图兼容模式 / 蒙版内稳健 LAB 色度校正）
-├── floor_segmentation.py       # 离线 MobileSAM + 正负笔触 + GrabCut 地板蒙版
-├── records.py                  # 记录持久化核心：队列状态、记录 CRUD、收藏/评审
-├── usage_stats.py / exports.py / reveal_security.py  # 用量统计 / HTML·PPTX 导出 / 提示词混淆与揭示
-├── failure_kb.py               # 失败知识库（错误分类与建议）
-├── floor_renderer.py           # 本地地板透视渲染（OpenCV）
+
+- 前端只负责交互与展示，业务状态统一由 FastAPI 提供。
+- B2、Pro 和 SD 使用独立并发槽，可在同一任务中并行执行。
+- 队列、结果来源和 FAL 请求句柄会持久化，重启后可恢复。
+- 服务默认只监听本机地址，不提供无认证的局域网或公网部署。
+
+<details>
+<summary><strong>项目结构</strong></summary>
+
+```text
+.
+├── serve.py                    # 前后端一体启动入口
+├── server_api.py               # FastAPI 应用组装
+├── routes_*.py                 # 任务、配置、记录、工具与修补路由
+├── server_state.py             # 队列、并发与取消状态
+├── cinematic_planner.py        # 电影真实感导演规划
+├── prompts.py / prompt_data.py # 行业提示词编译
+├── api.py                      # Gemini / Fal / 修补模型客户端
+├── floor_segmentation.py       # MobileSAM 地板分割
+├── color_match.py              # 局部 LAB 校色
+├── records.py                  # 记录、候选、评审与持久化
+├── exports.py                  # HTML / PPTX 导出
 ├── web/                        # Next.js 前端
-├── tests/                      # pytest（golden 提示词 + 68 端点契约快照 + 安全硬化 + 回归）
-└── requirements.txt
+├── assets/                     # Logo、MobileSAM 与参考资产
+└── tests/                      # 后端回归与契约测试
 ```
 
----
+</details>
 
-## 🛠️ 开发
+## 开发与验证
 
-深入的开发文档见：
-
-- [`DEVGUIDE.md`](./DEVGUIDE.md)：当前单机版架构、后端端点、前端结构、关键约定与开发工作流。
-- [`SAAS_ARCHITECTURE.md`](./SAAS_ARCHITECTURE.md)：未来在线网页订阅版的完整目标架构、计费、任务调度、多供应商容灾与迁移路线。
-- [`SD35_INTEGRATION.md`](./SD35_INTEGRATION.md)：SD 3.5 + IP-Adapter + AuraSR 的实现、接口、失败语义与校准说明。
-
-常用命令：
 ```bash
-# 后端测试（当前 178 项）
-.venv/bin/python -m pytest
+# 后端
+.venv/Scripts/python.exe -m pytest       # Windows
+.venv/bin/python -m pytest               # Linux / macOS
 
-# 前端 lint + 类型/生产构建
-cd web && npm run lint && npm run build
+# 前端
+cd web
+npm run lint
+npm run build
 ```
 
----
+当前主线会验证提示词黄金样本、路由契约、安全路径、模型切线、电影规划、自动校色、队列恢复、记录与导出等关键行为。
 
-## 📄 许可证
+进一步阅读：
+
+- [DEVGUIDE.md](./DEVGUIDE.md) — 当前架构、端点、模块边界与开发约定
+- [SAAS_ARCHITECTURE.md](./SAAS_ARCHITECTURE.md) — 在线订阅版目标架构与迁移路线
+- [SD35_INTEGRATION.md](./SD35_INTEGRATION.md) — SD 3.5、IP-Adapter 与 AuraSR
+- [THIRD_PARTY_NOTICES.md](./THIRD_PARTY_NOTICES.md) — 第三方组件与模型声明
+
+## 安全说明
+
+- `engine_config.json`、`data/`、输出图和日志均已加入 `.gitignore`。
+- 不要在 Issue、截图或日志中公开 API Key。
+- 本项目默认仅绑定 `127.0.0.1`；若要改造成多人或公网服务，需要先补充身份认证、租户隔离、对象存储和任务调度。
+
+## 许可证
 
 Copyright © 2026 Boki.
 
-本项目的原创代码采用 [GNU Affero General Public License v3.0 only](./LICENSE)
-（`AGPL-3.0-only`）授权。AGPL 允许商业使用，但修改、分发或通过网络向用户提供
-修改版时，必须遵守 AGPL 对应源码、许可证和修改声明等要求。
+原创代码采用 [GNU Affero General Public License v3.0 only](./LICENSE) 授权。修改、分发或通过网络向用户提供修改版时，需要遵守 AGPL 对应的源码开放与许可证义务。
 
-如果你希望将本项目用于不遵守 AGPL 的闭源产品或服务，需要向版权所有者申请
-[单独的商业许可证](./COMMERCIAL_LICENSING.md)。商业授权请通过本仓库的
-[GitHub Issues](https://github.com/Bok1-YY/Floor_engine_Linux/issues) 联系。
+如需将本项目用于不遵守 AGPL 的闭源产品或服务，请申请[单独的商业许可证](./COMMERCIAL_LICENSING.md)。商业授权可通过 [GitHub Issues](https://github.com/Bok1-YY/Floor_rendering_engine/issues) 联系。
 
-MobileSAM 模型资产及其他第三方组件继续遵循各自的许可证，详见
-[第三方声明](./THIRD_PARTY_NOTICES.md)。
+MobileSAM 模型资产及其他第三方组件遵循各自许可证，详见[第三方声明](./THIRD_PARTY_NOTICES.md)。
