@@ -22,11 +22,18 @@ from .api import (
     call_fal_sd35_generate, call_fal_aura_upscale, SD35_ENDPOINT,
     FLOOR_DESEAM_INSTRUCTION, infer_aspect_ratio_from_b64,
 )
-from .color_match import match_color_to_reference
+from .color_match import match_color_masked, match_color_to_reference
 from .config import (
     MAIN_OUTPUT_DIR, logger, load_config, GEMINI_MODEL_MAP,
     get_image_provider, get_bevel_ref_image, extract_clean_prompt,
+    get_omakase_gemini_model, get_auto_color_match_enabled,
 )
+from .cinematic_planner import (
+    CINEMATIC_FALLBACK_DIRECTION,
+    plan_cinematic_scene,
+    supports_cinematic,
+)
+from .floor_segmentation import segment_floor
 from .models import (
     JobRecord, new_job, update_job, compute_final_status, add_candidate,
     TaskParams, task_params_to_kwargs, ensure_model_runs, update_model_run,
@@ -50,13 +57,75 @@ from .server_schemas import EditRequest, FreeJobSubmitRequest, JobSubmitRequest,
 
 router = APIRouter()
 
+AUTO_COLOR_STRENGTH = 0.7
+AUTO_COLOR_MASK_FEATHER = 0.003
+_AUTO_COLOR_WORKFLOWS = ('纯效果图', '地板替换', '宠物友好', '参照模式', 'Omakase')
+
+
+def supports_auto_color_match(workflow_mode: str) -> bool:
+    """Only floor-oriented generation workflows are safe for automatic masking."""
+    mode = workflow_mode or ''
+    return any(name in mode for name in _AUTO_COLOR_WORKFLOWS)
+
+
+def _set_auto_color_settings(job: JobRecord, key: str, **values) -> None:
+    run = update_model_run(job, key)
+    settings = dict(run.get('settings') or {})
+    settings.update(values)
+    update_model_run(job, key, settings=settings)
+
+
+def _auto_color_match_generated(image: Image.Image, raw_path: str, reference_path: str):
+    """Return a floor-masked color-corrected copy without changing scene luminance."""
+    if image is None:
+        return None, {}, 'API 原图为空'
+    if not reference_path or not os.path.isfile(reference_path):
+        return None, {}, '地板小样不存在，已保留 API 原图'
+
+    stat = os.stat(raw_path)
+    cache_key = f'auto-color:{os.path.realpath(raw_path)}:{stat.st_size}:{stat.st_mtime_ns}'
+    _working, result = segment_floor(image, cache_key, auto_seed=True)
+    if result.status != 'ok' or result.mask is None:
+        detail = '；'.join(result.warnings or []) or '未识别到可靠地板区域'
+        return None, {
+            'mask_model': result.model,
+            'mask_confidence': round(float(result.confidence or 0.0), 4),
+            'mask_warnings': list(result.warnings or []),
+        }, f'{detail}，已保留 API 原图'
+
+    mask = Image.fromarray((result.mask.astype('uint8') * 255), mode='L')
+    with Image.open(reference_path) as reference:
+        reference.load()
+        corrected = match_color_masked(
+            image,
+            reference,
+            mask,
+            strength=AUTO_COLOR_STRENGTH,
+            adjustment_mode='auto',
+            mask_feather=AUTO_COLOR_MASK_FEATHER,
+        )
+    metadata = {
+        'operation': 'auto_color_match',
+        'variant': 'auto_color_corrected',
+        'scope': 'floor_mask',
+        'strength': AUTO_COLOR_STRENGTH,
+        'mask_feather': AUTO_COLOR_MASK_FEATHER,
+        'mask_model': result.model,
+        'mask_confidence': round(float(result.confidence or 0.0), 4),
+        'mask_coverage': round(float(result.mask.mean()), 4),
+        'mask_warnings': list(result.warnings or []),
+        'preserve_luminance': True,
+    }
+    return corrected, metadata, ''
+
 
 # ============================================================
 # 生成 worker（移植自 webui._generate_one_model / _run_job，删去所有 UI 调用）
 # ============================================================
 async def _generate_one_model(job: JobRecord, model_id, prompt_text, stage_key, model_name, *,
                               api_key, pnp, ims, ar, rp, sref, bevel_ref, jpt, rid, should_cancel,
-                              input_image_paths=None):
+                              input_image_paths=None, cinematic_mode=False,
+                              auto_color_match=False):
     """单模型生成：占本模型并发槽 → 调引擎 → 存盘 → 写记录 → 记用量。返回 (jpg路径或None, 错误串)。
     与 webui 版逐行一致，仅删去 _refresh_job_card(UI 刷新)——进度改由 SSE 读 job.{key}_stage。"""
     _t0 = time.time()
@@ -77,7 +146,8 @@ async def _generate_one_model(job: JobRecord, model_id, prompt_text, stage_key, 
             _t0 = time.time()      # 计时从真正开跑算起，不含排队等待
             img, err, provider = await asyncio.to_thread(
                 call_image_generate, api_key, model_id, prompt_text,
-                pnp, ims, ar, rp, sref, _on_stage, should_cancel, bevel_ref, input_image_paths)
+                pnp, ims, ar, rp, sref, _on_stage, should_cancel, bevel_ref,
+                input_image_paths, cinematic_mode)
     except Exception as e:
         img, err, provider = None, str(e), get_image_provider()
     finally:
@@ -92,15 +162,115 @@ async def _generate_one_model(job: JobRecord, model_id, prompt_text, stage_key, 
     path = None
     if img is not None:
         # 图已生成 = 已计费 → 即便随后判定取消也先存盘，避免白花钱（与 webui 同序）
-        path = save_api_result_jpg(img, model_name, pnp)
+        path = save_api_result_jpg(img, f'{model_name}_API原图', pnp)
         if not path:
             record_usage(job.workflow_mode, model_name, provider, True, job.operation)
             return None, '图片已生成，但保存到磁盘失败'
         add_model_candidate(job, stage_key, path)
+        update_model_run(job, stage_key, base_path=path)
+        _set_auto_color_settings(
+            job,
+            stage_key,
+            auto_color_match_enabled=bool(auto_color_match),
+            auto_color_status=('pending' if auto_color_match else 'disabled'),
+            auto_color_error='',
+        )
+        raw_result_id = None
         try:
-            await asyncio.to_thread(api_write_to_record, img, model_name, jpt, rid, path)
+            raw_result_id = await asyncio.to_thread(
+                api_write_to_record,
+                img,
+                f'{model_name} · API 原图',
+                jpt,
+                rid,
+                path,
+                {'variant': 'api_original'},
+                None,
+                f'API 原图 ({img.width}×{img.height})',
+            )
         except Exception as ex:
             logger.warning(f"写记录失败 job={job.job_id} {model_name}: {ex}")
+
+        if auto_color_match and not should_cancel():
+            _on_stage('🎯 自动校色中…')
+            try:
+                corrected, color_meta, color_err = await asyncio.to_thread(
+                    _auto_color_match_generated, img, path, pnp)
+                corrected_saved = False
+                if corrected is not None:
+                    corrected_meta = dict(color_meta)
+                    if raw_result_id:
+                        corrected_meta['source_result_id'] = raw_result_id
+                    corrected_path = await asyncio.to_thread(
+                        save_api_result_png,
+                        corrected,
+                        f'{model_name}_自动校色',
+                        path,
+                        corrected_meta,
+                    )
+                    if corrected_path:
+                        add_model_candidate(job, stage_key, corrected_path)
+                        path = corrected_path
+                        corrected_saved = True
+                        _set_auto_color_settings(
+                            job,
+                            stage_key,
+                            auto_color_status='done',
+                            auto_color_error='',
+                            auto_color_metadata=corrected_meta,
+                        )
+                        try:
+                            await asyncio.to_thread(
+                                api_write_to_record,
+                                corrected,
+                                f'{model_name} · 自动校色',
+                                jpt,
+                                rid,
+                                corrected_path,
+                                corrected_meta,
+                                raw_result_id,
+                                f'自动校色 ({corrected.width}×{corrected.height})',
+                            )
+                        except Exception as ex:
+                            logger.warning(
+                                f"自动校色图写记录失败 job={job.job_id} {model_name}: {ex}")
+                    else:
+                        color_err = '自动校色图保存失败，已保留 API 原图'
+                if not corrected_saved:
+                    message = color_err or '自动校色失败，已保留 API 原图'
+                    _set_auto_color_settings(
+                        job,
+                        stage_key,
+                        auto_color_status='failed',
+                        auto_color_error=message,
+                        auto_color_metadata=color_meta,
+                    )
+                    logger.warning(f"[自动校色] job={job.job_id} {model_name}: {message}")
+            except Exception as ex:
+                message = f'{ex}；已保留 API 原图'
+                _set_auto_color_settings(
+                    job,
+                    stage_key,
+                    auto_color_status='failed',
+                    auto_color_error=message,
+                )
+                logger.warning(
+                    f"[自动校色] 处理失败 job={job.job_id} {model_name}: {ex}",
+                    exc_info=True,
+                )
+            finally:
+                try:
+                    setattr(job, f'{stage_key}_stage', '')
+                    update_model_run(job, stage_key, stage='')
+                except Exception:
+                    pass
+        elif auto_color_match:
+            _set_auto_color_settings(
+                job,
+                stage_key,
+                auto_color_status='cancelled',
+                auto_color_error='用户已停止，保留 API 原图',
+            )
 
     _err = err or ''
     # 出图=ok；没出图且非取消=fail（取消不计失败）。provider 用引擎返回的【实际】线路(自动转 Fal 能记对)。
@@ -275,6 +445,11 @@ async def _run_job_bg(job: JobRecord, req: 'JobSubmitRequest'):
     cfg = load_config()
     api_key = (req.api_key or '').strip() or cfg.get('gemini_api_key', '').strip()
     fal_key = (cfg.get('fal_api_key') or '').strip()
+    auto_color_active = bool(
+        get_auto_color_match_enabled()
+        and supports_auto_color_match(p.workflow_mode)
+        and (run_b2 or run_pro)
+    )
 
     if state.JOBS.is_cancelled(jid, generation):
         update_job(job, status='failed', error='已取消（用户停止）',
@@ -303,8 +478,51 @@ async def _run_job_bg(job: JobRecord, req: 'JobSubmitRequest'):
                            operation_status='failed', operation_error=sa_err or '返回为空')
                 return
 
+        # 可选电影真实感：Omakase 的场景候选已由文本模型规划，不重复计费；
+        # 宠物/纯效果图/参照模式在正式生图前补一次轻量导演规划。失败只降级，不阻断付费生图。
+        cinematic_active = bool(
+            p.cinematic_enabled
+            and supports_cinematic(p.workflow_mode)
+            and (run_b2 or run_pro)
+        )
+        cinematic_direction = ''
+        cinematic_meta = {}
+        cinematic_error = ''
+        if cinematic_active:
+            if 'Omakase' in (p.workflow_mode or ''):
+                cinematic_direction = CINEMATIC_FALLBACK_DIRECTION
+                cinematic_meta = {
+                    'source': 'omakase_scene',
+                    'final_direction': cinematic_direction,
+                }
+            else:
+                cinematic_direction, cinematic_meta, plan_err = await asyncio.to_thread(
+                    plan_cinematic_scene,
+                    p,
+                    api_key=api_key,
+                    model=get_omakase_gemini_model(),
+                    style_analysis_text=style_text,
+                )
+                if plan_err:
+                    cinematic_error = plan_err
+                    cinematic_direction = CINEMATIC_FALLBACK_DIRECTION
+                    cinematic_meta = {
+                        'source': 'local_fallback',
+                        'final_direction': cinematic_direction,
+                    }
+                    logger.warning(
+                        f"[电影真实感] 规划失败，使用本地降级 job={jid}: {plan_err}"
+                    )
+                else:
+                    cinematic_meta = {'source': 'gemini', **cinematic_meta}
+
         # 组装提示词参数 → save_task_files_html（prep 串行：同张小样并发任务共享输出路径）
-        tp = TaskParams(image_path=req.image_path, style_analysis_text=style_text, **p.model_dump())
+        tp = TaskParams(
+            image_path=req.image_path,
+            style_analysis_text=style_text,
+            cinematic_plan_text=cinematic_direction,
+            **p.model_dump(),
+        )
         async with state.task_prep_lock:
             (_pil, sms, prt, saved_image_path, jpt, rid, pnp, prt_pro) = await asyncio.to_thread(
                 save_task_files_html, **task_params_to_kwargs(tp))
@@ -344,7 +562,9 @@ async def _run_job_bg(job: JobRecord, req: 'JobSubmitRequest'):
                              sd_negative=(sd_bundle.negative if sd_bundle else ''),
                              sd_options=req.sd_options.model_dump(),
                              ims=ims, ar=ar, rp=rp, sref=sref, bevel_ref=bevel_ref,
-                             jpt=jpt, rid=rid, model_filter=mf, model_targets=targets)
+                             jpt=jpt, rid=rid, model_filter=mf, model_targets=targets,
+                             cinematic_mode=cinematic_active,
+                             auto_color_match=auto_color_active)
         update_job(job, json_path=jpt, record_id=rid, png_path=pnp)
 
         # gen_context 快照：完整入参落记录 JSON，供「复用参数」「前后对比」。绝不含 api_key。
@@ -352,7 +572,10 @@ async def _run_job_bg(job: JobRecord, req: 'JobSubmitRequest'):
             await asyncio.to_thread(attach_generation_context, jpt, rid, dict(
                 image_path=req.image_path, room_path=req.room_path or '',
                 ref_path=req.ref_path or '', model_filter=mf, model_targets=targets,
-                sd_options=req.sd_options.model_dump() if run_sd else None, params=p.model_dump()))
+                sd_options=req.sd_options.model_dump() if run_sd else None,
+                cinematic_plan=(cinematic_meta if cinematic_active else None),
+                cinematic_error=cinematic_error,
+                params=p.model_dump()))
         except Exception as ex:
             logger.warning(f"[API任务] gen_context 写入失败 job={jid}: {ex}")
 
@@ -366,7 +589,10 @@ async def _run_job_bg(job: JobRecord, req: 'JobSubmitRequest'):
         def _gen_one(model_id, prompt_text, stage_key, model_name):
             return _generate_one_model(job, model_id, prompt_text, stage_key, model_name,
                                        api_key=api_key, pnp=pnp, ims=ims, ar=ar, rp=rp, sref=sref,
-                                       bevel_ref=bevel_ref, jpt=jpt, rid=rid, should_cancel=should_cancel)
+                                       bevel_ref=bevel_ref, jpt=jpt, rid=rid,
+                                       should_cancel=should_cancel,
+                                       cinematic_mode=cinematic_active,
+                                       auto_color_match=auto_color_active)
 
         tasks = []
         if run_b2:
@@ -527,7 +753,9 @@ async def _retry_bg(job: JobRecord):
                                        api_key=api_key, pnp=ctx['pnp'], ims=ctx['ims'], ar=ctx['ar'],
                                        rp=ctx['rp'], sref=ctx['sref'], bevel_ref=ctx.get('bevel_ref'),
                                        jpt=ctx['jpt'], rid=ctx['rid'], should_cancel=should_cancel,
-                                       input_image_paths=ctx.get('input_image_paths'))
+                                       input_image_paths=ctx.get('input_image_paths'),
+                                       cinematic_mode=bool(ctx.get('cinematic_mode', False)),
+                                       auto_color_match=bool(ctx.get('auto_color_match', False)))
 
         tasks = []
         if need_b2:
@@ -952,7 +1180,9 @@ async def _regen_once(job: JobRecord):
                                    pnp=ctx['pnp'], ims=ctx['ims'], ar=ctx['ar'], rp=ctx['rp'],
                                    sref=ctx['sref'], bevel_ref=ctx.get('bevel_ref'),
                                    jpt=ctx['jpt'], rid=ctx['rid'], should_cancel=should_cancel,
-                                   input_image_paths=ctx.get('input_image_paths'))
+                                   input_image_paths=ctx.get('input_image_paths'),
+                                   cinematic_mode=bool(ctx.get('cinematic_mode', False)),
+                                   auto_color_match=bool(ctx.get('auto_color_match', False)))
 
     tasks = []
     if 'b2' in targets:

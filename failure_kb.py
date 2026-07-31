@@ -166,6 +166,17 @@ FAILURE_RULES = [
         'subs': ['Omakase Gemini 主线路失败'],
     },
     {
+        'key': 'omakase_model_unavailable',
+        'title': '🔄 Gemini 场景模型已停用',
+        'cause': '当前配置的 Omakase Gemini 文本模型已下线、改名，或不再向该项目开放；Key 和网络本身可能完全正常。',
+        'action': '更新 Floor Engine 或把 Omakase 文本模型切换到当前稳定版本；无需重新申请 Gemini Key。',
+        'subs': [
+            'no longer available to new users',
+            'Omakase Gemini HTTP 404',
+            '模型不可用 (HTTP 404)',
+        ],
+    },
+    {
         'key': 'omakase_gemini_error',
         'title': '❌ Gemini 场景生成失败',
         'cause': 'Omakase 的 Gemini 文本请求失败或未返回可用的结构化候选。',

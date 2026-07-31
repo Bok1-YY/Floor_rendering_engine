@@ -25,6 +25,10 @@ export interface ModelRunView {
   idx: number;
   total: number;
   base_url: string;
+  api_original_url: string;
+  api_original_thumb: string;
+  auto_color_status: string;
+  auto_color_error: string;
   delivery_status: string;
   seed: number | null;
   settings: Record<string, unknown>;
@@ -115,6 +119,7 @@ export interface GenParams {
   cn_facilities?: string[] | null;
   style_ref_correction?: string;
   scene_override?: string;   // Omakase：AI 原创场景散文，接管 Omakase 工作流的场景层（仅 Omakase 生效，其他工作流忽略）
+  cinematic_enabled?: boolean; // Gemini 电影真实感导演规划；只作用于生成新场景的 B2/Pro
   panel_submode?: string;    // 墙板模式子行为：再设计 / 替换 / 纯原创（仅墙板模式生效，其他工作流忽略）
   panel_size?: string;       // 墙板尺寸/板型（预设或自定义；仅墙板再设计/纯原创生效）
 }
@@ -180,6 +185,7 @@ export interface ConfigView {
   image_provider: string;
   speed_profile: string;
   auto_failover: boolean;
+  auto_color_match_enabled: boolean;
   tls_verify: boolean;
   tls_ca_bundle: string;
   proxy: string;
@@ -211,6 +217,7 @@ export interface ConfigPatch {
   image_provider?: string;
   speed_profile?: string;
   auto_failover?: boolean;
+  auto_color_match_enabled?: boolean;
   proxy?: string;
   fal_queue_proxy?: string;
   tls_verify?: boolean;
@@ -239,6 +246,7 @@ export interface OmakaseOption {
   text: string;
   why: string;
   recommended: boolean;
+  subject_type: "none" | "person" | "pet" | "both";
 }
 
 export interface OmakaseScenesResponse {

@@ -222,6 +222,7 @@ def test_google_and_fal_free_inputs_keep_slot_order(tmp_path, monkeypatch):
         paths.append(str(path))
 
     captured = []
+    captured_urls = []
 
     class RejectedResponse:
         status_code = 400
@@ -231,10 +232,20 @@ def test_google_and_fal_free_inputs_keep_slot_order(tmp_path, monkeypatch):
             return {}
 
     def fake_post(_url, **kwargs):
+        captured_urls.append(_url)
         captured.append(kwargs["json"])
         return RejectedResponse()
 
-    monkeypatch.setattr(api_mod, "load_config", lambda: {"retry_attempts": 1})
+    monkeypatch.setattr(
+        api_mod,
+        "load_config",
+        lambda: {
+            "retry_attempts": 1,
+            "fal_model_map": {
+                "gemini-3-pro-image-preview": "custom/nano-pro/edit",
+            },
+        },
+    )
     monkeypatch.setattr(api_mod._req, "post", fake_post)
     api_mod.call_gemini_generate("k", "m", " exact prompt ", paths[0], input_image_paths=paths)
     google_parts = captured[-1]["contents"][0]["parts"]
@@ -243,8 +254,9 @@ def test_google_and_fal_free_inputs_keep_slot_order(tmp_path, monkeypatch):
         open(path, "rb").read() for path in paths
     ]
 
-    api_mod.call_fal_generate("k", "gemini-3-pro-image-preview", " exact prompt ", paths[0],
+    api_mod.call_fal_generate("k", "gemini-3-pro-image", " exact prompt ", paths[0],
                               input_image_paths=paths)
+    assert captured_urls[-1] == "https://fal.run/custom/nano-pro/edit"
     fal_payload = captured[-1]
     assert fal_payload["prompt"] == " exact prompt "
     assert [uri.split(",", 1)[1] for uri in fal_payload["image_urls"]] == [

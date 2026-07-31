@@ -9,16 +9,18 @@
 ## 零、快速启动 ⭐（先看这里）
 
 ### 0.1 一键启动（推荐）
-双击仓库**上一级** `test/` 目录下的一键启动脚本（脚本在 `test/`，不在本仓库内）：
-- **Windows**：`test/一键启动.bat`
-- **Linux / macOS**：`test/一键启动.sh`
+Windows 直接双击仓库内脚本：
+- `start-windows.bat`：生产静态前端与 FastAPI 合一运行在 **7870**；
+- `dev-windows.bat`：FastAPI **7870** + Next.js dev **3000** 两个进程。
 
-它会：
+Linux / macOS 仍可使用原有上级目录启动脚本，或按 0.2 的命令手动启动。
+
+Windows 开发脚本会：
 1. 起**后端** FastAPI（端口 **7870**）—— 独立终端窗口；
 2. 起**前端** Next.js dev（端口 **3000**）—— 独立终端窗口；
 3. 等 8 秒让前端编译完，自动打开浏览器 `http://localhost:3000`。
 
-关掉某个终端窗口 = 停掉对应服务。
+关掉某个终端窗口 = 停掉对应服务。Windows 一体运行只保留一个后端窗口，前端由 FastAPI 静态托管。
 
 ### 0.2 手动启动（开发时常用）
 路径以仓库上一级的 `test/` 目录为基准（下面 `<项目根>` 代表你本地放 `test/` 的位置）。
@@ -34,6 +36,9 @@ npm run dev                                        # → http://localhost:3000
 浏览器开 **http://localhost:3000**。后端健康检查：`GET http://127.0.0.1:7870/api/healthz` → `{"ok":true}`。
 
 ### 0.3 首次准备（只做一次）
+Windows 新电脑直接运行桌面的 `Install_Project_Dependencies.bat`，它会创建 `.venv`、安装 Python/Node
+依赖并构建前端。手动方式如下：
+
 ```bash
 # 引擎/后端 Python 依赖（建议先建虚拟环境后再装）
 pip install -r Floor_engine_server/requirements-dev.txt

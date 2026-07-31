@@ -23,6 +23,7 @@ from .prompt_data import (
 
 )
 from .image_prep import prepare_swatch_png
+from .cinematic_planner import CINEMATIC_FALLBACK_DIRECTION
 from .records import (
     get_json_path, load_records_file, save_records_file,
     img_to_b64, record_file_lock,
@@ -198,11 +199,13 @@ def _derive_translations(p, v):
     lighting = p.lighting
     market_furniture = p.market_furniture
     neighborhood = p.neighborhood
+    pet_action = p.pet_action
     property_type = p.property_type
     room_type = p.room_type
     seam_type = p.seam_type
     style_type = p.style_type
     view = p.view
+    workflow_mode = p.workflow_mode
 
     # ── 动态翻译与映射 ────────────────────────────────────────────────
     # 国内模式：覆盖位置、房间参数；风格始终使用顶部全局 Style
@@ -433,9 +436,15 @@ def _derive_translations(p, v):
     # 避免项翻译。
     #   硬性排除(人物/宠物/地毯/顺色家具)→ 留负向(无好正向写法, Gemini 执行得好)。
     #   地板表面项(过曝/反光/色偏)→ 改正向描述(生图模型对"别出X"易招X, 正向陈述想要的样子更稳)。
+    #   宠物模式必须允许宠物；主宠互动还必须允许人物，避免默认勾选项与主体指令互相冲突。
+    effective_avoid_items = list(avoid_items or [])
+    if "宠物友好" in workflow_mode:
+        effective_avoid_items = [item for item in effective_avoid_items if "宠物" not in item]
+        if pet_action == "主宠互动":
+            effective_avoid_items = [item for item in effective_avoid_items if "人物" not in item]
     avoid_en_list = []
     surface_pos_list = []
-    for item in avoid_items:
+    for item in effective_avoid_items:
         if "地毯" in item: avoid_en_list.append("rugs, carpets of any size or style")
         elif "人物" in item: avoid_en_list.append("any people or human figures")
         elif "宠物" in item: avoid_en_list.append("any animals or pets")
@@ -737,6 +746,8 @@ def _compose_prompt(p, v):
     pet_type = p.pet_type
     resolution = p.resolution
     scene_override = p.scene_override
+    cinematic_enabled = bool(p.cinematic_enabled)
+    cinematic_plan_text = p.cinematic_plan_text
     style_analysis_text = p.style_analysis_text
     style_ref_correction = p.style_ref_correction
     workflow_mode = p.workflow_mode
@@ -768,6 +779,14 @@ def _compose_prompt(p, v):
     en_view_trans = v.get('en_view_trans')
     extra_cmd_en = v.get('extra_cmd_en')
     no_sofa_note = v.get('no_sofa_note')
+    _cinematic_direction = (cinematic_plan_text or CINEMATIC_FALLBACK_DIRECTION).strip()
+    _cinematic_block = (
+        "\n\n**[CINEMATIC REALISM — DIRECTOR PLAN]**\n"
+        f"{_cinematic_direction}\n"
+        "This direction may shape staging, camera position, practical light and optical realism, "
+        "but it MUST NOT alter the uploaded floor product, its geometry, color or installation."
+        if cinematic_enabled else ""
+    )
 
     # ── 四模式提示词组装 (SCHEMA 顺序: Style→Composition→Lighting→Floor→Output) ──
     if "地板替换" in workflow_mode:
@@ -809,7 +828,7 @@ Professional photorealistic pet-friendly interior photography. {en_property}, {e
 **[Camera & Composition]** {en_angle}. {en_focus}
 {en_composition}
 
-**[Subject]** 🐾 {en_subj}
+**[Subject]** 🐾 {en_subj}{_cinematic_block}
 
 {en_light_inst}
 
@@ -882,7 +901,7 @@ Professional photorealistic interior architectural photography. {en_room}. Aspec
 
 {_context_block}
 
-{_realism_block}
+{_realism_block}{_cinematic_block}
 
 **[Camera & Composition]** {en_angle}.
 {en_composition}
@@ -899,7 +918,7 @@ Professional photorealistic interior architectural photography. {en_room}. Aspec
 
 Professional photorealistic interior architectural photography. Aspect ratio {ar_value}, {resolution} resolution.
 
-{_oma_scene}
+{_oma_scene}{_cinematic_block}
 
 {_floor_spec_block(CORE_MATERIAL_INSTRUCTION, en_floor_spec_line, en_floor_visibility, en_quality, avoid_en, extra_cmd_en)}"""
 
@@ -1009,7 +1028,7 @@ Professional photorealistic interior architectural photography. {en_property}, {
 
 {_prohibitions_block}
 
-{en_furniture_contrast}
+{en_furniture_contrast}{_cinematic_block}
 
 **[Camera & Composition]** {en_angle}.
 {en_composition}
@@ -1125,6 +1144,7 @@ def _persist_task_record(p, v):
         "params_summary": params_summary,
         "_pe": obfuscate_text(final_prompt_en),
         "_pe_pro": obfuscate_text(final_prompt_en_pro),
+        "cinematic_enabled": bool(p.cinematic_enabled),
         "_schema_version": 2,
         "sample_image_b64": img_to_b64(processed_img, max_width=400),
         "results": []
@@ -1147,6 +1167,7 @@ def save_task_files_html(workflow_mode, model_choice, image_path, continent, cou
                          cn_room_type="客餐厅一体", cn_view="自然通透景观",
                          cn_space_features=None, cn_facilities=None,
                          style_ref_correction="", style_analysis_text="", scene_override="",
+                         cinematic_enabled=False, cinematic_plan_text="",
                          panel_submode="再设计", panel_size="", persist=True):
     """提示词编排入口(兼容签名,26+ 参数原样保留;golden 快照按 8 元组逐字节回归)。
 
@@ -1175,6 +1196,7 @@ def save_task_files_html(workflow_mode, model_choice, image_path, continent, cou
         cn_room_type=cn_room_type, cn_view=cn_view, cn_space_features=cn_space_features,
         cn_facilities=cn_facilities, style_ref_correction=style_ref_correction,
         style_analysis_text=style_analysis_text, scene_override=scene_override,
+        cinematic_enabled=cinematic_enabled, cinematic_plan_text=cinematic_plan_text,
         panel_submode=panel_submode, panel_size=panel_size, persist=persist,
         json_path=json_path, base_name=base_name, png_path=png_path,
         processed_img=processed_img, msg_prefix=msg_prefix,

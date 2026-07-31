@@ -11,13 +11,25 @@
 """
 import os
 import sys
+import importlib.util
 
 import pytest
 
-# ── 1. 让 `import Floor_engine_server` 可用（父目录 = 含 Floor_engine_server/ 的目录）──
-_PKG_PARENT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-if _PKG_PARENT not in sys.path:
-    sys.path.insert(0, _PKG_PARENT)
+# ── 1. 让历史包名与 GitHub 默认克隆目录名都可用 ──
+_PKG_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+os.environ.setdefault("FLOOR_DATA_DIR", os.path.join(_PKG_DIR, "data", "pytest"))
+_PACKAGE_NAME = "Floor_engine_server"
+if _PACKAGE_NAME not in sys.modules:
+    _spec = importlib.util.spec_from_file_location(
+        _PACKAGE_NAME,
+        os.path.join(_PKG_DIR, "__init__.py"),
+        submodule_search_locations=[_PKG_DIR],
+    )
+    if _spec is None or _spec.loader is None:
+        raise RuntimeError("无法从项目目录加载 Floor Engine 测试包")
+    _package = importlib.util.module_from_spec(_spec)
+    sys.modules[_PACKAGE_NAME] = _package
+    _spec.loader.exec_module(_package)
 
 
 @pytest.fixture(autouse=True)

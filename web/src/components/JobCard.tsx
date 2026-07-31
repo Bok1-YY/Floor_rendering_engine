@@ -347,10 +347,34 @@ export function JobCard({
                     rel="noreferrer"
                     className="hover:text-foreground"
                   >
-                    ↗ 原图
+                    ↗ 打开
                   </a>
+                  {m.run.api_original_url && (
+                    <a
+                      href={api.imgUrl(m.run.api_original_url)}
+                      target="_blank"
+                      rel="noreferrer"
+                      title="未经本地自动校色的 API 返回原图"
+                      className="hover:text-foreground"
+                    >
+                      ↗ API 原图
+                    </a>
+                  )}
                 </span>
               </div>
+              {m.run.auto_color_status === "done" && (
+                <div className="mt-1 text-[10.5px] text-success">
+                  🎯 已自动校色 · API 原图已保留为候选
+                </div>
+              )}
+              {m.run.auto_color_status === "failed" && (
+                <div
+                  className="mt-1 text-[10.5px] text-warning"
+                  title={m.run.auto_color_error}
+                >
+                  ⚠ 自动校色未完成，当前保留 API 原图
+                </div>
+              )}
               {m.key === "sd35" && (
                 <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[10.5px] text-muted-foreground">
                   {m.run.seed != null && <span>Seed {m.run.seed}</span>}

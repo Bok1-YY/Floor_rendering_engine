@@ -29,3 +29,6 @@ _ng_uploads/
 engine_config.json
 .queue_state.json
 .style_analysis_cache.json
+
+# Windows standalone launcher keeps runtime data here via FLOOR_DATA_DIR.
+data/

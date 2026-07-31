@@ -19,7 +19,12 @@ if _IS_FROZEN:
             or sys.executable)
     _BASE_DIR = os.path.dirname(os.path.abspath(_exe))
 else:
-    _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    _BASE_DIR = os.path.abspath(
+        os.environ.get("FLOOR_DATA_DIR")
+        or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
+
+os.makedirs(_BASE_DIR, exist_ok=True)
 
 logging.basicConfig(
     level=logging.INFO,

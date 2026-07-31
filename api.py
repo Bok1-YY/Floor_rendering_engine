@@ -24,10 +24,11 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 from .config import (
     BASE_DIR, MAIN_OUTPUT_DIR, CONFIG_FILE,
-    GEMINI_MODEL_MAP, FAL_MODEL_MAP, DEFAULT_IMAGE_PROVIDER,
+    GEMINI_MODEL_MAP, FAL_MODEL_MAP, LEGACY_IMAGE_MODEL_ALIASES,
+    LITE_PREVIEW_MODEL, DEFAULT_IMAGE_PROVIDER,
     logger, short_text, load_config, save_config,
     get_speed_profile_params,
-    get_text_models, get_gen_sampling,
+    get_text_models, get_gen_sampling, get_omakase_gemini_model,
     get_inpaint_provider, get_comfyui_settings, get_inpaint_remove_prompt,
     get_inpaint_models,
 )
@@ -148,13 +149,25 @@ def _retry_plan() -> Tuple[int, list]:
     return max(1, attempts), backoffs
 
 
+def _image_thinking_config(model_id: str, *, cinematic_mode: bool, include_thoughts: bool) -> dict:
+    """构造兼容当前模型族的 thinkingConfig；独立成纯函数便于契约测试。"""
+    out = {}
+    mid = (model_id or '').lower()
+    if cinematic_mode and '3.1-flash-image' in mid and 'lite' not in mid:
+        out["thinkingLevel"] = "HIGH"
+    if include_thoughts:
+        out["includeThoughts"] = True
+    return out
+
+
 def call_gemini_generate(api_key: str, model_id: str, prompt_text: str, image_path: str,
                          image_size: str = "4K", aspect_ratio: str = "4:3",
                          room_image_path: Optional[str] = None,
                          style_ref_image_path: Optional[str] = None,
                          on_stage=None, should_cancel=None,
                          bevel_ref_image_path: Optional[str] = None,
-                         input_image_paths: Optional[list[str]] = None) -> Tuple[Optional[object], Optional[str]]:
+                         input_image_paths: Optional[list[str]] = None,
+                         cinematic_mode: bool = False) -> Tuple[Optional[object], Optional[str]]:
     """流式文生图/图生图。
 
     - Pro 模型(model_id 含 'pro')额外请求 includeThoughts，实时回传思考标题。
@@ -211,8 +224,6 @@ def call_gemini_generate(api_key: str, model_id: str, prompt_text: str, image_pa
             "responseModalities": ["TEXT", "IMAGE"] if wants_thoughts else ["IMAGE"],
             "imageConfig": {"imageSize": image_size, "aspectRatio": aspect_ratio},
         }
-        if wants_thoughts:
-            gen_cfg["thinkingConfig"] = {"includeThoughts": True}
         url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
                f"{model_id}:streamGenerateContent?alt=sse&key={api_key}")
     else:
@@ -220,6 +231,15 @@ def call_gemini_generate(api_key: str, model_id: str, prompt_text: str, image_pa
                    "imageConfig": {"imageSize": image_size, "aspectRatio": aspect_ratio}}
         url = (f"https://generativelanguage.googleapis.com/v1beta/models/"
                f"{model_id}:generateContent?key={api_key}")
+    # B2 默认 minimal thinking；电影真实感任务显式提高构图推理。
+    # Pro 自带深度图像思考，不发送可能不兼容的 thinkingLevel，只保留原有 thoughts 展示开关。
+    thinking_cfg = _image_thinking_config(
+        model_id,
+        cinematic_mode=cinematic_mode,
+        include_thoughts=wants_thoughts,
+    )
+    if thinking_cfg:
+        gen_cfg["thinkingConfig"] = thinking_cfg
     # 采样旋钮(opt-in)：engine_config.json 显式配了 gen_temperature/gen_seed 才注入；
     # 缺省返回 {} → gen_cfg 一字不变。流式/非流式共用，重试原样重发自动带上。
     _samp = get_gen_sampling()
@@ -1204,8 +1224,22 @@ def call_fal_generate(api_key: str, model_id: str, prompt_text: str, image_path:
         _notify_stage(on_stage, txt)
 
     cfg = load_config()
-    fal_map = cfg.get("fal_model_map") or FAL_MODEL_MAP
-    endpoint = fal_map.get(model_id) or FAL_MODEL_MAP.get(model_id)
+    custom_fal_map = cfg.get("fal_model_map")
+    custom_fal_map = custom_fal_map if isinstance(custom_fal_map, dict) else {}
+    # 用户覆盖优先；若覆盖仍以旧 Preview ID 为键，也要能作用于新 Stable ID。
+    legacy_id = next(
+        (old for old, stable in LEGACY_IMAGE_MODEL_ALIASES.items()
+         if stable == model_id),
+        None,
+    )
+    endpoint = custom_fal_map.get(model_id)
+    if not endpoint and legacy_id:
+        endpoint = custom_fal_map.get(legacy_id)
+    if not endpoint:
+        endpoint = FAL_MODEL_MAP.get(model_id)
+    if not endpoint and model_id in LEGACY_IMAGE_MODEL_ALIASES:
+        stable_id = LEGACY_IMAGE_MODEL_ALIASES[model_id]
+        endpoint = custom_fal_map.get(stable_id) or FAL_MODEL_MAP.get(stable_id)
     if not endpoint:
         logger.error(f"[Fal生成] 未知模型,无 Fal 端点映射: model={model_id}")
         return None, f"该模型未配置 Fal 端点: {model_id}"
@@ -1371,7 +1405,8 @@ def call_image_generate(api_key: str, model_id: str, prompt_text: str, image_pat
                         style_ref_image_path: Optional[str] = None,
                         on_stage=None, should_cancel=None,
                         bevel_ref_image_path: Optional[str] = None,
-                        input_image_paths: Optional[list[str]] = None) -> Tuple[Optional[object], Optional[str], str]:
+                        input_image_paths: Optional[list[str]] = None,
+                        cinematic_mode: bool = False) -> Tuple[Optional[object], Optional[str], str]:
     """生图调度器:按 engine_config.json 的 image_provider 选线路,两条线路同契约。
 
     返回 (PIL.Image|None, 错误字符串|None, provider)——provider∈{'google','fal'} 是【实际】出图/尝试
@@ -1400,7 +1435,8 @@ def call_image_generate(api_key: str, model_id: str, prompt_text: str, image_pat
     img, err = call_gemini_generate(api_key, model_id, prompt_text, image_path, image_size,
                                     aspect_ratio, room_image_path, style_ref_image_path, on_stage, should_cancel,
                                     bevel_ref_image_path=bevel_ref_image_path,
-                                    input_image_paths=input_image_paths)
+                                    input_image_paths=input_image_paths,
+                                    cinematic_mode=cinematic_mode)
     if img is not None:
         return img, err, "google"
 
@@ -1671,7 +1707,7 @@ def analyze_style_image(api_key: str, image_path: str) -> Tuple[str, Optional[st
     )
     payload = {
         "contents": [{"parts": [{"text": analysis_prompt}, {"inlineData": {"mimeType": mime, "data": img_b64}}]}],
-        "generationConfig": {"maxOutputTokens": 1000, "temperature": 0.1}
+        "generationConfig": {"maxOutputTokens": 1000}
     }
     cfg = load_config(); proxy = cfg.get("proxy", "").strip()
     proxies = {"http": proxy, "https": proxy} if proxy else None
@@ -1720,7 +1756,13 @@ _OMAKASE_SYSTEM_PROMPT = (
     "3. 绝对不要描写地板的划痕/磨损/损坏，也不要任何『前后对比/好坏对比』画面——"
     "要体现耐用等功能，就写『高强度使用但地板依然完好如新』的正向场景。\n"
     "4. 每段只写场景/氛围/光线/人物活动；不要写相机参数，也不要写地板的物理规格(尺寸/拼缝/光泽/颜色)——那些由系统另行控制。\n\n"
-    "只返回 JSON，格式：{\"options\":[{\"text\":\"场景散文\",\"why\":\"一句话说明为什么这么拍能体现客户诉求\",\"recommended\":true}]}。"
+    "5. 当场景含人物或宠物时，要写一个正在发生但尚未完成的自然动作，说明摄影机所处的现实观察位置；"
+    "拒绝看镜头摆拍、夸张表情、漂浮姿势和商业广告式互动。\n"
+    "6. 光必须来自窗户、灯具或其他画面内可解释来源；皮肤、毛发、衣料、接触阴影和家具尺度必须真实。\n"
+    "7. 电影感来自机位、动作、视线关系和现实光源，不靠黑边、青橙滤镜、重颗粒、烟雾、轮廓光或过度虚化。\n"
+    "8. subject_type 必须准确标注场景生命主体：none/person/pet/both。\n\n"
+    "只返回 JSON，格式：{\"options\":[{\"text\":\"场景散文\",\"why\":\"一句话说明为什么这么拍能体现客户诉求\","
+    "\"recommended\":true,\"subject_type\":\"person\"}]}。"
     "恰好把最稳妥的一段标 recommended:true、其余为 false。不要输出 JSON 以外的任何内容。"
 )
 
@@ -1738,8 +1780,12 @@ _OMAKASE_RESPONSE_SCHEMA = {
                     "text": {"type": "STRING"},
                     "why": {"type": "STRING"},
                     "recommended": {"type": "BOOLEAN"},
+                    "subject_type": {
+                        "type": "STRING",
+                        "enum": ["none", "person", "pet", "both"],
+                    },
                 },
-                "required": ["text", "why", "recommended"],
+                "required": ["text", "why", "recommended", "subject_type"],
             },
         },
     },
@@ -1750,12 +1796,17 @@ _OMAKASE_RESPONSE_SCHEMA = {
 def _clean_omakase_options(options):
     """Normalize provider output and enforce exactly one recommended option."""
     clean = []
+    allowed_subjects = {"none", "person", "pet", "both"}
     for option in options or []:
         if isinstance(option, dict) and (option.get("text") or "").strip():
+            subject_type = str(option.get("subject_type") or "none").strip().lower()
+            if subject_type not in allowed_subjects:
+                subject_type = "none"
             clean.append({
                 "text": str(option.get("text")).strip(),
                 "why": str(option.get("why") or "").strip(),
                 "recommended": bool(option.get("recommended", False)),
+                "subject_type": subject_type,
             })
             if len(clean) == 3:
                 break
@@ -1782,7 +1833,6 @@ def call_gemini_scenes(idea, *, api_key, model):
         "systemInstruction": {"parts": [{"text": _OMAKASE_SYSTEM_PROMPT}]},
         "contents": [{"role": "user", "parts": [{"text": idea}]}],
         "generationConfig": {
-            "temperature": 0.7,
             "maxOutputTokens": 2500,
             "responseMimeType": "application/json",
             "responseSchema": _OMAKASE_RESPONSE_SCHEMA,
@@ -1862,16 +1912,24 @@ def call_omakase_scenes(idea, *, gemini_api_key, gemini_model,
             idea, api_key=gemini_api_key, model=gemini_model)
         if not gemini_error:
             return options, None, "gemini", False
+        logger.warning(
+            "[Omakase] Gemini 主线路失败 model=%s fallback=%s err=%s",
+            gemini_model,
+            bool((deepseek_api_key or "").strip()),
+            short_text(_redact_api_key(gemini_error), 500),
+        )
 
     if (deepseek_api_key or "").strip():
-        if gemini_error:
-            logger.warning(f"[Omakase] Gemini 主线路失败，自动转 DeepSeek: "
-                           f"{short_text(gemini_error, 300)}")
         options, deepseek_error = call_deepseek_scenes(
             idea, api_key=deepseek_api_key, base_url=deepseek_base_url,
             model=deepseek_model)
         if not deepseek_error:
             return options, None, "deepseek", True
+        logger.warning(
+            "[Omakase] DeepSeek 线路失败 model=%s err=%s",
+            deepseek_model,
+            short_text(_redact_api_key(deepseek_error), 500),
+        )
         if gemini_error:
             return ([], f"Omakase Gemini 主线路失败: {gemini_error}; "
                     f"DeepSeek 备用线路失败: {deepseek_error}", "deepseek", True)
@@ -1891,11 +1949,68 @@ def infer_aspect_ratio_from_b64(b64_str: str) -> str:
     return min(candidates, key=lambda x: abs(x[1] - ratio))[0]
 
 
+def _probe_gemini_model_endpoint(api_key: str, model_id: str, *,
+                                 proxies=None, verify=True) -> str:
+    """零生成费用探测 generateContent 路由权限。
+
+    故意发送空 contents：可用端点会在进入生成前返回“contents 未指定”的 400；
+    已下线、对新项目关闭或无权限则会先返回 404/403。绝不生成内容或图片。
+    """
+    url = (
+        "https://generativelanguage.googleapis.com/v1beta/models/"
+        f"{model_id}:generateContent"
+    )
+    headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
+    response = None
+    last_error = None
+    for attempt in range(2):
+        try:
+            response = _req.post(
+                url,
+                headers=headers,
+                json={"contents": []},
+                timeout=12,
+                proxies=proxies,
+                verify=verify,
+            )
+            break
+        except _req.exceptions.SSLError:
+            return "❌ 证书校验失败"
+        except (_req.exceptions.Timeout, _req.exceptions.ConnectionError) as exc:
+            last_error = exc
+            if attempt == 0:
+                continue
+        except Exception as exc:
+            return f"❌ 请求异常：{short_text(_redact_api_key(exc), 100)}"
+    if response is None:
+        if isinstance(last_error, _req.exceptions.Timeout):
+            return "❌ 探测超时（已重试）"
+        return f"❌ 网络异常（已重试）：{short_text(_redact_api_key(last_error), 100)}"
+
+    try:
+        body = response.json()
+        message = str((body.get("error", {}) or {}).get("message", ""))
+    except Exception:
+        message = str(getattr(response, "text", "") or "")
+    low = message.lower()
+    if response.status_code == 200:
+        return "✅ 端点可用（未生成）"
+    if response.status_code == 400 and "content" in low and (
+        "not specified" in low or "required" in low or "missing" in low
+    ):
+        return "✅ 端点可用（未生成）"
+    if response.status_code == 404:
+        return f"❌ 模型不可用 (HTTP 404)：{short_text(message, 100)}"
+    if response.status_code in (401, 403):
+        return f"❌ Key 无权限 (HTTP {response.status_code})"
+    return f"⚠️ HTTP {response.status_code}：{short_text(message, 100)}"
+
+
 def test_connection(gemini_api_key: str, fal_api_key: str = "", proxy: str = "") -> str:
-    """提交前的轻量连通性自检（不生图、零成本），返回两行人类可读汇总。
+    """提交前的轻量连通性与模型端点自检（不生图、零生成费用）。
 
     - Google 直连(公司线，最易被代理重置)：打 ListModels 接口（不挑模型名、不生成），
-      只验「线路 + Key」。比 ping 具体模型稳——模型退役/改名都不会再误报 404。
+      验证「线路 + Key」，再用无效空请求探测各生产模型 generateContent 权限。
     - Fal 线路(用户自费，无免费生成 ping)：仅对 fal.run 做可达性探测，不触发任何计费请求。
     """
     proxies = {"http": proxy.strip(), "https": proxy.strip()} if (proxy and proxy.strip()) else None
@@ -1909,11 +2024,36 @@ def test_connection(gemini_api_key: str, fal_api_key: str = "", proxy: str = "")
     if not gk:
         lines.append("Google 直连：⚠️ 未填 Key")
     else:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models?key={gk}"
-        try:
-            r = _req.get(url, timeout=15, proxies=proxies, verify=_verify)
+        url = "https://generativelanguage.googleapis.com/v1beta/models"
+        headers = {"x-goog-api-key": gk}
+        google_ok = False
+        r = None
+        list_error = None
+        for attempt in range(2):
+            try:
+                r = _req.get(
+                    url,
+                    headers=headers,
+                    timeout=15,
+                    proxies=proxies,
+                    verify=_verify,
+                )
+                break
+            except _req.exceptions.SSLError as exc:
+                list_error = exc
+                break
+            except (_req.exceptions.Timeout, _req.exceptions.ConnectionError) as exc:
+                list_error = exc
+                if attempt == 0:
+                    continue
+            except Exception as exc:
+                list_error = exc
+                break
+
+        if r is not None:
             if r.status_code == 200:
                 lines.append("Google 直连：✅ 正常")
+                google_ok = True
             else:
                 # 读真实报错体区分原因：地区封锁 vs Key 无效 vs 其它（400 不能一律算 Key 问题）
                 try:
@@ -1927,12 +2067,18 @@ def test_connection(gemini_api_key: str, fal_api_key: str = "", proxy: str = "")
                     lines.append(f"Google 直连：❌ Key 无效/无权限 (HTTP {r.status_code})")
                 else:
                     lines.append(f"Google 直连：⚠️ HTTP {r.status_code}：{short_text(msg, 120)}")
-        except _req.exceptions.SSLError as e:
-            lines.append(f"Google 直连：❌ 证书校验失败（网络在拦 HTTPS；设 tls_verify=false 或配 CA）：{short_text(_redact_api_key(e), 100)}")
-        except _req.exceptions.Timeout:
-            lines.append("Google 直连：❌ 超时（代理/网络不通）")
-        except Exception as e:
-            lines.append(f"Google 直连：❌ 不通（{_redact_api_key(e)}）")
+        elif isinstance(list_error, _req.exceptions.SSLError):
+            lines.append(
+                "Google 直连：❌ 证书校验失败（网络在拦 HTTPS；设 tls_verify=false 或配 CA）："
+                f"{short_text(_redact_api_key(list_error), 100)}"
+            )
+        elif isinstance(list_error, _req.exceptions.Timeout):
+            lines.append("Google 直连：❌ 超时（已重试；代理/网络不通）")
+        else:
+            lines.append(
+                "Google 直连：❌ 不通（已重试；"
+                f"{short_text(_redact_api_key(list_error), 160)}）"
+            )
 
         # ── 证书校验状态（默认已开启；被显式关闭时探一下本网络能否安全开回）──
         eff = _verify_arg()
@@ -1940,12 +2086,27 @@ def test_connection(gemini_api_key: str, fal_api_key: str = "", proxy: str = "")
             lines.append("证书校验：✅ 已开启" + ("（自定义 CA）" if isinstance(eff, str) else ""))
         else:
             try:
-                _req.get(url, timeout=15, proxies=proxies, verify=True)
+                _req.get(
+                    url, headers=headers, timeout=15, proxies=proxies, verify=True
+                )
                 lines.append("证书校验：⚠️ 当前关闭，但本网络可开启（建议设 tls_verify=true）")
             except _req.exceptions.SSLError:
                 lines.append("证书校验：当前关闭（开启会失败：网络在拦 HTTPS，需装 CA）")
             except Exception:
                 lines.append("证书校验：当前关闭（暂无法判定能否开启）")
+
+        if google_ok:
+            model_checks = (
+                ("Omakase/电影规划", get_omakase_gemini_model()),
+                ("B2", GEMINI_MODEL_MAP["Nano Banana 2"]),
+                ("Pro", GEMINI_MODEL_MAP["Nano Banana Pro"]),
+                ("Lite 预览", LITE_PREVIEW_MODEL),
+            )
+            for label, model_id in model_checks:
+                result = _probe_gemini_model_endpoint(
+                    gk, model_id, proxies=proxies, verify=_verify
+                )
+                lines.append(f"{label} [{model_id}]：{result}")
 
     # ── Fal 线路：可达性探测（任何 HTTP 响应都算可达；不计费）──
     fk = (fal_api_key or "").strip()

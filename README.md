@@ -75,10 +75,10 @@
 - 若你所在网络无法直连 Google，需准备可用**代理**（见 [配置说明](#️-配置说明)）
 
 ### 1. 获取代码
-后端以 Python 包 `Floor_engine_server` 方式运行，请把仓库克隆为该名字的目录：
+仓库可直接使用 GitHub 默认目录名，Windows 与 Linux 均不再要求手工重命名：
 ```bash
-git clone <本仓库地址> Floor_engine_server
-cd Floor_engine_server
+git clone https://github.com/Bok1-YY/Floor_engine_Linux.git
+cd Floor_engine_Linux
 ```
 
 ### 2. 安装后端依赖（建议用虚拟环境）
@@ -95,15 +95,21 @@ cd web && npm install && cd ..
 ```
 
 ### 4. 启动
-> 后端需在**仓库目录的上一级**运行（详见 [数据目录](#-数据目录)）。
+
+Windows 完成依赖安装后，可双击：
+
+- `start-windows.bat`：构建后的前后端一体运行，入口为 <http://127.0.0.1:7870>；
+- `dev-windows.bat`：后端与 Next.js 开发服务器分开运行，入口为 <http://localhost:3000>。
+
+Linux 手动启动仍可按包方式运行：
 
 ```bash
-# 后端（在 Floor_engine_server 的【上一级】目录）
+# 后端（在仓库的【上一级】目录）
 cd ..
-python -m Floor_engine_server.server_api        # → http://127.0.0.1:7870
+python -m Floor_engine_Linux.server_api          # → http://127.0.0.1:7870
 
 # 前端（另开一个终端，在 web/ 下）
-cd Floor_engine_server/web && npm run dev        # → http://localhost:3000
+cd Floor_engine_Linux/web && npm run dev          # → http://localhost:3000
 ```
 
 浏览器打开 **http://localhost:3000**。后端健康检查：`GET http://127.0.0.1:7870/api/healthz` → `{"ok":true}`。
@@ -123,7 +129,7 @@ cd Floor_engine_server/web && npm run dev        # → http://localhost:3000
 | `deepseek_api_key` | 可选：Omakase 的 DeepSeek 备用线路 Key |
 | `omakase_enabled` | 是否启用 AI 场景代笔（Gemini 主线路） |
 | `sd_enabled` | 是否启用 SD 3.5 实验线路（默认关闭，仅纯效果图） |
-| `omakase_gemini_model` | Omakase 文本模型，默认 `gemini-2.5-flash` |
+| `omakase_gemini_model` | Omakase/电影规划文本模型，默认 `gemini-3.6-flash`；旧 `gemini-2.5-flash` 自动升级 |
 | `image_provider` | `google`（默认）或 `fal` |
 | `inpaint_provider` 等 | 生成式修补引擎组：提供方（`fal`/`comfyui`）、移除模型 `inpaint_remove_model`、添加模型 `inpaint_add_model`、ComfyUI 地址/超时/自定义 workflow；均可在设置页可视化配置 |
 | `proxy` | HTTP 代理，如 `http://127.0.0.1:7897/`；网络无法直连 Google 时填写 |
@@ -139,6 +145,7 @@ cd Floor_engine_server/web && npm run dev        # → http://localhost:3000
 
 前端开发默认由 `web/.env.development` 指向 `http://127.0.0.1:7870`；生产静态站由 `web/.env.production` 使用同源 API。
 后端可用环境变量：`FLOOR_API_PORT`(7870) / `FLOOR_API_HOST`(仅支持 127.0.0.1) / `FLOOR_API_CORS`（放行的开发前端源）。本版本是客户本机程序，不提供无认证的局域网或公网部署。
+Windows 启动脚本还会设置 `FLOOR_DATA_DIR=项目目录\data`，让配置、输出、上传和日志集中保存在项目内。
 
 ### 📁 数据目录
 后端会把**配置与运行期数据**写在仓库目录的**上一级**（`config.py` 中 `BASE_DIR = 仓库上级目录`）。因此运行时会在上级目录生成：

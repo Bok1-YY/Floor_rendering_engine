@@ -72,6 +72,7 @@ function buildDefaultParams(o: OptionsView, prevWorkflow?: string): GenParams {
     pet_action: o.pet_actions[0],
     pet_focus: o.pet_focus[0],
     avoid_items: o.avoid_items,
+    cinematic_enabled: false,
     panel_submode: "再设计",
     panel_size: o.panel_sizes[0],
   };

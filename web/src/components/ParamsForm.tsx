@@ -6,6 +6,7 @@ import type { GenParams, ModelKey, OptionsView, SDOptions, Swatch, OmakaseOption
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -209,6 +210,8 @@ export function ParamsForm({
   const isOmakase = params.workflow_mode.includes("Omakase");
   const isPanel = params.workflow_mode.includes("墙板");
   const isFree = params.workflow_mode.includes("自由创作");
+  const isPure = params.workflow_mode.includes("纯效果图");
+  const supportsCinematic = isPure || isPet || isRef || isOmakase;
   const panelSub = params.panel_submode || "再设计";
   const isPanelScene = isPanel && !panelSub.includes("替换"); // 再设计/纯原创：暴露场景控件；替换保留原图
   const [advOpen, setAdvOpen] = useState(false);
@@ -291,7 +294,12 @@ export function ParamsForm({
               key={m}
               type="button"
               onClick={() => {
-                onParams({ workflow_mode: m });
+                // 宠物场景默认开启；Omakase 在选中含生命主体候选时自动开启；
+                // 纯效果图/参照默认关闭但可手动打开。切换到其他模式一律清除。
+                onParams({
+                  workflow_mode: m,
+                  cinematic_enabled: m.includes("宠物友好"),
+                });
                 if (m.includes("自由创作")) {
                   onModelTargets(modelTargets.filter((key) => key !== "sd35"));
                 }
@@ -330,6 +338,23 @@ export function ParamsForm({
           );
         })}
       </div>
+
+      {supportsCinematic && (
+        <div className="mt-3 flex items-start justify-between gap-4 rounded-xl border border-border bg-card p-[13px]">
+          <div className="min-w-0">
+            <div className="text-[12.5px] font-bold text-secondary-foreground">🎬 电影真实感</div>
+            <p className="mt-1 text-[10.5px] leading-relaxed text-muted-foreground">
+              Gemini 会在生图前规划可信机位、自然动作、视线关系和现实光源，减少人物/宠物摆拍与 CG 感。
+              地板规格仍由原技术提示词锁定；当前只影响 B2 / Pro。
+            </p>
+          </div>
+          <Switch
+            checked={!!params.cinematic_enabled}
+            onCheckedChange={(checked) => onParams({ cinematic_enabled: checked })}
+            aria-label="电影真实感"
+          />
+        </div>
+      )}
 
       {isFree && (
         <FreeModePanel
@@ -810,7 +835,10 @@ export function ParamsForm({
                     <button
                       key={i}
                       type="button"
-                      onClick={() => onParams({ scene_override: o.text })}
+                      onClick={() => onParams({
+                        scene_override: o.text,
+                        cinematic_enabled: o.subject_type !== "none",
+                      })}
                       className={cn(
                         "block w-full rounded-[9px] border p-[11px] text-left transition",
                         chosen
