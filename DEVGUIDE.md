@@ -2,7 +2,9 @@
 
 > 地板行业**效果图生成**引擎的商业版。上传地板小样 → 自动识色/智能配方 → 配参数 → 调 Gemini/Fal 出图（B2 + Pro + 可选 SD 3.5，支持 4K）。
 > 本仓库 `Floor_engine_server/` 是从原型 `test/floor_engine/` fork 出来的**商业主线**：把界面从 NiceGUI 迁到「FastAPI 无头后端 + Next.js 真前端」，引擎逻辑原样复用。
-> 本手册按当前真实代码（2026-07）维护，**开头就是启动**。读完「零」即可跑起来；要改代码再往下看。
+> 本手册按当前真实代码（2026-08）维护，**开头就是启动**。读完「零」即可跑起来；要改代码再往下看。
+
+面向招聘与产品评审的阅读入口：[中文产品案例](./docs/PRODUCT_CASE_STUDY.zh-CN.md) / [English case study](./docs/PRODUCT_CASE_STUDY.en.md)。README 负责说明用户价值与业务结果，本手册聚焦实现边界、数据流和开发约定。
 
 ---
 
