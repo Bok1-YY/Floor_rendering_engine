@@ -593,6 +593,27 @@ export interface InpaintTargetPayload {
 export interface GenericInpaintRequest extends InpaintPayload {
   target: InpaintTargetPayload;
 }
+export interface SmartMaskCandidate {
+  id: string;
+  rle: number[]; // 行优先，0/1 交替计数，从 0 值游程开始
+  bbox: [number, number, number, number];
+  area: number;
+  confidence: number;
+  stability: number;
+}
+export interface InpaintSegmentRequest {
+  target: InpaintTargetPayload;
+  strategy: "scan_objects" | "point";
+  point?: { x: number; y: number };
+}
+export interface InpaintSegmentView {
+  width: number;
+  height: number;
+  status: "ok" | "needs_guidance";
+  warnings: string[];
+  model: string;
+  candidates: SmartMaskCandidate[];
+}
 export interface InpaintCandidate {
   url: string;
   thumb: string;

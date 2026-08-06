@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """生成式修补路由 —— 两段式抽卡:生成候选 → 挑选提交(usage 生成时记,apply 不计费)。"""
 import asyncio
+import hashlib
 import os
 import time
 import uuid
@@ -15,6 +16,7 @@ from .image_ops import (
     decode_inpaint_mask, prepare_inpaint_masks, normalize_inpaint_source,
     save_inpaint_candidate_png,
 )
+from .floor_segmentation import scan_object_masks, segment_mask_at_point
 from .models import (
     update_job, ensure_model_runs, add_model_candidate, compute_runs_final_status,
 )
@@ -28,7 +30,7 @@ from .server_helpers import (
     require_record_json_path, require_upload_image_path, require_output_image_rel,
 )
 from .server_schemas import (
-    GenericInpaintRequest, InpaintApplyRequest, InpaintPayload, InpaintTarget,
+    GenericInpaintRequest, InpaintApplyRequest, InpaintPayload, InpaintSegmentRequest, InpaintTarget,
 )
 
 router = APIRouter()
@@ -84,6 +86,41 @@ def _resolve_inpaint_source(target: InpaintTarget):
     with Image.open(room) as image:
         src = normalize_inpaint_source(image)
     return src, '房间图预处理', 'room_prep'
+
+
+def _segmentation_cache_key(image: Image.Image) -> str:
+    digest = hashlib.sha256()
+    digest.update(f'{image.mode}:{image.width}x{image.height}:'.encode('ascii'))
+    digest.update(image.tobytes())
+    return f'inpaint:{digest.hexdigest()}'
+
+
+@router.post('/api/inpaint/segment')
+def inpaint_segment(req: InpaintSegmentRequest):
+    """Offline smart-mask proposals for the same validated source used by inpaint."""
+    src, _workflow_mode, _operation = _resolve_inpaint_source(req.target)
+    cache_key = _segmentation_cache_key(src)
+    if req.strategy == 'point':
+        if req.point is None:
+            raise HTTPException(422, '点选识别需要 point 坐标')
+        result = segment_mask_at_point(src, cache_key, req.point.x, req.point.y)
+    else:
+        result = scan_object_masks(src, cache_key)
+    return {
+        'width': result.size[0],
+        'height': result.size[1],
+        'status': result.status,
+        'warnings': result.warnings,
+        'model': result.model,
+        'candidates': [{
+            'id': candidate.id,
+            'rle': candidate.rle,
+            'bbox': list(candidate.bbox),
+            'area': candidate.area,
+            'confidence': round(float(candidate.confidence), 4),
+            'stability': round(float(candidate.stability), 4),
+        } for candidate in result.candidates],
+    }
 
 
 async def _generic_inpaint_bg(iid: str, src_pil, engine_mask, blend_mask, prompt, mode, seed, n,
@@ -294,4 +331,3 @@ def inpaint_cancel(iid: str):
             return {'cancelled': True}
     state.INPAINTS.request_cancel(iid)
     return {'cancelled': True}
-

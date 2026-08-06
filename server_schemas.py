@@ -345,5 +345,16 @@ class GenericInpaintRequest(InpaintPayload):
     target: InpaintTarget
 
 
+class InpaintSegmentPoint(BaseModel):
+    x: float = Field(ge=0, le=1)
+    y: float = Field(ge=0, le=1)
+
+
+class InpaintSegmentRequest(BaseModel):
+    target: InpaintTarget
+    strategy: Literal['scan_objects', 'point']
+    point: Optional[InpaintSegmentPoint] = None
+
+
 class InpaintApplyRequest(BaseModel):
     index: int = Field(ge=0, le=2)
