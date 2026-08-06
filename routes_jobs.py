@@ -17,6 +17,7 @@ from fastapi.responses import StreamingResponse
 from PIL import Image
 
 from . import server_state as state
+from .auto_color import auto_color_match_generated, save_auto_color_mask
 from .api import (
     call_image_generate, call_gemini_edit, analyze_style_image,
     call_fal_sd35_generate, call_fal_aura_upscale, SD35_ENDPOINT,
@@ -54,6 +55,109 @@ router = APIRouter()
 # ============================================================
 # 生成 worker（移植自 webui._generate_one_model / _run_job，删去所有 UI 调用）
 # ============================================================
+def _auto_color_enabled(job: JobRecord, ref_path: str) -> bool:
+    """Automatic floor correction applies only to workflows with a floor swatch."""
+    mode = job.workflow_mode or ''
+    return bool(ref_path and os.path.isfile(ref_path)
+                and '墙板' not in mode and '自由创作' not in mode)
+
+
+def _set_auto_color_state(job: JobRecord, stage_key: str, metadata: dict) -> None:
+    run = update_model_run(job, stage_key)
+    settings = dict(run.get('settings') or {})
+    settings['auto_color_match'] = dict(metadata)
+    update_model_run(job, stage_key, settings=settings)
+
+
+def _set_postprocess_stage(job: JobRecord, stage_key: str, text: str) -> None:
+    update_model_run(job, stage_key, stage=text)
+    if stage_key in ('b2', 'pro'):
+        setattr(job, f'{stage_key}_stage', text)
+
+
+async def _append_auto_color_candidate(job: JobRecord, stage_key: str, model_name: str,
+                                       source_img: Image.Image, source_path: str, ref_path: str,
+                                       json_path: str, record_id: str, source_result_id=None,
+                                       should_cancel=None) -> str:
+    """Append a safe automatic floor-color candidate and make it current.
+
+    The generated original is expected to have already been saved as the first
+    candidate and record result.  Any segmentation/correction failure is
+    non-fatal and returns that original unchanged.
+    """
+    if not _auto_color_enabled(job, ref_path):
+        return source_path
+    if should_cancel and should_cancel():
+        return source_path
+
+    _set_postprocess_stage(job, stage_key, '自动校色中…')
+    metadata = {
+        'operation': 'auto_color_match',
+        'scope': 'floor_mask',
+        'adjustment_mode': 'auto',
+        'status': 'started',
+    }
+    try:
+        try:
+            stat = os.stat(source_path)
+            cache_key = f'{os.path.realpath(source_path)}:{stat.st_size}:{stat.st_mtime_ns}'
+        except OSError:
+            cache_key = f'{job.job_id}:{stage_key}:{time.time_ns()}'
+        result = await asyncio.to_thread(
+            auto_color_match_generated, source_img, ref_path, cache_key)
+        metadata = dict(result.metadata)
+        try:
+            metadata['source_image_file'] = os.path.relpath(
+                source_path, MAIN_OUTPUT_DIR).replace('\\', '/')
+        except ValueError:
+            metadata['source_image_file'] = os.path.basename(source_path)
+        if source_result_id:
+            metadata['source_result_id'] = str(source_result_id)
+
+        if result.image is None or result.mask is None:
+            _set_auto_color_state(job, stage_key, metadata)
+            logger.warning(
+                f"[自动校色] 跳过 job={job.job_id}, model={stage_key}, "
+                f"status={metadata.get('status')}, warnings={metadata.get('warnings')}")
+            return source_path
+
+        corrected_path = await asyncio.to_thread(
+            save_api_result_png, result.image, f'{model_name}_自动校色', ref_path, metadata)
+        if not corrected_path:
+            metadata['status'] = 'save_failed'
+            metadata.setdefault('warnings', []).append('自动校色图保存失败')
+            _set_auto_color_state(job, stage_key, metadata)
+            return source_path
+        try:
+            metadata['mask_file'] = await asyncio.to_thread(
+                save_auto_color_mask, result.mask, corrected_path)
+        except Exception as ex:
+            metadata.setdefault('warnings', []).append(f'蒙版留档失败：{ex}')
+            logger.warning(f'[自动校色] 蒙版留档失败 job={job.job_id}, model={stage_key}: {ex}')
+
+        add_model_candidate(job, stage_key, corrected_path)
+        if json_path and record_id:
+            try:
+                await asyncio.to_thread(
+                    api_write_to_record, result.image, f'{model_name} · 自动校色',
+                    json_path, record_id, corrected_path, metadata)
+            except Exception as ex:
+                metadata.setdefault('warnings', []).append(f'写记录失败：{ex}')
+                logger.warning(f'[自动校色] 写记录失败 job={job.job_id}, model={stage_key}: {ex}')
+        _set_auto_color_state(job, stage_key, metadata)
+        logger.info(
+            f"[自动校色] 完成 job={job.job_id}, model={stage_key}, "
+            f"confidence={metadata.get('confidence')}, path={corrected_path}")
+        return corrected_path
+    except Exception as ex:
+        metadata.update(status='failed', warnings=[str(ex)])
+        _set_auto_color_state(job, stage_key, metadata)
+        logger.warning(f'[自动校色] 失败(保留原图) job={job.job_id}, model={stage_key}: {ex}')
+        return source_path
+    finally:
+        _set_postprocess_stage(job, stage_key, '')
+
+
 async def _generate_one_model(job: JobRecord, model_id, prompt_text, stage_key, model_name, *,
                               api_key, pnp, ims, ar, rp, sref, bevel_ref, jpt, rid, should_cancel,
                               input_image_paths=None):
@@ -97,10 +201,15 @@ async def _generate_one_model(job: JobRecord, model_id, prompt_text, stage_key, 
             record_usage(job.workflow_mode, model_name, provider, True, job.operation)
             return None, '图片已生成，但保存到磁盘失败'
         add_model_candidate(job, stage_key, path)
+        source_result_id = None
         try:
-            await asyncio.to_thread(api_write_to_record, img, model_name, jpt, rid, path)
+            source_result_id = await asyncio.to_thread(
+                api_write_to_record, img, model_name, jpt, rid, path)
         except Exception as ex:
             logger.warning(f"写记录失败 job={job.job_id} {model_name}: {ex}")
+        path = await _append_auto_color_candidate(
+            job, stage_key, model_name, img, path, pnp, jpt, rid,
+            source_result_id=source_result_id, should_cancel=should_cancel)
 
     _err = err or ''
     # 出图=ok；没出图且非取消=fail（取消不计失败）。provider 用引擎返回的【实际】线路(自动转 Fal 能记对)。
@@ -244,10 +353,15 @@ async def _generate_sd35_model(job: JobRecord, *, fal_key: str, positive: str, n
                 'prompt_sha256': hashlib.sha256(positive.encode()).hexdigest(),
                 'negative_prompt_sha256': hashlib.sha256(negative.encode()).hexdigest(),
             }
+            source_result_id = None
             try:
-                await asyncio.to_thread(api_write_to_record, final_image, 'SD 3.5', jpt, rid, final_path, metadata)
+                source_result_id = await asyncio.to_thread(
+                    api_write_to_record, final_image, 'SD 3.5', jpt, rid, final_path, metadata)
             except Exception as ex:
                 logger.warning(f'写 SD 记录失败 job={job.job_id}: {ex}')
+            final_path = await _append_auto_color_candidate(
+                job, key, 'SD 3.5', final_image, final_path, pnp, jpt, rid,
+                source_result_id=source_result_id, should_cancel=should_cancel)
             update_model_run(
                 job, key, status=('partial' if upscale_error else 'done'), error=upscale_error,
                 stage='', seconds=round(time.time() - started, 1),
@@ -600,11 +714,18 @@ async def _retry_sd_upscale_bg(job: JobRecord):
             raise RuntimeError('超分图保存失败')
         add_model_candidate(job, 'sd35', path)
         _set_model_queue_handle(job, 'sd35', 'upscale_queue', None)
-        update_model_run(job, 'sd35', status='done', stage='', error='', delivery_status='upscaled')
+        source_result_id = None
         try:
-            await asyncio.to_thread(api_write_to_record, out, 'SD 3.5 · 4K重试', job.json_path, job.record_id, path)
+            source_result_id = await asyncio.to_thread(
+                api_write_to_record, out, 'SD 3.5 · 4K重试',
+                job.json_path, job.record_id, path)
         except Exception as ex:
             logger.warning(f'写超分重试记录失败 job={job.job_id}: {ex}')
+        path = await _append_auto_color_candidate(
+            job, 'sd35', 'SD 3.5 · 4K重试', out, path, job.png_path,
+            job.json_path, job.record_id, source_result_id=source_result_id,
+            should_cancel=lambda: state.JOBS.is_cancelled(job.job_id, generation))
+        update_model_run(job, 'sd35', status='done', stage='', error='', delivery_status='upscaled')
         update_job(job, status=compute_runs_final_status(job), operation_status='done', operation_error='')
     except Exception as ex:
         logger.exception(f'[SD35] 重试超分失败 job={job.job_id}')

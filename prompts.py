@@ -29,8 +29,8 @@ from .records import (
 )
 from .reveal_security import obfuscate_text
 
-# 地板整体颜色锁定指令：强制生成图地板的整体颜色与上传小样完全一致。
-# 取代旧的"提取色码注入 + 生成后自动校色"方案，改由提示词直接、人眼可校地约束模型。
+# 地板整体颜色锁定指令：生成阶段先强制地板颜色与上传小样一致。
+# 与出图后的 MobileSAM 局部自动校色组成双保险；后处理只修地板蒙版内色度。
 FLOOR_COLOR_MATCH_INSTRUCTION = (
     "**[FLOOR COLOR — MANDATORY EXACT MATCH]** "
     "The overall color of the wooden floor in the final image MUST be IDENTICAL to the uploaded floor swatch — "

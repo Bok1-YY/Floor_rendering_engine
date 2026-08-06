@@ -170,19 +170,22 @@ export function JobCard({
     idx: number;
     total: number;
     run: ModelRunView;
+    autoColor: boolean;
   }[] = [];
   for (const key of job.model_targets || (["b2", "pro"] as ModelKey[])) {
     const run = job.model_runs?.[key];
     if (!run?.url) continue;
     const ov = view[key];
+    const currentUrl = ov?.url ?? run.url;
     slots.push({
       key,
       name: run.label,
-      url: ov?.url ?? run.url,
+      url: currentUrl,
       thumb: ov?.thumb ?? run.thumb,
       idx: ov?.idx ?? run.idx,
       total: run.total,
       run,
+      autoColor: currentUrl.includes("自动校色") || currentUrl.includes("%E8%87%AA%E5%8A%A8%E6%A0%A1%E8%89%B2"),
     });
   }
 
@@ -269,10 +272,16 @@ export function JobCard({
                 <span className="absolute left-[7px] top-[7px] rounded-md bg-[rgba(26,24,21,.55)] px-[7px] py-[2px] text-[10px] font-bold text-white backdrop-blur-[2px]">
                   {m.name}
                 </span>
+                {m.autoColor && (
+                  <span className="absolute right-[7px] top-[7px] rounded-md bg-emerald-600 px-[7px] py-[2px] text-[10px] font-bold text-white shadow-sm">
+                    自动校色
+                  </span>
+                )}
               </div>
               <div className="mt-[5px] flex items-center justify-between text-[11px] text-muted-foreground">
                 <span className="flex items-center gap-1">
                   {m.name}
+                  {m.autoColor && <span className="text-emerald-600">· 自动校色</span>}
                   {m.total > 1 && (
                     <>
                       <button

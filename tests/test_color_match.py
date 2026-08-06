@@ -11,8 +11,9 @@ import pytest
 from fastapi import HTTPException
 from PIL import Image
 
-from Floor_engine_server import server_state, server_helpers, server_schemas, routes_tools
+from Floor_engine_server import auto_color, routes_jobs, server_state, server_helpers, server_schemas, routes_tools
 from Floor_engine_server import records, server_api
+from Floor_engine_server.auto_color import AutoColorResult
 from Floor_engine_server.color_match import (
     apply_color_adjustments,
     apply_color_adjustments_striped,
@@ -21,8 +22,8 @@ from Floor_engine_server.color_match import (
     match_color_masked,
     match_color_region,
 )
-from Floor_engine_server.floor_segmentation import encode_mask_png, segment_floor
-from Floor_engine_server.models import new_job
+from Floor_engine_server.floor_segmentation import SegmentResult, encode_mask_png, segment_floor
+from Floor_engine_server.models import add_model_candidate, ensure_model_runs, new_job
 from Floor_engine_server.task_registry import TaskRegistry
 
 
@@ -574,3 +575,104 @@ def test_record_color_match_falls_back_to_material_optimized_image(dirs):
     assert result["ok"] is True
     assert len(saved) == 2
     assert saved[-1]["model_label"] == "手动校色 Edit"
+
+
+def test_generated_auto_color_changes_only_segmented_floor(monkeypatch, tmp_path):
+    source = _solid(120, 80, (75, 95, 145))
+    ref = tmp_path / 'swatch.png'
+    _solid(30, 30, (175, 135, 70)).save(ref)
+    mask = np.zeros((80, 120), dtype=bool)
+    mask[40:, :] = True
+
+    monkeypatch.setattr(
+        auto_color, 'segment_floor',
+        lambda image, cache_key, auto_seed=True: (
+            image.copy(), SegmentResult(mask, 0.91, 'ok', [], 'mobile_sam')))
+
+    result = auto_color.auto_color_match_generated(source, str(ref), 'generated:test')
+
+    assert result.image is not None
+    assert result.mask is not None
+    before = np.asarray(source, dtype=np.int16)
+    after = np.asarray(result.image, dtype=np.int16)
+    assert np.array_equal(after[:35], before[:35])
+    assert np.abs(after[50:] - before[50:]).mean() > 5
+    assert result.metadata['operation'] == 'auto_color_match'
+    assert result.metadata['status'] == 'ok'
+
+
+def test_generated_auto_color_appends_queue_candidate_and_record(dirs, monkeypatch):
+    out_dir, up_dir = dirs
+    raw_path = out_dir / 'oak_Nano_Banana_2_raw.jpg'
+    ref_path = up_dir / 'oak_swatch.png'
+    raw = _solid(80, 60, (80, 100, 140))
+    raw.save(raw_path)
+    _solid(20, 20, (170, 130, 75)).save(ref_path)
+    json_path = out_dir / 'oak_记录.json'
+    json_path.write_text(json.dumps([{
+        'id': 'r1',
+        'results': [{'result_id': 'raw_1', 'model_label': 'Nano Banana 2',
+                     'result_image_file': raw_path.name}],
+    }]), encoding='utf-8')
+
+    floor_mask = Image.new('L', raw.size, 0)
+    floor_mask.paste(255, (0, 30, 80, 60))
+    corrected = _solid(80, 60, (155, 125, 80))
+    monkeypatch.setattr(
+        routes_jobs, 'auto_color_match_generated',
+        lambda source, ref, cache: AutoColorResult(corrected, floor_mask, {
+            'operation': 'auto_color_match', 'scope': 'floor_mask',
+            'adjustment_mode': 'auto', 'status': 'ok', 'confidence': 0.92,
+            'warnings': [],
+        }))
+
+    job = new_job('oak', 'now', 'b2')
+    job.workflow_mode = '纯效果图 (生成全新空间)'
+    job.model_targets = ['b2']
+    ensure_model_runs(job)
+    add_model_candidate(job, 'b2', str(raw_path))
+
+    current = asyncio.run(routes_jobs._append_auto_color_candidate(
+        job, 'b2', 'Nano Banana 2', raw, str(raw_path), str(ref_path),
+        str(json_path), 'r1', source_result_id='raw_1'))
+
+    assert current != str(raw_path)
+    assert job.b2_path == current
+    assert job.b2_paths == [str(raw_path), current]
+    assert os.path.isfile(current)
+    assert os.path.isfile(os.path.splitext(current)[0] + '_mask.png')
+    saved = records.load_records_file(str(json_path))[0]['results']
+    assert len(saved) == 2
+    assert saved[-1]['model_label'] == 'Nano Banana 2 · 自动校色'
+    assert saved[-1]['generation_metadata']['operation'] == 'auto_color_match'
+    assert saved[-1]['generation_metadata']['source_result_id'] == 'raw_1'
+
+
+def test_generated_auto_color_mask_failure_keeps_original(dirs, monkeypatch):
+    out_dir, up_dir = dirs
+    raw_path = out_dir / 'raw.jpg'
+    ref_path = up_dir / 'swatch.png'
+    raw = _solid(40, 30, (90, 100, 120))
+    raw.save(raw_path)
+    _solid(10, 10, (150, 120, 80)).save(ref_path)
+    monkeypatch.setattr(
+        routes_jobs, 'auto_color_match_generated',
+        lambda source, ref, cache: AutoColorResult(None, None, {
+            'operation': 'auto_color_match', 'scope': 'floor_mask',
+            'adjustment_mode': 'auto', 'status': 'needs_guidance',
+            'warnings': ['未识别到有效地板'],
+        }))
+
+    job = new_job('oak', 'now', 'pro')
+    job.workflow_mode = '地板替换 (上传房间图)'
+    job.model_targets = ['pro']
+    ensure_model_runs(job)
+    add_model_candidate(job, 'pro', str(raw_path))
+
+    current = asyncio.run(routes_jobs._append_auto_color_candidate(
+        job, 'pro', 'Nano Banana Pro', raw, str(raw_path), str(ref_path), '', ''))
+
+    assert current == str(raw_path)
+    assert job.pro_paths == [str(raw_path)]
+    state = job.model_runs['pro']['settings']['auto_color_match']
+    assert state['status'] == 'needs_guidance'
