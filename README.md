@@ -16,7 +16,7 @@
 </div>
 
 <p align="center">
-  <img src="./docs/media/hero-demo.gif" width="960" alt="Floor Rendering Engine product workflow demo">
+  <img src="./docs/media/hero-demo.gif" width="960" alt="Floor Rendering Engine feature tour">
 </p>
 
 > 这是一个真实投入公司社媒生产的产品，而不是只验证模型调用的 Demo。核心系统由我独立完成产品设计与工程实现；公司及客户信息已脱敏。
@@ -48,7 +48,9 @@ flowchart LR
     F --> G[提案与交付]
 ```
 
-![真实记录页：同一任务的原图、校色版本与候选结果](./docs/media/product-overview.webp)
+![功能巡礼：色板与场景规划、批量生成、自动校色和智能修补](./docs/media/feature-tour.webp)
+
+首屏动图按真实操作顺序展示六个环节：色板识别与智能配方、多色板批量生产、多模型候选、AI 自动校色、智能选区修补，以及最后的评审交付。记录页只作为闭环证据，不再占据主要展示时间。
 
 ## 关键产品能力
 

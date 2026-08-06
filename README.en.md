@@ -16,7 +16,7 @@
 </div>
 
 <p align="center">
-  <img src="./docs/media/hero-demo.gif" width="960" alt="Floor Rendering Engine product workflow demo">
+  <img src="./docs/media/hero-demo.gif" width="960" alt="Floor Rendering Engine feature tour">
 </p>
 
 > This is a production tool used by a real corporate social media team—not a model API demo. I independently owned the core product design and engineering. Company and customer information shown here is anonymized.
@@ -48,7 +48,9 @@ flowchart LR
     F --> G[Proposal and delivery]
 ```
 
-![Real records view with original outputs, color-matched variants, and candidates](./docs/media/product-overview.webp)
+![Feature tour covering swatch planning, batch generation, color control, and smart inpainting](./docs/media/feature-tour.webp)
+
+The hero demo follows six real product steps: swatch-aware planning, multi-swatch batching, multi-model candidates, AI color matching, smart inpainting, and a brief final review-and-delivery frame. Records now serve as closing-loop evidence rather than the main visual.
 
 ## Core product capabilities
 
