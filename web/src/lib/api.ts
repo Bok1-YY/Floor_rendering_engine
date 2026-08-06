@@ -32,6 +32,8 @@ import type {
   ColorMatchSegmentView,
   ModelKey,
   GenericInpaintRequest,
+  InpaintSegmentRequest,
+  InpaintSegmentView,
   InpaintSubmitView,
   InpaintStatusView,
   InpaintApplyResponse,
@@ -220,6 +222,8 @@ export const api = {
     jsend<{ ok: boolean; result_url: string }>(`/api/records/color-match`, "POST", b),
 
   // ── 生成式修补（画笔选区 → 并发 n 候选抽卡 → 挑选提交；引擎可切换）──
+  inpaintSegment: (b: InpaintSegmentRequest, signal?: AbortSignal) =>
+    jsend<InpaintSegmentView>(`/api/inpaint/segment`, "POST", b, signal),
   submitInpaint: (b: GenericInpaintRequest) =>
     jsend<InpaintSubmitView>(`/api/inpaint`, "POST", b),
   inpaintStatus: (iid: string) => jget<InpaintStatusView>(`/api/inpaint/${iid}`),

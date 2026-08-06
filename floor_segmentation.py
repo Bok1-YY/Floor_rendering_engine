@@ -24,13 +24,17 @@ MODEL_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "
 ENCODER_PATH = os.path.join(MODEL_DIR, "mobile_sam_encoder.onnx")
 DECODER_PATH = os.path.join(MODEL_DIR, "mobile_sam_decoder.onnx")
 SEGMENT_MAX_SIDE = 1600
+OBJECT_SEGMENT_MAX_SIDE = 1280
 SAM_INPUT_SIDE = 1024
 MAX_PROMPT_POINTS = 32
+OBJECT_SCAN_COLS = 8
+OBJECT_SCAN_ROWS = 6
+OBJECT_SCAN_MAX_CANDIDATES = 24
 
 
-def _resize_working(image: Image.Image) -> Image.Image:
+def _resize_working(image: Image.Image, max_side: int = SEGMENT_MAX_SIDE) -> Image.Image:
     out = ImageOps.exif_transpose(image).convert("RGB")
-    out.thumbnail((SEGMENT_MAX_SIDE, SEGMENT_MAX_SIDE), Image.Resampling.LANCZOS)
+    out.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
     return out.copy()
 
 
@@ -143,11 +147,11 @@ class _MobileSAMRuntime:
                 self._cache.popitem(last=False)
             return embedding, scale
 
-    def predict(self, image: Image.Image, cache_key: str, points: np.ndarray,
-                labels: np.ndarray, previous: np.ndarray | None = None) -> tuple[list[np.ndarray], list[float]]:
+    def predict_raw(self, image: Image.Image, cache_key: str, points: np.ndarray,
+                    labels: np.ndarray, previous: np.ndarray | None = None) -> tuple[np.ndarray, list[float]]:
         self._ensure_loaded()
         if not self.available:
-            return [], []
+            return np.empty((0, image.height, image.width), dtype=np.float32), []
         embedding, scale = self._embedding(image, cache_key)
         height, width = image.height, image.width
         point_coords = (points * scale)[None].astype(np.float32)
@@ -168,13 +172,20 @@ class _MobileSAMRuntime:
             "orig_im_size": np.array([height, width], dtype=np.float32),
         }
         outputs = self._decoder.run(None, feed)
-        masks = outputs[0][0]
+        masks = np.asarray(outputs[0][0], dtype=np.float32)
         scores = outputs[1][0]
-        return [(mask > 0) for mask in masks], [float(score) for score in scores]
+        return masks, [float(score) for score in scores]
+
+    def predict(self, image: Image.Image, cache_key: str, points: np.ndarray,
+                labels: np.ndarray, previous: np.ndarray | None = None) -> tuple[list[np.ndarray], list[float]]:
+        masks, scores = self.predict_raw(image, cache_key, points, labels, previous)
+        return [(mask > 0) for mask in masks], scores
 
 
 _RUNTIME = _MobileSAMRuntime()
 _INFERENCE_LOCK = threading.Lock()
+_OBJECT_SCAN_CACHE_LOCK = threading.Lock()
+_OBJECT_SCAN_CACHE: OrderedDict[str, tuple[tuple[int, int], list["MaskCandidate"]]] = OrderedDict()
 
 
 @dataclass
@@ -184,6 +195,209 @@ class SegmentResult:
     status: str
     warnings: list[str]
     model: str
+
+
+@dataclass
+class MaskCandidate:
+    """Compact, frontend-friendly binary mask candidate (row-major uncompressed RLE)."""
+
+    id: str
+    rle: list[int]
+    bbox: tuple[int, int, int, int]
+    area: int
+    confidence: float
+    stability: float
+
+
+@dataclass
+class SmartSegmentResult:
+    size: tuple[int, int]
+    candidates: list[MaskCandidate]
+    status: str
+    warnings: list[str]
+    model: str = "mobile_sam"
+
+
+def encode_mask_rle(mask: np.ndarray) -> list[int]:
+    """Encode a boolean mask as alternating 0/1 run lengths, starting with zeros."""
+    flat = np.asarray(mask, dtype=bool).reshape(-1)
+    if flat.size == 0:
+        return []
+    changes = np.flatnonzero(flat[1:] != flat[:-1]) + 1
+    bounds = np.concatenate((np.array([0]), changes, np.array([flat.size])))
+    runs = np.diff(bounds).astype(np.int64).tolist()
+    if bool(flat[0]):
+        runs.insert(0, 0)
+    return runs
+
+
+def decode_mask_rle(rle: list[int], size: tuple[int, int]) -> np.ndarray:
+    """Decode row-major alternating RLE. Primarily used by tests and cache consumers."""
+    width, height = size
+    total = max(0, int(width) * int(height))
+    flat = np.zeros(total, dtype=bool)
+    offset = 0
+    value = False
+    for raw_count in rle:
+        count = max(0, int(raw_count))
+        end = min(total, offset + count)
+        if value and end > offset:
+            flat[offset:end] = True
+        offset += count
+        value = not value
+        if offset >= total:
+            break
+    return flat.reshape((height, width))
+
+
+def _mask_stability(logits: np.ndarray, offset: float = 1.0) -> float:
+    inner = int(np.count_nonzero(logits > offset))
+    outer = int(np.count_nonzero(logits > -offset))
+    return float(inner / outer) if outer else 0.0
+
+
+def _component_at_point(mask: np.ndarray, x: int, y: int) -> np.ndarray:
+    count, labels, stats, _ = cv2.connectedComponentsWithStats(mask.astype(np.uint8), 8)
+    if count <= 1:
+        return mask
+    label = int(labels[max(0, min(mask.shape[0] - 1, y)), max(0, min(mask.shape[1] - 1, x))])
+    if label <= 0:
+        label = 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))
+    return labels == label
+
+
+def _candidate_from_mask(candidate_id: str, mask: np.ndarray, confidence: float,
+                         stability: float) -> MaskCandidate:
+    ys, xs = np.nonzero(mask)
+    left, top = int(xs.min()), int(ys.min())
+    right, bottom = int(xs.max()) + 1, int(ys.max()) + 1
+    return MaskCandidate(
+        id=candidate_id,
+        rle=encode_mask_rle(mask),
+        bbox=(left, top, right - left, bottom - top),
+        area=int(mask.sum()),
+        confidence=max(0.0, min(1.0, float(confidence))),
+        stability=max(0.0, min(1.0, float(stability))),
+    )
+
+
+def _overlaps_existing(mask: np.ndarray, area: int,
+                       existing: list[tuple[np.ndarray, int, float, float]]) -> bool:
+    for other, other_area, _, _ in existing:
+        intersection = int(np.count_nonzero(mask & other))
+        if not intersection:
+            continue
+        union = area + other_area - intersection
+        iou = intersection / max(1, union)
+        containment = intersection / max(1, min(area, other_area))
+        if iou >= 0.80 or containment >= 0.92:
+            return True
+    return False
+
+
+def scan_object_masks(image: Image.Image, cache_key: str) -> SmartSegmentResult:
+    """Best-effort offline object proposal scan for inpaint selection."""
+    working = _resize_working(image, OBJECT_SEGMENT_MAX_SIDE)
+    size = working.size
+    scoped_key = f"{cache_key}:objects:{size[0]}x{size[1]}"
+    with _OBJECT_SCAN_CACHE_LOCK:
+        cached = _OBJECT_SCAN_CACHE.get(scoped_key)
+        if cached is not None:
+            _OBJECT_SCAN_CACHE.move_to_end(scoped_key)
+            cached_size, candidates = cached
+            return SmartSegmentResult(cached_size, list(candidates), "ok", [])
+
+    warnings: list[str] = []
+    kept: list[tuple[np.ndarray, int, float, float]] = []
+    with _INFERENCE_LOCK:
+        available = _RUNTIME.available
+    if not available:
+        warnings.append(_RUNTIME.error or "AI 蒙版当前不可用")
+    else:
+        width, height = size
+        min_area = max(64, int(width * height * 0.001))
+        max_area = int(width * height * 0.60)
+        for row in range(OBJECT_SCAN_ROWS):
+            for col in range(OBJECT_SCAN_COLS):
+                x = int(round((col + 0.5) * width / OBJECT_SCAN_COLS))
+                y = int(round((row + 0.5) * height / OBJECT_SCAN_ROWS))
+                # Yield the shared runtime lock between grid points so an
+                # explicit user click can be served before the background scan ends.
+                with _INFERENCE_LOCK:
+                    logits, scores = _RUNTIME.predict_raw(
+                        working, scoped_key,
+                        np.array([[x, y]], dtype=np.float32),
+                        np.ones((1,), dtype=np.float32),
+                    )
+                ranked = sorted(
+                    zip(logits, scores),
+                    key=lambda item: float(item[1]), reverse=True,
+                )
+                for raw_mask, score in ranked:
+                    stability = _mask_stability(raw_mask)
+                    if score < 0.70 or stability < 0.82:
+                        continue
+                    mask = _component_at_point(raw_mask > 0, x, y)
+                    area = int(mask.sum())
+                    if area < min_area or area > max_area:
+                        continue
+                    if _overlaps_existing(mask, area, kept):
+                        continue
+                    kept.append((mask, area, float(score), stability))
+
+    if not kept:
+        return SmartSegmentResult(size, [], "needs_guidance",
+                                  warnings or ["未识别到可选物件，请使用画笔涂抹"], "mobile_sam")
+
+    kept.sort(key=lambda item: (-item[2], -item[3], item[1]))
+    kept = kept[:OBJECT_SCAN_MAX_CANDIDATES]
+    candidates = [
+        _candidate_from_mask(f"object-{index + 1}", mask, confidence, stability)
+        for index, (mask, _, confidence, stability) in enumerate(kept)
+    ]
+    with _OBJECT_SCAN_CACHE_LOCK:
+        _OBJECT_SCAN_CACHE[scoped_key] = (size, list(candidates))
+        while len(_OBJECT_SCAN_CACHE) > 3:
+            _OBJECT_SCAN_CACHE.popitem(last=False)
+    return SmartSegmentResult(size, candidates, "ok", warnings, "mobile_sam")
+
+
+def segment_mask_at_point(image: Image.Image, cache_key: str, x: float, y: float) -> SmartSegmentResult:
+    """Return the best MobileSAM region containing one normalized click point."""
+    working = _resize_working(image, OBJECT_SEGMENT_MAX_SIDE)
+    width, height = working.size
+    px = max(0, min(width - 1, int(round(float(x) * (width - 1)))))
+    py = max(0, min(height - 1, int(round(float(y) * (height - 1)))))
+    scoped_key = f"{cache_key}:objects:{width}x{height}"
+    warnings: list[str] = []
+    choices: list[tuple[np.ndarray, int, float, float]] = []
+    with _INFERENCE_LOCK:
+        if not _RUNTIME.available:
+            warnings.append(_RUNTIME.error or "AI 蒙版当前不可用")
+        else:
+            logits, scores = _RUNTIME.predict_raw(
+                working, scoped_key,
+                np.array([[px, py]], dtype=np.float32),
+                np.ones((1,), dtype=np.float32),
+            )
+            max_area = int(width * height * 0.95)
+            min_area = max(16, int(width * height * 0.0002))
+            for raw_mask, score in zip(logits, scores):
+                mask = _component_at_point(raw_mask > 0, px, py)
+                area = int(mask.sum())
+                if min_area <= area <= max_area:
+                    choices.append((mask, area, float(score), _mask_stability(raw_mask)))
+    if not choices:
+        return SmartSegmentResult((width, height), [], "needs_guidance",
+                                  warnings or ["该位置未识别到有效区域，请换个位置或使用画笔"],
+                                  "mobile_sam")
+    choices.sort(key=lambda item: (item[2] * 0.75 + item[3] * 0.25), reverse=True)
+    mask, _, confidence, stability = choices[0]
+    return SmartSegmentResult(
+        (width, height),
+        [_candidate_from_mask("point-region", mask, confidence, stability)],
+        "ok", warnings, "mobile_sam",
+    )
 
 
 def _auto_candidate(image: Image.Image, cache_key: str) -> tuple[np.ndarray | None, float]:
@@ -302,4 +516,8 @@ def segment_floor(image: Image.Image, cache_key: str, *, positive_b64: str = "",
     return working, SegmentResult(refined, confidence, "ok", warnings, "mobile_sam")
 
 
-__all__ = ["segment_floor", "encode_mask_png", "SEGMENT_MAX_SIDE", "SegmentResult"]
+__all__ = [
+    "segment_floor", "encode_mask_png", "SEGMENT_MAX_SIDE", "SegmentResult",
+    "scan_object_masks", "segment_mask_at_point", "encode_mask_rle", "decode_mask_rle",
+    "MaskCandidate", "SmartSegmentResult", "OBJECT_SEGMENT_MAX_SIDE",
+]

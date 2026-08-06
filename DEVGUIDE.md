@@ -109,9 +109,9 @@ Floor_engine_server/
 ├── routes_library.py    上传/历史小样、记录列表与揭示、收藏/评审、导出、用量
 ├── routes_config.py     配方/失败库/连通性/配置/Omakase/模型与选项词表
 ├── routes_tools.py      识色 + 地板可视化渲染 + AI 蒙版/局部与兼容全图校色
-├── routes_inpaint.py    生成式修补（两段式抽卡）
+├── routes_inpaint.py    生成式修补（AI 智能选区 + 两段式抽卡）
 ├── server_state.py      全部可变运行时状态：JOBS/PREVIEWS/INPAINTS 注册表、按模型信号量、spawn；路由经 `state.X` 访问（测试注入唯一入口）
-├── server_schemas.py    27 个 Pydantic 请求模型（前端契约，改字段先确认前端）
+├── server_schemas.py    31 个 Pydantic 请求模型（前端契约，改字段先确认前端）
 ├── server_helpers.py    路由共享工具：URL 映射、job_view、路径守卫(require_*)、上传落盘、导出响应
 ├── image_ops.py         纯 PIL：mask 解码/羽化、EXIF 归一化、修补候选落盘
 ├── task_registry.py     泛型 TaskRegistry：dict+锁+取消集合+trim 四件套的统一容器（jobs/previews/inpaints 共用）
@@ -129,7 +129,7 @@ Floor_engine_server/
 ├── custom_recipes.py    “我的配方”：运行期 JSON 存储及增删改查
 ├── api.py               外部模型客户端：Google/Fal 生图、FAL 持久队列、SD3.5 IP-Adapter、AuraSR、磨缝二改、生成式修补调度
 ├── color_match.py       本地色彩算法：全图 Reinhard、区域诊断、蒙版内稳健 a/b 校正及 4K 分片变体
-├── floor_segmentation.py 离线 MobileSAM ONNX、正负点提示、GrabCut 边缘细化与严格手绘降级
+├── floor_segmentation.py 离线 MobileSAM ONNX、地板正负点提示、通用物件扫描、单点区域提示、RLE 与严格手绘降级
 ├── records.py           记录持久化核心：队列状态、记录 CRUD、结果图落盘、收藏/评审、复盘聚合、迁移/揭示
 ├── usage_stats.py       用量统计：模式×模型×线路计数 + 成本估算（全程吞异常，绝不拖垮生图）
 ├── exports.py           导出层：记录 HTML 对照文档、客户提案 PPTX（单记录/收藏夹）
@@ -140,7 +140,7 @@ Floor_engine_server/
 ├── logging_setup.py     logger（输出到 test/app_local_save.log）
 │
 ├── web/                 ★ Next.js 前端（见 §五）
-├── tests/               pytest：golden 提示词、68 端点路由契约快照、TaskRegistry/用量直测、安全硬化、校色回归
+├── tests/               pytest：golden 提示词、69 端点路由契约快照、AI 智能选区、TaskRegistry/用量直测、安全硬化、校色回归
 ├── assets/              倒角参考图、logo、MobileSAM ONNX 与模型许可证 —— 入库
 ├── requirements.txt     Python 依赖
 ├── 开发日志.md          每次会话改了啥、为什么（最新在最上，接手前先读）
@@ -201,7 +201,7 @@ POST /api/jobs ──秒回 job_id──▶ 后台 asyncio task(routes_jobs._run
 - **上传** `POST /api/uploads/{floor,room,ref}`；品牌 Logo 为 `POST /api/uploads/logo` 与 `POST /api/uploads/logo/clear`。
 - **小样与配方**：`GET /api/swatches/recent` · `GET /api/recipes` · `/api/recipes/custom` 列表/新增/更新/删除。
 - **识色与校色**：`GET /api/floor/analyze`；`POST /api/color-match/segment` 用离线 MobileSAM 自动生成地板蒙版，并接受正/负画笔与上一版蒙版做增量细化；`POST /api/color-match/preview` 支持 `scope=floor_mask|global`。默认局部模式只在 mask 内校正 LAB 的 a/b 色度、保留 L 明暗并向内羽化，区外逐像素不变；旧 `global` 模式仍以 `rect` 取样并作用全图。`POST /api/jobs/{id}/color-match` 与 `/api/records/color-match` 以 PNG 落局部结果，并在旁边留存 `_mask.png` 及记录元数据。
-- **生成式修补** `/api/inpaint`（两段式，实验）：`POST /api/inpaint`（target 三种 kind=job/record/room + mask + n=1~3；响应含 requested_n/effective_n/notice，专职 Eraser 强制 effective_n=1）· `GET {iid}`(轮询候选) · `POST {iid}/apply`(挑中才落目标) · `POST {iid}/cancel` · `GET comfyui/ping`(后端代理探测本地实例)。
+- **生成式修补** `/api/inpaint`：`POST /api/inpaint/segment` 复用与修补一致的三种 `target`，`strategy=scan_objects|point` 分别返回自动物件候选或点击位置区域（行优先 RLE）；两段式生成仍为 `POST /api/inpaint`（mask + n=1~3；响应含 requested_n/effective_n/notice，专职 Eraser 强制 effective_n=1）· `GET {iid}`(轮询候选) · `POST {iid}/apply`(挑中才落目标) · `POST {iid}/cancel` · `GET comfyui/ping`(后端代理探测本地实例)。
 - **评审复盘**：`GET /api/review/summary` 聚合维度统计 · `GET /api/review/gallery?filter=pass|best` 好图样本库。
 - **失败** `POST /api/failure/classify` · `GET /api/failure/rules`；**连通** `GET /api/connection/test`。
 - **配置** `GET/PUT /api/config`；**模型** `GET /api/models`；**选项** `GET /api/options`(前端下拉真源)；**用量** `GET /api/usage`；**健康** `GET /api/healthz`。
@@ -221,11 +221,15 @@ POST /api/jobs ──秒回 job_id──▶ 后台 asyncio task(routes_jobs._run
 - 完整契约与校准说明见 [`SD35_INTEGRATION.md`](SD35_INTEGRATION.md)。
 
 ### 4.6 生成式修补（移除已可用；添加仍为实验能力）
-- **能力**：画笔涂抹 mask → 移除自动外扩覆盖边缘/阴影；添加默认 grow=0，内部羽化确保涂抹区外逐像素不变。三处入口：任务结果、历史记录、房间图生成前清理家具；房间 JPEG 先按 EXIF 方向归一化，避免选区错位。
+- **能力**：AI 智能选区与原有画笔共同生成 mask。移除模式后台扫描可分割物件，点击青色轮廓多选；添加模式点击地面、墙面、桌面等承载区域取得初始选区；画笔补选、橡皮排除、撤销和清空继续保留。移除自动外扩覆盖边缘/阴影；添加默认 grow=0，内部羽化确保选区外逐像素不变。三处入口：任务结果、历史记录、房间图生成前清理家具；房间 JPEG 先按 EXIF 方向归一化，避免选区错位。
+- **智能分割**（`floor_segmentation.py`）：源图工作长边 1280；`scan_object_masks` 用 `8×6` 规则网格取得多尺度候选，经 predicted IoU ≥ 0.70、稳定度 ≥ 0.82、面积、点击连通域过滤，再用 IoU ≥ 0.80 / containment ≥ 0.92 去重，最多返回 24 个候选；`segment_mask_at_point` 对归一化点击坐标选取置信度与稳定度综合最优区域。图像 embedding 复用，完整扫描另有 3 项 LRU 缓存。
+- **点击优先级**：完整扫描每处理一个网格点便释放共享推理锁；前端若点到尚无候选的位置，立即请求 `strategy=point` 并显示“正在识别点击的物件…”，因此点击无需静默等待整图扫描。点选结果会先加入当前候选，后台扫描结束后按 id 合并，不覆盖用户已选内容。
+- **前端合成与传输**：候选 mask 以行优先、0/1 交替计数的无压缩 RLE 返回。`InpaintDialog` 分别维护 AI 选区、手绘包含层和手绘排除层，最终规则为 `union(AI selections, manual include) - manual exclude`；移除/添加各自保存独立编辑状态，提交前导出二值 PNG。
 - **管线**（`api.call_image_inpaint` 统一调度）：`image_ops.prepare_inpaint_masks` 拆出二值 `engine_mask` 与最终 `blend_mask` → 按模式裁上下文（移除偏局部清晰度，添加扩大透视上下文，长边上限 2048）→ 引擎 → `_stitch_inpaint_result` 贴回 → 独立 blend mask 合成。默认 ComfyUI 模板不再重复 GrowMask；自定义 workflow 收到的也是已处理二值 mask。
 - **引擎**：移除默认 `bria-eraser`（可选 finegrain/lama/flux-fill/gemini-mark）；添加默认 `flux-fill`（可选 qwen-inpaint/gemini-mark）。**qwen-inpaint 实测无法做移除**（指令编辑类模型强条件于原图，mask 对模型不可见），只保留在添加列表。`inpaint_provider=comfyui` 时全部走本地 ComfyUI 实例（workflow 模板占位符注入，内置模板在 `assets/comfy_workflows/`）。
 - **提示词与计费**：FLUX/Qwen/Gemini/ComfyUI 使用按模式编译的边界、透视、光照和材质保持指令；BRIA/Finegrain/LaMa 不读取提示词且没有可控 seed，服务端把多候选请求降为 1 次。usage 按实际候选调用数记录，取消不记失败、已出图仍记成功，本地 ComfyUI 归 `local` 且默认 API 成本为 0；apply 不计费。候选以无损 PNG 存 `output_files/_inpaint_candidates/`，apply/cancel/trim/关闭弹窗时清理；同时最多 3 个 running/applying 会话，总表最多 20 条，超限返回 429。
 - **恢复边界**：修补会话仍是进程内临时状态，不承诺服务重启恢复；需要持久恢复的是主作业与 SD/AuraSR Fal 队列句柄。
+- **降级边界**：MobileSAM 不输出类别名称，自动扫描属于 best-effort；模型缺失、加载失败、无稳定候选或阴影/反射边界不完整时，必须提示用户用画笔补选，不能阻断原手绘流程，也不能擅自扩成全图。
 - **成熟度与验收**：2026-07-15 经用户在本地真实工作图上操作确认，当前生成式移除已经达到可用程度，可作为任务结果、历史记录和房间图预处理的正式工具使用。生成式添加仍依赖所选模型对物体尺度、透视和光照的理解，继续标为实验能力；超大选区被缩到 2048 工作分辨率时，局部细节仍可能比原图略软。
 
 ---
@@ -254,7 +258,7 @@ web/src/
 │   ├── CompareSlider.tsx 前后图拖动对比
 │   ├── ColorMatchDialog.tsx 局部/全图模式、1% 自动强度、高级参数与竞态安全预览
 │   ├── ColorMaskEditor.tsx  MobileSAM 初始蒙版、正负画笔、撤销/清空/重新识别
-│   ├── InpaintDialog.tsx 生成式修补（画笔/橡皮/撤销 canvas、1~3 候选抽卡、CompareSlider 对比、apply 落盘）
+│   ├── InpaintDialog.tsx 生成式修补（AI 物件扫描/单点选区、画笔/橡皮/撤销、候选抽卡、对比与 apply）
 │   ├── ThemeProvider.tsx next-themes 接线（浅色/深色/跟随系统）
 │   ├── ImageZoom.tsx     全屏看图；支持原图+结果透明图层，滚轮缩放/拖动/双击复位/Esc
 │   ├── dc-ui.tsx         设计基元：SectionHeader(点头标)·Segmented(分段)·Pill(胶囊)
@@ -278,6 +282,13 @@ web/src/
 2. 有效蒙版触发 `/api/color-match/preview`。后端在 mask 内用 median/MAD 抑制家具与高光离群点，只对 LAB a/b 做受限迁移，L 通道保持原场景光影；合成 mask 只向内部羽化，区外像素不变。
 3. 前端缓存满强度预览，自动强度 `0%~100%` 以 1% 步进在 canvas 即时混合；笔触、参照、高级参数或羽化变化才防抖请求后端，序号机制丢弃过期响应。
 4. 切到 `global` 即恢复旧流程：矩形只作取样/诊断，自动与手动参数作用整张图。局部结果无损 PNG 落盘并保存配套 mask；保存始终是独立动作。
+
+### 5.6 生成式修补智能选区数据流
+1. 打开 `InpaintDialog` 后，前端把原 `target` 传给 `/api/inpaint/segment`；后端继续使用 `_resolve_inpaint_source` 做 job/record/room 路径归属校验和 EXIF 归一化，不接受前端直接指定任意文件。
+2. 移除模式异步请求 `scan_objects` 并绘制青色轮廓；添加模式等待用户点击。若移除模式在扫描结束前点击，或点击位置未命中已有候选，则立即请求 `point`，UI 必须显示忙碌反馈。
+3. 前端将 RLE 解码为本地 mask 与 owner map：轮廓层只负责命中测试和提示，红色层表示最终被选区域；点击候选可切换，多候选重叠时按 owner 命中，后台返回不得清空点击期间加入的候选。
+4. AI 选区、画笔包含层、画笔排除层只在前端合成，沿用原有 ≤2048 长边 mask 画布；`POST /api/inpaint` 的两段式生成/计费/候选/apply 契约不变，因此智能选区不接触生成模型选择和落盘逻辑。
+5. 弹窗每次切换移除/添加模式都恢复该模式自己的蒙版状态；AI 失败时保留画笔工具并显示 warnings，禁止无反馈 return。
 
 ---
 
@@ -310,7 +321,7 @@ web/src/
 6. 在 **`开发日志.md` 顶部追加一条**（改了啥、为什么）。
 7. 提交（见 §九）。
 
-**测试**：`cd Floor_engine_server && python -m pytest`（引擎层 golden 提示词、安全硬化、人工评审元数据、AI/手绘蒙版与局部/全图校色、SD 提示词/IP-Adapter/FAL 队列恢复、生成式修补的模式化 mask/提示词/EXIF/候选计费/无损落盘和非校色新功能回归；当前 **178 项**）。本机若系统 `python` 无 pytest，可用项目虚拟环境：`.venv/bin/python -m pytest`。`tests/golden/` 基准入库，缓存不入。
+**测试**：`cd Floor_engine_server && python -m pytest`（引擎层 golden 提示词、安全硬化、人工评审元数据、AI/手绘蒙版与局部/全图校色、SD 提示词/IP-Adapter/FAL 队列恢复、生成式修补智能选区的 RLE/扫描过滤/点击策略/路由契约，以及模式化 mask/提示词/EXIF/候选计费/无损落盘和非校色新功能回归；当前 **186 项**）。本机若系统 `python` 无 pytest，可用项目虚拟环境：`.venv/bin/python -m pytest`。`tests/golden/` 基准入库，缓存不入。
 
 ---
 

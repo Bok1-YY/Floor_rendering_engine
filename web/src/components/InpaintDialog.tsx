@@ -8,6 +8,7 @@ import type {
   InpaintTargetPayload,
   JobView,
   ModelKey,
+  SmartMaskCandidate,
 } from "@/lib/types";
 import { toast } from "sonner";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
@@ -39,6 +40,37 @@ const UNDO_LIMIT = 20;
 // 纯 eraser 模型不吃 prompt（BRIA/Finegrain/LaMa）；指令式模型把 prompt 当补充说明
 const PURE_ERASERS = new Set(["bria-eraser", "finegrain-eraser", "lama"]);
 
+type MaskMode = "remove" | "add";
+type MaskTool = "smart" | "brush" | "erase";
+type MaskLayers = { smart: HTMLCanvasElement; include: HTMLCanvasElement; exclude: HTMLCanvasElement };
+type MaskSnapshot = { smart: string; include: string; exclude: string; selected: string[] };
+
+function makeCanvas(width: number, height: number) {
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  return canvas;
+}
+
+function canvasDataUrl(canvas: HTMLCanvasElement) {
+  return canvas.toDataURL("image/png");
+}
+
+function clearCanvas(canvas: HTMLCanvasElement) {
+  canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function forEachMaskRun(candidate: SmartMaskCandidate, visit: (start: number, end: number) => void) {
+  let offset = 0;
+  let selected = false;
+  for (const count of candidate.rle) {
+    const end = offset + Math.max(0, count | 0);
+    if (selected && end > offset) visit(offset, end);
+    offset = end;
+    selected = !selected;
+  }
+}
+
 function toTargetPayload(t: InpaintTarget): InpaintTargetPayload {
   if (t.kind === "job") return { kind: "job", jid: t.jobId, stage: t.stage, image_rel: t.imageRel };
   if (t.kind === "record")
@@ -59,12 +91,18 @@ function InpaintSession({
   onDone,
   onRoomCleaned,
 }: InpaintDialogProps) {
-  const [mode, setMode] = useState<"remove" | "add">("remove");
+  const [mode, setMode] = useState<MaskMode>("remove");
   const [prompt, setPrompt] = useState("");
   const [brush, setBrush] = useState(36); // 屏幕像素直径
-  const [eraser, setEraser] = useState(false);
+  const [tool, setTool] = useState<MaskTool>("smart");
   const [hasMask, setHasMask] = useState(false);
   const [canUndo, setCanUndo] = useState(false);
+  const [scanBusy, setScanBusy] = useState(false);
+  const [pointBusy, setPointBusy] = useState(false);
+  const smartBusy = scanBusy || pointBusy;
+  const [smartMessage, setSmartMessage] = useState("正在后台识别物件…");
+  const [scanCandidates, setScanCandidates] = useState<SmartMaskCandidate[]>([]);
+  const [selectedCandidateIds, setSelectedCandidateIds] = useState<string[]>([]);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [removeGrow, setRemoveGrow] = useState(8);
   const [addGrow, setAddGrow] = useState(0);
@@ -88,21 +126,32 @@ function InpaintSession({
 
   const boxRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const candidateCanvasRef = useRef<HTMLCanvasElement>(null);
   const cursorRef = useRef<HTMLDivElement>(null);
   const drawing = useRef(false);
   const lastPt = useRef<{ x: number; y: number } | null>(null);
-  const undoStack = useRef<string[]>([]);
-  const eraserRef = useRef(false);
+  const layersRef = useRef<Record<MaskMode, MaskLayers> | null>(null);
+  const undoStacksRef = useRef<Record<MaskMode, MaskSnapshot[]>>({ remove: [], add: [] });
+  const selectedIdsRef = useRef<Set<string>>(new Set());
+  const ownerMapRef = useRef<Int16Array | null>(null);
+  const scanCandidatesRef = useRef<SmartMaskCandidate[]>([]);
+  const scanSizeRef = useRef({ width: 0, height: 0 });
+  const scanAbortRef = useRef<AbortController | null>(null);
+  const scanStartedRef = useRef(false);
+  const smartRequestSeq = useRef(0);
+  const pointBusyRef = useRef(false);
+  const composeFrameRef = useRef<number | null>(null);
   const brushRef = useRef(36);
+  const toolRef = useRef<MaskTool>("smart");
   const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const submitLock = useRef(false);
   const taskIdRef = useRef("");
   const pickIdRef = useRef("");
   const openRef = useRef(open);
-  const modeRef = useRef<"remove" | "add">("remove");
+  const modeRef = useRef<MaskMode>("remove");
   useEffect(() => {
-    eraserRef.current = eraser;
-  }, [eraser]);
+    toolRef.current = tool;
+  }, [tool]);
   useEffect(() => {
     brushRef.current = brush;
   }, [brush]);
@@ -131,6 +180,9 @@ function InpaintSession({
   useEffect(
     () => () => {
       if (pollTimer.current) clearTimeout(pollTimer.current);
+      if (composeFrameRef.current !== null) cancelAnimationFrame(composeFrameRef.current);
+      scanAbortRef.current?.abort();
+      smartRequestSeq.current++;
       const iid = taskIdRef.current || pickIdRef.current;
       if (iid) void api.cancelInpaint(iid).catch(() => {});
     },
@@ -152,23 +204,319 @@ function InpaintSession({
   const setGrow = mode === "remove" ? setRemoveGrow : setAddGrow;
   const setFeather = mode === "remove" ? setRemoveFeather : setAddFeather;
 
-  function changeMode(next: "remove" | "add") {
+  function activeLayers(which: MaskMode = modeRef.current) {
+    return layersRef.current?.[which] || null;
+  }
+
+  function setSelectedIds(ids: Set<string>) {
+    selectedIdsRef.current = ids;
+    setSelectedCandidateIds(Array.from(ids));
+  }
+
+  function recompose(which: MaskMode = modeRef.current, updateMaskState = true) {
+    if (which !== modeRef.current) return;
+    const canvas = canvasRef.current;
+    const layers = activeLayers(which);
+    const ctx = canvas?.getContext("2d", { willReadFrequently: true });
+    if (!canvas || !ctx || !layers) return;
+    ctx.globalCompositeOperation = "source-over";
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(layers.smart, 0, 0);
+    ctx.drawImage(layers.include, 0, 0);
+    ctx.globalCompositeOperation = "destination-out";
+    ctx.drawImage(layers.exclude, 0, 0);
+    ctx.globalCompositeOperation = "source-in";
+    ctx.fillStyle = "rgba(255,60,60,0.92)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.globalCompositeOperation = "source-over";
+    if (updateMaskState) setHasMask(maskNotEmpty());
+  }
+
+  function scheduleRecompose() {
+    if (composeFrameRef.current !== null) return;
+    const which = modeRef.current;
+    composeFrameRef.current = requestAnimationFrame(() => {
+      composeFrameRef.current = null;
+      recompose(which, false);
+    });
+  }
+
+  function pushUndo(which: MaskMode = modeRef.current) {
+    const layers = activeLayers(which);
+    if (!layers) return;
+    const stack = undoStacksRef.current[which];
+    stack.push({
+      smart: canvasDataUrl(layers.smart),
+      include: canvasDataUrl(layers.include),
+      exclude: canvasDataUrl(layers.exclude),
+      selected: which === "remove" ? Array.from(selectedIdsRef.current) : [],
+    });
+    if (stack.length > UNDO_LIMIT) stack.shift();
+    if (which === modeRef.current) setCanUndo(true);
+  }
+
+  function loadCanvas(canvas: HTMLCanvasElement, value: string) {
+    return new Promise<void>((resolve) => {
+      const image = new Image();
+      image.onload = () => {
+        clearCanvas(canvas);
+        canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
+        resolve();
+      };
+      image.onerror = () => resolve();
+      image.src = value;
+    });
+  }
+
+  function drawRleMask(targetCanvas: HTMLCanvasElement, candidate: SmartMaskCandidate,
+                       width: number, height: number) {
+    if (!width || !height) return;
+    const source = makeCanvas(width, height);
+    const ctx = source.getContext("2d");
+    if (!ctx) return;
+    const pixels = ctx.createImageData(width, height);
+    forEachMaskRun(candidate, (start, end) => {
+      for (let index = start; index < end; index++) {
+        const p = index * 4;
+        pixels.data[p] = pixels.data[p + 1] = pixels.data[p + 2] = 255;
+        pixels.data[p + 3] = 255;
+      }
+    });
+    ctx.putImageData(pixels, 0, 0);
+    const target = targetCanvas.getContext("2d");
+    if (!target) return;
+    target.imageSmoothingEnabled = false;
+    target.drawImage(source, 0, 0, targetCanvas.width, targetCanvas.height);
+  }
+
+  function rebuildRemoveSmartLayer() {
+    const layers = activeLayers("remove");
+    if (!layers) return;
+    clearCanvas(layers.smart);
+    const { width, height } = scanSizeRef.current;
+    for (const candidate of scanCandidatesRef.current) {
+      if (selectedIdsRef.current.has(candidate.id)) {
+        drawRleMask(layers.smart, candidate, width, height);
+      }
+    }
+    recompose("remove");
+  }
+
+  function drawCandidateOverlay() {
+    const canvas = candidateCanvasRef.current;
+    const candidates = scanCandidatesRef.current;
+    const { width, height } = scanSizeRef.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx) return;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (modeRef.current !== "remove" || !width || !height || !candidates.length) {
+      ownerMapRef.current = null;
+      return;
+    }
+    const owner = new Int16Array(width * height);
+    owner.fill(-1);
+    const ordered = candidates.map((candidate, index) => ({ candidate, index }))
+      .sort((a, b) => b.candidate.area - a.candidate.area);
+    for (const { candidate, index } of ordered) {
+      forEachMaskRun(candidate, (start, end) => owner.fill(index, start, end));
+    }
+    ownerMapRef.current = owner;
+    const preview = makeCanvas(width, height);
+    const previewCtx = preview.getContext("2d");
+    if (!previewCtx) return;
+    const pixels = previewCtx.createImageData(width, height);
+    for (let index = 0; index < owner.length; index++) {
+      const candidateIndex = owner[index];
+      if (candidateIndex < 0) continue;
+      const x = index % width;
+      const y = Math.floor(index / width);
+      const edge = x === 0 || y === 0 || x === width - 1 || y === height - 1 ||
+        owner[index - 1] !== candidateIndex || owner[index + 1] !== candidateIndex ||
+        owner[index - width] !== candidateIndex || owner[index + width] !== candidateIndex;
+      const selected = selectedIdsRef.current.has(candidates[candidateIndex].id);
+      const p = index * 4;
+      pixels.data[p] = selected ? 255 : 20;
+      pixels.data[p + 1] = selected ? 70 : 210;
+      pixels.data[p + 2] = selected ? 70 : 255;
+      pixels.data[p + 3] = edge ? 220 : selected ? 45 : 12;
+    }
+    previewCtx.putImageData(pixels, 0, 0);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(preview, 0, 0, canvas.width, canvas.height);
+  }
+
+  async function startObjectScan(force = false) {
+    if (scanStartedRef.current && !force) return;
+    scanStartedRef.current = true;
+    scanAbortRef.current?.abort();
+    const controller = new AbortController();
+    scanAbortRef.current = controller;
+    setScanBusy(true);
+    setSmartMessage("正在后台识别物件，画笔仍可使用…");
+    try {
+      const result = await api.inpaintSegment({
+        target: toTargetPayload(target),
+        strategy: "scan_objects",
+      }, controller.signal);
+      if (controller.signal.aborted) return;
+      const clickedCandidates = scanCandidatesRef.current.filter((candidate) => candidate.id.startsWith("point-object-"));
+      const mergedCandidates = [...result.candidates, ...clickedCandidates];
+      scanCandidatesRef.current = mergedCandidates;
+      scanSizeRef.current = { width: result.width, height: result.height };
+      setScanCandidates(mergedCandidates);
+      if (modeRef.current === "remove" && !pointBusyRef.current) {
+        setSmartMessage(mergedCandidates.length
+          ? `已识别 ${mergedCandidates.length} 个候选，可在图上点选多个物件`
+          : result.warnings[0] || "未识别到物件，请使用画笔涂抹");
+      }
+      requestAnimationFrame(drawCandidateOverlay);
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        setSmartMessage(`智能识别失败：${(error as Error).message}；仍可使用画笔`);
+      }
+    } finally {
+      if (!controller.signal.aborted) setScanBusy(false);
+    }
+  }
+
+  async function selectPointRegion(p: { x: number; y: number }, which: MaskMode = "add") {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    if (pointBusyRef.current) {
+      setSmartMessage("AI 正在处理上一次点击，请稍等片刻");
+      return;
+    }
+    const seq = ++smartRequestSeq.current;
+    pointBusyRef.current = true;
+    setPointBusy(true);
+    setSmartMessage(which === "remove" ? "正在识别点击的物件…" : "正在识别点击位置…");
+    try {
+      const result = await api.inpaintSegment({
+        target: toTargetPayload(target),
+        strategy: "point",
+        point: { x: p.x / canvas.width, y: p.y / canvas.height },
+      });
+      if (seq !== smartRequestSeq.current || !result.candidates[0]) {
+        if (seq === smartRequestSeq.current) {
+          setSmartMessage(result.warnings[0] || "该位置未识别到区域，请换个位置或用画笔");
+        }
+        return;
+      }
+      if (which === "remove") {
+        pushUndo("remove");
+        const candidate = { ...result.candidates[0], id: `point-object-${seq}` };
+        scanCandidatesRef.current = [...scanCandidatesRef.current, candidate];
+        scanSizeRef.current = { width: result.width, height: result.height };
+        setScanCandidates(scanCandidatesRef.current);
+        const next = new Set(selectedIdsRef.current);
+        next.add(candidate.id);
+        setSelectedIds(next);
+        rebuildRemoveSmartLayer();
+        drawCandidateOverlay();
+        setSmartMessage(`已按点击位置选中物件 · 置信度 ${Math.round(candidate.confidence * 100)}%，可继续多选或用画笔修正`);
+      } else {
+        pushUndo("add");
+        const layers = activeLayers("add");
+        if (!layers) return;
+        clearCanvas(layers.smart);
+        clearCanvas(layers.include);
+        clearCanvas(layers.exclude);
+        drawRleMask(layers.smart, result.candidates[0], result.width, result.height);
+        recompose("add");
+        setSmartMessage(`已识别目标区域 · 置信度 ${Math.round(result.candidates[0].confidence * 100)}%，可用画笔收窄或补充`);
+      }
+    } catch (error) {
+      if (seq === smartRequestSeq.current) {
+        setSmartMessage(`点选识别失败：${(error as Error).message}；仍可使用画笔`);
+      }
+    } finally {
+      if (seq === smartRequestSeq.current) {
+        pointBusyRef.current = false;
+        setPointBusy(false);
+      }
+    }
+  }
+
+  function toggleCandidateAt(p: { x: number; y: number }) {
+    const owner = ownerMapRef.current;
+    const canvas = canvasRef.current;
+    const { width, height } = scanSizeRef.current;
+    if (!canvas) return;
+    if (pointBusyRef.current) {
+      setSmartMessage("AI 正在处理上一次点击，请稍等片刻");
+      return;
+    }
+    if (!owner || !width || !height) {
+      void selectPointRegion(p, "remove");
+      return;
+    }
+    const x = Math.max(0, Math.min(width - 1, Math.floor(p.x / canvas.width * width)));
+    const y = Math.max(0, Math.min(height - 1, Math.floor(p.y / canvas.height * height)));
+    const candidateIndex = owner[y * width + x];
+    const candidate = scanCandidatesRef.current[candidateIndex];
+    if (!candidate) {
+      void selectPointRegion(p, "remove");
+      return;
+    }
+    pushUndo("remove");
+    const next = new Set(selectedIdsRef.current);
+    if (next.has(candidate.id)) next.delete(candidate.id);
+    else next.add(candidate.id);
+    setSelectedIds(next);
+    rebuildRemoveSmartLayer();
+    requestAnimationFrame(drawCandidateOverlay);
+  }
+
+  function changeMode(next: MaskMode) {
     modeRef.current = next;
     setMode(next);
+    setTool("smart");
+    setSmartMessage(next === "add"
+      ? "智能选区：点击地面、墙面或桌面，再用画笔收窄"
+      : scanCandidatesRef.current.length
+        ? `已识别 ${scanCandidatesRef.current.length} 个候选，可在图上点选多个物件`
+        : scanBusy ? "正在后台识别物件；也可以直接点击图中物件优先识别" : "未识别到物件，请使用画笔涂抹");
+    setCanUndo(undoStacksRef.current[next].length > 0);
+    requestAnimationFrame(() => {
+      recompose(next);
+      drawCandidateOverlay();
+    });
     if (next === "remove" && inpaintConfigLoaded && inpaintProvider === "fal" && PURE_ERASERS.has(removeModel)) {
       setNCount(1);
     }
   }
 
   // ── 画布 ──
-  const onImgLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
+  function onImgLoad(e: React.SyntheticEvent<HTMLImageElement>) {
     const img = e.currentTarget;
     const canvas = canvasRef.current;
     if (!canvas || !img.naturalWidth) return;
     const scale = Math.min(1, MASK_MAX_SIDE / Math.max(img.naturalWidth, img.naturalHeight));
     canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
     canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
-  }, []);
+    if (candidateCanvasRef.current) {
+      candidateCanvasRef.current.width = canvas.width;
+      candidateCanvasRef.current.height = canvas.height;
+    }
+    const existing = layersRef.current;
+    if (!existing || existing.remove.smart.width !== canvas.width || existing.remove.smart.height !== canvas.height) {
+      layersRef.current = {
+        remove: {
+          smart: makeCanvas(canvas.width, canvas.height),
+          include: makeCanvas(canvas.width, canvas.height),
+          exclude: makeCanvas(canvas.width, canvas.height),
+        },
+        add: {
+          smart: makeCanvas(canvas.width, canvas.height),
+          include: makeCanvas(canvas.width, canvas.height),
+          exclude: makeCanvas(canvas.width, canvas.height),
+        },
+      };
+    }
+    recompose();
+    drawCandidateOverlay();
+    void startObjectScan();
+  }
 
   function toCanvas(e: React.PointerEvent): { x: number; y: number; ratio: number } | null {
     const el = boxRef.current;
@@ -181,30 +529,38 @@ function InpaintSession({
   }
 
   function strokeTo(p: { x: number; y: number; ratio: number }) {
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext("2d");
-    if (!canvas || !ctx) return;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.lineWidth = Math.max(2, brushRef.current * p.ratio);
-    ctx.globalCompositeOperation = eraserRef.current ? "destination-out" : "source-over";
-    ctx.strokeStyle = "rgba(255,60,60,0.9)";
-    ctx.beginPath();
+    const layers = activeLayers();
+    if (!layers || toolRef.current === "smart") return;
+    const primary = toolRef.current === "erase" ? layers.exclude : layers.include;
+    const opposite = toolRef.current === "erase" ? layers.include : layers.exclude;
     const from = lastPt.current ?? { x: p.x, y: p.y };
-    ctx.moveTo(from.x, from.y);
-    ctx.lineTo(p.x + (from.x === p.x ? 0.01 : 0), p.y);
-    ctx.stroke();
+    for (const [layer, operation] of [[primary, "source-over"], [opposite, "destination-out"]] as const) {
+      const ctx = layer.getContext("2d");
+      if (!ctx) continue;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.lineWidth = Math.max(2, brushRef.current * p.ratio);
+      ctx.globalCompositeOperation = operation;
+      ctx.strokeStyle = "white";
+      ctx.beginPath();
+      ctx.moveTo(from.x, from.y);
+      ctx.lineTo(p.x + (from.x === p.x ? 0.01 : 0), p.y);
+      ctx.stroke();
+    }
     lastPt.current = { x: p.x, y: p.y };
+    scheduleRecompose();
   }
 
   function onDown(e: React.PointerEvent) {
     const p = toCanvas(e);
-    const canvas = canvasRef.current;
-    if (!p || !canvas) return;
+    if (!p || !canvasRef.current || task || submitting) return;
+    if (toolRef.current === "smart") {
+      if (modeRef.current === "remove") toggleCandidateAt(p);
+      else void selectPointRegion(p);
+      return;
+    }
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    undoStack.current.push(canvas.toDataURL());
-    if (undoStack.current.length > UNDO_LIMIT) undoStack.current.shift();
-    setCanUndo(true);
+    pushUndo();
     drawing.current = true;
     lastPt.current = null;
     strokeTo(p);
@@ -213,12 +569,12 @@ function InpaintSession({
   function onMove(e: React.PointerEvent) {
     const cursor = cursorRef.current;
     const el = boxRef.current;
-    if (cursor && el) {
+    if (cursor && el && toolRef.current !== "smart") {
       const r = el.getBoundingClientRect();
       cursor.style.left = `${e.clientX - r.left}px`;
       cursor.style.top = `${e.clientY - r.top}px`;
       cursor.style.display = "block";
-    }
+    } else if (cursor) cursor.style.display = "none";
     if (!drawing.current) return;
     const p = toCanvas(e);
     if (p) strokeTo(p);
@@ -228,7 +584,11 @@ function InpaintSession({
     if (!drawing.current) return;
     drawing.current = false;
     lastPt.current = null;
-    setHasMask(maskNotEmpty());
+    if (composeFrameRef.current !== null) {
+      cancelAnimationFrame(composeFrameRef.current);
+      composeFrameRef.current = null;
+    }
+    recompose();
   }
 
   function maskNotEmpty(): boolean {
@@ -241,30 +601,34 @@ function InpaintSession({
   }
 
   function undo() {
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext("2d");
-    const snap = undoStack.current.pop();
-    if (!canvas || !ctx || snap === undefined) return;
-    setCanUndo(undoStack.current.length > 0);
-    const img = new Image();
-    img.onload = () => {
-      ctx.globalCompositeOperation = "source-over";
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.drawImage(img, 0, 0);
-      setHasMask(maskNotEmpty());
-    };
-    img.src = snap;
+    const which = modeRef.current;
+    const stack = undoStacksRef.current[which];
+    const snap = stack.pop();
+    const layers = activeLayers(which);
+    if (!snap || !layers) return;
+    setCanUndo(stack.length > 0);
+    void Promise.all([
+      loadCanvas(layers.smart, snap.smart),
+      loadCanvas(layers.include, snap.include),
+      loadCanvas(layers.exclude, snap.exclude),
+    ]).then(() => {
+      if (which === "remove") setSelectedIds(new Set(snap.selected));
+      recompose(which);
+      drawCandidateOverlay();
+    });
   }
 
   function clearMask() {
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext("2d");
-    if (!canvas || !ctx) return;
-    undoStack.current.push(canvas.toDataURL());
-    if (undoStack.current.length > UNDO_LIMIT) undoStack.current.shift();
-    setCanUndo(true);
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    setHasMask(false);
+    const which = modeRef.current;
+    const layers = activeLayers(which);
+    if (!layers) return;
+    pushUndo(which);
+    clearCanvas(layers.smart);
+    clearCanvas(layers.include);
+    clearCanvas(layers.exclude);
+    if (which === "remove") setSelectedIds(new Set());
+    recompose(which);
+    drawCandidateOverlay();
   }
 
   /** 涂抹层 → 黑白 mask PNG（alpha>0 = 白 = 重绘区），返回纯 base64。 */
@@ -517,7 +881,7 @@ function InpaintSession({
           <div>
             <div className="text-[15.5px] font-bold">生成式修补</div>
             <div className="mt-0.5 text-[12px] text-muted-foreground">
-              用画笔涂抹要处理的区域：移除会适度外扩，请把物体及阴影一起涂上；添加默认严格限制在涂抹区。最终处理范围之外保持原图。
+              智能选区可自动贴合物件或承载区域；画笔和橡皮始终保留，用于补阴影、收窄或修正边缘。最终处理范围之外保持原图。
             </div>
           </div>
 
@@ -527,7 +891,7 @@ function InpaintSession({
           <div
             ref={boxRef}
             className="relative select-none"
-            style={{ touchAction: "none", cursor: "none" }}
+            style={{ touchAction: "none", cursor: tool === "smart" ? "crosshair" : "none" }}
             onPointerDown={onDown}
             onPointerMove={onMove}
             onPointerUp={onUp}
@@ -544,8 +908,12 @@ function InpaintSession({
               className="block max-h-[58vh] max-w-full"
             />
             <canvas
+              ref={candidateCanvasRef}
+              className="pointer-events-none absolute inset-0 h-full w-full"
+            />
+            <canvas
               ref={canvasRef}
-              className="absolute inset-0 h-full w-full opacity-60"
+              className="pointer-events-none absolute inset-0 h-full w-full opacity-60"
             />
             {/* 笔刷光标 */}
             <div
@@ -581,6 +949,18 @@ function InpaintSession({
           </div>
           </div>
 
+          <div className="flex min-h-5 flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+            <span>{smartBusy ? "⏳ " : ""}{smartMessage}</span>
+            {mode === "remove" && selectedCandidateIds.length > 0 && (
+              <span className="font-semibold text-primary">已选 {selectedCandidateIds.length} 个物件</span>
+            )}
+            {mode === "remove" && !smartBusy && scanCandidates.length === 0 && (
+              <button type="button" className="font-semibold text-primary hover:underline" onClick={() => void startObjectScan(true)}>
+                重新识别
+              </button>
+            )}
+          </div>
+
           {/* 工具行 */}
           <div className="flex flex-wrap items-center gap-2.5">
             <div className="flex items-center gap-1.5">
@@ -589,6 +969,37 @@ function InpaintSession({
               </button>
               <button className={modeBtn(mode === "add")} onClick={() => changeMode("add")}>
                 ✨ 生成式添加
+              </button>
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                className={`${toolBtn} ${tool === "smart" ? "border-primary text-primary" : ""}`}
+                onClick={() => {
+                  setTool("smart");
+                  setSmartMessage(mode === "add"
+                    ? "智能选区：点击地面、墙面或桌面，再用画笔收窄"
+                    : smartBusy
+                      ? "物件仍在后台识别，请稍等片刻；也可以切换画笔直接涂抹"
+                      : scanCandidates.length
+                        ? `已识别 ${scanCandidates.length} 个候选：点青色轮廓；点其他位置也会单独识别`
+                        : "点击图中物件即可识别；没有命中时可使用画笔补选");
+                }}
+                title={mode === "remove" ? "点击青色轮廓选择或取消物件" : "点击地面、墙面或桌面识别目标区域"}
+              >
+                {mode === "remove" ? "◎ 智能选物" : "◎ 智能选区"}
+              </button>
+              <button
+                className={`${toolBtn} ${tool === "brush" ? "border-primary text-primary" : ""}`}
+                onClick={() => setTool("brush")}
+              >
+                🖌 画笔
+              </button>
+              <button
+                className={`${toolBtn} ${tool === "erase" ? "border-primary text-primary" : ""}`}
+                onClick={() => setTool("erase")}
+                title="擦掉智能或手工选区中多余的部分"
+              >
+                🧽 橡皮
               </button>
             </div>
             <div className="flex min-w-[180px] flex-1 items-center gap-2">
@@ -604,13 +1015,6 @@ function InpaintSession({
                 {brush}
               </span>
             </div>
-            <button
-              className={`${toolBtn} ${eraser ? "border-primary text-primary" : ""}`}
-              onClick={() => setEraser((v) => !v)}
-              title="橡皮擦：擦掉多涂的部分"
-            >
-              🧽 橡皮 {eraser ? "开" : "关"}
-            </button>
             <button className={toolBtn} onClick={undo} disabled={!canUndo}>
               ↩ 撤销
             </button>
@@ -671,14 +1075,14 @@ function InpaintSession({
             <button
               onClick={submit}
               disabled={!hasMask || !!task || submitting}
-              title={!hasMask ? "请先涂抹选区" : undefined}
+              title={!hasMask ? "请先智能选择或涂抹选区" : undefined}
               className="h-9 flex-none rounded-[9px] bg-primary px-4 text-[13px] font-bold text-primary-foreground hover:bg-primary-hover disabled:opacity-50"
             >
               {task || submitting
                 ? "处理中…"
                 : mode === "remove"
-                ? `移除所涂区域 ×${nCount}`
-                : `在所涂区域生成 ×${nCount}`}
+                ? `移除选中区域 ×${nCount}`
+                : `在选中区域生成 ×${nCount}`}
             </button>
           </div>
 
