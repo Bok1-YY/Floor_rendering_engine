@@ -50,6 +50,12 @@ def test_sd_prompt_is_separate_positive_and_negative():
     assert bundle.compiler_version == "sd35-v1"
 
 
+def test_sd_prompt_uses_custom_floor_coverage():
+    bundle = compile_sd35_prompt(_params(floor_coverage_min=55, floor_coverage_max=65))
+    assert "approximately 55 to 65 percent of the frame" in bundle.positive
+    assert "approximately 40 to 50 percent of the frame" not in bundle.positive
+
+
 def test_sd_prompt_seam_rules_are_conditional():
     seamless = compile_sd35_prompt(_params(seam_type="无缝拼接 (SPC/LVT专用)"))
     bevel = compile_sd35_prompt(_params(seam_type="圆弧倒角 (Pressed Bevel)"))

@@ -2,23 +2,27 @@
 
 > 地板行业**效果图生成**引擎的商业版。上传地板小样 → 自动识色/智能配方 → 配参数 → 调 Gemini/Fal 出图（B2 + Pro + 可选 SD 3.5，支持 4K）。
 > 本仓库 `Floor_engine_server/` 是从原型 `test/floor_engine/` fork 出来的**商业主线**：把界面从 NiceGUI 迁到「FastAPI 无头后端 + Next.js 真前端」，引擎逻辑原样复用。
-> 本手册按当前真实代码（2026-07）维护，**开头就是启动**。读完「零」即可跑起来；要改代码再往下看。
+> 本手册按当前真实代码（2026-08）维护，**开头就是启动**。读完「零」即可跑起来；要改代码再往下看。
+
+面向招聘与产品评审的阅读入口：[中文产品案例](./docs/PRODUCT_CASE_STUDY.zh-CN.md) / [English case study](./docs/PRODUCT_CASE_STUDY.en.md)。README 负责说明用户价值与业务结果，本手册聚焦实现边界、数据流和开发约定。
 
 ---
 
 ## 零、快速启动 ⭐（先看这里）
 
 ### 0.1 一键启动（推荐）
-双击仓库**上一级** `test/` 目录下的一键启动脚本（脚本在 `test/`，不在本仓库内）：
-- **Windows**：`test/一键启动.bat`
-- **Linux / macOS**：`test/一键启动.sh`
+Windows 直接双击仓库内脚本：
+- `start-windows.bat`：生产静态前端与 FastAPI 合一运行在 **7870**；
+- `dev-windows.bat`：FastAPI **7870** + Next.js dev **3000** 两个进程。
 
-它会：
+Linux / macOS 仍可使用原有上级目录启动脚本，或按 0.2 的命令手动启动。
+
+Windows 开发脚本会：
 1. 起**后端** FastAPI（端口 **7870**）—— 独立终端窗口；
 2. 起**前端** Next.js dev（端口 **3000**）—— 独立终端窗口；
 3. 等 8 秒让前端编译完，自动打开浏览器 `http://localhost:3000`。
 
-关掉某个终端窗口 = 停掉对应服务。
+关掉某个终端窗口 = 停掉对应服务。Windows 一体运行只保留一个后端窗口，前端由 FastAPI 静态托管。
 
 ### 0.2 手动启动（开发时常用）
 路径以仓库上一级的 `test/` 目录为基准（下面 `<项目根>` 代表你本地放 `test/` 的位置）。
@@ -34,6 +38,9 @@ npm run dev                                        # → http://localhost:3000
 浏览器开 **http://localhost:3000**。后端健康检查：`GET http://127.0.0.1:7870/api/healthz` → `{"ok":true}`。
 
 ### 0.3 首次准备（只做一次）
+Windows 新电脑直接运行桌面的 `Install_Project_Dependencies.bat`，它会创建 `.venv`、安装 Python/Node
+依赖并构建前端。手动方式如下：
+
 ```bash
 # 引擎/后端 Python 依赖（建议先建虚拟环境后再装）
 pip install -r Floor_engine_server/requirements-dev.txt
@@ -321,7 +328,7 @@ web/src/
 6. 在 **`开发日志.md` 顶部追加一条**（改了啥、为什么）。
 7. 提交（见 §九）。
 
-**测试**：`cd Floor_engine_server && python -m pytest`（引擎层 golden 提示词、安全硬化、人工评审元数据、AI/手绘蒙版与局部/全图校色、SD 提示词/IP-Adapter/FAL 队列恢复、生成式修补智能选区的 RLE/扫描过滤/点击策略/路由契约，以及模式化 mask/提示词/EXIF/候选计费/无损落盘和非校色新功能回归；当前 **186 项**）。本机若系统 `python` 无 pytest，可用项目虚拟环境：`.venv/bin/python -m pytest`。`tests/golden/` 基准入库，缓存不入。
+**测试**：`cd Floor_engine_server && python -m pytest`（引擎层 golden 提示词、安全硬化、人工评审元数据、AI/手绘蒙版与局部/全图校色、SD 提示词/IP-Adapter/FAL 队列恢复、生成式修补智能选区的 RLE/扫描过滤/点击策略/路由契约，以及模式化 mask/提示词/EXIF/候选计费/无损落盘和非校色新功能回归；当前 **207 项**）。本机若系统 `python` 无 pytest，可用项目虚拟环境：`.venv/bin/python -m pytest`。`tests/golden/` 基准入库，缓存不入。
 
 ---
 

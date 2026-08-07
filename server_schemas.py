@@ -6,7 +6,7 @@
 """
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 # ── 任务提交/预览/二改 ──────────────────────────────────────
@@ -29,6 +29,8 @@ class GenParams(BaseModel):
     floor_size: str = ''
     seam_type: str = '无缝拼接 (SPC/LVT专用)'
     glossiness: str = '哑光 (3-5°)'
+    floor_coverage_min: int = Field(default=40, ge=10, le=80)
+    floor_coverage_max: int = Field(default=50, ge=10, le=80)
     angle: str = '28mm lens (Wide)'
     aspect_ratio: str = '4:3'
     resolution: str = '4K'
@@ -51,8 +53,15 @@ class GenParams(BaseModel):
     cn_facilities: Optional[List[str]] = None
     style_ref_correction: str = ''
     scene_override: str = ''   # Omakase 模式：AI 原创场景散文，接管整个场景层(仅 Omakase 工作流生效)
+    cinematic_enabled: bool = False  # 电影真实感：宠物/含生命主体 Omakase 可由前端智能开启
     panel_submode: str = '再设计'   # 墙板模式子行为：再设计 / 替换 / 纯原创(仅墙板模式生效)
     panel_size: str = ''            # 墙板尺寸/板型(预设或自定义；仅墙板再设计/纯原创生效)
+
+    @model_validator(mode='after')
+    def floor_coverage_range_is_ordered(self):
+        if self.floor_coverage_min > self.floor_coverage_max:
+            raise ValueError('floor_coverage_min must not exceed floor_coverage_max')
+        return self
 
 
 class SDOptions(BaseModel):
@@ -135,6 +144,7 @@ class ConfigPatch(BaseModel):
     image_provider: Optional[Literal['google', 'fal']] = None
     speed_profile: Optional[Literal['fast', 'resilient']] = None
     auto_failover: Optional[bool] = None
+    auto_color_match_enabled: Optional[bool] = None
     proxy: Optional[str] = Field(default=None, max_length=1000)
     fal_queue_proxy: Optional[str] = Field(default=None, max_length=1000)
     tls_verify: Optional[bool] = None

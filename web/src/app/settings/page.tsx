@@ -42,6 +42,7 @@ export default function SettingsPage() {
   const [provider, setProvider] = useState("google");
   const [speed, setSpeed] = useState("fast");
   const [failover, setFailover] = useState(false);
+  const [autoColorMatchEnabled, setAutoColorMatchEnabled] = useState(true);
   const [tlsVerify, setTlsVerify] = useState(true);
   const [conc, setConc] = useState(1);
   const [testResult, setTestResult] = useState("");
@@ -89,6 +90,7 @@ export default function SettingsPage() {
         setProvider(c.image_provider);
         setSpeed(c.speed_profile);
         setFailover(c.auto_failover);
+        setAutoColorMatchEnabled(c.auto_color_match_enabled !== false);
         setTlsVerify(c.tls_verify);
         setConc(c.max_concurrent_per_model);
         setOmakaseEnabled(!!c.omakase_enabled);
@@ -128,6 +130,7 @@ export default function SettingsPage() {
         image_provider: provider,
         speed_profile: speed,
         auto_failover: failover,
+        auto_color_match_enabled: autoColorMatchEnabled,
         proxy,
         fal_queue_proxy: falQueueProxy,
         tls_verify: tlsVerify,
@@ -349,6 +352,16 @@ export default function SettingsPage() {
                   </div>
                 </div>
                 <Switch checked={sdEnabled} onCheckedChange={setSdEnabled} />
+              </div>
+
+              <div className="mb-[15px] flex items-center justify-between rounded-[10px] border border-border bg-panel p-[13px]">
+                <div className="leading-snug">
+                  <div className="text-[13px] font-bold text-foreground">生图后自动校色</div>
+                  <div className="mt-px text-[11px] text-muted-foreground">
+                    B2 / Pro 地板工作流出图后自动匹配地板小样色彩；本地处理、不增加 API 费用，并保留 API 原图
+                  </div>
+                </div>
+                <Switch checked={autoColorMatchEnabled} onCheckedChange={setAutoColorMatchEnabled} />
               </div>
 
               <div className="flex flex-col gap-[7px]">

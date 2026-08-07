@@ -22,6 +22,7 @@ import { ImageZoom } from "@/components/ImageZoom";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { SectionHeader, Segmented, Pill } from "@/components/dc-ui";
 import { loadDraft, saveDraft, takeReuseRequest } from "@/lib/draft";
+import { cn } from "@/lib/utils";
 
 // 由后端文件路径重建 Swatch（复用参数回填：记录里只有 path，url/缩略图按上传目录约定拼出）
 function swatchFromPath(p?: string): Swatch | null {
@@ -62,6 +63,8 @@ function buildDefaultParams(o: OptionsView, prevWorkflow?: string): GenParams {
     floor_size: o.floor_sizes[0],
     seam_type: o.seam_types[0],
     glossiness: o.glossiness[1] || o.glossiness[0],
+    floor_coverage_min: 40,
+    floor_coverage_max: 50,
     floor_tone: o.floor_tones[0],
     style_type: o.styles[0],
     lighting: o.lightings[0],
@@ -72,6 +75,7 @@ function buildDefaultParams(o: OptionsView, prevWorkflow?: string): GenParams {
     pet_action: o.pet_actions[0],
     pet_focus: o.pet_focus[0],
     avoid_items: o.avoid_items,
+    cinematic_enabled: false,
     panel_submode: "再设计",
     panel_size: o.panel_sizes[0],
   };
@@ -639,11 +643,59 @@ export default function GeneratePage() {
       : options.room_types
     : [];
 
+  const outputLabel = modelTargets
+    .map((key) => ({ b2: "快速", pro: "高质量", sd35: "SD 3.5" })[key])
+    .join(" + ");
+
   return (
-    <div className="flex h-full overflow-hidden">
+    <div className="flex h-full min-w-0 overflow-hidden">
       {/* ── 左：参数列 ── */}
-      <section className="flex w-[600px] flex-none flex-col border-r border-border bg-panel">
-        <div className="flex-1 space-y-0 overflow-y-auto px-5 pb-2.5 pt-4">
+      <section className="flex w-[clamp(430px,44vw,600px)] min-w-[430px] flex-none flex-col border-r border-border bg-panel max-[980px]:min-w-[410px]">
+        <div className="flex-1 space-y-0 overflow-y-auto px-5 pb-2.5 pt-4 max-[1080px]:px-4">
+          <div className="mb-5 rounded-[14px] border border-border bg-card p-2.5 shadow-[0_4px_16px_rgba(120,90,60,.06)]">
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                {
+                  no: "01",
+                  label: "产品",
+                  detail: isFreeMode ? `${freeImages.length} 张素材` : floor?.name || "选择小样",
+                  ready: isFreeMode ? freeImages.length > 0 : !!floor,
+                },
+                {
+                  no: "02",
+                  label: "场景",
+                  detail: params.workflow_mode.split(" (")[0],
+                  ready: !!options,
+                },
+                {
+                  no: "03",
+                  label: "输出",
+                  detail: outputLabel || "选择模型",
+                  ready: modelTargets.length > 0,
+                },
+              ].map((step) => (
+                <div
+                  key={step.no}
+                  className={cn(
+                    "min-w-0 rounded-[11px] border px-3 py-2.5",
+                    step.ready
+                      ? "border-primary/25 bg-primary-soft"
+                      : "border-border bg-panel",
+                  )}
+                >
+                  <div className="mb-1 flex items-center gap-1.5 text-[10.5px] font-extrabold tracking-[0.08em] text-muted-foreground">
+                    <span className={step.ready ? "text-primary" : undefined}>{step.no}</span>
+                    {step.label}
+                    {step.ready && <span className="ml-auto text-success">✓</span>}
+                  </div>
+                  <div className="truncate text-[12.5px] font-bold text-foreground" title={step.detail}>
+                    {step.detail}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
           {!isFreeMode && (
             <>
               <SectionHeader className="mx-0.5 mb-[11px] mt-1">
@@ -767,7 +819,7 @@ export default function GeneratePage() {
         </div>
 
         {/* sticky 底栏 */}
-        <div className="flex flex-none gap-2.5 border-t border-border bg-card px-[18px] py-[13px]">
+        <div className="flex flex-none gap-2.5 border-t border-border bg-card px-[18px] py-[13px] max-[1080px]:px-4">
           <button
             onClick={generate}
             disabled={
@@ -810,14 +862,14 @@ export default function GeneratePage() {
 
       {/* ── 右：任务队列 ── */}
       <section className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background">
-        <div className="flex flex-none items-center justify-between border-b border-border px-[22px] py-[14px]">
-          <div className="flex items-baseline gap-2.5">
-            <span className="text-[14.5px] font-bold">任务队列</span>
-            <span className="text-[12px] text-muted-foreground">
+        <div className="flex flex-none flex-wrap items-center justify-between gap-2 border-b border-border px-[22px] py-[14px] max-[1080px]:px-4">
+          <div className="min-w-0">
+            <div className="text-[14.5px] font-bold">结果工作区</div>
+            <div className="text-[11.5px] text-muted-foreground">
               {total} 个任务 · 完成 {doneCount}/{total}
-            </span>
+            </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-1.5">
             <button
               onClick={() =>
                 api
@@ -825,7 +877,7 @@ export default function GeneratePage() {
                   .then(setJobs)
                   .catch((e) => toast.error("刷新失败：" + (e as Error).message))
               }
-              className="h-[30px] rounded-lg border border-border bg-card px-3 text-[12.5px] font-semibold text-secondary-foreground hover:bg-accent"
+              className="h-[30px] rounded-lg border border-border bg-card px-2.5 text-[12px] font-semibold text-secondary-foreground hover:bg-accent"
             >
               刷新
             </button>
@@ -837,7 +889,7 @@ export default function GeneratePage() {
                   .then(() => api.listJobs(50).then(setJobs))
                   .catch((e) => toast.error((e as Error).message))
               }
-              className="h-[30px] rounded-lg border border-border bg-card px-3 text-[12.5px] font-semibold text-secondary-foreground hover:bg-accent"
+              className="h-[30px] rounded-lg border border-border bg-card px-2.5 text-[12px] font-semibold text-secondary-foreground hover:bg-accent"
             >
               清除已完成
             </button>
@@ -849,7 +901,7 @@ export default function GeneratePage() {
                   .then(() => api.listJobs(50).then(setJobs))
                   .catch((e) => toast.error((e as Error).message))
               }
-              className="h-[30px] rounded-lg border border-border bg-card px-3 text-[12.5px] font-semibold text-destructive hover:bg-destructive-soft"
+              className="h-[30px] rounded-lg border border-border bg-card px-2.5 text-[12px] font-semibold text-destructive hover:bg-destructive-soft"
             >
               全部停止
             </button>
@@ -857,7 +909,7 @@ export default function GeneratePage() {
         </div>
 
         {activeCount > 0 && (
-          <div className="flex-none border-b border-border bg-card px-[22px] py-[11px]">
+          <div className="flex-none border-b border-border bg-card px-[22px] py-[11px] max-[1080px]:px-4">
             <div className="mb-1.5 flex justify-between text-[11.5px] text-muted-foreground">
               <span>
                 进行中 {activeCount} · 完成 {doneCount} / 共 {total}
@@ -873,13 +925,13 @@ export default function GeneratePage() {
           </div>
         )}
 
-        <div className="flex-1 overflow-y-auto px-[22px] py-[18px]">
+        <div className="flex-1 overflow-y-auto px-[22px] py-[18px] max-[1080px]:px-4 max-[1080px]:py-4">
           {jobs.length === 0 ? (
             <div className="rounded-2xl border-[1.5px] border-dashed border-border-strong px-5 py-[54px] text-center text-[13px] text-muted-foreground">
               还没有任务 · 左侧上传地板图并点「生成效果图」
             </div>
           ) : (
-            <div className="grid items-start gap-4 [grid-template-columns:repeat(auto-fill,minmax(260px,1fr))]">
+            <div className="grid items-start gap-4 [grid-template-columns:repeat(auto-fill,minmax(300px,1fr))] max-[1100px]:[grid-template-columns:1fr]">
               {jobs.map((j) => (
                 <JobCard
                   key={j.job_id}

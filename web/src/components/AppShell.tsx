@@ -97,8 +97,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-full w-full overflow-hidden text-[14px] text-foreground">
       {/* ── 侧边栏 ── */}
-      <aside className="flex w-[236px] flex-none flex-col border-r border-border bg-panel px-[14px] py-[18px]">
-        <div className="flex items-center gap-[10px] px-1.5 pb-5">
+      <aside className="flex w-[236px] flex-none flex-col border-r border-border bg-panel px-[14px] py-[18px] transition-[width,padding] duration-200 max-[1320px]:w-[76px] max-[1320px]:px-[10px]">
+        <div className="flex items-center gap-[10px] px-1.5 pb-5 max-[1320px]:justify-center max-[1320px]:px-0">
           <div
             className="flex h-9 w-9 flex-none items-center justify-center rounded-[11px]"
             style={{
@@ -110,7 +110,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <path d="M3 8.5h18M3 14h18M8 4.5v15M14.5 4.5v15" />
             </svg>
           </div>
-          <div className="leading-tight">
+          <div className="leading-tight max-[1320px]:hidden">
             <div className="text-[15px] font-extrabold tracking-tight">Floor AI</div>
             <div className="text-[10.5px] font-semibold tracking-wider text-muted-foreground">
               生图引擎 · 商业版
@@ -125,36 +125,37 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               <Link
                 key={item.href}
                 href={item.href}
+                title={item.label}
                 className={cn(
-                  "mb-[3px] flex items-center gap-[11px] rounded-[11px] px-3 py-[9.5px] text-[13.5px] font-semibold transition-colors",
+                  "mb-[3px] flex items-center gap-[11px] rounded-[11px] px-3 py-[9.5px] text-[13.5px] font-semibold transition-colors max-[1320px]:justify-center max-[1320px]:px-0 max-[1320px]:py-[11px]",
                   active
                     ? "bg-primary text-primary-foreground shadow-[0_5px_14px_rgba(193,95,60,.3)]"
                     : "text-secondary-foreground hover:bg-accent",
                 )}
               >
                 {item.icon}
-                <span>{item.label}</span>
+                <span className="max-[1320px]:hidden">{item.label}</span>
               </Link>
             );
           })}
         </nav>
 
-        <div className="mt-2 border-t border-border pt-3 pl-1.5">
-          <div className="flex items-center gap-[10px]">
+        <div className="mt-2 border-t border-border pt-3 pl-1.5 max-[1320px]:pl-0">
+          <div className="flex items-center gap-[10px] max-[1320px]:justify-center">
             <div className="flex h-[30px] w-[30px] items-center justify-center rounded-[9px] bg-success text-[13px] font-bold text-white">
               运
             </div>
-            <div className="min-w-0 leading-tight">
+            <div className="min-w-0 leading-tight max-[1320px]:hidden">
               <div className="text-[12.5px] font-bold">运营工作台</div>
               <div className="text-[10.5px] text-muted-foreground">
                 {online === null ? "正在检查服务" : online ? "本机服务在线" : "本机服务离线"}
               </div>
             </div>
           </div>
-          <div className="mt-2 text-[9.5px] leading-relaxed text-muted-foreground">
+          <div className="mt-2 text-[9.5px] leading-relaxed text-muted-foreground max-[1320px]:hidden">
             © 2026 Boki ·{" "}
             <a
-              href="https://github.com/Bok1-YY/Floor_engine_Linux/blob/main/LICENSE"
+              href="https://github.com/Bok1-YY/Floor_rendering_engine/blob/main/LICENSE"
               target="_blank"
               rel="noreferrer"
               className="underline-offset-2 hover:text-foreground hover:underline"
@@ -164,7 +165,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             · 无担保{" "}
             ·{" "}
             <a
-              href="https://github.com/Bok1-YY/Floor_engine_Linux"
+              href="https://github.com/Bok1-YY/Floor_rendering_engine"
               target="_blank"
               rel="noreferrer"
               className="underline-offset-2 hover:text-foreground hover:underline"
@@ -177,10 +178,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* ── 主区 ── */}
       <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <div className="flex h-14 flex-none items-center justify-between border-b border-border px-[22px] backdrop-blur-[8px] bg-glass">
+        <div className="flex h-14 flex-none items-center justify-between border-b border-border px-[22px] backdrop-blur-[8px] bg-glass max-[1080px]:px-4">
           <div className="flex flex-col leading-tight">
             <span className="text-[15px] font-bold tracking-tight">{title}</span>
-            <span className="text-[11.5px] text-muted-foreground">{sub}</span>
+            <span className="text-[11.5px] text-muted-foreground max-[900px]:hidden">{sub}</span>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -202,13 +203,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </button>
             <button
               onClick={() => setHelpOpen(true)}
-              className="flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-[13px] text-[12.5px] font-semibold text-secondary-foreground hover:bg-accent"
+              className="flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card px-[13px] text-[12.5px] font-semibold text-secondary-foreground hover:bg-accent max-[900px]:w-8 max-[900px]:justify-center max-[900px]:px-0"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                 <circle cx="12" cy="12" r="9" />
                 <path d="M9.5 9a2.5 2.5 0 1 1 3.6 2.2c-.8.4-1.1.9-1.1 1.8M12 17h.01" />
               </svg>
-              帮助
+              <span className="max-[900px]:hidden">帮助</span>
             </button>
           </div>
         </div>

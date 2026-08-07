@@ -408,7 +408,9 @@ def reveal_prompt_fn(json_path, record_id, input_password):
 
 # ── API 生成结果落地 & 记录写入（原在 api.py，归入记录层）──────────────
 def api_write_to_record(pil_img, model_key: str, json_path_val: str, record_id_val: str,
-                         image_file: Optional[str] = None, metadata: Optional[dict] = None):
+                         image_file: Optional[str] = None, metadata: Optional[dict] = None,
+                         source_result_id: Optional[str] = None,
+                         comment: Optional[str] = None):
     # 用 is not None 而不是 bool(pil_img)——PIL Image 在某些版本布尔求值会异常
     if pil_img is None or not json_path_val or not record_id_val:
         logger.warning(f"api_write_to_record 参数不全: img={pil_img is not None}, jpath={bool(json_path_val)}, rid={bool(record_id_val)}")
@@ -422,9 +424,11 @@ def api_write_to_record(pil_img, model_key: str, json_path_val: str, record_id_v
         entry = {
             'result_id': _new_result_id(),
             'result_timestamp': time.strftime("%Y-%m-%d %H:%M:%S"),
-            'comment': f'API 自动生成 ({pil_img.width}×{pil_img.height})',
+            'comment': comment or f'API 自动生成 ({pil_img.width}×{pil_img.height})',
             'model_label': model_key,
         }
+        if source_result_id:
+            entry['source_result_id'] = source_result_id
         if metadata:
             entry['generation_metadata'] = dict(metadata)
         if rel:

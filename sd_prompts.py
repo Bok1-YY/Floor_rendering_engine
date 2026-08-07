@@ -95,7 +95,7 @@ def compile_sd35_prompt(
         _english(params.angle),
         _english(params.view),
         "balanced eye-level architectural composition",
-        "the flooring occupies approximately 40 to 50 percent of the frame and anchors the foreground",
+        f"the flooring occupies approximately {params.floor_coverage_min} to {params.floor_coverage_max} percent of the frame and anchors the foreground",
     ) if x)
     lighting = ", ".join(x for x in (
         _english(params.lighting),

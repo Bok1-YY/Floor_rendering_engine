@@ -36,7 +36,12 @@ if _IS_FROZEN:
             or sys.executable)
     BASE_DIR = os.path.dirname(os.path.abspath(_exe))
 else:
-    BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    # A standalone checkout can keep runtime data inside the project on Windows
+    # instead of writing it into the user's home directory.
+    BASE_DIR = os.path.abspath(
+        os.environ.get("FLOOR_DATA_DIR")
+        or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
 MAIN_OUTPUT_DIR = os.path.join(BASE_DIR, "output_files")
 os.makedirs(MAIN_OUTPUT_DIR, exist_ok=True)
 
@@ -72,14 +77,21 @@ _build_theme_css = build_theme_css
 
 # ── Gemini 模型映射 ─────────────────────────────────────────────
 GEMINI_MODEL_MAP = {
-    "Nano Banana 2":  "gemini-3.1-flash-image-preview",
-    "Nano Banana Pro": "gemini-3-pro-image-preview",
+    "Nano Banana 2":  "gemini-3.1-flash-image",
+    "Nano Banana Pro": "gemini-3-pro-image",
+}
+
+# Google Preview → Stable 兼容别名。新任务只使用右侧稳定 ID；左侧仅用于读取旧配置、
+# 历史任务上下文和用户自定义 Fal 映射，避免模型迁移后突然找不到端点。
+LEGACY_IMAGE_MODEL_ALIASES = {
+    "gemini-3.1-flash-image-preview": "gemini-3.1-flash-image",
+    "gemini-3-pro-image-preview": "gemini-3-pro-image",
 }
 
 # ── Nano Banana 2 Lite（Gemini 3.1 Flash-Lite Image）——「快速预览/草稿」专用 ──
 # 特意【不】放进 GEMINI_MODEL_MAP：它不是 B2/Pro 的平级生产模型。
-# 约束（2026-06-30 上线，官方文档核实）：① 只出 1K，不支持 2K/4K → 做不了 4K 交付图，仅当出图前的
-# 快速构图/风格预览；② Fal 暂无对应 endpoint → 预览恒走 Google 直连，不参与自动转 Fal。
+# 约束：只出 1K，不作为 B2/Pro 的 4K 交付模型；当前预览管线仍刻意恒走 Google 直连，
+# 不参与 Fal 自动转线，保持快速预览与正式队列解耦。
 LITE_PREVIEW_MODEL = "gemini-3.1-flash-lite-image"
 
 # ── Fal 路由模型映射 ────────────────────────────────────────────
@@ -87,8 +99,8 @@ LITE_PREVIEW_MODEL = "gemini-3.1-flash-lite-image"
 # 只换更稳的线路(国内→Fal→Google)。key = 上面 GEMINI_MODEL_MAP 里的 Gemini model_id，
 # value = Fal endpoint id。可在 engine_config.json 的 "fal_model_map" 里覆盖。
 FAL_MODEL_MAP = {
-    "gemini-3.1-flash-image-preview": "fal-ai/nano-banana-2/edit",   # Nano Banana 2
-    "gemini-3-pro-image-preview":     "fal-ai/nano-banana-pro/edit",  # Nano Banana Pro
+    "gemini-3.1-flash-image": "fal-ai/nano-banana-2/edit",   # Nano Banana 2
+    "gemini-3-pro-image":     "fal-ai/nano-banana-pro/edit",  # Nano Banana Pro
 }
 
 # 生图线路：'google' = 直连 Google AI Studio(默认)；'fal' = 走 Fal 路由
@@ -382,6 +394,11 @@ def get_auto_failover() -> bool:
     return bool(load_config().get("auto_failover", False))
 
 
+def get_auto_color_match_enabled() -> bool:
+    """读取『生图后自动校色』开关；缺省开启，兼容已有配置文件。"""
+    return bool(load_config().get("auto_color_match_enabled", True))
+
+
 def get_pptx_branding() -> dict:
     """PPTX 导出品牌配置：公司名/联系方式/logo 路径。全部可空（空=保持无品牌旧样式）。"""
     cfg = load_config()
@@ -441,8 +458,13 @@ def get_omakase_enabled() -> bool:
 
 def get_omakase_gemini_model() -> str:
     """Omakase 主线路使用的稳定 Gemini 文本模型。"""
-    return ((load_config().get("omakase_gemini_model") or "gemini-2.5-flash").strip()
-            or "gemini-2.5-flash")
+    model = ((load_config().get("omakase_gemini_model") or "gemini-3.6-flash").strip()
+             or "gemini-3.6-flash")
+    # 2.5 Flash 对新项目会返回 404 "no longer available to new users"；
+    # 即使旧配置显式保存过该值，也自动升级，避免默认修复被历史配置抵消。
+    if model == "gemini-2.5-flash":
+        return "gemini-3.6-flash"
+    return model
 
 
 def save_deepseek_settings(api_key=None, base_url=None, model=None, enabled=None) -> None:
@@ -484,13 +506,8 @@ def get_gen_sampling() -> dict:
 #   text_models : 参照模式风格分析按优先级依次尝试的视觉文字模型列表
 #   ping_model  : 连通性自检(test_connection)用的便宜纯文字模型
 DEFAULT_TEXT_MODELS = [
-    "gemini-3.1-flash-image-preview",   # 该 API Key 确认可用，优先尝试
-    "gemini-3-pro-image-preview",        # 该 API Key 确认可用
-    "gemini-2.0-flash",                  # 标准 key 可用
-    "gemini-2.0-flash-001",
-    "gemini-1.5-flash",
-    "gemini-1.5-flash-latest",
-    "gemini-1.5-flash-001",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash-lite",
 ]
 
 
@@ -504,7 +521,8 @@ def get_text_models() -> list:
 
 def get_ping_model() -> str:
     """连通性自检用的便宜文字模型；engine_config.json 的 ping_model 可覆盖。"""
-    return (load_config().get("ping_model") or "gemini-2.0-flash").strip() or "gemini-2.0-flash"
+    model = (load_config().get("ping_model") or "gemini-3.5-flash-lite").strip()
+    return model or "gemini-3.5-flash-lite"
 
 
 def extract_clean_prompt(prompt_combined: str) -> str:

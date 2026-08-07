@@ -16,7 +16,7 @@ from PIL import Image
 from .config import (
     MAIN_OUTPUT_DIR, UPLOAD_DIR, logger,
     load_config, safe_upload_path,
-    get_image_provider, get_speed_profile, get_auto_failover, get_proxy,
+    get_image_provider, get_speed_profile, get_auto_failover, get_auto_color_match_enabled, get_proxy,
     get_tls_verify, get_tls_ca_bundle, get_speed_profile_params,
     get_deepseek_base_url, get_deepseek_model, get_omakase_enabled,
     get_omakase_gemini_model, get_usage_prices, get_pptx_branding,
@@ -70,6 +70,8 @@ def job_view(job: JobRecord) -> dict:
         paths = list(run.get('paths') or [])
         idx = max(0, min(int(run.get('index') or 0), len(paths) - 1)) if paths else 0
         current = paths[idx] if paths else ''
+        settings = run.get('settings') or {}
+        api_original = run.get('base_path') if settings.get('auto_color_match_enabled') else ''
         runs[key] = {
             'key': key,
             'label': run.get('label') or key,
@@ -84,9 +86,13 @@ def job_view(job: JobRecord) -> dict:
             'idx': idx,
             'total': len(paths),
             'base_url': to_url(run.get('base_path')),
+            'api_original_url': to_url(api_original),
+            'api_original_thumb': result_thumb_url(api_original),
+            'auto_color_status': settings.get('auto_color_status') or '',
+            'auto_color_error': settings.get('auto_color_error') or '',
             'delivery_status': run.get('delivery_status') or '',
             'seed': run.get('seed'),
-            'settings': run.get('settings') or {},
+            'settings': settings,
         }
     return {
         'job_id': job.job_id,
@@ -138,6 +144,7 @@ def config_view() -> dict:
         'image_provider': get_image_provider(),
         'speed_profile': get_speed_profile(),
         'auto_failover': get_auto_failover(),
+        'auto_color_match_enabled': get_auto_color_match_enabled(),
         'tls_verify': get_tls_verify(),
         'tls_ca_bundle': get_tls_ca_bundle(),
         'proxy': get_proxy(),
@@ -344,4 +351,3 @@ def require_ref_image_path(path: str) -> str:
         except Exception:
             continue
     raise HTTPException(400, '参照图必须是已上传的小样或本程序的输出图')
-

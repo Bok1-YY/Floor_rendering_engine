@@ -23,14 +23,15 @@ from .prompt_data import (
 
 )
 from .image_prep import prepare_swatch_png
+from .cinematic_planner import CINEMATIC_FALLBACK_DIRECTION
 from .records import (
     get_json_path, load_records_file, save_records_file,
     img_to_b64, record_file_lock,
 )
 from .reveal_security import obfuscate_text
 
-# 地板整体颜色锁定指令：生成阶段先强制地板颜色与上传小样一致。
-# 与出图后的 MobileSAM 局部自动校色组成双保险；后处理只修地板蒙版内色度。
+# 地板整体颜色锁定指令：强制生成图地板的整体颜色与上传小样完全一致。
+# 取代旧的"提取色码注入 + 生成后自动校色"方案，改由提示词直接、人眼可校地约束模型。
 FLOOR_COLOR_MATCH_INSTRUCTION = (
     "**[FLOOR COLOR — MANDATORY EXACT MATCH]** "
     "The overall color of the wooden floor in the final image MUST be IDENTICAL to the uploaded floor swatch — "
@@ -192,17 +193,26 @@ def _derive_translations(p, v):
     cn_view = p.cn_view
     country = p.country
     custom_addition = p.custom_addition
+    try:
+        floor_coverage_min = max(10, min(80, int(p.floor_coverage_min)))
+        floor_coverage_max = max(10, min(80, int(p.floor_coverage_max)))
+    except (TypeError, ValueError):
+        floor_coverage_min, floor_coverage_max = 40, 50
+    if floor_coverage_min > floor_coverage_max:
+        floor_coverage_min, floor_coverage_max = floor_coverage_max, floor_coverage_min
     floor_size = p.floor_size
     floor_tone = p.floor_tone
     glossiness = p.glossiness
     lighting = p.lighting
     market_furniture = p.market_furniture
     neighborhood = p.neighborhood
+    pet_action = p.pet_action
     property_type = p.property_type
     room_type = p.room_type
     seam_type = p.seam_type
     style_type = p.style_type
     view = p.view
+    workflow_mode = p.workflow_mode
 
     # ── 动态翻译与映射 ────────────────────────────────────────────────
     # 国内模式：覆盖位置、房间参数；风格始终使用顶部全局 Style
@@ -298,6 +308,19 @@ def _derive_translations(p, v):
         _style_must = []
         _style_ban  = []
         _style_may  = []
+
+    # 少数风格预设自身带有地板百分比。用户改动高级占比后，同步替换预设中的旧数字，
+    # 避免场景层与后面的地板技术锁互相矛盾；默认 40-50 保留既有 prompt 快照。
+    if (floor_coverage_min, floor_coverage_max) != (40, 50):
+        _style_must = [
+            re.sub(
+                r"occupying\s+\d+\s*[–-]\s*\d+%\s+of image area",
+                f"occupying {floor_coverage_min}-{floor_coverage_max}% of image area",
+                item,
+                flags=re.IGNORECASE,
+            )
+            for item in _style_must
+        ]
 
     # ── SCHEMA 强化块：MANDATORY & OPTIONAL & PROHIBITIONS ────────────────
     _mandatory_block = ""
@@ -413,7 +436,7 @@ def _derive_translations(p, v):
     else:
         en_perspective = "Natural eye-level perspective with balanced spatial depth. True-to-life proportions, neither distorted nor compressed."
 
-    en_floor_visibility = "**Floor Coverage**: The floor must occupy a minimum of 40-50% of the total image area. Furniture placement should deliberately reveal large unobstructed floor zones. Camera angle must maximize visible floor surface."
+    en_floor_visibility = f"**Floor Coverage**: The floor must occupy a minimum of {floor_coverage_min}-{floor_coverage_max}% of the total image area. Furniture placement should deliberately reveal large unobstructed floor zones. Camera angle must maximize visible floor surface."
     en_composition = f"**Composition**: {en_perspective} Floor texture must be the absolute visual anchor of the image."
 
     no_sofa_rooms = ["厨房", "餐厨一体", "餐厅", "独立餐厅", "开放式厨房", "封闭式厨房", "衣帽间", "生活阳台", "卫生间", "浴室 (带浴缸)"]
@@ -433,9 +456,15 @@ def _derive_translations(p, v):
     # 避免项翻译。
     #   硬性排除(人物/宠物/地毯/顺色家具)→ 留负向(无好正向写法, Gemini 执行得好)。
     #   地板表面项(过曝/反光/色偏)→ 改正向描述(生图模型对"别出X"易招X, 正向陈述想要的样子更稳)。
+    #   宠物模式必须允许宠物；主宠互动还必须允许人物，避免默认勾选项与主体指令互相冲突。
+    effective_avoid_items = list(avoid_items or [])
+    if "宠物友好" in workflow_mode:
+        effective_avoid_items = [item for item in effective_avoid_items if "宠物" not in item]
+        if pet_action == "主宠互动":
+            effective_avoid_items = [item for item in effective_avoid_items if "人物" not in item]
     avoid_en_list = []
     surface_pos_list = []
-    for item in avoid_items:
+    for item in effective_avoid_items:
         if "地毯" in item: avoid_en_list.append("rugs, carpets of any size or style")
         elif "人物" in item: avoid_en_list.append("any people or human figures")
         elif "宠物" in item: avoid_en_list.append("any animals or pets")
@@ -737,6 +766,8 @@ def _compose_prompt(p, v):
     pet_type = p.pet_type
     resolution = p.resolution
     scene_override = p.scene_override
+    cinematic_enabled = bool(p.cinematic_enabled)
+    cinematic_plan_text = p.cinematic_plan_text
     style_analysis_text = p.style_analysis_text
     style_ref_correction = p.style_ref_correction
     workflow_mode = p.workflow_mode
@@ -768,6 +799,14 @@ def _compose_prompt(p, v):
     en_view_trans = v.get('en_view_trans')
     extra_cmd_en = v.get('extra_cmd_en')
     no_sofa_note = v.get('no_sofa_note')
+    _cinematic_direction = (cinematic_plan_text or CINEMATIC_FALLBACK_DIRECTION).strip()
+    _cinematic_block = (
+        "\n\n**[CINEMATIC REALISM — DIRECTOR PLAN]**\n"
+        f"{_cinematic_direction}\n"
+        "This direction may shape staging, camera position, practical light and optical realism, "
+        "but it MUST NOT alter the uploaded floor product, its geometry, color or installation."
+        if cinematic_enabled else ""
+    )
 
     # ── 四模式提示词组装 (SCHEMA 顺序: Style→Composition→Lighting→Floor→Output) ──
     if "地板替换" in workflow_mode:
@@ -809,7 +848,7 @@ Professional photorealistic pet-friendly interior photography. {en_property}, {e
 **[Camera & Composition]** {en_angle}. {en_focus}
 {en_composition}
 
-**[Subject]** 🐾 {en_subj}
+**[Subject]** 🐾 {en_subj}{_cinematic_block}
 
 {en_light_inst}
 
@@ -882,7 +921,7 @@ Professional photorealistic interior architectural photography. {en_room}. Aspec
 
 {_context_block}
 
-{_realism_block}
+{_realism_block}{_cinematic_block}
 
 **[Camera & Composition]** {en_angle}.
 {en_composition}
@@ -899,7 +938,7 @@ Professional photorealistic interior architectural photography. {en_room}. Aspec
 
 Professional photorealistic interior architectural photography. Aspect ratio {ar_value}, {resolution} resolution.
 
-{_oma_scene}
+{_oma_scene}{_cinematic_block}
 
 {_floor_spec_block(CORE_MATERIAL_INSTRUCTION, en_floor_spec_line, en_floor_visibility, en_quality, avoid_en, extra_cmd_en)}"""
 
@@ -1009,7 +1048,7 @@ Professional photorealistic interior architectural photography. {en_property}, {
 
 {_prohibitions_block}
 
-{en_furniture_contrast}
+{en_furniture_contrast}{_cinematic_block}
 
 **[Camera & Composition]** {en_angle}.
 {en_composition}
@@ -1125,6 +1164,7 @@ def _persist_task_record(p, v):
         "params_summary": params_summary,
         "_pe": obfuscate_text(final_prompt_en),
         "_pe_pro": obfuscate_text(final_prompt_en_pro),
+        "cinematic_enabled": bool(p.cinematic_enabled),
         "_schema_version": 2,
         "sample_image_b64": img_to_b64(processed_img, max_width=400),
         "results": []
@@ -1141,12 +1181,14 @@ def _persist_task_record(p, v):
 
 
 def save_task_files_html(workflow_mode, model_choice, image_path, continent, country, city, neighborhood, property_type, style_type, room_type, view, lighting, pet_type, pet_action, pet_focus, angle, aspect_ratio, resolution, glossiness, seam_type, avoid_items, floor_size, custom_addition, floor_tone, market_furniture, last_image_path,
+                         floor_coverage_min=40, floor_coverage_max=50,
                          cn_mode=False, cn_developer="── 不指定 ──", cn_city="上海",
                          cn_tier="── 不指定 ──", cn_unit_type="── 不指定 ──",
                          cn_delivery="🏆 样板间 / 展示单位",
                          cn_room_type="客餐厅一体", cn_view="自然通透景观",
                          cn_space_features=None, cn_facilities=None,
                          style_ref_correction="", style_analysis_text="", scene_override="",
+                         cinematic_enabled=False, cinematic_plan_text="",
                          panel_submode="再设计", panel_size="", persist=True):
     """提示词编排入口(兼容签名,26+ 参数原样保留;golden 快照按 8 元组逐字节回归)。
 
@@ -1169,12 +1211,14 @@ def save_task_files_html(workflow_mode, model_choice, image_path, continent, cou
         lighting=lighting, pet_type=pet_type, pet_action=pet_action, pet_focus=pet_focus,
         angle=angle, aspect_ratio=aspect_ratio, resolution=resolution, glossiness=glossiness,
         seam_type=seam_type, avoid_items=avoid_items, floor_size=floor_size,
+        floor_coverage_min=floor_coverage_min, floor_coverage_max=floor_coverage_max,
         custom_addition=custom_addition, floor_tone=floor_tone, market_furniture=market_furniture,
         last_image_path=last_image_path, cn_mode=cn_mode, cn_developer=cn_developer,
         cn_city=cn_city, cn_tier=cn_tier, cn_unit_type=cn_unit_type, cn_delivery=cn_delivery,
         cn_room_type=cn_room_type, cn_view=cn_view, cn_space_features=cn_space_features,
         cn_facilities=cn_facilities, style_ref_correction=style_ref_correction,
         style_analysis_text=style_analysis_text, scene_override=scene_override,
+        cinematic_enabled=cinematic_enabled, cinematic_plan_text=cinematic_plan_text,
         panel_submode=panel_submode, panel_size=panel_size, persist=persist,
         json_path=json_path, base_name=base_name, png_path=png_path,
         processed_img=processed_img, msg_prefix=msg_prefix,

@@ -6,6 +6,10 @@
   "engines": {
     "node": ">=20.9.0"
   },
+  "allowScripts": {
+    "sharp@0.34.5": true,
+    "unrs-resolver@1.12.2": true
+  },
   "scripts": {
     "dev": "next dev",
     "build": "next build",

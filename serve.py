@@ -17,14 +17,26 @@ import os
 import sys
 import threading
 import time
+import importlib
+import importlib.util
 
-# —— 让 `import Floor_engine_server.*` 可用（源码运行时；冻结后由 Nuitka 内部解析，无副作用）——
+# Register the repository root as the historical package name without relying
+# on the parent directory being enumerable. This works for default Git clones,
+# renamed folders, and restricted Windows accounts.
 _PKG_DIR = os.path.dirname(os.path.abspath(__file__))
-_PARENT = os.path.dirname(_PKG_DIR)
-if _PARENT not in sys.path:
-    sys.path.insert(0, _PARENT)
-
-from Floor_engine_server.server_api import app  # noqa: E402
+_PACKAGE_NAME = 'Floor_engine_server'
+if _PACKAGE_NAME not in sys.modules:
+    _spec = importlib.util.spec_from_file_location(
+        _PACKAGE_NAME,
+        os.path.join(_PKG_DIR, '__init__.py'),
+        submodule_search_locations=[_PKG_DIR],
+    )
+    if _spec is None or _spec.loader is None:
+        raise SystemExit('无法从项目目录加载 Floor Engine Python 包。')
+    _package = importlib.util.module_from_spec(_spec)
+    sys.modules[_PACKAGE_NAME] = _package
+    _spec.loader.exec_module(_package)
+app = importlib.import_module(f'{_PACKAGE_NAME}.server_api').app  # noqa: E402
 
 
 def _open_browser_later(url: str):

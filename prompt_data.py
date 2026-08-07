@@ -117,11 +117,9 @@ TECH_DICT = {
     # —— 直拼 straight plank（按板宽从窄到宽的完整阶梯；接近的尺寸已取中位数合并）——
     "窄板直拼：910 x 122 mm": "narrow strip plank pattern (910 x 122 mm)",
     "短板直拼：808 x 130 mm": "short plank pattern (808 x 130 mm)",
-    "长窄板直拼：1900 x 136 mm": "long narrow plank pattern (1900 x 136 mm)",
     "标准直拼：1200 x 150 mm": "standard plank pattern (1200 x 150 mm)",
     "常规直拼：1220 x 180 mm": "standard plank pattern (1220 x 180 mm)",
     "经典长板直拼：1524 x 187 mm": "classic long plank pattern (1524 x 187 mm)",
-    "长板直拼：1900 x 190 mm": "long plank pattern (1900 x 190 mm)",
     "宽板直拼：1830 x 230 mm": "wide plank pattern (1830 x 230 mm)",
     "超宽大板直拼：2200 x 260 mm": "extra-wide oversized plank pattern (2200 x 260 mm)",
     "巨幅大板直拼：2400 x 300 mm": "grand-format oversized plank pattern (2400 x 300 mm)",
@@ -862,10 +860,8 @@ FLOOR_SIZES = [
     "常规直拼：1220 x 180 mm",        # 默认：市面最通用住宅板
     "窄板直拼：910 x 122 mm",
     "短板直拼：808 x 130 mm",
-    "长窄板直拼：1900 x 136 mm",
     "标准直拼：1200 x 150 mm",
     "经典长板直拼：1524 x 187 mm",
-    "长板直拼：1900 x 190 mm",
     "宽板直拼：1830 x 230 mm",
     "超宽大板直拼：2200 x 260 mm",
     "巨幅大板直拼：2400 x 300 mm",

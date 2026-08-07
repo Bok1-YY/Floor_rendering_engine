@@ -25,7 +25,9 @@ const BADGE: Record<string, { label: string; color: string; bg: string }> = {
 
 const REGEN_NS = [1, 2, 4, 6];
 const actBtn =
-  "h-[28px] rounded-lg border border-border bg-card px-[11px] text-[11.5px] font-semibold text-secondary-foreground transition-colors hover:bg-accent";
+  "h-8 rounded-lg border border-border bg-card px-3 text-[12px] font-semibold text-secondary-foreground transition-colors hover:bg-accent";
+const imageToolBtn =
+  "inline-flex h-[30px] items-center justify-center rounded-lg border border-border bg-card px-2.5 text-[11.5px] font-semibold text-secondary-foreground transition-colors hover:border-primary/35 hover:bg-primary-soft hover:text-accent-foreground";
 
 type SlotView = { idx: number; url: string; thumb: string };
 
@@ -170,22 +172,19 @@ export function JobCard({
     idx: number;
     total: number;
     run: ModelRunView;
-    autoColor: boolean;
   }[] = [];
   for (const key of job.model_targets || (["b2", "pro"] as ModelKey[])) {
     const run = job.model_runs?.[key];
     if (!run?.url) continue;
     const ov = view[key];
-    const currentUrl = ov?.url ?? run.url;
     slots.push({
       key,
       name: run.label,
-      url: currentUrl,
+      url: ov?.url ?? run.url,
       thumb: ov?.thumb ?? run.thumb,
       idx: ov?.idx ?? run.idx,
       total: run.total,
       run,
-      autoColor: currentUrl.includes("自动校色") || currentUrl.includes("%E8%87%AA%E5%8A%A8%E6%A0%A1%E8%89%B2"),
     });
   }
 
@@ -207,13 +206,13 @@ export function JobCard({
     (slots.find((s) => s.key === "pro") ?? slots.find((s) => s.key === "b2") ?? slots[0])?.url || "";
 
   return (
-    <div className="animate-scfade rounded-[14px] border border-border bg-card p-[13px] shadow-[0_2px_8px_rgba(120,90,60,.05)]">
+    <div className="animate-scfade rounded-[16px] border border-border bg-card p-[15px] shadow-[0_6px_22px_rgba(120,90,60,.07)]">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="truncate text-[13.5px] font-bold text-foreground">
+          <div className="truncate text-[14.5px] font-bold text-foreground">
             {job.display_name}
           </div>
-          <div className="mt-0.5 text-[11px] text-muted-foreground">
+          <div className="mt-0.5 text-[11.5px] text-muted-foreground">
             {job.ts}
             {job.time_text ? ` · ${job.time_text}` : ""}
           </div>
@@ -272,16 +271,10 @@ export function JobCard({
                 <span className="absolute left-[7px] top-[7px] rounded-md bg-[rgba(26,24,21,.55)] px-[7px] py-[2px] text-[10px] font-bold text-white backdrop-blur-[2px]">
                   {m.name}
                 </span>
-                {m.autoColor && (
-                  <span className="absolute right-[7px] top-[7px] rounded-md bg-emerald-600 px-[7px] py-[2px] text-[10px] font-bold text-white shadow-sm">
-                    自动校色
-                  </span>
-                )}
               </div>
-              <div className="mt-[5px] flex items-center justify-between text-[11px] text-muted-foreground">
+              <div className="mt-2 flex items-center justify-between text-[11.5px] text-muted-foreground">
                 <span className="flex items-center gap-1">
                   {m.name}
-                  {m.autoColor && <span className="text-emerald-600">· 自动校色</span>}
                   {m.total > 1 && (
                     <>
                       <button
@@ -304,7 +297,16 @@ export function JobCard({
                     </>
                   )}
                 </span>
-                <span className="flex items-center gap-2">
+                <a
+                  href={api.imgUrl(m.url)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-semibold hover:text-foreground"
+                >
+                  查看大图 ↗
+                </a>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-border/70 pt-2">
                   {terminal && job.floor_path && m.url.startsWith("/outputs/") && (
                     <button
                       title={`把原始地板小样确定性投影到这张 ${m.name} 图`}
@@ -315,9 +317,9 @@ export function JobCard({
                           imageRel: m.url.slice("/outputs/".length),
                         })
                       }
-                      className="hover:text-foreground"
+                      className={imageToolBtn}
                     >
-                      🪵 真实贴地板
+                      🪵 贴地板
                     </button>
                   )}
                   {terminal && m.url.startsWith("/outputs/") && (
@@ -330,9 +332,9 @@ export function JobCard({
                           imageRel: m.url.slice("/outputs/".length),
                         })
                       }
-                      className="hover:text-foreground"
+                      className={imageToolBtn}
                     >
-                      🖌️ 修补
+                      🖌️ 智能修补
                     </button>
                   )}
                   {terminal && job.floor_url && m.url.startsWith("/outputs/") && (
@@ -345,21 +347,36 @@ export function JobCard({
                           imageRel: m.url.slice("/outputs/".length),
                         })
                       }
-                      className="hover:text-foreground"
+                      className={imageToolBtn}
                     >
                       🎯 校色
                     </button>
                   )}
-                  <a
-                    href={api.imgUrl(m.url)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="hover:text-foreground"
-                  >
-                    ↗ 原图
-                  </a>
-                </span>
+                  {m.run.api_original_url && (
+                    <a
+                      href={api.imgUrl(m.run.api_original_url)}
+                      target="_blank"
+                      rel="noreferrer"
+                      title="未经本地自动校色的 API 返回原图"
+                      className={imageToolBtn}
+                    >
+                      API 原图 ↗
+                    </a>
+                  )}
               </div>
+              {m.run.auto_color_status === "done" && (
+                <div className="mt-2 rounded-lg bg-primary-soft px-2.5 py-1.5 text-[11px] font-semibold text-success">
+                  🎯 已自动校色 · API 原图已保留为候选
+                </div>
+              )}
+              {m.run.auto_color_status === "failed" && (
+                <div
+                  className="mt-2 rounded-lg bg-warn-soft px-2.5 py-1.5 text-[11px] font-semibold text-warn"
+                  title={m.run.auto_color_error}
+                >
+                  ⚠ 自动校色未完成，当前保留 API 原图
+                </div>
+              )}
               {m.key === "sd35" && (
                 <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[10.5px] text-muted-foreground">
                   {m.run.seed != null && <span>Seed {m.run.seed}</span>}

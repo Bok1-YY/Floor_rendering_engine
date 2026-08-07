@@ -17,6 +17,8 @@ import { cn } from "@/lib/utils";
 
 const toolBtn =
   "h-8 rounded-lg border border-border bg-card px-[13px] text-[12.5px] font-semibold text-secondary-foreground hover:bg-accent";
+const resultToolBtn =
+  "inline-flex h-[30px] items-center justify-center rounded-lg border border-border bg-card px-2.5 text-[11.5px] font-semibold text-secondary-foreground transition-colors hover:bg-accent hover:text-foreground";
 
 const REVIEW_TAGS = [
   "色偏",
@@ -112,15 +114,32 @@ export default function RecordsPage() {
     best: false,
   });
 
-  useEffect(() => {
-    api
-      .listRecords()
-      .then(setFiles)
-      .catch((e) => toast.error((e as Error).message));
-  }, []);
-
   // 加载乱序防护：快速连点两个记录文件时，先发的响应后到会覆盖后选文件的内容（左侧高亮与右侧内容错位）
   const openSeq = useRef(0);
+
+  useEffect(() => {
+    const seq = ++openSeq.current;
+    void (async () => {
+      try {
+        const next = await api.listRecords();
+        if (seq !== openSeq.current) return;
+        setFiles(next);
+        const latest = next[0]?.json_path;
+        if (!latest) return;
+        setActive(latest);
+        setLoading(true);
+        const recs = await api.loadRecord(latest);
+        if (seq === openSeq.current) setRecords(recs);
+      } catch (e) {
+        if (seq === openSeq.current) toast.error((e as Error).message);
+      } finally {
+        if (seq === openSeq.current) setLoading(false);
+      }
+    })();
+    return () => {
+      openSeq.current += 1;
+    };
+  }, []);
 
   async function open(jsonPath: string) {
     const seq = ++openSeq.current;
@@ -377,7 +396,7 @@ export default function RecordsPage() {
   return (
     <div className="flex h-full overflow-hidden">
       {/* 左栏：文件列表 + 搜索 + 收藏筛选/导出 */}
-      <aside className="flex w-[280px] flex-none flex-col border-r border-border bg-panel px-[14px] py-[16px]">
+      <aside className="flex w-[280px] flex-none flex-col border-r border-border bg-panel px-[14px] py-[16px] max-[1320px]:w-[232px] max-[1080px]:w-[210px]">
         <div className="relative mb-[9px]">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="absolute left-[11px] top-[11px] text-muted-foreground">
             <circle cx="11" cy="11" r="7" />
@@ -536,31 +555,31 @@ export default function RecordsPage() {
                           {r.room_type ? ` · ${r.room_type}` : ""}
                           {r.workflow_mode ? ` · ${String(r.workflow_mode)}` : ""}
                         </span>
-                        <div className="flex flex-none gap-2.5 text-[14px] text-muted-foreground">
+                        <div className="flex flex-none flex-wrap justify-end gap-1.5 text-muted-foreground">
                           {(r.gen_context?.params || (r.user_prompt && r.gen_context?.free_image_paths?.length)) && (
                             <button
                               title="用这套参数再生成"
                               onClick={() => doReuse(r)}
-                              className="hover:text-accent-foreground"
+                              className="h-[30px] rounded-lg border border-border bg-card px-2.5 text-[11.5px] font-semibold hover:bg-accent hover:text-accent-foreground"
                             >
-                              ⟳
+                              ⟳ 复用
                             </button>
                           )}
                           {!r.user_prompt && (
                             <button
                               title="解密提示词"
                               onClick={() => setReveal({ open: true, rid, pw: "", text: "" })}
-                              className="hover:text-foreground"
+                              className="h-[30px] rounded-lg border border-border bg-card px-2.5 text-[11.5px] font-semibold hover:bg-accent hover:text-foreground"
                             >
-                              🔑
+                              🔑 提示词
                             </button>
                           )}
                           <button
                             title="删除记录"
                             onClick={() => doDeleteRecord(rid)}
-                            className="hover:text-destructive"
+                            className="h-[30px] rounded-lg border border-border bg-card px-2.5 text-[11.5px] font-semibold hover:bg-destructive-soft hover:text-destructive"
                           >
-                            🗑
+                            删除
                           </button>
                         </div>
                       </div>
@@ -585,7 +604,7 @@ export default function RecordsPage() {
                         </div>
                       )}
 
-                      <div className="grid grid-cols-[repeat(auto-fill,minmax(150px,1fr))] gap-[11px]">
+                      <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-[14px]">
                         {(r.results || []).map((res, j) => {
                           const resultId = res.result_id;
                           const url = res.result_url || "";
@@ -621,28 +640,24 @@ export default function RecordsPage() {
                                   </div>
                                 )}
                               </div>
-                              <div className="mt-1.5 flex items-center justify-between text-[11px] text-muted-foreground">
-                                <span className="truncate">{res.model_label || ""}</span>
-                                <span className="flex shrink-0 items-center gap-2.5 text-[12.5px]">
+                              <div className="mt-2 flex flex-col gap-2 text-[11.5px] text-muted-foreground">
+                                <span className="truncate font-semibold">{res.model_label || "候选图"}</span>
+                                <span className="flex flex-wrap items-center gap-1.5">
                                   <button
                                     title="收藏"
                                     onClick={() => doFav(rid, resultId)}
-                                    className={
-                                      res.favorite
-                                        ? "text-primary"
-                                        : "text-muted-foreground hover:text-foreground"
-                                    }
+                                    className={cn(resultToolBtn, res.favorite && "border-primary/30 bg-primary-soft text-primary")}
                                   >
-                                    {res.favorite ? "★" : "☆"}
+                                    {res.favorite ? "★ 已收藏" : "☆ 收藏"}
                                   </button>
                                   <button
                                     title="二改"
                                     onClick={() =>
                                       setEdit({ open: true, rid, resultId, instruction: "", colorMatch: true })
                                     }
-                                    className="hover:text-foreground"
+                                    className={resultToolBtn}
                                   >
-                                    ✎
+                                    ✎ 二改
                                   </button>
                                   {url && url.startsWith("/outputs/") && (
                                     <button
@@ -658,9 +673,9 @@ export default function RecordsPage() {
                                         })
                                       }
                                       disabled={!r.gen_context?.image_path}
-                                      className="hover:text-foreground disabled:hidden"
+                                      className={cn(resultToolBtn, "disabled:hidden")}
                                     >
-                                      🪵
+                                      🪵 贴地板
                                     </button>
                                   )}
                                   {url && url.startsWith("/outputs/") && (
@@ -669,9 +684,9 @@ export default function RecordsPage() {
                                       onClick={() =>
                                         setInpaint({ open: true, srcUrl: url, recordId: rid, resultId })
                                       }
-                                      className="hover:text-foreground"
+                                      className={resultToolBtn}
                                     >
-                                      🖌️
+                                      🖌️ 智能修补
                                     </button>
                                   )}
                                   {url && url.startsWith("/outputs/") && (
@@ -688,9 +703,9 @@ export default function RecordsPage() {
                                           resultId,
                                         })
                                       }
-                                      className="hover:text-foreground"
+                                      className={resultToolBtn}
                                     >
-                                      🎯
+                                      🎯 校色
                                     </button>
                                   )}
                                   {url && compareBeforeUrl(r) && (
@@ -702,26 +717,26 @@ export default function RecordsPage() {
                                           after: url,
                                         })
                                       }
-                                      className="hover:text-foreground"
+                                      className={resultToolBtn}
                                     >
-                                      ⇔
+                                      ⇔ 对比
                                     </button>
                                   )}
                                   {url && (
                                     <button
                                       title="下载"
                                       onClick={() => download(api.imgUrl(url))}
-                                      className="hover:text-foreground"
+                                      className={resultToolBtn}
                                     >
-                                      ↓
+                                      ↓ 下载
                                     </button>
                                   )}
                                   <button
                                     title="删除"
                                     onClick={() => doDeleteResult(rid, resultId)}
-                                    className="hover:text-destructive"
+                                    className={cn(resultToolBtn, "hover:bg-destructive-soft hover:text-destructive")}
                                   >
-                                    🗑
+                                    删除
                                   </button>
                                 </span>
                               </div>
