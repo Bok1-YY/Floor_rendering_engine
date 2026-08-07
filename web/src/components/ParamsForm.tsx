@@ -303,6 +303,39 @@ export function ParamsForm({
       <SectionHeader className="mx-0.5 mb-[11px] mt-[22px]">
         工作流 / WORKFLOW
       </SectionHeader>
+
+      <div
+        className={cn(
+          "mb-3 flex items-start justify-between gap-4 rounded-xl border p-[13px] transition-colors",
+          supportsCinematic
+            ? "border-primary/40 bg-primary-soft"
+            : "border-border bg-muted/45",
+        )}
+      >
+        <div className="min-w-0">
+          <div
+            className={cn(
+              "text-[12.5px] font-bold",
+              supportsCinematic ? "text-accent-foreground" : "text-muted-foreground",
+            )}
+          >
+            🎬 电影模式 · 真实感导演
+          </div>
+          <p className="mt-1 text-[10.5px] leading-relaxed text-muted-foreground">
+            {supportsCinematic
+              ? "生图前自动规划可信机位、自然动作、视线关系和现实光源，减少人物/宠物摆拍与 CG 感。当前影响 B2 / Pro，地板规格保持不变。"
+              : `当前“${short(params.workflow_mode)}”不支持电影模式。请选择纯效果图、宠物友好、参照模式或 Omakase。`}
+          </p>
+        </div>
+        <Switch
+          className="mt-0.5 shrink-0"
+          checked={supportsCinematic && !!params.cinematic_enabled}
+          disabled={!supportsCinematic}
+          onCheckedChange={(checked) => onParams({ cinematic_enabled: checked })}
+          aria-label="电影模式：电影真实感"
+        />
+      </div>
+
       <div className="grid grid-cols-2 gap-[9px]">
         {options.workflow_modes.map((m) => {
           const active = params.workflow_mode === m;
@@ -356,23 +389,6 @@ export function ParamsForm({
           );
         })}
       </div>
-
-      {supportsCinematic && (
-        <div className="mt-3 flex items-start justify-between gap-4 rounded-xl border border-border bg-card p-[13px]">
-          <div className="min-w-0">
-            <div className="text-[12.5px] font-bold text-secondary-foreground">🎬 电影真实感</div>
-            <p className="mt-1 text-[10.5px] leading-relaxed text-muted-foreground">
-              Gemini 会在生图前规划可信机位、自然动作、视线关系和现实光源，减少人物/宠物摆拍与 CG 感。
-              地板规格仍由原技术提示词锁定；当前只影响 B2 / Pro。
-            </p>
-          </div>
-          <Switch
-            checked={!!params.cinematic_enabled}
-            onCheckedChange={(checked) => onParams({ cinematic_enabled: checked })}
-            aria-label="电影真实感"
-          />
-        </div>
-      )}
 
       {isFree && (
         <FreeModePanel
