@@ -58,12 +58,12 @@ cd Floor_engine_server/web && npm install
 | 旧版 NiceGUI（过渡 fallback） | 7869 | 见 §八 | 老界面，**不加新功能**，留作兜底 |
 
 ### 0.5 启动逻辑（一键启动脚本到底做了什么）
-两个平台的脚本逻辑一致，只是语法不同（Windows 用 `.bat`，Linux/macOS 用 `.sh`）：
-- 先切到脚本所在的 `test/`（后端必须在 `test/` 跑，原因见 §四：数据目录靠相对路径解析到这里）。Windows 用 `cd /d "%~dp0"`，Linux/macOS 用 `cd "$(dirname "$0")"`。
-- 各起一个**独立终端窗口**分别跑后端 `python -m Floor_engine_server.server_api` 和前端 `npm run dev`（跑完不关，方便看日志）。
-- 等前端首次编译（约 8 秒），再打开浏览器 `http://localhost:3000`。
-- **为什么两个窗口**：前后端是两个独立进程（解耦，互不阻塞）；这正是新架构相对老 NiceGUI「一锅炖」的核心改进——后端忙着出 4K 图时前端照样丝滑。
-- **（Windows 专属）为什么 .bat 必须纯 ASCII**：中文 Windows 的 cmd 用 GBK 解析 .bat，文件里有中文会字节错位、命令报错，故 .bat 保持纯英文 + CRLF 换行。`.sh` 无此限制（UTF-8 + LF）。
+生产与开发脚本职责不同：
+- `start-windows.bat` 先切到仓库根目录、检查 `.venv`，再比较 `web/src`、前端配置文件与 `web/out/index.html` 的修改时间。只有静态产物缺失或过期时才运行 `npm run build`；`node_modules` 缺失时才运行 `npm ci`，避免源码已经更新却继续启动旧界面。
+- 生产启动把 `FLOOR_DATA_DIR` 固定到仓库内 `data/`，然后执行 `python serve.py`。FastAPI 与 `web/out` 使用同一个 **7870** 端口，`serve.py` 默认自动打开浏览器；设 `FLOOR_NO_BROWSER=1` 可禁用。
+- `dev-windows.bat` 才使用两个独立进程：FastAPI **7870** + Next.js dev **3000**。前后端解耦，后端生成 4K 图时不会阻塞前端 HMR。
+- Linux / macOS 当前使用手动命令：先 `npm run build`，再从仓库根目录运行 `python serve.py`。
+- **（Windows 专属）为什么 .bat 必须纯 ASCII**：中文 Windows 的 cmd 用 GBK 解析 `.bat`，文件里有中文可能字节错位，因此脚本保持英文命令；Git 检出时允许转换为 CRLF。
 
 ---
 
@@ -252,14 +252,14 @@ web/src/
 ├── app/
 │   ├── layout.tsx        根布局：字体 + ThemeProvider + <AppShell> + <Toaster>
 │   ├── globals.css       ★ 浅色/深色设计令牌 + 滚动条 + keyframes —— 改主题改这里
-│   ├── page.tsx          生成页（左 600px 参数列 + 右任务队列，两栏全高）
-│   ├── records/page.tsx  记录页（左 280px 文件列表 + 右记录卡；房间/评审筛选、收藏、最佳图、人工标注）
-│   ├── review/page.tsx   评审复盘（覆盖率/通过率、维度统计、问题标签、好图样本库）
+│   ├── page.tsx          生成页（产品/场景/输出步骤提示 + 左参数工作台 + 右结果队列）
+│   ├── records/page.tsx  记录页（材料检索 + 房间/评审筛选 + 候选对比、收藏、最佳图、人工标注）
+│   ├── review/page.tsx   评审复盘（通过率、质量分布、问题标签、近期洞察和好图样本库）
 │   ├── usage/page.tsx    用量页（stat 卡 + 成功率 + 估算成本 + 明细表）
 │   └── settings/page.tsx 设置页（密钥、线路网络、生成式修补引擎、模型单价、PPTX 品牌）
 ├── components/
 │   ├── AppShell.tsx      ★ 应用外壳：奶油侧边栏(236) + 顶栏(56,路由映射标题) + 内容槽
-│   ├── ParamsForm.tsx    参数表单（工作流 / 多模型选择 / SD 高级参数 / 字段 Select / 胶囊 / 高级折叠）
+│   ├── ParamsForm.tsx    参数表单（工作流 / 电影真实感 / 多模型 / 地板占比双滑块 / SD 高级参数）
 │   ├── JobCard.tsx       通用模型任务卡（model_runs / 候选 / SD Seed·基础图·超分重试 / 既有编辑操作）
 │   ├── FloorUploader.tsx 地板上传 + 最近小样网格 + 历史弹窗
 │   ├── CompareSlider.tsx 前后图拖动对比
@@ -269,7 +269,7 @@ web/src/
 │   ├── ThemeProvider.tsx next-themes 接线（浅色/深色/跟随系统）
 │   ├── ImageZoom.tsx     全屏看图；支持原图+结果透明图层，滚轮缩放/拖动/双击复位/Esc
 │   ├── dc-ui.tsx         设计基元：SectionHeader(点头标)·Segmented(分段)·Pill(胶囊)
-│   └── ui/               shadcn 基础组件（button/select/dialog/switch/input…，令牌驱动）
+│   └── ui/               shadcn/Base UI 基础组件（button/select/dialog/switch/双端 slider…）
 ├── lib/
 │   ├── api.ts            ★ typed 客户端，开发指向 7870、生产走同源
 │   ├── types.ts          JobView/GenParams/OptionsView/ConfigView/UsageSummary/RecordEntry… 类型
@@ -296,6 +296,13 @@ web/src/
 3. 前端将 RLE 解码为本地 mask 与 owner map：轮廓层只负责命中测试和提示，红色层表示最终被选区域；点击候选可切换，多候选重叠时按 owner 命中，后台返回不得清空点击期间加入的候选。
 4. AI 选区、画笔包含层、画笔排除层只在前端合成，沿用原有 ≤2048 长边 mask 画布；`POST /api/inpaint` 的两段式生成/计费/候选/apply 契约不变，因此智能选区不接触生成模型选择和落盘逻辑。
 5. 弹窗每次切换移除/添加模式都恢复该模式自己的蒙版状态；AI 失败时保留画笔工具并显示 warnings，禁止无反馈 return。
+
+### 5.7 电影真实感与地板占比控制
+1. `GenParams.cinematic_enabled` 控制正式 B2 / Pro 任务是否先运行 `cinematic_planner.py`。支持的工作流会根据房间、风格、人物/宠物和现实光源生成导演规划；调用失败时写入 `cinematic_error` 并使用本地 fallback，不阻断付费生图。SD 3.5 不消费这段规划。
+2. `floor_coverage_min` / `floor_coverage_max` 的服务端范围均为 `10..80`，默认 `40/50`，Pydantic 校验 `min <= max`。字段经 `TaskParams` 同时进入 `prompts.py`、`cinematic_planner.py` 与 `sd_prompts.py`，禁止再在独立风格文案里写死另一组百分比。
+3. 高级选项使用 Base UI 双端 Slider。拖动过程只更新 `coverageDraft` 与可见数字，`onValueCommitted` 在松手后一次写回表单，避免受控数字框在用户清空输入的瞬间强行回填。
+4. 前端载入旧草稿时会把越界值归一化到 `10..80` 并保证最大值不小于最小值；两个 thumb 有独立 ARIA 名称，可用方向键微调。
+5. 修改提示词覆盖范围时必须保留默认 `40–50%` 的黄金快照，并为自定义值补 Gemini、电影规划、SD 及 schema 契约回归。
 
 ---
 
