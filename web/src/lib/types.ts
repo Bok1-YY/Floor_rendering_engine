@@ -97,6 +97,8 @@ export interface GenParams {
   floor_size?: string;
   seam_type?: string;
   glossiness?: string;
+  floor_coverage_min?: number;
+  floor_coverage_max?: number;
   angle?: string;
   aspect_ratio?: string;
   resolution?: string;

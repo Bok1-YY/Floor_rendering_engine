@@ -93,6 +93,11 @@ def build_cinematic_context(params: Any, style_analysis_text: str = "") -> dict:
     """只抽取镜头规划需要的场景字段，刻意不向规划器暴露地板物理规格。"""
     workflow_mode = str(_value(params, "workflow_mode"))
     pet_action = str(_value(params, "pet_action"))
+    try:
+        coverage_min = int(_value(params, "floor_coverage_min", 40))
+        coverage_max = int(_value(params, "floor_coverage_max", 50))
+    except (TypeError, ValueError):
+        coverage_min, coverage_max = 40, 50
     avoid_items = _value(params, "avoid_items", []) or []
     if not isinstance(avoid_items, list):
         avoid_items = [str(avoid_items)]
@@ -122,7 +127,7 @@ def build_cinematic_context(params: Any, style_analysis_text: str = "") -> dict:
         "reference_style_notes": str(style_analysis_text or ""),
         "avoid_items": [str(item) for item in avoid_items if str(item).strip()],
         "product_constraints": (
-            "Keep roughly 40-50% of the image as clearly visible, unobstructed floor. "
+            f"Keep roughly {coverage_min}-{coverage_max}% of the image as clearly visible, unobstructed floor. "
             "Do not invent or alter any floor material property."
         ),
     }

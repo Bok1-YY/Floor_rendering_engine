@@ -14,8 +14,32 @@ from Floor_engine_server import server_state, server_helpers, routes_jobs, route
 from Floor_engine_server import records
 from Floor_engine_server import server_api
 from Floor_engine_server.models import new_job
-from Floor_engine_server.server_schemas import FreeJobSubmitRequest
+from Floor_engine_server.server_schemas import FreeJobSubmitRequest, GenParams
 from Floor_engine_server.task_registry import TaskRegistry
+
+
+def test_floor_coverage_schema_defaults_and_range_validation():
+    defaults = GenParams(workflow_mode="纯效果图 (生成全新空间)")
+    assert (defaults.floor_coverage_min, defaults.floor_coverage_max) == (40, 50)
+
+    custom = GenParams(
+        workflow_mode="纯效果图 (生成全新空间)",
+        floor_coverage_min=55,
+        floor_coverage_max=65,
+    )
+    assert (custom.floor_coverage_min, custom.floor_coverage_max) == (55, 65)
+
+    with pytest.raises(ValidationError):
+        GenParams(
+            workflow_mode="纯效果图 (生成全新空间)",
+            floor_coverage_min=70,
+            floor_coverage_max=60,
+        )
+    with pytest.raises(ValidationError):
+        GenParams(
+            workflow_mode="纯效果图 (生成全新空间)",
+            floor_coverage_min=5,
+        )
 
 
 def test_result_files_are_unique_even_in_same_second(tmp_path, monkeypatch):

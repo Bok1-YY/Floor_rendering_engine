@@ -1,11 +1,12 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import type { GenParams, ModelKey, OptionsView, SDOptions, Swatch, OmakaseOption } from "@/lib/types";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
+import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -216,6 +217,7 @@ export function ParamsForm({
   const isPanelScene = isPanel && !panelSub.includes("替换"); // 再设计/纯原创：暴露场景控件；替换保留原图
   const [advOpen, setAdvOpen] = useState(false);
   const [sdOpen, setSdOpen] = useState(false);
+  const [coverageDraft, setCoverageDraft] = useState<[number, number] | null>(null);
   // 房间图生成前预处理：画笔涂抹移除原有家具/杂物，清理结果另存并回填为当前房间图
   const [roomCleanOpen, setRoomCleanOpen] = useState(false);
   const toggleModel = (key: ModelKey) => {
@@ -267,6 +269,22 @@ export function ParamsForm({
     const city0 = (options.location_map[continent]?.[v] || [])[0] || "";
     onParams({ country: v, city: city0 });
   };
+
+  const rawCoverageMin = params.floor_coverage_min ?? 40;
+  const rawCoverageMax = params.floor_coverage_max ?? 50;
+  const coverageMin = Math.min(80, Math.max(10, Math.round(rawCoverageMin)));
+  const coverageMax = Math.min(80, Math.max(coverageMin, Math.round(rawCoverageMax)));
+  const coverageRange = coverageDraft ?? [coverageMin, coverageMax];
+  const readCoverageRange = (value: number | readonly number[]): [number, number] => {
+    const values = Array.isArray(value) ? value : [value, value];
+    return [Math.round(values[0]), Math.round(values[1])];
+  };
+
+  useEffect(() => {
+    if (rawCoverageMin !== coverageMin || rawCoverageMax !== coverageMax) {
+      onParams({ floor_coverage_min: coverageMin, floor_coverage_max: coverageMax });
+    }
+  }, [coverageMax, coverageMin, onParams, rawCoverageMax, rawCoverageMin]);
 
   // 多选 toggle
   const toggle = (
@@ -949,36 +967,75 @@ export function ParamsForm({
         />
       </div>
 
-      {!isOmakase && !isFree && (<>
-      {/* ── 高级：回避清单 / 自定义补充 ── */}
+      {!isPanel && !isFree && (<>
+      {/* ── 高级：地板占比 / 回避清单 / 自定义补充 ── */}
       <button
         type="button"
         onClick={() => setAdvOpen((v) => !v)}
         className="mt-[18px] flex w-full items-center justify-between rounded-xl border border-border bg-card px-[13px] py-[11px] transition hover:bg-accent"
       >
         <span className="text-[12.5px] font-bold text-secondary-foreground">
-          ⚙ 高级 · 回避清单 / 自定义补充
+          {isOmakase ? "⚙ 高级 · 地板画面占比" : "⚙ 高级 · 地板占比 / 回避清单 / 自定义补充"}
         </span>
         <span className="text-[11px] text-muted-foreground">{advOpen ? "收起 ▲" : "展开 ▼"}</span>
       </button>
       {advOpen && (
         <div className="mt-2.5 space-y-3 rounded-xl border border-border bg-card p-[13px]">
-          <Chips
-            label="🚫 避免出现"
-            options={options.avoid_items}
-            selected={params.avoid_items ?? []}
-            onToggle={(v) => toggle("avoid_items", v)}
-          />
-          <div className="flex flex-col gap-1.5">
-            <span className="text-[11.5px] font-semibold text-muted-foreground">自定义补充（可选）</span>
-            <Textarea
-              rows={2}
-              value={params.custom_addition || ""}
-              onChange={(e) => onParams({ custom_addition: e.target.value })}
-              placeholder="可追加任何中/英文补充说明…"
-              className="rounded-[9px] bg-panel"
-            />
+          <div>
+            <div className="mb-2 flex items-baseline justify-between gap-3">
+              <span className="text-[11.5px] font-semibold text-muted-foreground">地板占画面面积</span>
+              <span className="text-[10.5px] text-muted-foreground">允许 10–80% · 模型会近似执行</span>
+            </div>
+            <div className="rounded-[12px] border border-border bg-panel px-3.5 py-3">
+              <div className="mb-2.5 flex items-center justify-between gap-3">
+                <div className="rounded-lg bg-card px-2.5 py-1.5 text-[11px] text-muted-foreground shadow-sm ring-1 ring-border">
+                  最小 <b className="ml-1 text-[13px] tabular-nums text-foreground">{coverageRange[0]}%</b>
+                </div>
+                <div className="text-[10.5px] font-semibold text-primary">当前范围 {coverageRange[0]}–{coverageRange[1]}%</div>
+                <div className="rounded-lg bg-card px-2.5 py-1.5 text-[11px] text-muted-foreground shadow-sm ring-1 ring-border">
+                  最大 <b className="ml-1 text-[13px] tabular-nums text-foreground">{coverageRange[1]}%</b>
+                </div>
+              </div>
+              <Slider
+                value={coverageRange}
+                min={10}
+                max={80}
+                step={1}
+                thumbCollisionBehavior="none"
+                getAriaLabel={(index) => index === 0 ? "地板最小占比" : "地板最大占比"}
+                onValueChange={(value) => setCoverageDraft(readCoverageRange(value))}
+                onValueCommitted={(value) => {
+                  const [min, max] = readCoverageRange(value);
+                  setCoverageDraft(null);
+                  onParams({ floor_coverage_min: min, floor_coverage_max: max });
+                }}
+                className="py-2 [&_[data-slot=slider-thumb]]:size-4 [&_[data-slot=slider-thumb]]:border-2 [&_[data-slot=slider-track]]:h-2"
+              />
+              <div className="mt-1.5 flex justify-between text-[10px] tabular-nums text-muted-foreground">
+                <span>10%</span>
+                <span>拖动两个圆点，松手后应用</span>
+                <span>80%</span>
+              </div>
+            </div>
           </div>
+          {!isOmakase && (<>
+            <Chips
+              label="🚫 避免出现"
+              options={options.avoid_items}
+              selected={params.avoid_items ?? []}
+              onToggle={(v) => toggle("avoid_items", v)}
+            />
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[11.5px] font-semibold text-muted-foreground">自定义补充（可选）</span>
+              <Textarea
+                rows={2}
+                value={params.custom_addition || ""}
+                onChange={(e) => onParams({ custom_addition: e.target.value })}
+                placeholder="可追加任何中/英文补充说明…"
+                className="rounded-[9px] bg-panel"
+              />
+            </div>
+          </>)}
         </div>
       )}
       </>)}

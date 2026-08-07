@@ -193,6 +193,13 @@ def _derive_translations(p, v):
     cn_view = p.cn_view
     country = p.country
     custom_addition = p.custom_addition
+    try:
+        floor_coverage_min = max(10, min(80, int(p.floor_coverage_min)))
+        floor_coverage_max = max(10, min(80, int(p.floor_coverage_max)))
+    except (TypeError, ValueError):
+        floor_coverage_min, floor_coverage_max = 40, 50
+    if floor_coverage_min > floor_coverage_max:
+        floor_coverage_min, floor_coverage_max = floor_coverage_max, floor_coverage_min
     floor_size = p.floor_size
     floor_tone = p.floor_tone
     glossiness = p.glossiness
@@ -301,6 +308,19 @@ def _derive_translations(p, v):
         _style_must = []
         _style_ban  = []
         _style_may  = []
+
+    # 少数风格预设自身带有地板百分比。用户改动高级占比后，同步替换预设中的旧数字，
+    # 避免场景层与后面的地板技术锁互相矛盾；默认 40-50 保留既有 prompt 快照。
+    if (floor_coverage_min, floor_coverage_max) != (40, 50):
+        _style_must = [
+            re.sub(
+                r"occupying\s+\d+\s*[–-]\s*\d+%\s+of image area",
+                f"occupying {floor_coverage_min}-{floor_coverage_max}% of image area",
+                item,
+                flags=re.IGNORECASE,
+            )
+            for item in _style_must
+        ]
 
     # ── SCHEMA 强化块：MANDATORY & OPTIONAL & PROHIBITIONS ────────────────
     _mandatory_block = ""
@@ -416,7 +436,7 @@ def _derive_translations(p, v):
     else:
         en_perspective = "Natural eye-level perspective with balanced spatial depth. True-to-life proportions, neither distorted nor compressed."
 
-    en_floor_visibility = "**Floor Coverage**: The floor must occupy a minimum of 40-50% of the total image area. Furniture placement should deliberately reveal large unobstructed floor zones. Camera angle must maximize visible floor surface."
+    en_floor_visibility = f"**Floor Coverage**: The floor must occupy a minimum of {floor_coverage_min}-{floor_coverage_max}% of the total image area. Furniture placement should deliberately reveal large unobstructed floor zones. Camera angle must maximize visible floor surface."
     en_composition = f"**Composition**: {en_perspective} Floor texture must be the absolute visual anchor of the image."
 
     no_sofa_rooms = ["厨房", "餐厨一体", "餐厅", "独立餐厅", "开放式厨房", "封闭式厨房", "衣帽间", "生活阳台", "卫生间", "浴室 (带浴缸)"]
@@ -1161,6 +1181,7 @@ def _persist_task_record(p, v):
 
 
 def save_task_files_html(workflow_mode, model_choice, image_path, continent, country, city, neighborhood, property_type, style_type, room_type, view, lighting, pet_type, pet_action, pet_focus, angle, aspect_ratio, resolution, glossiness, seam_type, avoid_items, floor_size, custom_addition, floor_tone, market_furniture, last_image_path,
+                         floor_coverage_min=40, floor_coverage_max=50,
                          cn_mode=False, cn_developer="── 不指定 ──", cn_city="上海",
                          cn_tier="── 不指定 ──", cn_unit_type="── 不指定 ──",
                          cn_delivery="🏆 样板间 / 展示单位",
@@ -1190,6 +1211,7 @@ def save_task_files_html(workflow_mode, model_choice, image_path, continent, cou
         lighting=lighting, pet_type=pet_type, pet_action=pet_action, pet_focus=pet_focus,
         angle=angle, aspect_ratio=aspect_ratio, resolution=resolution, glossiness=glossiness,
         seam_type=seam_type, avoid_items=avoid_items, floor_size=floor_size,
+        floor_coverage_min=floor_coverage_min, floor_coverage_max=floor_coverage_max,
         custom_addition=custom_addition, floor_tone=floor_tone, market_furniture=market_furniture,
         last_image_path=last_image_path, cn_mode=cn_mode, cn_developer=cn_developer,
         cn_city=cn_city, cn_tier=cn_tier, cn_unit_type=cn_unit_type, cn_delivery=cn_delivery,

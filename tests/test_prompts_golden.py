@@ -123,6 +123,24 @@ def test_prompt_assembly_is_deterministic(swatch_image):
     assert r1[7] == r2[7], "Pro prompt 两次不一致——prompt 组装里混入了非确定性"
 
 
+def test_custom_floor_coverage_reaches_prompt_and_overrides_style_percentage(swatch_image):
+    """高级占比必须进入 B2/Pro 技术层，并覆盖风格预设里可能存在的旧百分比。"""
+    params = TaskParams(
+        workflow_mode="纯效果图 (生成全新空间)",
+        model_choice="Pro",
+        image_path=swatch_image,
+        style_type="🪵 原木风 (Raw Wood) - 原木暖调，自然留白，地板即主角。",
+        floor_coverage_min=55,
+        floor_coverage_max=65,
+    )
+    result = save_task_files_html(**task_params_to_kwargs(params))
+    for prompt in (result[2], result[7]):
+        assert "55-65% of the total image area" in prompt
+        assert "occupying 55-65% of image area" in prompt
+        assert "40-50% of the total image area" not in prompt
+        assert "50–60% of image area" not in prompt
+
+
 def test_seamless_square_has_no_chevron(swatch_image):
     """语义锁：无缝+正方形拼的 B2/Pro 提示词绝不能出现 chevron（人字纹）——
     收尾覆盖段(READ THIS LAST)曾硬编码 chevron，以最高优先级压过正文的方格描述。"""

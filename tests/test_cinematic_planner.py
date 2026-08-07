@@ -50,6 +50,18 @@ def test_context_excludes_floor_physical_specifications():
     assert context["avoid_items"] == ["任何地毯"]
 
 
+def test_context_uses_custom_floor_coverage_constraint():
+    params = TaskParams(
+        workflow_mode="纯效果图 (生成全新空间)",
+        model_choice="Pro",
+        image_path="x.png",
+        floor_coverage_min=55,
+        floor_coverage_max=65,
+    )
+    context = cinematic_planner.build_cinematic_context(params)
+    assert "roughly 55-65%" in context["product_constraints"]
+
+
 def test_planner_uses_structured_output_and_returns_direction(monkeypatch):
     captured = {}
     raw_plan = {

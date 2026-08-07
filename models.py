@@ -360,6 +360,8 @@ class TaskParams:
     floor_size: str = ''
     seam_type: str = '无缝拼接 (SPC/LVT专用)'
     glossiness: str = '哑光 (3-5°)'
+    floor_coverage_min: int = 40
+    floor_coverage_max: int = 50
 
     # ── Camera ──
     angle: str = '28mm lens (Wide)'
@@ -438,6 +440,8 @@ def task_params_to_kwargs(p: TaskParams) -> dict:
         'seam_type': p.seam_type,
         'avoid_items': p.avoid_items,
         'floor_size': p.floor_size,
+        'floor_coverage_min': p.floor_coverage_min,
+        'floor_coverage_max': p.floor_coverage_max,
         'custom_addition': p.custom_addition,
         'floor_tone': p.floor_tone,
         'market_furniture': p.market_furniture,

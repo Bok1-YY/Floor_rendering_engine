@@ -19,6 +19,7 @@ const pct = (v: number | null | undefined) =>
 
 export default function ReviewPage() {
   const [data, setData] = useState<ReviewSummary | null>(null);
+  const [summaryError, setSummaryError] = useState("");
   const [galleryFilter, setGalleryFilter] = useState<"pass" | "best">("pass");
   const [gallery, setGallery] = useState<ReviewGalleryItem[]>([]);
   const [zoom, setZoom] = useState<string | null>(null);
@@ -30,7 +31,12 @@ export default function ReviewPage() {
     api
       .getReviewSummary()
       .then((next) => seq === summarySeq.current && setData(next))
-      .catch((e) => seq === summarySeq.current && toast.error((e as Error).message));
+      .catch((e) => {
+        if (seq !== summarySeq.current) return;
+        const message = (e as Error).message;
+        setSummaryError(message);
+        toast.error(message);
+      });
   }
   function loadGallery(filter: "pass" | "best") {
     const seq = ++gallerySeq.current;
@@ -71,8 +77,24 @@ export default function ReviewPage() {
           </button>
         </div>
 
-        {!data ? (
-          <div className="text-sm text-muted-foreground">加载中…</div>
+        {!data ? summaryError ? (
+          <div className="rounded-[16px] border border-destructive/20 bg-card px-6 py-12 text-center shadow-[0_6px_22px_rgba(120,90,60,.06)]">
+            <div className="text-[15px] font-bold text-foreground">复盘数据暂时无法加载</div>
+            <div className="mx-auto mt-2 max-w-lg text-[12.5px] leading-relaxed text-muted-foreground">
+              服务可能正在整理旧记录。你可以重试，生成与记录功能不受影响。
+            </div>
+            <button
+              onClick={() => {
+                setSummaryError("");
+                loadAll();
+              }}
+              className="mt-5 h-9 rounded-[9px] bg-primary px-4 text-[12.5px] font-bold text-primary-foreground hover:bg-primary-hover"
+            >
+              重新加载
+            </button>
+          </div>
+        ) : (
+          <div className="rounded-[14px] border border-border bg-card px-5 py-12 text-center text-sm text-muted-foreground">正在汇总评审数据…</div>
         ) : (
           <>
             {/* 总览 */}
