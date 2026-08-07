@@ -1,6 +1,10 @@
 # Floor Rendering Engine
 
-**Release:** 2026.08
+![Release](https://img.shields.io/badge/release-2026.08-blue)
+![License](https://img.shields.io/badge/license-AGPL--3.0--only-blue)
+![Python](https://img.shields.io/badge/python-3.10%2B-3776AB)
+![Node](https://img.shields.io/badge/node-20%2B-339933)
+![Tests](https://img.shields.io/badge/tests-211%20passed-brightgreen)
 
 把一块真实地板色板，转译成可批量生成、可锁定产品颜色、可局部修补、可评审交付的空间内容。
 
@@ -8,7 +12,9 @@
 
 > 不是让 AI 多生成几张，而是让真实产品可靠地走到可发布内容。
 
-[English](./README.en.md) · [产品案例](./docs/PRODUCT_CASE_STUDY.zh-CN.md) · [在线演示](https://bokiframe.com) · [开发手册](./DEVGUIDE.md)
+[English](./README.en.md) · [产品案例](./docs/PRODUCT_CASE_STUDY.zh-CN.md) · [在线演示](https://www.bokiframe.com) · [开发手册](./DEVGUIDE.md)
+
+![从色板到批量生成、自动校色与智能修补的完整工作流](./docs/media/hero-demo.gif)
 
 ## Why
 
@@ -145,7 +151,7 @@ FastAPI / task orchestration / queue recovery
 
 ## Quick Start
 
-要求：Python 3.10+、Node.js 20+，并至少配置一个可用图像模型 API。MobileSAM 模型资产已包含在仓库中。
+要求：Python 3.10+、Node.js 20+，并至少配置一个可用图像模型 API——[Google AI Studio](https://aistudio.google.com/)（Gemini）或 [fal.ai](https://fal.ai/) 任一即可；也可连接自备的 ComfyUI 实例，本地算力零 API 费用。MobileSAM 模型资产已包含在仓库中。
 
 ### Windows
 

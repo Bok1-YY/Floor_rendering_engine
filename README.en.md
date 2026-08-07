@@ -1,6 +1,10 @@
 # Floor Rendering Engine
 
-**Release:** 2026.08
+![Release](https://img.shields.io/badge/release-2026.08-blue)
+![License](https://img.shields.io/badge/license-AGPL--3.0--only-blue)
+![Python](https://img.shields.io/badge/python-3.10%2B-3776AB)
+![Node](https://img.shields.io/badge/node-20%2B-339933)
+![Tests](https://img.shields.io/badge/tests-211%20passed-brightgreen)
 
 Turn a real flooring swatch into spatial content that can be batch-generated, color-locked, locally repaired, reviewed, and delivered.
 
@@ -8,7 +12,9 @@ This is not a “home interior” prompt preset. It asks whether the product col
 
 > The goal is not to make AI generate more images. It is to move a real product reliably into publishable content.
 
-[中文](./README.md) · [Product case study](./docs/PRODUCT_CASE_STUDY.en.md) · [Live demo](https://bokiframe.com) · [Developer guide](./DEVGUIDE.md)
+[中文](./README.md) · [Product case study](./docs/PRODUCT_CASE_STUDY.en.md) · [Live demo](https://www.bokiframe.com) · [Developer guide](./DEVGUIDE.md)
+
+![End-to-end workflow: swatch to batch generation, automatic color locking, and smart inpainting](./docs/media/hero-demo.gif)
 
 ## Why
 
@@ -112,7 +118,7 @@ These are internal production observations, not offline benchmarks:
 4. **Editable composition:** AI regions are unioned, brush additions are applied, and eraser exclusions are subtracted before exporting a binary PNG mask. Inference and feathered blend masks remain separate, preserving pixels outside the edit region.
 5. **Controlled fallback:** reflective, transparent, or occluded edges may be incomplete. The UI explains the state and keeps manual editing available. Smart segmentation adds no third-party segmentation API cost.
 
-See the [developer guide's smart-selection data flow](./DEVGUIDE.md#56-生成式修补智能选区数据流) for implementation detail.
+See the [developer guide's smart-selection data flow](./DEVGUIDE.md#56-生成式修补智能选区数据流) (Chinese) for implementation detail.
 
 </details>
 
@@ -145,7 +151,7 @@ The [full product case study](./docs/PRODUCT_CASE_STUDY.en.md) covers context, t
 
 ## Quick Start
 
-Requirements: Python 3.10+, Node.js 20+, and at least one configured image-model API. The MobileSAM model asset is included.
+Requirements: Python 3.10+, Node.js 20+, and at least one configured image-model API — either [Google AI Studio](https://aistudio.google.com/) (Gemini) or [fal.ai](https://fal.ai/) is enough; a self-hosted ComfyUI instance is also supported with zero API cost. The MobileSAM model asset is included.
 
 ### Windows
 
@@ -173,7 +179,7 @@ Enter API keys on the Settings page after first launch. See [DEVGUIDE.md](./DEVG
 
 - [Product case study (English)](./docs/PRODUCT_CASE_STUDY.en.md) / [产品案例（中文）](./docs/PRODUCT_CASE_STUDY.zh-CN.md)
 - [Developer guide](./DEVGUIDE.md)
-- [Development log](./开发日志.md)
+- [Development log](./开发日志.md) (Chinese)
 - [SaaS architecture roadmap](./SAAS_ARCHITECTURE.md)
 - [Third-party notices](./THIRD_PARTY_NOTICES.md)
 - [Commercial licensing](./COMMERCIAL_LICENSING.md)
