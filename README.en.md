@@ -19,7 +19,7 @@ This is not a “home interior” prompt preset. It asks whether the product col
 ## What's New in 2026.08
 
 - **A redesigned production workspace:** Product → Scene → Output replaces the long parameter column. Core room, style, lighting, and camera controls stay close at hand, while B2 / Pro tabs, candidate thumbnails, and pass / alternative / reject / favorite actions now live directly on result cards.
-- **Color matching 2.0 + a standalone utility:** Match a newly photographed large sample to an older small swatch without starting Floor Engine or calling an AI service. Beyond classic LAB statistics, it now offers reliable-pixel filtering, detailed distribution transfer, optional spatial illumination correction, and a 0–100 confidence report with a four-color diagnostic overlay. Classic mode remains the default and preserves the new image's texture and natural lighting.
+- **Color matching 2.0 + a standalone utility:** Match a newly photographed large sample to an older small swatch without starting Floor Engine or calling an AI service. Beyond classic LAB statistics, it now offers reliable-pixel filtering, detailed distribution transfer, optional spatial illumination correction, and a 0–100 confidence report with a four-color diagnostic overlay. Floor Engine previews default to Detailed 2.0 and always show both the selected engine and the version actually applied to the canvas; the standalone tool and legacy API retain Classic 1.0 defaults for compatibility.
 
 > **Bring new and historical sample photography back to one product-color baseline.** Launch it directly on Windows or run it independently on Linux: [try the standalone sample color matcher](./standalone_color_calibrator/README.md).
 

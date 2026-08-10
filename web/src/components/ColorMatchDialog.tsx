@@ -74,6 +74,14 @@ const HINT_STYLES: Record<ColorMatchHintCode, string> = {
   unavailable: "border-border bg-panel text-muted-foreground",
 };
 
+function algorithmLabel(value: ColorMatchAlgorithm): string {
+  return value === "distribution" ? "精细 2.0" : "经典 1.0";
+}
+
+function illuminationLabel(value: ColorIlluminationMode): string {
+  return value === "chroma" ? "仅色偏" : value === "full" ? "色偏 + 明暗" : "光照关闭";
+}
+
 function scaleAutoAdjustments(
   profile: ColorMatchAdjustments,
   strength: number,
@@ -137,8 +145,12 @@ function ColorMatchSession({
   const [analyzing, setAnalyzing] = useState(Boolean(refPath));
   const [analysis, setAnalysis] = useState<ColorMatchAnalysis | null>(null);
   const [quality, setQuality] = useState<ColorQualityReport | null>(null);
-  const [algorithm, setAlgorithm] = useState<ColorMatchAlgorithm>("classic");
+  const [algorithm, setAlgorithm] = useState<ColorMatchAlgorithm>("distribution");
   const [illuminationMode, setIlluminationMode] = useState<ColorIlluminationMode>("off");
+  const [appliedAlgorithm, setAppliedAlgorithm] = useState<ColorMatchAlgorithm | null>(null);
+  const [appliedIlluminationMode, setAppliedIlluminationMode] = useState<ColorIlluminationMode>("off");
+  const [appliedFallbackReason, setAppliedFallbackReason] = useState("");
+  const [previewEngineError, setPreviewEngineError] = useState("");
   const [hasPreview, setHasPreview] = useState(false);
   const [ready, setReady] = useState(false); // fullPreview 与当前 rect/ref 对应（可保存）
   const [saving, setSaving] = useState(false);
@@ -168,8 +180,10 @@ function ColorMatchSession({
   const scopeRef = useRef<ColorScope>("floor_mask");
   const maskRef = useRef("");
   const maskFeatherRef = useRef(0.003);
-  const algorithmRef = useRef<ColorMatchAlgorithm>("classic");
+  const algorithmRef = useRef<ColorMatchAlgorithm>("distribution");
   const illuminationModeRef = useRef<ColorIlluminationMode>("off");
+  const appliedAlgorithmRef = useRef<ColorMatchAlgorithm | null>(null);
+  const appliedIlluminationModeRef = useRef<ColorIlluminationMode>("off");
 
   // canvas 重绘：原图打底 + fullPreview 按当前强度 alpha 叠加（即时，无网络）
   const redraw = useCallback(() => {
@@ -204,6 +218,10 @@ function ColorMatchSession({
     ) => {
       if (!refPathNow || r.w < 0.02 || r.h < 0.02) return;
       if (scopeRef.current === "floor_mask" && !maskRef.current) return;
+      const requestedAlgorithm = algorithmRef.current;
+      const requestedIlluminationMode = illuminationModeRef.current;
+      const previousAppliedAlgorithm = appliedAlgorithmRef.current;
+      const previousAppliedIlluminationMode = appliedIlluminationModeRef.current;
       const controller = new AbortController();
       abortPreview.current = controller;
       api
@@ -219,8 +237,8 @@ function ColorMatchSession({
             scope: scopeRef.current,
             mask_b64: maskRef.current,
             mask_feather: maskFeatherRef.current,
-            algorithm: algorithmRef.current,
-            illumination_mode: illuminationModeRef.current,
+            algorithm: requestedAlgorithm,
+            illumination_mode: requestedIlluminationMode,
           },
           controller.signal,
         )
@@ -238,18 +256,46 @@ function ColorMatchSession({
           const img = new Image();
           img.onload = () => {
             if (seq !== previewSeq.current) return;
+            const actualAlgorithm = res.quality_report?.algorithm
+              ?? appliedAlgorithmRef.current
+              ?? requestedAlgorithm;
+            const actualIlluminationMode = res.quality_report?.applied_illumination_mode
+              ?? appliedIlluminationModeRef.current;
             fullPreviewRef.current = img;
             if (nextMode === "auto") autoPreviewRef.current = img;
+            appliedAlgorithmRef.current = actualAlgorithm;
+            appliedIlluminationModeRef.current = actualIlluminationMode;
+            setAppliedAlgorithm(actualAlgorithm);
+            setAppliedIlluminationMode(actualIlluminationMode);
+            if (res.quality_report) {
+              setAppliedFallbackReason(res.quality_report.fallback_reason ?? "");
+            }
             adjustmentModeRef.current = nextMode;
             setAdjustmentMode(nextMode);
             setHasPreview(true);
             setReady(true);
             setPreviewing(false);
+            setPreviewEngineError("");
             redraw();
+            const didSwitch = previousAppliedAlgorithm !== null
+              && (previousAppliedAlgorithm !== actualAlgorithm
+                || previousAppliedIlluminationMode !== actualIlluminationMode
+                || requestedAlgorithm !== previousAppliedAlgorithm
+                || requestedIlluminationMode !== previousAppliedIlluminationMode);
+            if (didSwitch) {
+              if (requestedAlgorithm !== actualAlgorithm) {
+                toast.warning(`精细 2.0 已回退，当前实际使用${algorithmLabel(actualAlgorithm)}`);
+              } else if (requestedIlluminationMode !== actualIlluminationMode) {
+                toast.warning(`${algorithmLabel(actualAlgorithm)}预览已更新，但空间光照校正未能应用`);
+              } else {
+                toast.success(`${algorithmLabel(actualAlgorithm)}预览已更新`);
+              }
+            }
           };
           img.onerror = () => {
             if (seq !== previewSeq.current) return;
             setPreviewing(false);
+            setPreviewEngineError("预览图片读取失败");
             if (includeAnalysis) setAnalyzing(false);
             toast.error("预览图片读取失败");
           };
@@ -259,6 +305,7 @@ function ColorMatchSession({
           if (seq !== previewSeq.current) return;
           if ((e as Error).name === "AbortError") return;
           setPreviewing(false);
+          setPreviewEngineError((e as Error).message);
           if (includeAnalysis) setAnalyzing(false);
           toast.error("预览失败：" + (e as Error).message);
         });
@@ -276,6 +323,7 @@ function ColorMatchSession({
       includeAnalysis = false,
     ) => {
       setReady(false);
+      setPreviewEngineError("");
       abortPreview.current?.abort();
       const seq = ++previewSeq.current;
       if (debounceTimer.current) clearTimeout(debounceTimer.current);
@@ -532,6 +580,8 @@ function ColorMatchSession({
   }
 
   function changeAlgorithm(next: ColorMatchAlgorithm) {
+    if (next === algorithmRef.current
+        && (next !== "classic" || illuminationModeRef.current === "off")) return;
     algorithmRef.current = next;
     setAlgorithm(next);
     if (next === "classic") {
@@ -542,10 +592,12 @@ function ColorMatchSession({
     setQuality(null);
     adjustmentModeRef.current = "auto";
     setAdjustmentMode("auto");
+    toast.info(`正在切换到${algorithmLabel(next)}，完成前画布保留原预览`);
     schedulePreview(rectRef.current, ref.path, DEFAULT_ADJUSTMENTS, "auto", 80, true);
   }
 
   function changeIlluminationMode(next: ColorIlluminationMode) {
+    if (next === illuminationModeRef.current) return;
     illuminationModeRef.current = next;
     setIlluminationMode(next);
     if (next !== "off") {
@@ -556,6 +608,7 @@ function ColorMatchSession({
     setQuality(null);
     adjustmentModeRef.current = "auto";
     setAdjustmentMode("auto");
+    toast.info(`正在应用${illuminationLabel(next)}，完成前画布保留原预览`);
     schedulePreview(rectRef.current, ref.path, DEFAULT_ADJUSTMENTS, "auto", 80, true);
   }
 
@@ -584,6 +637,27 @@ function ColorMatchSession({
     : [];
   const paneTitle =
     "mb-1.5 flex items-center gap-1.5 text-[11px] font-extrabold tracking-[0.08em] text-accent-foreground";
+  const selectedAlgorithmLabel = algorithmLabel(algorithm);
+  const appliedAlgorithmLabel = appliedAlgorithm ? algorithmLabel(appliedAlgorithm) : "尚未生成";
+  const modeSwitchPending = previewing && appliedAlgorithm !== null
+    && (algorithm !== appliedAlgorithm || illuminationMode !== appliedIlluminationMode);
+  const previewEngineStatus = previewEngineError
+    ? appliedAlgorithm
+      ? `更新失败：当前画面仍是${appliedAlgorithmLabel}`
+      : `预览生成失败：${previewEngineError}`
+    : !ref.path
+    ? `等待参照图 · 目标${selectedAlgorithmLabel}`
+    : scope === "floor_mask" && !maskB64
+    ? `等待地板蒙版 · 目标${selectedAlgorithmLabel}`
+    : appliedAlgorithm === null
+    ? `${previewing ? "正在生成" : "等待生成"}${selectedAlgorithmLabel}预览…`
+    : modeSwitchPending
+    ? `切换中：当前画面 ${appliedAlgorithmLabel} → ${selectedAlgorithmLabel}`
+    : algorithm !== appliedAlgorithm
+    ? `当前画面：${appliedAlgorithmLabel} · ${selectedAlgorithmLabel}已回退`
+    : illuminationMode !== appliedIlluminationMode
+    ? `当前画面：${appliedAlgorithmLabel} · 光照校正未应用`
+    : `当前画面：${appliedAlgorithmLabel} · ${illuminationLabel(appliedIlluminationMode)}`;
 
   return (
     <>
@@ -597,6 +671,13 @@ function ColorMatchSession({
               <div className="inline-flex rounded-lg border border-border bg-panel p-0.5">
                 <button type="button" onClick={() => changeScope("floor_mask")} className={`rounded-md px-2.5 py-1 text-[11px] font-bold ${scope === "floor_mask" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"}`}>地板局部（默认）</button>
                 <button type="button" onClick={() => changeScope("global")} className={`rounded-md px-2.5 py-1 text-[11px] font-bold ${scope === "global" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"}`}>全图校准（兼容）</button>
+              </div>
+              <div className="ml-auto flex items-center gap-1.5 max-[720px]:ml-0">
+                <span className="text-[10.5px] font-bold text-muted-foreground">对色引擎</span>
+                <div className="inline-flex rounded-lg border border-border bg-panel p-0.5">
+                  <button type="button" onClick={() => changeAlgorithm("classic")} className={`rounded-md px-2.5 py-1 text-[11px] font-bold ${algorithm === "classic" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"}`}>经典 1.0</button>
+                  <button type="button" onClick={() => changeAlgorithm("distribution")} className={`rounded-md px-2.5 py-1 text-[11px] font-bold ${algorithm === "distribution" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-accent"}`}>精细 2.0</button>
+                </div>
               </div>
             </div>
             <div className="mt-0.5 text-[12px] text-muted-foreground">
@@ -668,6 +749,13 @@ function ColorMatchSession({
                 <span className="ml-auto text-[11px] font-semibold text-muted-foreground">
                   点击放大看细节
                 </span>
+              </div>
+              <div
+                title={appliedFallbackReason || undefined}
+                className={`mb-1.5 rounded-md border px-2 py-1 text-[10.5px] font-bold ${previewEngineError ? "border-amber-300/60 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/35 dark:text-amber-200" : modeSwitchPending || appliedAlgorithm === null ? "border-sky-300/60 bg-sky-50 text-sky-800 dark:border-sky-800 dark:bg-sky-950/35 dark:text-sky-200" : algorithm !== appliedAlgorithm || illuminationMode !== appliedIlluminationMode ? "border-amber-300/60 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/35 dark:text-amber-200" : "border-emerald-300/60 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/35 dark:text-emerald-200"}`}
+              >
+                {previewEngineStatus}
+                {adjustmentMode === "manual" && appliedAlgorithm && ` · 手动参数基于${appliedAlgorithmLabel}自动基准`}
               </div>
               <div className="relative overflow-hidden rounded-[10px] border border-border bg-black/5">
                 <canvas
@@ -916,16 +1004,7 @@ function ColorMatchSession({
 
             {advancedOpen && (
               <div className="rounded-[10px] border border-border bg-panel/60 p-3">
-                <div className="mb-3 grid grid-cols-2 gap-3 max-[850px]:grid-cols-1">
-                  <div className="rounded-lg border border-border bg-card px-3 py-2">
-                    <div className="mb-1.5 text-[11.5px] font-bold text-secondary-foreground">校色算法</div>
-                    <div className="flex gap-1.5">
-                      <button type="button" onClick={() => changeAlgorithm("classic")} className={`rounded-md px-2.5 py-1.5 text-[11px] font-bold ${algorithm === "classic" ? "bg-primary text-primary-foreground" : "bg-panel text-muted-foreground hover:bg-accent"}`}>经典 · 快速稳定</button>
-                      <button type="button" onClick={() => changeAlgorithm("distribution")} className={`rounded-md px-2.5 py-1.5 text-[11px] font-bold ${algorithm === "distribution" ? "bg-primary text-primary-foreground" : "bg-panel text-muted-foreground hover:bg-accent"}`}>精细 · 分布匹配</button>
-                    </div>
-                    <div className="mt-1.5 text-[10px] text-muted-foreground">精细模式可匹配偏斜、双峰等复杂颜色分布，耗时略高。</div>
-                  </div>
-                  <div className="rounded-lg border border-border bg-card px-3 py-2">
+                <div className="mb-3 rounded-lg border border-border bg-card px-3 py-2">
                     <div className="mb-1.5 text-[11.5px] font-bold text-secondary-foreground">空间光照校正</div>
                     <div className="flex flex-wrap gap-1.5">
                       {(["off", "chroma", "full"] as ColorIlluminationMode[]).map((value) => (
@@ -935,7 +1014,6 @@ function ColorMatchSession({
                       ))}
                     </div>
                     <div className="mt-1.5 text-[10px] text-muted-foreground">仅在大样存在渐变色偏或混合光时开启；开启会自动使用精细算法。</div>
-                  </div>
                 </div>
                 <div className="mb-2 flex items-center justify-between gap-3">
                   <div>

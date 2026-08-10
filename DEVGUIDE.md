@@ -295,8 +295,9 @@ web/src/
 2. 有效蒙版触发 `/api/color-match/preview`。经典模式保持原受限 LAB 统计迁移；精细模式先排除裁切、反光、深阴影与异色离群像素，再做受限协方差预对齐和固定旋转的一维分位数迭代，处理偏斜/多峰颜色分布。局部模式默认只迁移 a/b，L 通道保持原场景光影；合成 mask 只向内部羽化，区外像素不变。
 3. 前端缓存满强度预览，自动强度 `0%~100%` 以 1% 步进在 canvas 即时混合；笔触、参照、高级参数或羽化变化才防抖请求后端，序号机制丢弃过期响应。
 4. 切到 `global` 即恢复旧流程：矩形只作取样/诊断，自动与手动参数作用整张图。局部结果无损 PNG 落盘并保存配套 mask；保存始终是独立动作。
-5. `algorithm=classic|distribution` 默认 `classic`；`illumination_mode=off|chroma|full` 默认 `off`。请求空间光照校正时 schema 自动切换到精细算法；二次曲面采用分块中位数与 Huber IRLS 拟合，并设置色度/亮度幅度上限。分片执行必须传递全图 y 坐标，保证预览与全分辨率输出一致。
-6. `standalone_color_calibrator/advanced.py` 是主系统与独立工具共享的无 UI 核心。质量报告包含可用像素比例、排除原因、空间色偏跨度、初始/预计 ΔE00、预估色域裁切率和 0–100 分；诊断覆盖图绿色=可用、红色=反光/裁切、蓝色=深阴影、黄色=离群。低分只警告，不阻止保存；算法、光照模式和报告会写入结果 metadata。
+5. API schema 与独立工具的 `algorithm=classic|distribution` 默认仍是 `classic`，Floor Engine 的 `ColorMatchDialog` 首次预览则默认请求 `distribution`（精细 2.0）；`illumination_mode=off|chroma|full` 默认 `off`。请求空间光照校正时 schema 自动切换到精细算法；二次曲面采用分块中位数与 Huber IRLS 拟合，并设置色度/亮度幅度上限。分片执行必须传递全图 y 坐标，保证预览与全分辨率输出一致。
+6. 前端必须分开保存“已选择模式”和“画布已应用模式”：切换请求完成前继续标注旧画布版本，只有新预览图片 `onload` 后才能更新“当前画面”。1.0/2.0 切换常驻在弹窗顶部；若精细算法或光照拟合回退，状态条显示实际生效模式，不能只依赖高级选项按钮的选中态。
+7. `standalone_color_calibrator/advanced.py` 是主系统与独立工具共享的无 UI 核心。质量报告包含可用像素比例、排除原因、空间色偏跨度、初始/预计 ΔE00、预估色域裁切率和 0–100 分；诊断覆盖图绿色=可用、红色=反光/裁切、蓝色=深阴影、黄色=离群。低分只警告，不阻止保存；算法、光照模式和报告会写入结果 metadata。
 
 ### 5.6 生成式修补智能选区数据流
 1. 打开 `InpaintDialog` 后，前端把原 `target` 传给 `/api/inpaint/segment`；后端继续使用 `_resolve_inpaint_source` 做 job/record/room 路径归属校验和 EXIF 归一化，不接受前端直接指定任意文件。
