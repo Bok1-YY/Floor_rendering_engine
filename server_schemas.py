@@ -300,6 +300,14 @@ class ColorMatchPreviewRequest(BaseModel):
     scope: Literal['global', 'floor_mask'] = 'global'
     mask_b64: str = Field(default='', max_length=12_000_000)
     mask_feather: float = Field(default=0.003, ge=0, le=0.02)
+    algorithm: Literal['classic', 'distribution'] = 'classic'
+    illumination_mode: Literal['off', 'chroma', 'full'] = 'off'
+
+    @model_validator(mode='after')
+    def enable_distribution_for_illumination(self):
+        if self.illumination_mode != 'off':
+            self.algorithm = 'distribution'
+        return self
 
 
 
@@ -322,6 +330,14 @@ class RecordColorMatchRequest(BaseModel):
     scope: Literal['global', 'floor_mask'] = 'global'
     mask_b64: str = Field(default='', max_length=12_000_000)
     mask_feather: float = Field(default=0.003, ge=0, le=0.02)
+    algorithm: Literal['classic', 'distribution'] = 'classic'
+    illumination_mode: Literal['off', 'chroma', 'full'] = 'off'
+
+    @model_validator(mode='after')
+    def enable_distribution_for_illumination(self):
+        if self.illumination_mode != 'off':
+            self.algorithm = 'distribution'
+        return self
 
 
 

@@ -4,8 +4,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import type {
   ColorMatchAdjustments,
+  ColorMatchAlgorithm,
   ColorMatchAnalysis,
   ColorMatchHintCode,
+  ColorIlluminationMode,
+  ColorQualityReport,
   ColorMatchRect,
   JobView,
   ModelKey,
@@ -133,6 +136,9 @@ function ColorMatchSession({
   const [previewing, setPreviewing] = useState(Boolean(refPath));
   const [analyzing, setAnalyzing] = useState(Boolean(refPath));
   const [analysis, setAnalysis] = useState<ColorMatchAnalysis | null>(null);
+  const [quality, setQuality] = useState<ColorQualityReport | null>(null);
+  const [algorithm, setAlgorithm] = useState<ColorMatchAlgorithm>("classic");
+  const [illuminationMode, setIlluminationMode] = useState<ColorIlluminationMode>("off");
   const [hasPreview, setHasPreview] = useState(false);
   const [ready, setReady] = useState(false); // fullPreview 与当前 rect/ref 对应（可保存）
   const [saving, setSaving] = useState(false);
@@ -162,6 +168,8 @@ function ColorMatchSession({
   const scopeRef = useRef<ColorScope>("floor_mask");
   const maskRef = useRef("");
   const maskFeatherRef = useRef(0.003);
+  const algorithmRef = useRef<ColorMatchAlgorithm>("classic");
+  const illuminationModeRef = useRef<ColorIlluminationMode>("off");
 
   // canvas 重绘：原图打底 + fullPreview 按当前强度 alpha 叠加（即时，无网络）
   const redraw = useCallback(() => {
@@ -211,6 +219,8 @@ function ColorMatchSession({
             scope: scopeRef.current,
             mask_b64: maskRef.current,
             mask_feather: maskFeatherRef.current,
+            algorithm: algorithmRef.current,
+            illumination_mode: illuminationModeRef.current,
           },
           controller.signal,
         )
@@ -219,6 +229,7 @@ function ColorMatchSession({
           autoAdjustmentsRef.current = res.auto_adjustments;
           if (includeAnalysis) {
             setAnalysis(res.analysis ?? null);
+            setQuality(res.quality_report ?? null);
             setAnalyzing(false);
           }
           if (nextMode === "auto") {
@@ -318,6 +329,7 @@ function ColorMatchSession({
     adjustmentModeRef.current = "auto";
     setAdjustmentMode("auto");
     setAnalysis(null);
+    setQuality(null);
     autoPreviewRef.current = null;
     schedulePreview(bounds, ref.path, DEFAULT_ADJUSTMENTS, "auto", 80, true);
   }, [ref.path, schedulePreview]);
@@ -331,6 +343,7 @@ function ColorMatchSession({
     setHasPreview(false);
     setReady(false);
     setAnalysis(null);
+    setQuality(null);
     if (nextScope === "global") {
       strengthRef.current = 0;
       setStrength(0);
@@ -371,6 +384,7 @@ function ColorMatchSession({
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
     autoPreviewRef.current = null;
     setAnalysis(null);
+    setQuality(null);
     setAnalyzing(false);
     setReady(false);
   }
@@ -399,6 +413,7 @@ function ColorMatchSession({
     adjustmentModeRef.current = "manual";
     setAdjustmentMode("manual");
     setAnalysis(null);
+    setQuality(null);
     schedulePreview(rectRef.current, ref.path, next, "manual", 350, true);
   }
 
@@ -416,6 +431,8 @@ function ColorMatchSession({
           scope,
           mask_b64: maskB64,
           mask_feather: maskFeather,
+          algorithm,
+          illumination_mode: illuminationMode,
           stage: target.stage,
         });
         toast.success("已保存为新候选（‹n/N› 可切回原图对比）");
@@ -433,6 +450,8 @@ function ColorMatchSession({
           scope,
           mask_b64: maskB64,
           mask_feather: maskFeather,
+          algorithm,
+          illumination_mode: illuminationMode,
         });
         toast.success("校色结果已追加到该记录");
         onDone?.();
@@ -462,6 +481,7 @@ function ColorMatchSession({
       adjustmentModeRef.current = nextMode;
       setAdjustmentMode(nextMode);
       setAnalysis(null);
+      setQuality(null);
       if (scopeRef.current === "global" || maskRef.current) {
         schedulePreview(rect, s.path, next, nextMode, 350, true);
       }
@@ -509,6 +529,34 @@ function ColorMatchSession({
     } else {
       schedulePreview(rect, ref.path, DEFAULT_ADJUSTMENTS, "auto");
     }
+  }
+
+  function changeAlgorithm(next: ColorMatchAlgorithm) {
+    algorithmRef.current = next;
+    setAlgorithm(next);
+    if (next === "classic") {
+      illuminationModeRef.current = "off";
+      setIlluminationMode("off");
+    }
+    autoPreviewRef.current = null;
+    setQuality(null);
+    adjustmentModeRef.current = "auto";
+    setAdjustmentMode("auto");
+    schedulePreview(rectRef.current, ref.path, DEFAULT_ADJUSTMENTS, "auto", 80, true);
+  }
+
+  function changeIlluminationMode(next: ColorIlluminationMode) {
+    illuminationModeRef.current = next;
+    setIlluminationMode(next);
+    if (next !== "off") {
+      algorithmRef.current = "distribution";
+      setAlgorithm("distribution");
+    }
+    autoPreviewRef.current = null;
+    setQuality(null);
+    adjustmentModeRef.current = "auto";
+    setAdjustmentMode("auto");
+    schedulePreview(rectRef.current, ref.path, DEFAULT_ADJUSTMENTS, "auto", 80, true);
   }
 
   function applySuggestedAdjustments() {
@@ -778,6 +826,33 @@ function ColorMatchSession({
             )}
           </div>
 
+          {quality && (
+            <div className={`rounded-[12px] border p-3 ${quality.level === "low" ? "border-amber-400/60 bg-amber-50/70 dark:bg-amber-950/20" : "border-border bg-panel/45"}`}>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex h-12 w-12 flex-none items-center justify-center rounded-full border-4 border-primary/25 bg-card text-[16px] font-black text-secondary-foreground">
+                  {quality.score}
+                </div>
+                <div className="min-w-[240px] flex-1">
+                  <div className="text-[12.5px] font-bold text-secondary-foreground">校色可信度 · {quality.summary}</div>
+                  <div className="mt-0.5 text-[10.5px] text-muted-foreground">
+                    可用像素 {Math.round(quality.source_usable_ratio * 100)}% · 自动算法预计 ΔE00 {quality.initial_delta_e00.toFixed(1)} → {quality.estimated_delta_e00.toFixed(1)} ·
+                    {quality.applied_illumination_mode === "off" ? " 空间光照校正关闭" : ` 已应用 ${quality.applied_illumination_mode} 光照校正`}
+                  </div>
+                  {!!quality.warnings.length && (
+                    <div className="mt-1 text-[10.5px] font-semibold text-amber-700 dark:text-amber-300">{quality.warnings.join("；")}</div>
+                  )}
+                </div>
+                {quality.diagnostic_overlay && (
+                  <button type="button" onClick={() => setZoom({ url: quality.diagnostic_overlay!, baseUrl: api.imgUrl(srcUrl), overlayOpacity: 1 })} className="relative h-[72px] w-[112px] overflow-hidden rounded-lg border border-border bg-black/5" title="放大问题像素诊断图">
+                    <img src={api.imgUrl(srcUrl)} alt="" className="absolute inset-0 h-full w-full object-contain" />
+                    <img src={quality.diagnostic_overlay} alt="问题像素诊断" className="absolute inset-0 h-full w-full object-contain" />
+                  </button>
+                )}
+              </div>
+              <div className="mt-2 text-[9.5px] text-muted-foreground">诊断图：绿色可用，红色反光/过曝，蓝色深阴影，黄色异色离群点。低可信度只提示，不阻止保存。</div>
+            </div>
+          )}
+
           <div className="space-y-2.5">
             <div className="flex flex-wrap items-center gap-3 lg:flex-nowrap">
               {/* 参照小样 */}
@@ -841,6 +916,27 @@ function ColorMatchSession({
 
             {advancedOpen && (
               <div className="rounded-[10px] border border-border bg-panel/60 p-3">
+                <div className="mb-3 grid grid-cols-2 gap-3 max-[850px]:grid-cols-1">
+                  <div className="rounded-lg border border-border bg-card px-3 py-2">
+                    <div className="mb-1.5 text-[11.5px] font-bold text-secondary-foreground">校色算法</div>
+                    <div className="flex gap-1.5">
+                      <button type="button" onClick={() => changeAlgorithm("classic")} className={`rounded-md px-2.5 py-1.5 text-[11px] font-bold ${algorithm === "classic" ? "bg-primary text-primary-foreground" : "bg-panel text-muted-foreground hover:bg-accent"}`}>经典 · 快速稳定</button>
+                      <button type="button" onClick={() => changeAlgorithm("distribution")} className={`rounded-md px-2.5 py-1.5 text-[11px] font-bold ${algorithm === "distribution" ? "bg-primary text-primary-foreground" : "bg-panel text-muted-foreground hover:bg-accent"}`}>精细 · 分布匹配</button>
+                    </div>
+                    <div className="mt-1.5 text-[10px] text-muted-foreground">精细模式可匹配偏斜、双峰等复杂颜色分布，耗时略高。</div>
+                  </div>
+                  <div className="rounded-lg border border-border bg-card px-3 py-2">
+                    <div className="mb-1.5 text-[11.5px] font-bold text-secondary-foreground">空间光照校正</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {(["off", "chroma", "full"] as ColorIlluminationMode[]).map((value) => (
+                        <button key={value} type="button" onClick={() => changeIlluminationMode(value)} className={`rounded-md px-2.5 py-1.5 text-[11px] font-bold ${illuminationMode === value ? "bg-primary text-primary-foreground" : "bg-panel text-muted-foreground hover:bg-accent"}`}>
+                          {value === "off" ? "关闭" : value === "chroma" ? "仅色偏" : "色偏 + 明暗"}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="mt-1.5 text-[10px] text-muted-foreground">仅在大样存在渐变色偏或混合光时开启；开启会自动使用精细算法。</div>
+                  </div>
+                </div>
                 <div className="mb-2 flex items-center justify-between gap-3">
                   <div>
                     <div className="text-[12px] font-bold text-secondary-foreground">

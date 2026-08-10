@@ -14,6 +14,27 @@ from typing import Iterable
 import numpy as np
 from PIL import Image, ImageOps
 
+try:
+    from .advanced import (
+        Algorithm,
+        ColorAnalysisError,
+        ColorQualityReport,
+        ColorTransformPlan,
+        IlluminationMode,
+        apply_color_transform_plan,
+        build_color_transform_plan,
+    )
+except ImportError:  # Direct script launch from this directory.
+    from advanced import (
+        Algorithm,
+        ColorAnalysisError,
+        ColorQualityReport,
+        ColorTransformPlan,
+        IlluminationMode,
+        apply_color_transform_plan,
+        build_color_transform_plan,
+    )
+
 
 Rect = tuple[float, float, float, float]
 
@@ -26,6 +47,7 @@ class MatchReport:
     reference_mean_lab: tuple[float, float, float]
     estimated_mean_delta_e: float
     selected_rect: Rect
+    quality: ColorQualityReport | None = None
 
 
 def open_image(path: str | Path) -> Image.Image:
@@ -69,6 +91,41 @@ def _crop_from_rect(image: Image.Image, rect: Rect) -> Image.Image:
     return image.crop((left, top, right, bottom))
 
 
+def _mask_from_rect(size: tuple[int, int], rect: Rect) -> Image.Image:
+    width, height = size
+    x, y, rect_width, rect_height = rect
+    left = int(round(x * width))
+    top = int(round(y * height))
+    right = max(left + 1, int(round((x + rect_width) * width)))
+    bottom = max(top + 1, int(round((y + rect_height) * height)))
+    mask = Image.new("L", size, 0)
+    mask.paste(255, (left, top, min(right, width), min(bottom, height)))
+    return mask
+
+
+def build_sample_match_plan(
+    source: Image.Image,
+    reference: Image.Image,
+    *,
+    source_rect: Iterable[float] | None = None,
+    preserve_luminance: bool = True,
+    algorithm: Algorithm = "distribution",
+    illumination_mode: IlluminationMode = "off",
+) -> tuple[ColorTransformPlan, Rect]:
+    """Build a reusable advanced plan for preview and full-resolution output."""
+
+    rect = _normalise_rect(source_rect)
+    plan = build_color_transform_plan(
+        source.convert("RGB"),
+        reference.convert("RGB"),
+        sample_mask=_mask_from_rect(source.size, rect),
+        algorithm=algorithm,
+        illumination_mode=illumination_mode,
+        preserve_luminance=preserve_luminance,
+    )
+    return plan, rect
+
+
 def _bounded_sample(image: Image.Image, max_size: int) -> Image.Image:
     sample = image.convert("RGB").copy()
     sample.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
@@ -108,6 +165,9 @@ def match_sample_color(
     strength: float = 0.85,
     preserve_luminance: bool = True,
     strip_rows: int = 256,
+    algorithm: Algorithm = "classic",
+    illumination_mode: IlluminationMode = "off",
+    transform_plan: ColorTransformPlan | None = None,
 ) -> tuple[Image.Image, MatchReport]:
     """Match a newly photographed large sample to an older small reference.
 
@@ -125,6 +185,34 @@ def match_sample_color(
     rect = _normalise_rect(source_rect)
     strength = float(min(max(strength, 0.0), 1.0))
     rows = max(1, int(strip_rows))
+
+    quality_plan = transform_plan
+    if quality_plan is None:
+        try:
+            quality_plan, _ = build_sample_match_plan(
+                source_rgb,
+                reference_rgb,
+                source_rect=rect,
+                preserve_luminance=preserve_luminance,
+                algorithm=algorithm,
+                illumination_mode=illumination_mode,
+            )
+        except ColorAnalysisError:
+            if algorithm == "distribution":
+                raise
+    if algorithm == "distribution":
+        assert quality_plan is not None
+        output = apply_color_transform_plan(
+            source_rgb, quality_plan, strength=strength, strip_rows=rows)
+        quality = quality_plan.report
+        report = MatchReport(
+            source_mean_lab=tuple(float(value) for value in quality_plan.source_mean),
+            reference_mean_lab=tuple(float(value) for value in quality_plan.reference_mean),
+            estimated_mean_delta_e=quality.estimated_delta_e00,
+            selected_rect=rect,
+            quality=quality,
+        )
+        return output, report
 
     source_sample = _crop_from_rect(source_rgb, rect)
     source_mean, source_std = _profile_image(source_sample, 1600)
@@ -174,6 +262,7 @@ def match_sample_color(
         reference_mean_lab=tuple(float(value) for value in reference_mean),
         estimated_mean_delta_e=float(np.linalg.norm(residual)),
         selected_rect=rect,
+        quality=quality_plan.report if quality_plan else None,
     )
     return output, report
 

@@ -506,6 +506,30 @@ export interface ColorMatchAnalysis {
   recommended_adjustments: ColorMatchAdjustments;
   zones: ColorMatchZoneAnalysis[];
 }
+export type ColorMatchAlgorithm = "classic" | "distribution";
+export type ColorIlluminationMode = "off" | "chroma" | "full";
+export interface ColorQualityReport {
+  score: number;
+  level: "high" | "medium" | "low";
+  summary: string;
+  source_usable_ratio: number;
+  reference_usable_ratio: number;
+  clipped_ratio: number;
+  glare_ratio: number;
+  shadow_ratio: number;
+  outlier_ratio: number;
+  spatial_chroma_span: number;
+  spatial_luminance_span: number;
+  initial_delta_e00: number;
+  estimated_delta_e00: number;
+  predicted_gamut_clip_ratio: number;
+  algorithm: ColorMatchAlgorithm;
+  requested_illumination_mode: ColorIlluminationMode;
+  applied_illumination_mode: ColorIlluminationMode;
+  fallback_reason: string;
+  warnings: string[];
+  diagnostic_overlay: string | null;
+}
 export interface ColorMatchPreviewRequest {
   image_rel: string; // 成图相对 /outputs 路径
   ref_path: string;
@@ -518,6 +542,8 @@ export interface ColorMatchPreviewRequest {
   scope?: "global" | "floor_mask";
   mask_b64?: string;
   mask_feather?: number;
+  algorithm?: ColorMatchAlgorithm;
+  illumination_mode?: ColorIlluminationMode;
 }
 export interface ColorMatchPreviewView {
   preview: string; // data URL
@@ -525,6 +551,7 @@ export interface ColorMatchPreviewView {
   height: number;
   auto_adjustments: ColorMatchAdjustments; // 满强度自动校准对应的原图基准滑杆值
   analysis?: ColorMatchAnalysis;
+  quality_report?: ColorQualityReport;
 }
 export interface JobColorMatchRequest extends ColorMatchPreviewRequest {
   stage: ModelKey;
@@ -542,6 +569,8 @@ export interface RecordColorMatchRequest {
   scope?: "global" | "floor_mask";
   mask_b64?: string;
   mask_feather?: number;
+  algorithm?: ColorMatchAlgorithm;
+  illumination_mode?: ColorIlluminationMode;
 }
 export interface ColorMatchSegmentRequest {
   image_rel: string;

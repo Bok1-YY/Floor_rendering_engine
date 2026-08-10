@@ -11,9 +11,13 @@ from pathlib import Path
 from PIL import Image, ImageTk
 
 try:  # Package import (tests / ``python -m``).
-    from .engine import MatchReport, match_sample_color, open_image, save_image
+    from .engine import (
+        MatchReport, build_sample_match_plan, match_sample_color, open_image, save_image,
+    )
 except ImportError:  # Direct script / double-click launch.
-    from engine import MatchReport, match_sample_color, open_image, save_image
+    from engine import (
+        MatchReport, build_sample_match_plan, match_sample_color, open_image, save_image,
+    )
 
 
 IMAGE_TYPES = [
@@ -46,6 +50,14 @@ def _build_parser() -> argparse.ArgumentParser:
         "--match-luminance", action="store_true",
         help="同时匹配明暗；默认保留新图的纹理和光影",
     )
+    parser.add_argument(
+        "--algorithm", choices=("classic", "distribution"), default="classic",
+        help="校色算法：classic 经典快速，distribution 精细分布匹配",
+    )
+    parser.add_argument(
+        "--illumination", choices=("off", "chroma", "full"), default="off",
+        help="空间光照校正：off 关闭，chroma 仅校正色偏，full 同时校正明暗",
+    )
     return parser
 
 
@@ -54,6 +66,7 @@ def run_cli(args: argparse.Namespace) -> int:
     if missing:
         raise SystemExit("命令行模式缺少参数: " + ", ".join("--" + name for name in missing))
     source_path = Path(args.source)
+    algorithm = "distribution" if args.illumination != "off" else args.algorithm
     with Image.open(source_path) as opened:
         source_info = dict(opened.info)
     result, report = match_sample_color(
@@ -62,10 +75,17 @@ def run_cli(args: argparse.Namespace) -> int:
         source_rect=args.rect,
         strength=args.strength,
         preserve_luminance=not args.match_luminance,
+        algorithm=algorithm,
+        illumination_mode=args.illumination,
     )
     save_image(result, args.output, source_info=source_info)
     print(f"已保存: {Path(args.output).resolve()}")
     print(f"估算平均色差 ΔE: {report.estimated_mean_delta_e:.1f}")
+    if report.quality:
+        quality = report.quality
+        print(f"输入可信度: {quality.score}/100（{quality.summary}）")
+        for warning in quality.warnings:
+            print(f"提示: {warning}")
     return 0
 
 
@@ -94,11 +114,18 @@ class ColorCalibratorApp:
         self.source_photo = None
         self.reference_photo = None
         self.result_photo = None
+        self.diagnostic_overlay: Image.Image | None = None
+        self.transform_plan = None
+        self.plan_signature = None
 
         self.mode = tk.StringVar(value="color")
+        self.algorithm = tk.StringVar(value="classic")
+        self.illumination = tk.StringVar(value="off")
+        self.show_diagnostic = tk.BooleanVar(value=False)
         self.strength = tk.DoubleVar(value=85)
         self.status = tk.StringVar(value="先载入新拍大图和旧小样；如有背景，请在新图上框选纯样品区域。")
         self.selection_text = tk.StringVar(value="取色区域：整张新图")
+        self.quality_text = tk.StringVar(value="质量报告：生成预览后显示")
 
         toolbar = ttk.Frame(root, padding=10)
         toolbar.pack(fill="x")
@@ -119,6 +146,31 @@ class ColorCalibratorApp:
         self.preview_button.pack(side="right", padx=4)
         self.save_button = ttk.Button(toolbar, text="4. 保存全分辨率", command=self.save_full, state="disabled")
         self.save_button.pack(side="right", padx=4)
+
+        advanced = ttk.Frame(root, padding=(14, 0, 14, 8))
+        advanced.pack(fill="x")
+        ttk.Label(advanced, text="算法").pack(side="left")
+        algorithm_box = ttk.Combobox(
+            advanced, textvariable=self.algorithm, state="readonly", width=18,
+            values=("classic", "distribution"),
+        )
+        algorithm_box.pack(side="left", padx=(4, 16))
+        algorithm_box.bind("<<ComboboxSelected>>", self._algorithm_changed)
+        ttk.Label(advanced, text="classic 经典 / distribution 精细").pack(side="left")
+        ttk.Label(advanced, text="空间光照").pack(side="left", padx=(22, 4))
+        illumination_box = ttk.Combobox(
+            advanced, textvariable=self.illumination, state="readonly", width=10,
+            values=("off", "chroma", "full"),
+        )
+        illumination_box.pack(side="left")
+        illumination_box.bind("<<ComboboxSelected>>", self._illumination_changed)
+        ttk.Label(advanced, text="off 关闭 / chroma 色偏 / full 色偏+明暗").pack(
+            side="left", padx=(5, 16)
+        )
+        ttk.Checkbutton(
+            advanced, text="显示问题像素", variable=self.show_diagnostic,
+            command=self.render_source,
+        ).pack(side="right")
 
         content = ttk.Panedwindow(root, orient="horizontal")
         content.pack(fill="both", expand=True, padx=10, pady=(0, 8))
@@ -144,14 +196,27 @@ class ColorCalibratorApp:
         ref_box.pack(side="left")
         self.reference_label = ttk.Label(ref_box, text="尚未载入", width=24, anchor="center")
         self.reference_label.pack()
-        ttk.Label(footer, textvariable=self.status, anchor="w", wraplength=760).pack(
-            side="left", fill="x", expand=True, padx=12
+        messages = ttk.Frame(footer)
+        messages.pack(side="left", fill="x", expand=True, padx=12)
+        ttk.Label(messages, textvariable=self.status, anchor="w", wraplength=760).pack(
+            fill="x"
+        )
+        ttk.Label(messages, textvariable=self.quality_text, anchor="w", wraplength=760).pack(
+            fill="x", pady=(3, 0)
         )
 
     def _open_dialog(self, title):
         from tkinter import filedialog
 
         return filedialog.askopenfilename(title=title, filetypes=IMAGE_TYPES)
+
+    def _algorithm_changed(self, _event=None):
+        if self.algorithm.get() == "classic":
+            self.illumination.set("off")
+
+    def _illumination_changed(self, _event=None):
+        if self.illumination.get() != "off":
+            self.algorithm.set("distribution")
 
     def load_source(self):
         path = self._open_dialog("选择新拍的大面积样品图")
@@ -163,6 +228,11 @@ class ColorCalibratorApp:
             self.source = open_image(path)
             self.source_path = Path(path)
             self.result = None
+            self.report = None
+            self.diagnostic_overlay = None
+            self.transform_plan = None
+            self.plan_signature = None
+            self.quality_text.set("质量报告：生成预览后显示")
             self.reset_selection()
             self.render_source()
             self.render_result()
@@ -178,6 +248,8 @@ class ColorCalibratorApp:
         try:
             self.reference = open_image(path)
             self.reference_path = Path(path)
+            self.transform_plan = None
+            self.plan_signature = None
             preview = self.reference.copy()
             preview.thumbnail((230, 130), Image.Resampling.LANCZOS)
             self.reference_photo = ImageTk.PhotoImage(preview)
@@ -201,6 +273,9 @@ class ColorCalibratorApp:
             self.source_canvas.create_text(20, 20, anchor="nw", fill="white", text="请打开新拍大图")
             return
         preview, self.display_box = self._fit(self.source, self.source_canvas)
+        if self.show_diagnostic.get() and self.diagnostic_overlay is not None:
+            overlay = self.diagnostic_overlay.resize(preview.size, Image.Resampling.NEAREST)
+            preview = Image.alpha_composite(preview.convert("RGBA"), overlay.convert("RGBA"))
         self.source_photo = ImageTk.PhotoImage(preview)
         x, y, width, height = self.display_box
         self.source_canvas.create_image(x, y, image=self.source_photo, anchor="nw")
@@ -281,29 +356,58 @@ class ColorCalibratorApp:
         rect = self.rect
         strength = self.strength.get() / 100.0
         preserve_luminance = self.mode.get() == "color"
+        algorithm = self.algorithm.get()
+        illumination = self.illumination.get()
+        signature = (
+            self.source_path, self.reference_path, rect, preserve_luminance,
+            algorithm, illumination,
+        )
 
         def work():
             try:
+                plan = None
+                if algorithm == "distribution":
+                    plan, _ = build_sample_match_plan(
+                        self.source, reference, source_rect=rect,
+                        preserve_luminance=preserve_luminance,
+                        algorithm=algorithm, illumination_mode=illumination,
+                    )
                 result, report = match_sample_color(
                     source, reference, source_rect=rect,
                     strength=strength,
                     preserve_luminance=preserve_luminance,
+                    algorithm=algorithm,
+                    illumination_mode=illumination,
+                    transform_plan=plan,
                 )
-                self.root.after(0, lambda: self._preview_done(result, report))
+                self.root.after(
+                    0, lambda: self._preview_done(result, report, plan, signature)
+                )
             except Exception as exc:
                 self.root.after(0, lambda error=exc: self.show_error(error))
 
         threading.Thread(target=work, daemon=True).start()
 
-    def _preview_done(self, result, report):
+    def _preview_done(self, result, report, plan=None, signature=None):
         self.result = result
         self.report = report
+        self.transform_plan = plan
+        self.plan_signature = signature
+        self.diagnostic_overlay = report.quality.diagnostic_overlay if report.quality else None
+        self.render_source()
         self.render_result()
         self._finish_busy()
         self.status.set(
             f"预览完成。估算平均色差 ΔE={report.estimated_mean_delta_e:.1f}；"
             "满意后点“保存全分辨率”。"
         )
+        if report.quality:
+            quality = report.quality
+            warnings = "；".join(quality.warnings) if quality.warnings else "未发现明显风险"
+            self.quality_text.set(
+                f"质量报告：{quality.score}/100 · {quality.summary} · "
+                f"可用像素 {quality.source_usable_ratio:.0%} · {warnings}"
+            )
 
     def save_full(self):
         if self.source is None or self.reference is None or self.source_path is None:
@@ -324,12 +428,22 @@ class ColorCalibratorApp:
         rect = self.rect
         strength = self.strength.get() / 100.0
         preserve_luminance = self.mode.get() == "color"
+        algorithm = self.algorithm.get()
+        illumination = self.illumination.get()
+        signature = (
+            self.source_path, self.reference_path, rect, preserve_luminance,
+            algorithm, illumination,
+        )
+        plan = self.transform_plan if self.plan_signature == signature else None
 
         def work():
             try:
                 result, report = match_sample_color(
                     source, reference, source_rect=rect, strength=strength,
                     preserve_luminance=preserve_luminance,
+                    algorithm=algorithm,
+                    illumination_mode=illumination,
+                    transform_plan=plan,
                 )
                 save_image(result, path, source_info=self.source_info)
                 self.root.after(0, lambda: self._save_done(path, report))

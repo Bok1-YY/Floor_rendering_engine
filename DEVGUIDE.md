@@ -6,7 +6,7 @@
 
 面向招聘与产品评审的阅读入口：[中文产品案例](./docs/PRODUCT_CASE_STUDY.zh-CN.md) / [English case study](./docs/PRODUCT_CASE_STUDY.en.md)。README 负责说明用户价值与业务结果，本手册聚焦实现边界、数据流和开发约定。
 
-只做新旧样品照片对色时，不必启动完整服务：`standalone_color_calibrator/` 是从现有 LAB 校色核心抽出的独立 Pillow / NumPy 桌面与命令行工具，入口和参数见其 [README](./standalone_color_calibrator/README.md)。
+只做新旧样品照片对色时，不必启动完整服务：`standalone_color_calibrator/` 是从现有 LAB 校色核心抽出的独立 Pillow / NumPy / OpenCV 桌面与命令行工具，入口和参数见其 [README](./standalone_color_calibrator/README.md)。
 
 ---
 
@@ -292,9 +292,11 @@ web/src/
 
 ### 5.5 地板校色数据流
 1. 弹窗默认 `floor_mask`：图片加载后请求 `/api/color-match/segment`，MobileSAM 在本机 CPU 生成初稿；绿色笔作为前景约束、红色笔作为背景约束，随后用 GrabCut 贴合边缘。模型不可用时只采用明确的绿色笔触，不扩散、不回退成全图修改。
-2. 有效蒙版触发 `/api/color-match/preview`。后端在 mask 内用 median/MAD 抑制家具与高光离群点，只对 LAB a/b 做受限迁移，L 通道保持原场景光影；合成 mask 只向内部羽化，区外像素不变。
+2. 有效蒙版触发 `/api/color-match/preview`。经典模式保持原受限 LAB 统计迁移；精细模式先排除裁切、反光、深阴影与异色离群像素，再做受限协方差预对齐和固定旋转的一维分位数迭代，处理偏斜/多峰颜色分布。局部模式默认只迁移 a/b，L 通道保持原场景光影；合成 mask 只向内部羽化，区外像素不变。
 3. 前端缓存满强度预览，自动强度 `0%~100%` 以 1% 步进在 canvas 即时混合；笔触、参照、高级参数或羽化变化才防抖请求后端，序号机制丢弃过期响应。
 4. 切到 `global` 即恢复旧流程：矩形只作取样/诊断，自动与手动参数作用整张图。局部结果无损 PNG 落盘并保存配套 mask；保存始终是独立动作。
+5. `algorithm=classic|distribution` 默认 `classic`；`illumination_mode=off|chroma|full` 默认 `off`。请求空间光照校正时 schema 自动切换到精细算法；二次曲面采用分块中位数与 Huber IRLS 拟合，并设置色度/亮度幅度上限。分片执行必须传递全图 y 坐标，保证预览与全分辨率输出一致。
+6. `standalone_color_calibrator/advanced.py` 是主系统与独立工具共享的无 UI 核心。质量报告包含可用像素比例、排除原因、空间色偏跨度、初始/预计 ΔE00、预估色域裁切率和 0–100 分；诊断覆盖图绿色=可用、红色=反光/裁切、蓝色=深阴影、黄色=离群。低分只警告，不阻止保存；算法、光照模式和报告会写入结果 metadata。
 
 ### 5.6 生成式修补智能选区数据流
 1. 打开 `InpaintDialog` 后，前端把原 `target` 传给 `/api/inpaint/segment`；后端继续使用 `_resolve_inpaint_source` 做 job/record/room 路径归属校验和 EXIF 归一化，不接受前端直接指定任意文件。
@@ -341,7 +343,7 @@ web/src/
 6. 在 **`开发日志.md` 顶部追加一条**（改了啥、为什么）。
 7. 提交（见 §九）。
 
-**测试**：`cd Floor_engine_server && python -m pytest`（引擎层 golden 提示词、安全硬化、人工评审元数据、AI/手绘蒙版与局部/全图校色、独立样品对色、SD 提示词/IP-Adapter/FAL 队列恢复、生成式修补智能选区的 RLE/扫描过滤/点击策略/路由契约，以及模式化 mask/提示词/EXIF/候选计费/无损落盘和非校色新功能回归；当前 **215 项**）。本机若系统 `python` 无 pytest，可用项目虚拟环境：`.venv/bin/python -m pytest`。`tests/golden/` 基准入库，缓存不入。
+**测试**：`cd Floor_engine_server && python -m pytest`（引擎层 golden 提示词、安全硬化、人工评审元数据、AI/手绘蒙版与局部/全图校色、独立样品对色、SD 提示词/IP-Adapter/FAL 队列恢复、生成式修补智能选区的 RLE/扫描过滤/点击策略/路由契约，以及模式化 mask/提示词/EXIF/候选计费/无损落盘和非校色新功能回归；当前 **220 项**）。本机若系统 `python` 无 pytest，可用项目虚拟环境：`.venv/bin/python -m pytest`。`tests/golden/` 基准入库，缓存不入。
 
 ---
 

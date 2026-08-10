@@ -4,7 +4,7 @@
 ![License](https://img.shields.io/badge/license-AGPL--3.0--only-blue)
 ![Python](https://img.shields.io/badge/python-3.10%2B-3776AB)
 ![Node](https://img.shields.io/badge/node-20%2B-339933)
-![Tests](https://img.shields.io/badge/tests-215%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-220%20passed-brightgreen)
 
 把一块真实地板色板，转译成可批量生成、可锁定产品颜色、可局部修补、可评审交付的空间内容。
 
@@ -19,7 +19,7 @@
 ## 2026.08 最新更新
 
 - **生成工作台重构**：用“产品 → 场景 → 输出”三步手风琴替代长参数列，常用的房间、风格、光线和镜头保持在核心层；结果区新增 B2 / Pro 页签、候选缩略条，并可直接完成通过、备选、淘汰和收藏。
-- **独立样品对色工具**：不用启动 Floor Engine，也不调用网络或 AI 接口，就能把新拍摄的大面积样品图对齐到历史小面积样品的产品色。工具支持在新图上框选纯样品区域、调节匹配强度、预览并保存全分辨率 JPG / PNG / TIFF；默认只迁移颜色，保留新图的纹理、曝光和真实光影。
+- **对色算法 2.0 + 独立样品对色工具**：不用启动 Floor Engine，也不调用网络或 AI 接口，就能把新拍大样对齐历史小样。除经典 LAB 统计校色外，新增可靠像素筛选、精细颜色分布迁移、可选空间光照校正，以及带四色诊断图的 0–100 可信度报告；默认仍使用经典模式并保留新图纹理与真实光影。
 
 > **让不同时间拍摄的新旧样品图回到同一产品色基准。** Windows 可直接双击启动，Linux 也可独立运行：[立即使用独立样品对色工具](./standalone_color_calibrator/README.md)。
 
@@ -71,9 +71,9 @@ Floor Rendering Engine 把这套隐性的人工流程改成一组可执行、可
 
 ### 新拍大样，也能对齐历史小样
 
-仓库同时提供一个可脱离主系统运行的[独立样品对色工具](./standalone_color_calibrator/README.md)。它复用 Floor Engine 已验证的 LAB / Reinhard 色彩统计思路：在新拍大图中框选一块干净材料区域，以旧小样为参考，把校正应用到整张高分辨率图片。默认仅迁移 LAB 色彩通道，木纹、压纹、倒角、受光和阴影仍来自新照片；需要统一两次拍摄曝光时，也可以选择“颜色 + 明暗”。
+仓库同时提供一个可脱离主系统运行的[独立样品对色工具](./standalone_color_calibrator/README.md)。它在新拍大图中框选材料区域，以旧小样为参考，把确定性的校正应用到整张高分辨率图片。默认经典模式仅迁移 LAB 色彩通道，木纹、压纹、倒角、受光和阴影仍来自新照片；需要处理复杂、多峰颜色分布时可切换精细模式，需要消除大面积渐变偏色时可开启空间光照校正。
 
-这让设计、样册、电商和社媒团队无需先启动整套生图服务，也能快速得到产品色更一致的素材底图。全程本地处理，不上传图片，不产生模型 API 费用。
+分析时会自动排除反光、过曝/欠曝、深阴影和异色离群点，并返回 0–100 可信度、CIEDE2000 预计色差、色域风险和四色诊断图。低可信度只警告、不阻止导出。这让设计、样册、电商和社媒团队无需启动整套生图服务，也能快速得到产品色更一致的素材底图。全程本地处理，不上传图片，不产生模型 API 费用。
 
 ### Click an object, then refine the mask
 
@@ -150,7 +150,7 @@ FastAPI / task orchestration / queue recovery
 
 - B2、Pro 与 SD 使用独立并发槽；服务默认只监听 `127.0.0.1`。
 - 配置、输出、日志和任务恢复状态保存在本机数据目录。
-- 当前回归集覆盖提示词黄金样本、路由契约、路径安全、队列恢复、电影规划、地板占比、校色、独立样品对色、智能选区和记录链路；本次发布为 **215 tests passed**。
+- 当前回归集覆盖提示词黄金样本、路由契约、路径安全、队列恢复、电影规划、地板占比、校色、独立样品对色、智能选区和记录链路；本次发布为 **220 tests passed**。
 
 ## My Role
 
@@ -170,7 +170,7 @@ FastAPI / task orchestration / queue recovery
 
 ### 只需要样品对色
 
-Windows 双击 [`standalone_color_calibrator/启动校色工具.bat`](./standalone_color_calibrator/启动校色工具.bat)，依次载入新拍大图和旧小样即可。它只依赖 Pillow 与 NumPy，不需要 Node.js、API Key 或 Floor Engine 服务。命令行也可直接运行：
+Windows 双击 [`standalone_color_calibrator/启动校色工具.bat`](./standalone_color_calibrator/启动校色工具.bat)，依次载入新拍大图和旧小样即可。它只依赖 Pillow、NumPy 与 OpenCV，不需要 Node.js、API Key 或 Floor Engine 服务。命令行也可直接运行：
 
 ```powershell
 python standalone_color_calibrator/app.py --source 新大图.jpg --reference 旧小样.jpg --output 对色结果.jpg

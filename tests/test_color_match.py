@@ -249,6 +249,20 @@ def test_masked_auto_changes_floor_only_and_preserves_scene_luminance():
     assert np.abs(after_l - before_l).mean() < 2.0
 
 
+def test_masked_distribution_returns_quality_and_never_changes_outside_mask():
+    src = _split_lr(240, 160, (70, 105, 155), (175, 135, 85))
+    ref = _solid(90, 70, (125, 150, 90))
+    mask = Image.new('L', src.size, 0)
+    mask.paste(255, (0, 80, 240, 160))
+    out, report = match_color_masked(
+        src, ref, mask, strength=1, mask_feather=0,
+        algorithm='distribution', return_quality_report=True)
+    assert np.array_equal(np.asarray(out)[:80], np.asarray(src)[:80])
+    assert report is not None
+    assert 0 <= report.score <= 100
+    assert report.diagnostic_overlay is not None
+
+
 def test_masked_manual_never_touches_pixels_outside_mask():
     src = _solid(160, 100, (90, 110, 130))
     ref = _solid(40, 40, (130, 95, 65))
@@ -303,6 +317,17 @@ def test_adjustment_request_defaults_and_bounds():
         server_schemas.ColorMatchAdjustments(exposure=2.1)
     with pytest.raises(ValueError):
         server_schemas.ColorMatchAdjustments(temperature=-101)
+
+
+def test_illumination_request_automatically_enables_distribution_algorithm():
+    preview = server_schemas.ColorMatchPreviewRequest(
+        image_rel='result.jpg', ref_path='reference.jpg', rect=_rect(),
+        illumination_mode='chroma')
+    record = server_schemas.RecordColorMatchRequest(
+        json_path='record.json', record_id='r1', result_id='x', rect=_rect(),
+        illumination_mode='full')
+    assert preview.algorithm == 'distribution'
+    assert record.algorithm == 'distribution'
 
 
 def test_auto_profile_is_relative_to_source_and_bounded():
@@ -493,6 +518,9 @@ def test_preview_optionally_returns_serialized_zone_analysis(dirs):
     assert with_analysis['analysis']['status'] == 'ok'
     assert all(zone['preview'].startswith('data:image/jpeg;base64,')
                for zone in with_analysis['analysis']['zones'])
+    assert with_analysis['quality_report']['diagnostic_overlay'].startswith(
+        'data:image/png;base64,')
+    assert 0 <= with_analysis['quality_report']['score'] <= 100
     assert 'analysis' not in without_analysis
 
 

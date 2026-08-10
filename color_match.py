@@ -10,6 +10,19 @@ import math
 
 from PIL import Image
 
+try:
+    from .standalone_color_calibrator.advanced import (
+        ColorAnalysisError,
+        apply_color_transform_plan,
+        build_color_transform_plan,
+    )
+except ImportError:  # Direct module import in standalone tests.
+    from standalone_color_calibrator.advanced import (
+        ColorAnalysisError,
+        apply_color_transform_plan,
+        build_color_transform_plan,
+    )
+
 
 def match_color_to_reference(src_img, ref_img, strength=1.0):
     """把 src 的整体色彩统计对齐到 ref（LAB 空间均值/方差迁移，Reinhard 色彩迁移）。
@@ -609,9 +622,34 @@ def apply_color_adjustments_striped(img, adjustments=None, strip_rows=256):
     return out
 
 
+def _rect_sample_mask(size, rect):
+    width, height = size
+    x, y, w, h = rect
+    left = max(0, min(width - 1, int(round(x * width))))
+    top = max(0, min(height - 1, int(round(y * height))))
+    right = max(left + 1, min(width, int(round((x + w) * width))))
+    bottom = max(top + 1, min(height, int(round((y + h) * height))))
+    mask = Image.new('L', size, 0)
+    mask.paste(255, (left, top, right, bottom))
+    return mask
+
+
+def _safe_quality_report(src, ref_img, sample_mask, preserve_luminance,
+                         algorithm='classic', illumination_mode='off'):
+    try:
+        return build_color_transform_plan(
+            src, ref_img, sample_mask=sample_mask, algorithm=algorithm,
+            illumination_mode=illumination_mode,
+            preserve_luminance=preserve_luminance).report
+    except ColorAnalysisError:
+        return None
+
+
 def match_color_global(src_img, ref_img, rect, strength=1.0, feather=0.05,
                        adjustments=None, adjustment_mode='auto',
-                       return_auto_adjustments=False, strip_rows=256):
+                       return_auto_adjustments=False, strip_rows=256,
+                       algorithm='classic', illumination_mode='off',
+                       return_quality_report=False):
     """Use the selected floor only for statistics, then adjust the whole image.
 
     ``feather`` remains in the signature for wire compatibility but is
@@ -625,16 +663,47 @@ def match_color_global(src_img, ref_img, rect, strength=1.0, feather=0.05,
     src = src_img.convert('RGB')
     normalized = _normalize_color_adjustments(adjustments)
 
-    if adjustment_mode == 'manual' and not return_auto_adjustments:
+    if adjustment_mode == 'manual' and not return_auto_adjustments and not return_quality_report:
         return apply_color_adjustments_striped(src, normalized, strip_rows)
 
     profile, auto_adjustments = _global_color_profile(src, ref_img, rect)
     if adjustment_mode == 'manual':
         out = apply_color_adjustments_striped(src, normalized, strip_rows)
-        return (out, auto_adjustments) if return_auto_adjustments else out
+        quality_report = (_safe_quality_report(
+            src, ref_img, _rect_sample_mask(src.size, rect), False,
+            algorithm, illumination_mode) if return_quality_report else None)
+        if return_auto_adjustments and return_quality_report:
+            return out, auto_adjustments, quality_report
+        if return_auto_adjustments:
+            return out, auto_adjustments
+        if return_quality_report:
+            return out, quality_report
+        return out
+
+    if algorithm == 'distribution':
+        sample_mask = _rect_sample_mask(src.size, rect)
+        plan = build_color_transform_plan(
+            src, ref_img, sample_mask=sample_mask, algorithm='distribution',
+            illumination_mode=illumination_mode, preserve_luminance=False)
+        out = apply_color_transform_plan(src, plan, strength=strength, strip_rows=strip_rows)
+        if adjustment_mode == 'relative' and any(normalized.values()):
+            out = apply_color_adjustments_striped(out, normalized, strip_rows)
+        if return_auto_adjustments and return_quality_report:
+            return out, auto_adjustments, plan.report
+        if return_auto_adjustments:
+            return out, auto_adjustments
+        if return_quality_report:
+            return out, plan.report
+        return out
     if profile is None or strength <= 0:
         out = src.copy()
-        return (out, auto_adjustments) if return_auto_adjustments else out
+        if return_auto_adjustments and return_quality_report:
+            return out, auto_adjustments, None
+        if return_auto_adjustments:
+            return out, auto_adjustments
+        if return_quality_report:
+            return out, None
+        return out
 
     strength = float(min(max(strength, 0.0), 1.0))
     rows = max(1, int(strip_rows))
@@ -655,8 +724,16 @@ def match_color_global(src_img, ref_img, rect, strength=1.0, feather=0.05,
             transferred = Image.blend(source_strip, transferred, strength)
         out.paste(transferred, (0, y0))
 
+    quality_report = (_safe_quality_report(
+        src, ref_img, _rect_sample_mask(src.size, rect), False,
+        algorithm, illumination_mode)
+                      if return_quality_report else None)
+    if return_auto_adjustments and return_quality_report:
+        return out, auto_adjustments, quality_report
     if return_auto_adjustments:
         return out, auto_adjustments
+    if return_quality_report:
+        return out, quality_report
     return out
 
 
@@ -741,7 +818,9 @@ def _inward_soft_mask(mask_img, size, feather):
 
 def match_color_masked(src_img, ref_img, mask_img, strength=0.7,
                        adjustments=None, adjustment_mode='auto', mask_feather=0.003,
-                       return_auto_adjustments=False, strip_rows=256):
+                       return_auto_adjustments=False, strip_rows=256,
+                       algorithm='classic', illumination_mode='off',
+                       return_quality_report=False):
     """Correct only the painted floor; decoded pixels outside remain unchanged.
 
     Auto mode performs robust a/b-only LAB transfer and preserves scene
@@ -753,12 +832,28 @@ def match_color_masked(src_img, ref_img, mask_img, strength=0.7,
     src = src_img.convert('RGB')
     normalized = _normalize_color_adjustments(adjustments)
     profile, auto_adjustments = _masked_color_profile(src, ref_img, mask_img)
+    quality_report = None
     if adjustment_mode == 'manual':
         transferred = apply_color_adjustments_striped(src, normalized, strip_rows)
         blend_strength = 1.0
+    elif algorithm == 'distribution':
+        plan = build_color_transform_plan(
+            src, ref_img, sample_mask=mask_img, algorithm='distribution',
+            illumination_mode=illumination_mode, preserve_luminance=True)
+        transferred = apply_color_transform_plan(src, plan, strength=1.0, strip_rows=strip_rows)
+        quality_report = plan.report
+        if adjustment_mode == 'relative' and any(normalized.values()):
+            transferred = apply_color_adjustments_striped(transferred, normalized, strip_rows)
+        blend_strength = float(min(max(strength, 0.0), 1.0))
     elif profile is None or strength <= 0:
         out = src.copy()
-        return (out, auto_adjustments) if return_auto_adjustments else out
+        if return_auto_adjustments and return_quality_report:
+            return out, auto_adjustments, None
+        if return_auto_adjustments:
+            return out, auto_adjustments
+        if return_quality_report:
+            return out, None
+        return out
     else:
         rows = max(1, int(strip_rows))
         transferred = Image.new('RGB', src.size)
@@ -779,8 +874,15 @@ def match_color_masked(src_img, ref_img, mask_img, strength=0.7,
     if blend_strength < 1.0:
         alpha = alpha.point(lambda value: round(value * blend_strength))
     out = Image.composite(transferred, src, alpha)
+    if return_quality_report and quality_report is None:
+        quality_report = _safe_quality_report(
+            src, ref_img, mask_img, True, algorithm, illumination_mode)
+    if return_auto_adjustments and return_quality_report:
+        return out, auto_adjustments, quality_report
     if return_auto_adjustments:
         return out, auto_adjustments
+    if return_quality_report:
+        return out, quality_report
     return out
 
 
@@ -792,4 +894,5 @@ __all__ = [
     'match_color_masked',
     'apply_color_adjustments',
     'apply_color_adjustments_striped',
+    'ColorAnalysisError',
 ]

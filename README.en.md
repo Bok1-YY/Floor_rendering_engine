@@ -4,7 +4,7 @@
 ![License](https://img.shields.io/badge/license-AGPL--3.0--only-blue)
 ![Python](https://img.shields.io/badge/python-3.10%2B-3776AB)
 ![Node](https://img.shields.io/badge/node-20%2B-339933)
-![Tests](https://img.shields.io/badge/tests-215%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-220%20passed-brightgreen)
 
 Turn a real flooring swatch into spatial content that can be batch-generated, color-locked, locally repaired, reviewed, and delivered.
 
@@ -19,7 +19,7 @@ This is not a “home interior” prompt preset. It asks whether the product col
 ## What's New in 2026.08
 
 - **A redesigned production workspace:** Product → Scene → Output replaces the long parameter column. Core room, style, lighting, and camera controls stay close at hand, while B2 / Pro tabs, candidate thumbnails, and pass / alternative / reject / favorite actions now live directly on result cards.
-- **A standalone sample color matcher:** Match a newly photographed large sample to an older small swatch without starting Floor Engine or calling an AI service. Select a clean area in the new photograph, adjust strength, preview the result, and export full-resolution JPG / PNG / TIFF. The recommended mode transfers color while preserving the new image's texture, exposure, and natural lighting.
+- **Color matching 2.0 + a standalone utility:** Match a newly photographed large sample to an older small swatch without starting Floor Engine or calling an AI service. Beyond classic LAB statistics, it now offers reliable-pixel filtering, detailed distribution transfer, optional spatial illumination correction, and a 0–100 confidence report with a four-color diagnostic overlay. Classic mode remains the default and preserves the new image's texture and natural lighting.
 
 > **Bring new and historical sample photography back to one product-color baseline.** Launch it directly on Windows or run it independently on Linux: [try the standalone sample color matcher](./standalone_color_calibrator/README.md).
 
@@ -71,9 +71,9 @@ Image models routinely shift flooring color. The system segments the floor and m
 
 ### Match a newly photographed large sample to an older swatch
 
-The repository now includes a [standalone sample color matcher](./standalone_color_calibrator/README.md) that runs without the main application. It extracts the proven LAB / Reinhard statistical approach from Floor Engine: select a clean material region in the new large photograph, use the historical small swatch as the reference, and apply the correction across the full-resolution image. The default mode transfers LAB chroma only, so grain, embossing, bevels, highlights, and shadows remain those of the new photograph. A Color + Luminance mode is available when exposure must be aligned as well.
+The repository includes a [standalone sample color matcher](./standalone_color_calibrator/README.md) that runs without the main application. Select a material region in the new large photograph, use the historical small swatch as the reference, and apply a deterministic correction across the full-resolution image. Classic mode transfers LAB chroma while preserving grain, embossing, bevels, highlights, and shadows. Detailed mode handles skewed or multimodal color distributions, while optional spatial correction can remove a large-area color cast or align color and luminance together.
 
-Design, catalog, e-commerce, and social teams can produce more color-consistent source assets without starting the generation stack. Processing stays local, images are not uploaded, and no model API cost is incurred.
+Analysis rejects glare, clipped pixels, deep local shadows, and off-material outliers. It reports a 0–100 confidence score, estimated CIEDE2000 difference, gamut risk, and a four-color pixel overlay; low confidence warns without blocking export. Design, catalog, e-commerce, and social teams can therefore produce more consistent source assets without starting the generation stack. Processing stays local, images are not uploaded, and no model API cost is incurred.
 
 ### Click an object, then refine the mask
 
@@ -150,7 +150,7 @@ FastAPI / task orchestration / queue recovery
 
 - B2, Pro, and SD use independent concurrency slots. The service binds to `127.0.0.1` by default.
 - Configuration, outputs, logs, and queue recovery state remain in the local data directory.
-- Regression coverage includes prompt snapshots, route contracts, path security, queue recovery, cinematic planning, floor coverage, color matching, standalone sample matching, smart selection, and record lineage. This release is verified at **215 tests passed**.
+- Regression coverage includes prompt snapshots, route contracts, path security, queue recovery, cinematic planning, floor coverage, color matching, standalone sample matching, smart selection, and record lineage. This release is verified at **220 tests passed**.
 
 ## My Role
 
@@ -170,7 +170,7 @@ Requirements: Python 3.10+, Node.js 20+, and at least one configured image-model
 
 ### If you only need sample color matching
 
-On Windows, double-click [`standalone_color_calibrator/启动校色工具.bat`](./standalone_color_calibrator/启动校色工具.bat), then load the new large photograph and the older reference swatch. The utility only needs Pillow and NumPy—no Node.js, API key, or Floor Engine service. It also has a command-line interface:
+On Windows, double-click [`standalone_color_calibrator/启动校色工具.bat`](./standalone_color_calibrator/启动校色工具.bat), then load the new large photograph and the older reference swatch. The utility only needs Pillow, NumPy, and OpenCV—no Node.js, API key, or Floor Engine service. It also has a command-line interface:
 
 ```powershell
 python standalone_color_calibrator/app.py --source new-large.jpg --reference old-swatch.jpg --output matched.jpg

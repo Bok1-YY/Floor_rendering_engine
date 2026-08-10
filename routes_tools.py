@@ -12,7 +12,12 @@ from fastapi import APIRouter, HTTPException
 from PIL import Image, ImageOps
 
 from . import server_state as state
-from .color_match import match_color_global, match_color_masked, analyze_color_region
+from .color_match import (
+    ColorAnalysisError,
+    analyze_color_region,
+    match_color_global,
+    match_color_masked,
+)
 from .config import logger, load_config, safe_upload_path
 from .floor_renderer import RenderRecipe, image_sha256, render_floor, validate_calibration_quad
 from .image_ops import decode_floor_mask, FLOOR_PREVIEW_MAX_SIDE
@@ -229,7 +234,10 @@ def _run_color_match(abs_src: str, ref_path: str, rect: ColorMatchRect,
                      scope: Literal['global', 'floor_mask'] = 'global',
                      mask_b64: str = '', mask_feather: float = 0.003,
                      return_auto_adjustments: bool = False,
-                     return_analysis: bool = False):
+                     return_analysis: bool = False,
+                     algorithm: Literal['classic', 'distribution'] = 'classic',
+                     illumination_mode: Literal['off', 'chroma', 'full'] = 'off',
+                     return_quality_report: bool = False):
     """读图 → （可选缩到 max_side 长边）→ 全图校色。
     rect 只用于地板统计/诊断，feather 保留为兼容字段但不再限制修改范围。"""
     src = Image.open(abs_src)
@@ -243,22 +251,37 @@ def _run_color_match(abs_src: str, ref_path: str, rect: ColorMatchRect,
         if not mask_b64:
             raise HTTPException(422, '地板局部校色需要有效蒙版')
         mask = decode_floor_mask(mask_b64)
-        result = match_color_masked(
-            src, ref, mask, strength=strength,
-            adjustments=(adjustments.model_dump() if adjustments else None),
-            adjustment_mode=adjustment_mode, mask_feather=mask_feather,
-            return_auto_adjustments=return_auto_adjustments)
+        try:
+            result = match_color_masked(
+                src, ref, mask, strength=strength,
+                adjustments=(adjustments.model_dump() if adjustments else None),
+                adjustment_mode=adjustment_mode, mask_feather=mask_feather,
+                return_auto_adjustments=return_auto_adjustments,
+                algorithm=algorithm, illumination_mode=illumination_mode,
+                return_quality_report=return_quality_report)
+        except ColorAnalysisError as exc:
+            raise HTTPException(422, str(exc)) from exc
     else:
-        result = match_color_global(src, ref, (rect.x, rect.y, rect.w, rect.h),
-                                    strength=strength, feather=feather,
-                                    adjustments=(adjustments.model_dump() if adjustments else None),
-                                    adjustment_mode=adjustment_mode,
-                                    return_auto_adjustments=return_auto_adjustments)
+        try:
+            result = match_color_global(
+                src, ref, (rect.x, rect.y, rect.w, rect.h),
+                strength=strength, feather=feather,
+                adjustments=(adjustments.model_dump() if adjustments else None),
+                adjustment_mode=adjustment_mode,
+                return_auto_adjustments=return_auto_adjustments,
+                algorithm=algorithm, illumination_mode=illumination_mode,
+                return_quality_report=return_quality_report)
+        except ColorAnalysisError as exc:
+            raise HTTPException(422, str(exc)) from exc
     if not return_analysis:
         return result
-    out, auto_adjustments = result
+    if return_quality_report:
+        out, auto_adjustments, quality_report = result
+    else:
+        out, auto_adjustments = result
+        quality_report = None
     analysis = analyze_color_region(src, ref, (rect.x, rect.y, rect.w, rect.h), mask)
-    return out, auto_adjustments, analysis
+    return out, auto_adjustments, analysis, quality_report
 
 
 def _serialize_color_analysis(analysis: dict) -> dict:
@@ -277,6 +300,20 @@ def _serialize_color_analysis(analysis: dict) -> dict:
             item['preview'] = 'data:image/jpeg;base64,' + base64.b64encode(buf.getvalue()).decode()
         zones.append(item)
     serialized['zones'] = zones
+    return serialized
+
+
+def _serialize_quality_report(report) -> Optional[dict]:
+    if report is None:
+        return None
+    serialized = report.to_dict()
+    overlay = report.diagnostic_overlay
+    serialized['diagnostic_overlay'] = None
+    if overlay is not None:
+        buf = io.BytesIO()
+        overlay.save(buf, format='PNG', optimize=True)
+        serialized['diagnostic_overlay'] = (
+            'data:image/png;base64,' + base64.b64encode(buf.getvalue()).decode())
     return serialized
 
 
@@ -313,12 +350,15 @@ def color_match_preview(req: ColorMatchPreviewRequest):
         adjustment_mode=req.adjustment_mode, scope=req.scope,
         mask_b64=req.mask_b64, mask_feather=req.mask_feather,
         return_auto_adjustments=True,
-        return_analysis=req.include_analysis)
+        return_analysis=req.include_analysis,
+        algorithm=req.algorithm, illumination_mode=req.illumination_mode,
+        return_quality_report=req.include_analysis)
     if req.include_analysis:
-        out, auto_adjustments, analysis = result
+        out, auto_adjustments, analysis, quality_report = result
     else:
         out, auto_adjustments = result
         analysis = None
+        quality_report = None
     buf = io.BytesIO()
     if req.scope == 'floor_mask':
         out.save(buf, format='PNG', optimize=True)
@@ -332,6 +372,8 @@ def color_match_preview(req: ColorMatchPreviewRequest):
                 'auto_adjustments': auto_adjustments}
     if analysis is not None:
         response['analysis'] = _serialize_color_analysis(analysis)
+    if quality_report is not None:
+        response['quality_report'] = _serialize_quality_report(quality_report)
     return response
 
 
@@ -381,17 +423,21 @@ async def job_color_match(jid: str, req: JobColorMatchRequest):
     if os.path.realpath(abs_src) not in cand:
         raise HTTPException(400, '该图不属于此任务的候选')
     ref = require_ref_image_path(req.ref_path or job.png_path or '')
-    out = await asyncio.to_thread(_run_color_match, abs_src, ref, req.rect,
-                                  req.strength, req.feather,
-                                  adjustments=req.adjustments,
-                                  adjustment_mode=req.adjustment_mode,
-                                  scope=req.scope, mask_b64=req.mask_b64,
-                                  mask_feather=req.mask_feather)
+    result = await asyncio.to_thread(
+        _run_color_match, abs_src, ref, req.rect, req.strength, req.feather,
+        adjustments=req.adjustments, adjustment_mode=req.adjustment_mode,
+        scope=req.scope, mask_b64=req.mask_b64, mask_feather=req.mask_feather,
+        algorithm=req.algorithm, illumination_mode=req.illumination_mode,
+        return_quality_report=True)
+    out, quality_report = result
     save_result = save_api_result_png if req.scope == 'floor_mask' else save_api_result_jpg
-    metadata = ({'operation': 'color_match', 'scope': req.scope,
-                 'adjustment_mode': req.adjustment_mode,
-                 'strength': req.strength, 'mask_feather': req.mask_feather}
-                if req.scope == 'floor_mask' else None)
+    metadata = {
+        'operation': 'color_match', 'scope': req.scope,
+        'adjustment_mode': req.adjustment_mode, 'strength': req.strength,
+        'mask_feather': req.mask_feather, 'algorithm': req.algorithm,
+        'illumination_mode': req.illumination_mode,
+        'quality_report': quality_report.to_dict() if quality_report else None,
+    }
     if req.scope == 'floor_mask':
         ppath = await asyncio.to_thread(save_result, out, '局部校色',
                                         job.png_path or abs_src, metadata)
@@ -400,7 +446,7 @@ async def job_color_match(jid: str, req: JobColorMatchRequest):
                                         job.png_path or abs_src)
     if not ppath:
         raise HTTPException(500, '校色结果保存失败')
-    if metadata is not None:
+    if req.scope == 'floor_mask':
         try:
             metadata['mask_file'] = await asyncio.to_thread(
                 _save_color_mask, req.mask_b64, ppath, out.size)
@@ -442,26 +488,28 @@ def record_color_match(req: RecordColorMatchRequest):
     if not ref_path:
         raise HTTPException(400, '该记录没有参照小样，请在弹窗中上传参照图')
     ref = require_ref_image_path(ref_path)
-    out = _run_color_match(abs_src, ref, req.rect, req.strength, req.feather,
-                           adjustments=req.adjustments,
-                           adjustment_mode=req.adjustment_mode,
-                           scope=req.scope, mask_b64=req.mask_b64,
-                           mask_feather=req.mask_feather)
+    out, quality_report = _run_color_match(
+        abs_src, ref, req.rect, req.strength, req.feather,
+        adjustments=req.adjustments, adjustment_mode=req.adjustment_mode,
+        scope=req.scope, mask_b64=req.mask_b64, mask_feather=req.mask_feather,
+        algorithm=req.algorithm, illumination_mode=req.illumination_mode,
+        return_quality_report=True)
+    metadata = {
+        'operation': 'color_match', 'scope': req.scope,
+        'adjustment_mode': req.adjustment_mode, 'strength': req.strength,
+        'mask_feather': req.mask_feather, 'algorithm': req.algorithm,
+        'illumination_mode': req.illumination_mode,
+        'quality_report': quality_report.to_dict() if quality_report else None,
+    }
     if req.scope == 'floor_mask':
         ppath = save_api_result_png(
             out, '局部校色', json_path.replace('_记录.json', '_优化图.png'),
-            {'operation': 'color_match', 'scope': req.scope,
-             'adjustment_mode': req.adjustment_mode,
-             'strength': req.strength, 'mask_feather': req.mask_feather})
+            metadata)
     else:
         ppath = save_api_result_jpg(out, '手动校色', json_path.replace('_记录.json', '_优化图.png'))
     if not ppath:
         raise HTTPException(500, '校色结果保存失败')
-    metadata = None
     if req.scope == 'floor_mask':
-        metadata = {'operation': 'color_match', 'scope': req.scope,
-                    'adjustment_mode': req.adjustment_mode,
-                    'strength': req.strength, 'mask_feather': req.mask_feather}
         try:
             metadata['mask_file'] = _save_color_mask(req.mask_b64, ppath, out.size)
         except Exception as ex:
