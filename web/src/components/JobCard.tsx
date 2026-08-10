@@ -1,10 +1,25 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  Bookmark,
+  Check,
+  Columns2,
+  LoaderCircle,
+  Maximize2,
+  Paintbrush,
+  Palette,
+  Pencil,
+  RefreshCw,
+  Sparkles,
+  Star,
+  Trash2,
+  X,
+} from "lucide-react";
 import { api } from "@/lib/api";
 import { useJobStream } from "@/hooks/useJobStream";
 import { notifyJobEnd } from "@/lib/notify";
-import type { JobView, ModelKey, ModelRunView } from "@/lib/types";
+import type { JobView, ModelKey, ModelRunView, RecordResult, ReviewStatus } from "@/lib/types";
 import { toast } from "sonner";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -27,9 +42,18 @@ const REGEN_NS = [1, 2, 4, 6];
 const actBtn =
   "h-8 rounded-lg border border-border bg-card px-3 text-[12px] font-semibold text-secondary-foreground transition-colors hover:bg-accent";
 const imageToolBtn =
-  "inline-flex h-[30px] items-center justify-center rounded-lg border border-border bg-card px-2.5 text-[11.5px] font-semibold text-secondary-foreground transition-colors hover:border-primary/35 hover:bg-primary-soft hover:text-accent-foreground";
+  "inline-flex h-[30px] items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-[11.5px] font-semibold text-secondary-foreground transition-colors hover:border-primary/35 hover:bg-primary-soft hover:text-accent-foreground";
 
 type SlotView = { idx: number; url: string; thumb: string };
+
+const resultFileName = (value?: string) => {
+  if (!value) return "";
+  try {
+    return decodeURIComponent(value).split(/[\\/]/).pop() || "";
+  } catch {
+    return value.split(/[\\/]/).pop() || "";
+  }
+};
 
 export function JobCard({
   initial,
@@ -62,6 +86,10 @@ export function JobCard({
     imageRel: string;
   } | null>(null);
   const [regenN, setRegenN] = useState(1);
+  const [activeModel, setActiveModel] = useState<ModelKey>(initial.model_targets?.[0] || "b2");
+  const [candidateCache, setCandidateCache] = useState<Partial<Record<ModelKey, SlotView[]>>>({});
+  const [reviewByUrl, setReviewByUrl] = useState<Record<string, { status: ReviewStatus; favorite: boolean; best: boolean }>>({});
+  const [reviewBusy, setReviewBusy] = useState(false);
   // 候选切换的本地覆盖（不影响后端"当前下标"，仅前端浏览）
   const [view, setView] = useState<Partial<Record<ModelKey, SlotView>>>({});
 
@@ -188,6 +216,96 @@ export function JobCard({
     });
   }
 
+  const activeSlot = slots.find((slot) => slot.key === activeModel) ?? slots[0];
+  const activeKey = activeSlot?.key;
+  const activeUrl = activeSlot?.url || "";
+  const activeTotal = activeSlot?.total || 0;
+
+  useEffect(() => {
+    if (!activeKey || activeTotal <= 0) return;
+    let alive = true;
+    Promise.all(
+      Array.from({ length: activeTotal }, (_, idx) =>
+        api.jobResult(job.job_id, activeKey, idx).then((result) => ({
+          idx: result.idx,
+          url: result.url,
+          thumb: result.thumb,
+        })),
+      ),
+    ).then((items) => {
+      if (alive) setCandidateCache((cache) => ({ ...cache, [activeKey]: items }));
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [activeKey, activeTotal, job.job_id]);
+
+  const findRecordResult = useCallback(async (slot: { url: string } | undefined): Promise<RecordResult | null> => {
+    if (!slot || !job.json_path || !job.record_id) return null;
+    const records = await api.loadRecord(job.json_path);
+    const record = records.find((entry) => entry.id === job.record_id);
+    const targetName = resultFileName(slot.url);
+    return record?.results?.find((result) => resultFileName(result.result_url) === targetName) ?? null;
+  }, [job.json_path, job.record_id]);
+
+  useEffect(() => {
+    if (!activeUrl || !job.json_path || !job.record_id || reviewByUrl[activeUrl]) return;
+    let alive = true;
+    findRecordResult({ url: activeUrl }).then((result) => {
+      if (!alive || !result) return;
+      setReviewByUrl((state) => ({
+        ...state,
+        [activeUrl]: {
+          status: result.review_status || "unreviewed",
+          favorite: !!result.favorite,
+          best: !!result.best,
+        },
+      }));
+    }).catch(() => {});
+    return () => { alive = false; };
+  }, [activeUrl, findRecordResult, job.json_path, job.record_id, reviewByUrl]);
+
+  async function setReviewStatus(status: ReviewStatus) {
+    if (!activeSlot || reviewBusy) return;
+    setReviewBusy(true);
+    try {
+      const result = await findRecordResult(activeSlot);
+      if (!result) throw new Error("当前候选尚未写入记录，请稍后再试");
+      const current = reviewByUrl[activeSlot.url] || { status: result.review_status || "unreviewed", favorite: !!result.favorite, best: !!result.best };
+      const nextStatus = current.status === status ? "unreviewed" : status;
+      await api.reviewResult({
+        json_path: job.json_path,
+        record_id: job.record_id,
+        result_id: result.result_id,
+        review_status: nextStatus,
+        review_tags: result.review_tags || [],
+        review_note: result.review_note || "",
+        best: current.best,
+      });
+      setReviewByUrl((state) => ({ ...state, [activeSlot.url]: { ...current, status: nextStatus } }));
+      toast.success(nextStatus === "unreviewed" ? "已取消评审" : "评审已保存");
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setReviewBusy(false);
+    }
+  }
+
+  async function toggleFavorite() {
+    if (!activeSlot || reviewBusy) return;
+    setReviewBusy(true);
+    try {
+      const result = await findRecordResult(activeSlot);
+      if (!result) throw new Error("当前候选尚未写入记录，请稍后再试");
+      const response = await api.favoriteResult(job.json_path, job.record_id, result.result_id);
+      const current = reviewByUrl[activeSlot.url] || { status: result.review_status || "unreviewed", favorite: !!result.favorite, best: !!result.best };
+      setReviewByUrl((state) => ({ ...state, [activeSlot.url]: { ...current, favorite: response.favorite } }));
+      toast.success(response.favorite ? "已收藏" : "已取消收藏");
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setReviewBusy(false);
+    }
+  }
+
   const stageLine =
     (job.model_targets || []).map((key) => {
       const run = job.model_runs?.[key];
@@ -204,9 +322,13 @@ export function JobCard({
   // 前后对比：仅替换类工作流有房间原图（room_url）；效果图优先取当前浏览中的 Pro 候选，无 Pro 用 B2
   const compareAfter =
     (slots.find((s) => s.key === "pro") ?? slots.find((s) => s.key === "b2") ?? slots[0])?.url || "";
+  const activeReview = activeUrl
+    ? reviewByUrl[activeUrl] || { status: "unreviewed" as ReviewStatus, favorite: false, best: false }
+    : { status: "unreviewed" as ReviewStatus, favorite: false, best: false };
+  const activeCandidates = activeKey ? candidateCache[activeKey] || [] : [];
 
   return (
-    <div className="animate-scfade rounded-[16px] border border-border bg-card p-[15px] shadow-[0_6px_22px_rgba(120,90,60,.07)]">
+    <div className="animate-scfade rounded-[16px] border border-border bg-card p-[15px] shadow-[0_6px_22px_rgba(120,90,60,.07)] dark:shadow-[0_6px_22px_rgba(0,0,0,.3)]">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="truncate text-[14.5px] font-bold text-foreground">
@@ -249,7 +371,7 @@ export function JobCard({
       )}
 
       {(job.operation_error || job.error) && (
-        <div className="mt-2.5 rounded-[9px] bg-destructive-soft px-[11px] py-[9px] text-[11.5px] leading-relaxed text-destructive-ink">
+        <div className="mt-2.5 line-clamp-2 rounded-[9px] bg-destructive-soft px-[11px] py-[9px] text-[11.5px] leading-relaxed text-destructive-ink" title={job.operation_error || job.error}>
           {job.error_kb ? (
             <span className="font-semibold">{job.error_kb.title} · </span>
           ) : null}
@@ -257,7 +379,154 @@ export function JobCard({
         </div>
       )}
 
-      {slots.length > 0 && (
+      {active && slots.length === 0 && (
+        <div className="mt-[11px] grid grid-cols-2 gap-2.5">
+          {(job.model_targets || ["b2", "pro"]).map((key) => {
+            const run = job.model_runs?.[key];
+            return (
+              <div key={key} className="flex aspect-[4/3] flex-col items-center justify-center gap-2 rounded-[11px] border border-dashed border-border-strong bg-panel text-[11.5px] font-semibold text-muted-foreground">
+                {run?.status === "running" || (!run?.stage?.includes("排队") && key === job.model_targets?.[0]) ? (
+                  <LoaderCircle size={16} className="animate-dc-spin text-primary" />
+                ) : null}
+                <span>{run?.label || key.toUpperCase()} · {run?.stage || "排队中"}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {slots.length > 0 && activeSlot && (
+        <div className="mt-[11px]">
+          <div className="flex rounded-[10px] bg-muted p-[3px]">
+            {slots.map((slot) => (
+              <button
+                key={slot.key}
+                type="button"
+                onClick={() => setActiveModel(slot.key)}
+                className={cn(
+                  "h-8 flex-1 rounded-lg text-[12px] font-bold transition-colors",
+                  activeSlot.key === slot.key
+                    ? "bg-card text-accent-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-secondary-foreground",
+                )}
+              >
+                {slot.name} · {slot.total} 张
+              </button>
+            ))}
+          </div>
+
+          <div className="relative mt-2.5 aspect-[4/3] cursor-zoom-in overflow-hidden rounded-[11px] border border-border bg-muted">
+            <img
+              src={api.imgUrl(activeSlot.thumb)}
+              alt={activeSlot.name}
+              onClick={() => setZoom(api.imgUrl(activeSlot.url))}
+              className="absolute inset-0 h-full w-full object-cover"
+            />
+            {activeSlot.run.auto_color_status === "done" && (
+              <span className="absolute left-2 top-2 rounded-md bg-[rgba(26,24,21,.55)] px-2 py-1 text-[10.5px] font-bold text-white backdrop-blur-[2px]">
+                已自动校色
+              </span>
+            )}
+            {activeReview.status !== "unreviewed" && (
+              <span className={cn(
+                "absolute right-2 top-2 rounded-full px-2.5 py-1 text-[10.5px] font-bold text-white",
+                activeReview.status === "pass" && "bg-success",
+                activeReview.status === "backup" && "bg-warn",
+                activeReview.status === "rejected" && "bg-destructive",
+              )}>
+                {activeReview.status === "pass" ? "通过" : activeReview.status === "backup" ? "备选" : "淘汰"}
+              </span>
+            )}
+          </div>
+
+          <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+            <span>{activeSlot.idx + 1} / {activeSlot.total}</span>
+            <a href={api.imgUrl(activeSlot.url)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold hover:text-foreground">
+              <Maximize2 size={12} />大图
+            </a>
+          </div>
+
+          {activeCandidates.length > 1 && (
+            <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+              {activeCandidates.map((candidate) => (
+                <button
+                  key={`${activeSlot.key}-${candidate.idx}`}
+                  type="button"
+                  onClick={() => setView((state) => ({ ...state, [activeSlot.key]: candidate }))}
+                  className={cn(
+                    "relative size-[52px] flex-none overflow-hidden rounded-lg border-2",
+                    candidate.idx === activeSlot.idx ? "border-primary" : "border-transparent opacity-75 hover:opacity-100",
+                  )}
+                >
+                  <img src={api.imgUrl(candidate.thumb)} alt={`${activeSlot.name} 候选 ${candidate.idx + 1}`} className="h-full w-full object-cover" />
+                </button>
+              ))}
+            </div>
+          )}
+
+          {terminal && (
+            <div className="mt-2.5 grid grid-cols-4 gap-1.5 border-t border-border/70 pt-2.5">
+              {([
+                ["pass", "通过", Check],
+                ["backup", "备选", Bookmark],
+                ["rejected", "淘汰", X],
+              ] as const).map(([status, label, Icon]) => (
+                <button
+                  key={status}
+                  type="button"
+                  disabled={reviewBusy}
+                  onClick={() => setReviewStatus(status)}
+                  className={cn(
+                    "inline-flex h-8 items-center justify-center gap-1 rounded-lg border text-[11.5px] font-bold transition-colors",
+                    activeReview.status === status
+                      ? status === "pass"
+                        ? "border-success bg-success text-white"
+                        : status === "backup"
+                          ? "border-warn bg-warn text-white"
+                          : "border-destructive bg-destructive text-white"
+                      : "border-border bg-card text-secondary-foreground hover:bg-accent",
+                  )}
+                >
+                  <Icon size={13} />{label}
+                </button>
+              ))}
+              <button
+                type="button"
+                disabled={reviewBusy}
+                onClick={toggleFavorite}
+                className={cn(
+                  "inline-flex h-8 items-center justify-center gap-1 rounded-lg border text-[11.5px] font-bold transition-colors",
+                  activeReview.favorite
+                    ? "border-primary bg-primary-soft text-accent-foreground"
+                    : "border-border bg-card text-secondary-foreground hover:bg-accent",
+                )}
+              >
+                <Star size={13} fill={activeReview.favorite ? "currentColor" : "none"} />收藏
+              </button>
+            </div>
+          )}
+
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {terminal && job.floor_path && activeSlot.url.startsWith("/outputs/") && (
+              <button className={imageToolBtn} onClick={() => setFloorVisualize({ stage: activeSlot.key, srcUrl: activeSlot.url, imageRel: activeSlot.url.slice("/outputs/".length) })}>
+                <Columns2 size={13} />贴地板
+              </button>
+            )}
+            {terminal && activeSlot.url.startsWith("/outputs/") && (
+              <button className={imageToolBtn} onClick={() => setInpaint({ stage: activeSlot.key, srcUrl: activeSlot.url, imageRel: activeSlot.url.slice("/outputs/".length) })}>
+                <Paintbrush size={13} />修补
+              </button>
+            )}
+            {terminal && job.floor_url && activeSlot.url.startsWith("/outputs/") && (
+              <button className={imageToolBtn} onClick={() => setColorMatch({ stage: activeSlot.key, srcUrl: activeSlot.url, imageRel: activeSlot.url.slice("/outputs/".length) })}>
+                <Palette size={13} />校色
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {false && slots.length > 0 && (
         <div className="mt-[11px] grid grid-cols-1 gap-[9px]">
           {slots.map((m) => (
             <div key={m.key}>
@@ -319,7 +588,7 @@ export function JobCard({
                       }
                       className={imageToolBtn}
                     >
-                      🪵 贴地板
+                      <Columns2 size={13} /> 贴地板
                     </button>
                   )}
                   {terminal && m.url.startsWith("/outputs/") && (
@@ -334,7 +603,7 @@ export function JobCard({
                       }
                       className={imageToolBtn}
                     >
-                      🖌️ 智能修补
+                      <Paintbrush size={13} /> 智能修补
                     </button>
                   )}
                   {terminal && job.floor_url && m.url.startsWith("/outputs/") && (
@@ -349,7 +618,7 @@ export function JobCard({
                       }
                       className={imageToolBtn}
                     >
-                      🎯 校色
+                      <Palette size={13} /> 校色
                     </button>
                   )}
                   {m.run.api_original_url && (
@@ -366,7 +635,7 @@ export function JobCard({
               </div>
               {m.run.auto_color_status === "done" && (
                 <div className="mt-2 rounded-lg bg-primary-soft px-2.5 py-1.5 text-[11px] font-semibold text-success">
-                  🎯 已自动校色 · API 原图已保留为候选
+                  已自动校色 · API 原图已保留为候选
                 </div>
               )}
               {m.run.auto_color_status === "failed" && (
@@ -374,7 +643,7 @@ export function JobCard({
                   className="mt-2 rounded-lg bg-warn-soft px-2.5 py-1.5 text-[11px] font-semibold text-warn"
                   title={m.run.auto_color_error}
                 >
-                  ⚠ 自动校色未完成，当前保留 API 原图
+                  自动校色未完成，当前保留 API 原图
                 </div>
               )}
               {m.key === "sd35" && (
@@ -415,7 +684,7 @@ export function JobCard({
               className={actBtn}
               onClick={() => act(() => api.retryJob(job.job_id), "已重试")}
             >
-              重试
+              重试失败线路
             </button>
           )}
         {terminal && job.pro_url && !isFree && (
@@ -423,7 +692,7 @@ export function JobCard({
             className={actBtn}
             onClick={() => act(() => api.polishJob(job.job_id), "已提交磨缝")}
           >
-            🪄 磨缝
+            <span className="inline-flex items-center gap-1.5"><Sparkles size={13} />磨缝</span>
           </button>
         )}
         {terminal && job.model_runs?.sd35?.delivery_status === "upscale_failed" && (
@@ -431,17 +700,17 @@ export function JobCard({
             className={actBtn}
             onClick={() => act(() => api.retrySdUpscale(job.job_id), "已重试 SD 超分")}
           >
-            ⤴ 重试超分
+            <span className="inline-flex items-center gap-1.5"><RefreshCw size={13} />重试超分</span>
           </button>
         )}
         {terminal && (job.pro_url || job.b2_url) && (
           <button className={actBtn} onClick={() => setEditOpen(true)}>
-            ✏️ 二改
+            <span className="inline-flex items-center gap-1.5"><Pencil size={13} />二改</span>
           </button>
         )}
         {terminal && job.room_url && compareAfter && (
           <button className={actBtn} onClick={() => setCompareOpen(true)}>
-            ⇔ 对比
+            <span className="inline-flex items-center gap-1.5"><Columns2 size={13} />对比</span>
           </button>
         )}
 
@@ -468,7 +737,7 @@ export function JobCard({
                 act(() => api.regenJob(job.job_id, regenN), `已开始重抽 ×${regenN}`)
               }
             >
-              🔄 重抽
+              <span className="inline-flex items-center gap-1.5"><RefreshCw size={13} />重抽</span>
             </button>
           </div>
         )}
@@ -482,7 +751,7 @@ export function JobCard({
             onClick={remove}
             title="从队列移除此卡（不影响出图与记录）"
           >
-            ✕ 清除
+            <span className="inline-flex items-center gap-1.5"><Trash2 size={13} />清除</span>
           </button>
         )}
       </div>

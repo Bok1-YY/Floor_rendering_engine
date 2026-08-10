@@ -6,6 +6,8 @@
 
 面向招聘与产品评审的阅读入口：[中文产品案例](./docs/PRODUCT_CASE_STUDY.zh-CN.md) / [English case study](./docs/PRODUCT_CASE_STUDY.en.md)。README 负责说明用户价值与业务结果，本手册聚焦实现边界、数据流和开发约定。
 
+只做新旧样品照片对色时，不必启动完整服务：`standalone_color_calibrator/` 是从现有 LAB 校色核心抽出的独立 Pillow / NumPy 桌面与命令行工具，入口和参数见其 [README](./standalone_color_calibrator/README.md)。
+
 ---
 
 ## 零、快速启动 ⭐（先看这里）
@@ -48,6 +50,8 @@ pip install -r Floor_engine_server/requirements-dev.txt
 cd Floor_engine_server/web && npm install
 ```
 然后在前端「**设置**」页填 Gemini API Key（或直接写 `test/engine_config.json`）。没有 key 也能开界面，但出图会失败。
+
+独立样品对色不需要上述前后端依赖或 API Key。Windows 双击 `standalone_color_calibrator/启动校色工具.bat`；独立复制该目录后只需执行 `pip install -r requirements.txt`。
 
 ### 0.4 端口与进程
 
@@ -252,16 +256,18 @@ web/src/
 ├── app/
 │   ├── layout.tsx        根布局：字体 + ThemeProvider + <AppShell> + <Toaster>
 │   ├── globals.css       ★ 浅色/深色设计令牌 + 滚动条 + keyframes —— 改主题改这里
-│   ├── page.tsx          生成页（产品/场景/输出步骤提示 + 左参数工作台 + 右结果队列）
+│   ├── page.tsx          生成页（三步手风琴状态编排 + 固定操作条 + 结果队列 + 批量/预览弹窗）
 │   ├── records/page.tsx  记录页（材料检索 + 房间/评审筛选 + 候选对比、收藏、最佳图、人工标注）
 │   ├── review/page.tsx   评审复盘（通过率、质量分布、问题标签、近期洞察和好图样本库）
 │   ├── usage/page.tsx    用量页（stat 卡 + 成功率 + 估算成本 + 明细表）
 │   └── settings/page.tsx 设置页（密钥、线路网络、生成式修补引擎、模型单价、PPTX 品牌）
 ├── components/
 │   ├── AppShell.tsx      ★ 应用外壳：奶油侧边栏(236) + 顶栏(56,路由映射标题) + 内容槽
-│   ├── ParamsForm.tsx    参数表单（工作流 / 电影真实感 / 多模型 / 地板占比双滑块 / SD 高级参数）
-│   ├── JobCard.tsx       通用模型任务卡（model_runs / 候选 / SD Seed·基础图·超分重试 / 既有编辑操作）
-│   ├── FloorUploader.tsx 地板上传 + 最近小样网格 + 历史弹窗
+│   ├── GenerateStepCard.tsx 产品/场景/输出单开手风琴卡与完成状态
+│   ├── ParamsForm.tsx    场景表单（工作流 / 核心四项 / 电影模式 / 更多场景参数 / 地板占比）
+│   ├── OutputForm.tsx    输出表单（多模型 / 比例 / 画质 / SD 高级参数）
+│   ├── JobCard.tsx       模型页签 + 单大图 + 候选缩略条 + 评审/收藏 + 既有编辑操作
+│   ├── FloorUploader.tsx 地板上传 + 识色摘要 + 最近小样网格 + 历史弹窗
 │   ├── CompareSlider.tsx 前后图拖动对比
 │   ├── ColorMatchDialog.tsx 局部/全图模式、1% 自动强度、高级参数与竞态安全预览
 │   ├── ColorMaskEditor.tsx  MobileSAM 初始蒙版、正负画笔、撤销/清空/重新识别
@@ -282,7 +288,7 @@ web/src/
 全站颜色/圆角/卡片底色等是 **Tailwind v4 设计令牌**，集中在 `globals.css` 的 `:root` 与 `.dark`。`ThemeProvider` 通过 `next-themes` 切换浅色、深色或跟随系统；shadcn 组件统一引用令牌。重复的视觉模式抽进了 `dc-ui.tsx`。完整视觉规范以仓库上级 `test/DESIGN.md` 为准；其中旧 NiceGUI 路径已经废弃，真实实现源是 `web/src/app/globals.css`、`AppShell.tsx` 与 `dc-ui.tsx`。
 
 ### 5.4 数据流
-页面 `useEffect` 调 `api.*` 取数；活动作业用 `useJobStream`(EventSource) 看 SSE 实时进度；生成页另有 2.5s 轮询 `listJobs` 做队列聚合进度。每次生成把不含密钥的 `gen_context` 写入记录，记录页通过 `draft.ts` 将参数一次性回填到生成页。`api.imgUrl()` 把后端相对图 URL 拼成绝对地址。
+页面 `useEffect` 调 `api.*` 取数；活动作业用 `useJobStream`(EventSource) 看 SSE 实时进度；生成页另有 2.5s 轮询 `listJobs` 做队列聚合进度。左栏由 `openStep: 0|1|2|3` 保证同一时刻最多展开一张步骤卡，`ParamsForm` 与 `OutputForm` 分别只负责场景/输出字段。任务卡通过 `jobResult` 读取候选缩略图，并以当前图片文件名在 `json_path + record_id` 中解析 `result_id`，再复用记录页的评审/收藏接口。每次生成把不含密钥的 `gen_context` 写入记录，记录页通过 `draft.ts` 将参数一次性回填到生成页。`api.imgUrl()` 把后端相对图 URL 拼成绝对地址。
 
 ### 5.5 地板校色数据流
 1. 弹窗默认 `floor_mask`：图片加载后请求 `/api/color-match/segment`，MobileSAM 在本机 CPU 生成初稿；绿色笔作为前景约束、红色笔作为背景约束，随后用 GrabCut 贴合边缘。模型不可用时只采用明确的绿色笔触，不扩散、不回退成全图修改。
@@ -335,7 +341,7 @@ web/src/
 6. 在 **`开发日志.md` 顶部追加一条**（改了啥、为什么）。
 7. 提交（见 §九）。
 
-**测试**：`cd Floor_engine_server && python -m pytest`（引擎层 golden 提示词、安全硬化、人工评审元数据、AI/手绘蒙版与局部/全图校色、SD 提示词/IP-Adapter/FAL 队列恢复、生成式修补智能选区的 RLE/扫描过滤/点击策略/路由契约，以及模式化 mask/提示词/EXIF/候选计费/无损落盘和非校色新功能回归；当前 **207 项**）。本机若系统 `python` 无 pytest，可用项目虚拟环境：`.venv/bin/python -m pytest`。`tests/golden/` 基准入库，缓存不入。
+**测试**：`cd Floor_engine_server && python -m pytest`（引擎层 golden 提示词、安全硬化、人工评审元数据、AI/手绘蒙版与局部/全图校色、独立样品对色、SD 提示词/IP-Adapter/FAL 队列恢复、生成式修补智能选区的 RLE/扫描过滤/点击策略/路由契约，以及模式化 mask/提示词/EXIF/候选计费/无损落盘和非校色新功能回归；当前 **215 项**）。本机若系统 `python` 无 pytest，可用项目虚拟环境：`.venv/bin/python -m pytest`。`tests/golden/` 基准入库，缓存不入。
 
 ---
 

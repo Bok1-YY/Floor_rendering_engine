@@ -1,24 +1,33 @@
 /* eslint-disable @next/next/no-img-element */
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { api } from "@/lib/api";
 import type { Swatch } from "@/lib/types";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 
-export function FloorUploader({
-  value,
-  onPick,
-}: {
+const cleanLabel = (value: string) => value.replace(/^[\p{Extended_Pictographic}\uFE0F\u200D\s]+/u, "");
+
+export interface FloorUploaderHandle {
+  open: () => void;
+}
+
+export const FloorUploader = forwardRef<FloorUploaderHandle, {
   value: Swatch | null;
   onPick: (s: Swatch) => void;
-}) {
+  tone?: string;
+  onClear?: () => void;
+}>(function FloorUploader({ value, onPick, tone, onClear }, ref) {
   const [recent, setRecent] = useState<Swatch[]>([]);
   const [busy, setBusy] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [more, setMore] = useState<Swatch[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useImperativeHandle(ref, () => ({
+    open: () => inputRef.current?.click(),
+  }), []);
 
   function openMore() {
     setMoreOpen(true);
@@ -92,15 +101,18 @@ export function FloorUploader({
             <div className="truncate text-[13px] font-bold text-foreground">
               {value.name}
             </div>
-            <div className="mt-[3px] inline-flex items-center gap-1.5 rounded-full bg-accent px-2 py-0.5 text-[11px] font-semibold text-accent-foreground">
-              已选地板
+            <div className="mt-[3px] truncate text-[11.5px] text-muted-foreground">
+              {tone ? `识色：${cleanLabel(tone.split(" (")[0])}` : "已选地板 · 等待识色"}
             </div>
           </div>
           <button
-            onClick={() => inputRef.current?.click()}
+            onClick={() => {
+              if (onClear) onClear();
+              else inputRef.current?.click();
+            }}
             className="h-[30px] flex-none rounded-lg border border-border bg-card px-[11px] text-[12px] font-semibold text-secondary-foreground hover:bg-accent"
           >
-            重新上传
+            更换
           </button>
         </div>
       )}
@@ -166,4 +178,4 @@ export function FloorUploader({
       </Dialog>
     </div>
   );
-}
+});

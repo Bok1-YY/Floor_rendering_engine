@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { Eye, Grid2X2, LoaderCircle, Pencil, Plus, RefreshCw, Sparkles, Star, Trash2, Upload } from "lucide-react";
 import { api } from "@/lib/api";
 import { requestNotifyPermission } from "@/lib/notify";
 import type {
@@ -15,14 +16,17 @@ import type {
   Swatch,
 } from "@/lib/types";
 import { toast } from "sonner";
-import { FloorUploader } from "@/components/FloorUploader";
+import { FloorUploader, type FloorUploaderHandle } from "@/components/FloorUploader";
 import { ParamsForm } from "@/components/ParamsForm";
+import { OutputForm } from "@/components/OutputForm";
+import { GenerateStepCard } from "@/components/GenerateStepCard";
 import { JobCard } from "@/components/JobCard";
 import { ImageZoom } from "@/components/ImageZoom";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { SectionHeader, Segmented, Pill } from "@/components/dc-ui";
 import { loadDraft, saveDraft, takeReuseRequest } from "@/lib/draft";
-import { cn } from "@/lib/utils";
+
+const cleanLabel = (value: string) => value.replace(/^[\p{Extended_Pictographic}\uFE0F\u200D\s]+/u, "");
 
 // 由后端文件路径重建 Swatch（复用参数回填：记录里只有 path，url/缩略图按上传目录约定拼出）
 function swatchFromPath(p?: string): Swatch | null {
@@ -121,6 +125,8 @@ export default function GeneratePage() {
     name: "",
   });
   const [jobs, setJobs] = useState<JobView[]>([]);
+  const [jobsLoaded, setJobsLoaded] = useState(false);
+  const [openStep, setOpenStep] = useState<0 | 1 | 2 | 3>(2);
   const [submitting, setSubmitting] = useState(false);
   const [batchOpen, setBatchOpen] = useState(false);
   const [batchTab, setBatchTab] = useState<"rooms" | "floors">("rooms");
@@ -142,6 +148,8 @@ export default function GeneratePage() {
   const previewWanted = useRef(false);
   // 识色响应乱序防护：连续快换地板时丢弃过期响应
   const floorSeq = useRef(0);
+  const floorUploaderRef = useRef<FloorUploaderHandle>(null);
+  const initialStepResolved = useRef(false);
 
   useEffect(() => {
     api
@@ -197,7 +205,7 @@ export default function GeneratePage() {
         }
       })
       .catch((e) => toast.error("加载选项失败：" + (e as Error).message));
-    api.listJobs(50).then(setJobs).catch(() => {});
+    api.listJobs(50).then(setJobs).catch(() => {}).finally(() => setJobsLoaded(true));
     api.listCustomRecipes().then(setMyRecipes).catch(() => {});
     api.getConfig().then((c) => setSdEnabled(!!c.sd_enabled)).catch(() => {});
   }, []);
@@ -228,8 +236,19 @@ export default function GeneratePage() {
     return () => clearInterval(t);
   }, []);
 
-  const updateParams = (patch: Partial<GenParams>) =>
+  const updateParams = (patch: Partial<GenParams>) => {
+    if (patch.workflow_mode?.includes("自由创作")) {
+      setModelTargets((targets) => targets.filter((key) => key !== "sd35"));
+    }
     setParams((p) => ({ ...p, ...patch }));
+  };
+
+  useEffect(() => {
+    if (!initialStepResolved.current && jobsLoaded && options) {
+      initialStepResolved.current = true;
+      setOpenStep(!floor && jobs.length === 0 ? 1 : 2);
+    }
+  }, [floor, jobs.length, jobsLoaded, options]);
 
   async function pickFloor(s: Swatch) {
     const seq = ++floorSeq.current;
@@ -644,70 +663,42 @@ export default function GeneratePage() {
     : [];
 
   const outputLabel = modelTargets
-    .map((key) => ({ b2: "快速", pro: "高质量", sd35: "SD 3.5" })[key])
+    .map((key) => ({ b2: "B2", pro: "Pro", sd35: "SD 3.5" })[key])
     .join(" + ");
 
   return (
     <div className="flex h-full min-w-0 overflow-hidden">
       {/* ── 左：参数列 ── */}
-      <section className="flex w-[clamp(430px,44vw,600px)] min-w-[430px] flex-none flex-col border-r border-border bg-panel max-[980px]:min-w-[410px]">
-        <div className="flex-1 space-y-0 overflow-y-auto px-5 pb-2.5 pt-4 max-[1080px]:px-4">
-          <div className="mb-5 rounded-[14px] border border-border bg-card p-2.5 shadow-[0_4px_16px_rgba(120,90,60,.06)]">
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                {
-                  no: "01",
-                  label: "产品",
-                  detail: isFreeMode ? `${freeImages.length} 张素材` : floor?.name || "选择小样",
-                  ready: isFreeMode ? freeImages.length > 0 : !!floor,
-                },
-                {
-                  no: "02",
-                  label: "场景",
-                  detail: params.workflow_mode.split(" (")[0],
-                  ready: !!options,
-                },
-                {
-                  no: "03",
-                  label: "输出",
-                  detail: outputLabel || "选择模型",
-                  ready: modelTargets.length > 0,
-                },
-              ].map((step) => (
-                <div
-                  key={step.no}
-                  className={cn(
-                    "min-w-0 rounded-[11px] border px-3 py-2.5",
-                    step.ready
-                      ? "border-primary/25 bg-primary-soft"
-                      : "border-border bg-panel",
-                  )}
-                >
-                  <div className="mb-1 flex items-center gap-1.5 text-[10.5px] font-extrabold tracking-[0.08em] text-muted-foreground">
-                    <span className={step.ready ? "text-primary" : undefined}>{step.no}</span>
-                    {step.label}
-                    {step.ready && <span className="ml-auto text-success">✓</span>}
-                  </div>
-                  <div className="truncate text-[12.5px] font-bold text-foreground" title={step.detail}>
-                    {step.detail}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+      <section className="flex w-[clamp(430px,40vw,540px)] min-w-[430px] flex-none flex-col border-r border-border bg-panel max-[980px]:min-w-[410px]">
+        <div className="flex flex-1 flex-col gap-[10px] overflow-y-auto px-[18px] py-4 max-[1080px]:px-4">
 
-          {!isFreeMode && (
+          <GenerateStepCard
+            step={1}
+            title="产品 · 地板小样"
+            summary={isFreeMode ? `${freeImages.length} 张自由创作素材` : floor ? `${floor.name} · ${params.floor_tone ? cleanLabel(params.floor_tone.split(" (")[0]) : "已识色"}` : "选择或上传一块地板小样"}
+            open={openStep === 1}
+            complete={isFreeMode ? freeImages.length > 0 : !!floor}
+            onToggle={() => setOpenStep((step) => step === 1 ? 0 : 1)}
+          >
+          {isFreeMode ? (
+            <div className="rounded-xl bg-accent px-3 py-3 text-[11.5px] leading-relaxed text-muted-foreground">
+              自由创作的指令和 1–3 张素材图在“场景”步骤中配置。
+            </div>
+          ) : (
             <>
-              <SectionHeader className="mx-0.5 mb-[11px] mt-1">
-                地板小样 / SWATCH
-              </SectionHeader>
-              <FloorUploader value={floor} onPick={pickFloor} />
+              <FloorUploader
+                ref={floorUploaderRef}
+                value={floor}
+                onPick={pickFloor}
+                tone={params.floor_tone}
+                onClear={() => setFloor(null)}
+              />
             </>
           )}
 
           {!isFreeMode && recipes.length > 0 && (
             <>
-              <SectionHeader className="mx-0.5 mb-[11px] mt-[22px]">
+              <SectionHeader className="mx-0.5 mb-[9px] mt-[16px]">
                 智能配方 / 按色调推荐
               </SectionHeader>
               <div className="flex gap-[9px] overflow-x-auto pb-1.5">
@@ -725,7 +716,7 @@ export default function GeneratePage() {
                         }}
                       />
                       <span className="truncate text-[13px] font-bold text-foreground">
-                        {r.label}
+                        {cleanLabel(r.label)}
                       </span>
                     </div>
                     <div className="line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
@@ -738,7 +729,7 @@ export default function GeneratePage() {
           )}
 
           {!isFreeMode && (<>
-          <SectionHeader className="mx-0.5 mb-[11px] mt-[22px]">
+          <SectionHeader className="mx-0.5 mb-[9px] mt-[16px]">
             我的配方 / MY RECIPES
           </SectionHeader>
           <div className="flex gap-[9px] overflow-x-auto pb-1.5">
@@ -752,8 +743,8 @@ export default function GeneratePage() {
                   className="block w-full text-left"
                 >
                   <div className="mb-[7px] flex items-center gap-[7px]">
-                    <span className="flex h-[18px] w-[18px] flex-none items-center justify-center rounded-md bg-accent text-[11px]">
-                      ★
+                    <span className="flex h-[18px] w-[18px] flex-none items-center justify-center rounded-md bg-accent text-accent-foreground">
+                      <Star size={11} />
                     </span>
                     <span className="truncate text-[13px] font-bold text-foreground">
                       {r.name}
@@ -762,6 +753,7 @@ export default function GeneratePage() {
                   <div className="line-clamp-2 text-[11px] leading-relaxed text-muted-foreground">
                     {[r.params.workflow_mode?.split(" ")[0], r.params.style_type, r.params.lighting]
                       .filter(Boolean)
+                      .map((value) => cleanLabel(String(value)))
                       .join(" · ") || "参数快照"}
                   </div>
                 </button>
@@ -771,14 +763,14 @@ export default function GeneratePage() {
                     onClick={() => setRecipeDlg({ open: true, id: r.id, name: r.name })}
                     className="flex h-[20px] w-[20px] items-center justify-center rounded-md bg-accent text-[11px] text-secondary-foreground hover:text-foreground"
                   >
-                    ✎
+                    <Pencil size={11} />
                   </button>
                   <button
                     title="删除"
                     onClick={() => removeCustomRecipe(r)}
                     className="flex h-[20px] w-[20px] items-center justify-center rounded-md bg-accent text-[11px] text-secondary-foreground hover:text-destructive"
                   >
-                    🗑
+                    <Trash2 size={11} />
                   </button>
                 </div>
               </div>
@@ -787,39 +779,72 @@ export default function GeneratePage() {
               onClick={() => setRecipeDlg({ open: true, id: "", name: "" })}
               className="flex w-[172px] flex-none flex-col items-center justify-center gap-1 rounded-xl border-[1.5px] border-dashed border-border-strong p-[11px] text-[12px] font-semibold text-muted-foreground transition hover:border-primary hover:text-accent-foreground"
             >
-              <span className="text-[16px] leading-none">＋</span>
+              <Plus size={16} />
               存为配方
             </button>
           </div>
           </>)}
 
+          </GenerateStepCard>
+
           {options ? (
-            <ParamsForm
-              options={options}
-              params={params}
-              modelTargets={modelTargets}
-              sdOptions={sdOptions}
-              sdEnabled={sdEnabled}
-              onParams={updateParams}
-              onModelTargets={setModelTargets}
-              onSDOptions={(patch) => setSdOptions((v) => ({ ...v, ...patch }))}
-              refValue={refImg}
-              onRefPick={setRefImg}
-              roomValue={roomImg}
-              onRoomPick={setRoomImg}
-              freePrompt={freePrompt}
-              freeImages={freeImages}
-              onFreePrompt={setFreePrompt}
-              onFreeImages={setFreeImages}
-            />
+            <>
+              <GenerateStepCard
+                step={2}
+                title="场景"
+                summary={[
+                  params.workflow_mode.split(" (")[0],
+                  isFreeMode ? `${freeImages.length} 张素材` : params.cn_mode ? params.cn_room_type : params.room_type,
+                  params.style_type,
+                  params.lighting,
+                  params.angle,
+                ].filter(Boolean).map((value) => cleanLabel(String(value).split(" (")[0])).join(" · ")}
+                open={openStep === 2}
+                complete={isFreeMode ? !!freePrompt.trim() && freeImages.length > 0 : true}
+                onToggle={() => setOpenStep((step) => step === 2 ? 0 : 2)}
+              >
+                <ParamsForm
+                  options={options}
+                  params={params}
+                  onParams={updateParams}
+                  refValue={refImg}
+                  onRefPick={setRefImg}
+                  roomValue={roomImg}
+                  onRoomPick={setRoomImg}
+                  freePrompt={freePrompt}
+                  freeImages={freeImages}
+                  onFreePrompt={setFreePrompt}
+                  onFreeImages={setFreeImages}
+                />
+              </GenerateStepCard>
+              <GenerateStepCard
+                step={3}
+                title="输出"
+                summary={`${outputLabel || "未选择模型"} · ${params.resolution || options.resolutions[0]} · ${(params.aspect_ratio || options.aspect_ratios[0]).split(" (")[0]}`}
+                open={openStep === 3}
+                complete={modelTargets.length > 0}
+                onToggle={() => setOpenStep((step) => step === 3 ? 0 : 3)}
+              >
+                <OutputForm
+                  options={options}
+                  params={params}
+                  modelTargets={modelTargets}
+                  sdOptions={sdOptions}
+                  sdEnabled={sdEnabled}
+                  onParams={updateParams}
+                  onModelTargets={setModelTargets}
+                  onSDOptions={(patch) => setSdOptions((value) => ({ ...value, ...patch }))}
+                />
+              </GenerateStepCard>
+            </>
           ) : (
-            <div className="mt-4 text-sm text-muted-foreground">加载选项中…</div>
+            <div className="rounded-[14px] border border-border bg-card p-5 text-sm text-muted-foreground">加载选项中…</div>
           )}
-          <div className="h-2" />
         </div>
 
         {/* sticky 底栏 */}
-        <div className="flex flex-none gap-2.5 border-t border-border bg-card px-[18px] py-[13px] max-[1080px]:px-4">
+        <div className="flex flex-none flex-col gap-1.5 border-t border-border bg-card px-[18px] py-[13px] max-[1080px]:px-4">
+          <div className="flex gap-2.5">
           <button
             onClick={generate}
             disabled={
@@ -828,9 +853,7 @@ export default function GeneratePage() {
             }
             className="flex h-[46px] flex-1 items-center justify-center gap-2 rounded-xl bg-primary text-[14.5px] font-bold text-primary-foreground shadow-[0_6px_16px_rgba(193,95,60,.32)] transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-              <path d="M13 2L4.5 13.5H11l-1 8.5L19.5 10H13l0-8z" />
-            </svg>
+            <Sparkles size={18} strokeWidth={2.2} />
             {submitting ? "提交中…" : isFreeMode ? "生成图片" : "生成效果图"}
           </button>
           {!isFreeMode && (<>
@@ -840,7 +863,7 @@ export default function GeneratePage() {
             title="用 Nano Banana 2 Lite 出一张 1K 快速预览（几秒、便宜），满意再点「生成效果图」出 4K"
             className="h-[46px] flex-none rounded-xl border border-border bg-card px-[15px] text-[13px] font-bold text-secondary-foreground transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
           >
-            ⚡ 预览
+            <span className="inline-flex items-center gap-1.5"><Eye size={15} />预览</span>
           </button>
           <button
             onClick={openBatch}
@@ -854,19 +877,26 @@ export default function GeneratePage() {
             }
             className="h-[46px] flex-none rounded-xl border border-border bg-card px-[18px] text-[13.5px] font-bold text-secondary-foreground transition hover:bg-accent disabled:cursor-not-allowed disabled:opacity-50"
           >
-            批量
+            <span className="inline-flex items-center gap-1.5"><Grid2X2 size={15} />批量</span>
           </button>
           </>)}
+          </div>
+          <div className="truncate text-center text-[11px] text-muted-foreground">
+            {params.workflow_mode.includes("Omakase")
+              ? "Omakase 可按同一场景批量替换多块地板"
+              : `${outputLabel || "选择模型"} 并行 · 正式出图速度取决于所选 API · 1K 预览通常更快`}
+          </div>
         </div>
       </section>
 
       {/* ── 右：任务队列 ── */}
       <section className="flex min-w-0 flex-1 flex-col overflow-hidden bg-background">
         <div className="flex flex-none flex-wrap items-center justify-between gap-2 border-b border-border px-[22px] py-[14px] max-[1080px]:px-4">
-          <div className="min-w-0">
+          <div className="flex min-w-0 flex-wrap items-center gap-2.5">
             <div className="text-[14.5px] font-bold">结果工作区</div>
-            <div className="text-[11.5px] text-muted-foreground">
-              {total} 个任务 · 完成 {doneCount}/{total}
+            <div className="inline-flex items-center gap-1.5 rounded-full bg-card px-2.5 py-1 text-[11px] text-muted-foreground shadow-sm ring-1 ring-border">
+              {activeCount > 0 && <LoaderCircle size={12} className="animate-dc-spin text-primary" />}
+              进行中 {activeCount} · 完成 {doneCount}/{total}
             </div>
           </div>
           <div className="flex flex-wrap gap-1.5">
@@ -877,9 +907,11 @@ export default function GeneratePage() {
                   .then(setJobs)
                   .catch((e) => toast.error("刷新失败：" + (e as Error).message))
               }
-              className="h-[30px] rounded-lg border border-border bg-card px-2.5 text-[12px] font-semibold text-secondary-foreground hover:bg-accent"
+              title="刷新任务"
+              aria-label="刷新任务"
+              className="flex size-[30px] items-center justify-center rounded-lg border border-border bg-card text-secondary-foreground hover:bg-accent"
             >
-              刷新
+              <RefreshCw size={14} />
             </button>
             <button
               onClick={() =>
@@ -927,11 +959,44 @@ export default function GeneratePage() {
 
         <div className="flex-1 overflow-y-auto px-[22px] py-[18px] max-[1080px]:px-4 max-[1080px]:py-4">
           {jobs.length === 0 ? (
-            <div className="rounded-2xl border-[1.5px] border-dashed border-border-strong px-5 py-[54px] text-center text-[13px] text-muted-foreground">
-              还没有任务 · 左侧上传地板图并点「生成效果图」
+            <div className="flex min-h-full flex-col items-center justify-center gap-5 px-6 py-8 text-center">
+              <div className="flex size-16 items-center justify-center rounded-[20px] bg-accent text-accent-foreground">
+                <Sparkles size={29} strokeWidth={1.8} />
+              </div>
+              <div>
+                <div className="text-[16px] font-extrabold text-foreground">
+                  {!floor ? "从一块地板小样开始" : "参数已就绪，开始第一批出图"}
+                </div>
+                <p className="mt-2 max-w-[430px] text-[12.5px] leading-[1.8] text-muted-foreground">
+                  {!floor
+                    ? "上传产品小样后，系统会自动识别色调并推荐场景配方。三步完成配置，结果会实时出现在这里。"
+                    : "确认左侧场景和输出参数，点击生成效果图；B2 与 Pro 可以并行提交。"}
+                </p>
+              </div>
+              <div className="flex max-w-full flex-wrap justify-center gap-2.5">
+                {["上传产品小样", "选择场景参数", "生成并评审"].map((label, index) => (
+                  <div key={label} className="w-[150px] rounded-xl border border-border bg-card px-3 py-3 text-left shadow-sm">
+                    <div className="text-[10.5px] font-extrabold tracking-[0.1em] text-primary">0{index + 1}</div>
+                    <div className="mt-1 text-[12px] font-bold text-foreground">{label}</div>
+                  </div>
+                ))}
+              </div>
+              {!floor && !isFreeMode && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOpenStep(1);
+                    window.setTimeout(() => floorUploaderRef.current?.open(), 0);
+                  }}
+                  className="inline-flex h-10 items-center gap-2 rounded-[10px] bg-primary px-5 text-[13px] font-bold text-primary-foreground shadow-[0_6px_16px_rgba(193,95,60,.25)] hover:bg-primary-hover"
+                >
+                  <Upload size={15} />
+                  上传地板小样
+                </button>
+              )}
             </div>
           ) : (
-            <div className="grid items-start gap-4 [grid-template-columns:repeat(auto-fill,minmax(300px,1fr))] max-[1100px]:[grid-template-columns:1fr]">
+            <div className="grid items-start gap-4 [grid-template-columns:repeat(auto-fill,minmax(320px,1fr))] max-[1100px]:[grid-template-columns:1fr]">
               {jobs.map((j) => (
                 <JobCard
                   key={j.job_id}
@@ -948,8 +1013,8 @@ export default function GeneratePage() {
 
       {/* 批量：多房间 × 同地板 ｜ 多地板 × 同场景 */}
       <Dialog open={batchOpen} onOpenChange={setBatchOpen}>
-        <DialogContent className="max-w-[560px]">
-          <div className="space-y-3">
+        <DialogContent className="max-w-[min(92vw,560px)] rounded-[18px]">
+          <div className="space-y-4">
             <div>
               <div className="text-[15.5px] font-bold">批量生成</div>
               <div className="mt-0.5 text-[12px] text-muted-foreground">
@@ -970,8 +1035,10 @@ export default function GeneratePage() {
             )}
 
             {batchTab === "rooms" ? (
-              <div className="flex flex-wrap gap-[7px] pt-1">
-                {batchRoomOptions.map((rt) => {
+              <div>
+                <div className="mb-2 text-[11.5px] font-semibold text-muted-foreground">房间类型 · 已选 {batchRooms.length}</div>
+                <div className="flex flex-wrap gap-[7px]">
+                  {batchRoomOptions.map((rt) => {
                   const on = batchRooms.includes(rt);
                   return (
                     <Pill
@@ -986,7 +1053,8 @@ export default function GeneratePage() {
                       {rt}
                     </Pill>
                   );
-                })}
+                  })}
+                </div>
               </div>
             ) : (
               <div className="max-h-[320px] overflow-y-auto pt-1">
@@ -995,7 +1063,7 @@ export default function GeneratePage() {
                     没有最近小样 · 请先在生成页上传地板图
                   </div>
                 ) : (
-                  <div className="grid grid-cols-4 gap-[9px]">
+                  <div className="grid grid-cols-5 gap-[9px]">
                     {recentFloors.map((s) => {
                       const on = batchFloors.some((x) => x.path === s.path);
                       return (
@@ -1035,7 +1103,7 @@ export default function GeneratePage() {
               </div>
             )}
 
-            <div className="flex items-center justify-between pt-1">
+            <div className="flex items-center justify-between">
               <div className="flex gap-2">
                 <button
                   onClick={() =>
@@ -1056,19 +1124,31 @@ export default function GeneratePage() {
                   清空
                 </button>
               </div>
-              <button
-                onClick={batchTab === "rooms" ? runBatch : runBatchFloors}
-                disabled={
-                  (batchTab === "rooms"
-                    ? batchRooms.length === 0
-                    : batchFloors.length === 0) || batchSubmitting
-                }
-                className="h-[38px] rounded-[10px] bg-primary px-5 text-[13.5px] font-bold text-primary-foreground hover:bg-primary-hover disabled:opacity-50"
-              >
-                {batchSubmitting
-                  ? "提交中…"
-                  : `提交批量 (${batchTab === "rooms" ? batchRooms.length : batchFloors.length})`}
-              </button>
+              <span className="text-[11.5px] text-muted-foreground">
+                当前已选 {batchTab === "rooms" ? batchRooms.length : batchFloors.length} 项
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 border-t border-border pt-4">
+              <div className="min-w-0 text-[11.5px] leading-relaxed text-muted-foreground">
+                将提交 {batchTab === "rooms" ? batchRooms.length : batchFloors.length} 个任务 × {modelTargets.length} 模型 = {(batchTab === "rooms" ? batchRooms.length : batchFloors.length) * modelTargets.length} 张起
+              </div>
+              <div className="flex flex-none gap-2">
+                <button onClick={() => setBatchOpen(false)} className="h-[38px] rounded-[10px] border border-border bg-card px-4 text-[13px] font-semibold text-secondary-foreground hover:bg-accent">
+                  取消
+                </button>
+                <button
+                  onClick={batchTab === "rooms" ? runBatch : runBatchFloors}
+                  disabled={
+                    (batchTab === "rooms"
+                      ? batchRooms.length === 0
+                      : batchFloors.length === 0) || batchSubmitting
+                  }
+                  className="h-[38px] rounded-[10px] bg-primary px-5 text-[13.5px] font-bold text-primary-foreground hover:bg-primary-hover disabled:opacity-50"
+                >
+                  {batchSubmitting ? "提交中…" : "提交批量"}
+                </button>
+              </div>
             </div>
           </div>
         </DialogContent>

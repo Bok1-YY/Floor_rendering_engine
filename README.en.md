@@ -4,7 +4,7 @@
 ![License](https://img.shields.io/badge/license-AGPL--3.0--only-blue)
 ![Python](https://img.shields.io/badge/python-3.10%2B-3776AB)
 ![Node](https://img.shields.io/badge/node-20%2B-339933)
-![Tests](https://img.shields.io/badge/tests-211%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-215%20passed-brightgreen)
 
 Turn a real flooring swatch into spatial content that can be batch-generated, color-locked, locally repaired, reviewed, and delivered.
 
@@ -15,6 +15,13 @@ This is not a “home interior” prompt preset. It asks whether the product col
 [中文](./README.md) · [Product case study](./docs/PRODUCT_CASE_STUDY.en.md) · [Live demo](https://www.bokiframe.com) · [Developer guide](./DEVGUIDE.md)
 
 ![End-to-end workflow: swatch to batch generation, automatic color locking, and smart inpainting](./docs/media/hero-demo.gif)
+
+## What's New in 2026.08
+
+- **A redesigned production workspace:** Product → Scene → Output replaces the long parameter column. Core room, style, lighting, and camera controls stay close at hand, while B2 / Pro tabs, candidate thumbnails, and pass / alternative / reject / favorite actions now live directly on result cards.
+- **A standalone sample color matcher:** Match a newly photographed large sample to an older small swatch without starting Floor Engine or calling an AI service. Select a clean area in the new photograph, adjust strength, preview the result, and export full-resolution JPG / PNG / TIFF. The recommended mode transfers color while preserving the new image's texture, exposure, and natural lighting.
+
+> **Bring new and historical sample photography back to one product-color baseline.** Launch it directly on Windows or run it independently on Linux: [try the standalone sample color matcher](./standalone_color_calibrator/README.md).
 
 ## Why
 
@@ -39,18 +46,20 @@ One production job can run B2, Pro, and SD routes together, retain both API orig
 
 The current production workspace supports:
 
+- A Product → Scene → Output accordion that keeps core controls visible and expands secondary parameters only when needed;
 - Swatch-aware tone detection and flooring-specific scene recipes;
 - Batch generation across rooms or products, with independent model concurrency;
 - A Cinematic Realism switch that plans believable camera positions, action, eye lines, and practical light before B2 / Pro generation;
 - A dual-thumb floor-coverage control from **10–80%**, defaulting to **40–50%**, committed only when the drag ends;
 - Local MobileSAM segmentation for floors, objects, and receiving surfaces, with brush refinement;
-- Pass / alternative / reject review, favorites, issue tags, and HTML / PPTX delivery exports.
+- Offline matching of newly photographed large samples to historical swatches while retaining resolution, texture, and lighting;
+- B2 / Pro tabs and candidate thumbnails with pass / alternative / reject / favorite actions directly on result cards; the records workspace retains issue tags and HTML / PPTX delivery exports.
 
 ## Product Gallery
 
 ### Swatch → planning → production
 
-The generation page is not a giant prompt box. Swatch, workflow, region, room, material, camera, cinematic direction, and floor coverage are reusable controls; the result workspace shows multi-model candidates and live job state beside them.
+The generation page is not a giant prompt box. Product, scene, and output are organized as a three-step accordion: room, style, light, and camera stay in the core layer while region, material, and floor coverage expand on demand. The result workspace uses model tabs and candidate thumbnails for live review.
 
 ![From swatch planning to batch generation, color control, and smart inpainting](./docs/media/feature-tour.webp)
 
@@ -59,6 +68,12 @@ The generation page is not a giant prompt box. Swatch, workflow, region, room, m
 Image models routinely shift flooring color. The system segments the floor and moves the result toward the swatch target in LAB space. The correction remains inside the mask to preserve walls, furniture, and ambient light as much as possible.
 
 ![Generated image before and after automatic color matching](./docs/media/quality-before-after.webp)
+
+### Match a newly photographed large sample to an older swatch
+
+The repository now includes a [standalone sample color matcher](./standalone_color_calibrator/README.md) that runs without the main application. It extracts the proven LAB / Reinhard statistical approach from Floor Engine: select a clean material region in the new large photograph, use the historical small swatch as the reference, and apply the correction across the full-resolution image. The default mode transfers LAB chroma only, so grain, embossing, bevels, highlights, and shadows remain those of the new photograph. A Color + Luminance mode is available when exposure must be aligned as well.
+
+Design, catalog, e-commerce, and social teams can produce more color-consistent source assets without starting the generation stack. Processing stays local, images are not uploaded, and no model API cost is incurred.
 
 ### Click an object, then refine the mask
 
@@ -135,7 +150,7 @@ FastAPI / task orchestration / queue recovery
 
 - B2, Pro, and SD use independent concurrency slots. The service binds to `127.0.0.1` by default.
 - Configuration, outputs, logs, and queue recovery state remain in the local data directory.
-- Regression coverage includes prompt snapshots, route contracts, path security, queue recovery, cinematic planning, floor coverage, color matching, smart selection, and record lineage. This release is verified at **211 tests passed**.
+- Regression coverage includes prompt snapshots, route contracts, path security, queue recovery, cinematic planning, floor coverage, color matching, standalone sample matching, smart selection, and record lineage. This release is verified at **215 tests passed**.
 
 ## My Role
 
@@ -152,6 +167,16 @@ The [full product case study](./docs/PRODUCT_CASE_STUDY.en.md) covers context, t
 ## Quick Start
 
 Requirements: Python 3.10+, Node.js 20+, and at least one configured image-model API — either [Google AI Studio](https://aistudio.google.com/) (Gemini) or [fal.ai](https://fal.ai/) is enough; a self-hosted ComfyUI instance is also supported with zero API cost. The MobileSAM model asset is included.
+
+### If you only need sample color matching
+
+On Windows, double-click [`standalone_color_calibrator/启动校色工具.bat`](./standalone_color_calibrator/启动校色工具.bat), then load the new large photograph and the older reference swatch. The utility only needs Pillow and NumPy—no Node.js, API key, or Floor Engine service. It also has a command-line interface:
+
+```powershell
+python standalone_color_calibrator/app.py --source new-large.jpg --reference old-swatch.jpg --output matched.jpg
+```
+
+See the [standalone color matcher guide](./standalone_color_calibrator/README.md) for the GUI workflow, selection advice, and all options.
 
 ### Windows
 
@@ -180,6 +205,7 @@ Enter API keys on the Settings page after first launch. See [DEVGUIDE.md](./DEVG
 - [Product case study (English)](./docs/PRODUCT_CASE_STUDY.en.md) / [产品案例（中文）](./docs/PRODUCT_CASE_STUDY.zh-CN.md)
 - [Developer guide](./DEVGUIDE.md)
 - [Development log](./开发日志.md) (Chinese)
+- [Standalone sample color matcher](./standalone_color_calibrator/README.md)
 - [SaaS architecture roadmap](./SAAS_ARCHITECTURE.md)
 - [Third-party notices](./THIRD_PARTY_NOTICES.md)
 - [Commercial licensing](./COMMERCIAL_LICENSING.md)

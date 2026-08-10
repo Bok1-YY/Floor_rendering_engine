@@ -4,7 +4,7 @@
 ![License](https://img.shields.io/badge/license-AGPL--3.0--only-blue)
 ![Python](https://img.shields.io/badge/python-3.10%2B-3776AB)
 ![Node](https://img.shields.io/badge/node-20%2B-339933)
-![Tests](https://img.shields.io/badge/tests-211%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-215%20passed-brightgreen)
 
 把一块真实地板色板，转译成可批量生成、可锁定产品颜色、可局部修补、可评审交付的空间内容。
 
@@ -15,6 +15,13 @@
 [English](./README.en.md) · [产品案例](./docs/PRODUCT_CASE_STUDY.zh-CN.md) · [在线演示](https://www.bokiframe.com) · [开发手册](./DEVGUIDE.md)
 
 ![从色板到批量生成、自动校色与智能修补的完整工作流](./docs/media/hero-demo.gif)
+
+## 2026.08 最新更新
+
+- **生成工作台重构**：用“产品 → 场景 → 输出”三步手风琴替代长参数列，常用的房间、风格、光线和镜头保持在核心层；结果区新增 B2 / Pro 页签、候选缩略条，并可直接完成通过、备选、淘汰和收藏。
+- **独立样品对色工具**：不用启动 Floor Engine，也不调用网络或 AI 接口，就能把新拍摄的大面积样品图对齐到历史小面积样品的产品色。工具支持在新图上框选纯样品区域、调节匹配强度、预览并保存全分辨率 JPG / PNG / TIFF；默认只迁移颜色，保留新图的纹理、曝光和真实光影。
+
+> **让不同时间拍摄的新旧样品图回到同一产品色基准。** Windows 可直接双击启动，Linux 也可独立运行：[立即使用独立样品对色工具](./standalone_color_calibrator/README.md)。
 
 ## Why
 
@@ -39,18 +46,20 @@ Floor Rendering Engine 把这套隐性的人工流程改成一组可执行、可
 
 当前生成工作台支持：
 
+- 用“产品 → 场景 → 输出”三步手风琴组织任务，核心参数常驻，其余参数按需展开；
 - 从色板自动识别色调，并给出适合地板营销的场景配方；
 - 批量生成多房间或多块地板，多模型使用独立并发槽；
 - 打开“电影真实感”后，在 B2 / Pro 生图前规划可信机位、动作、视线关系和现实光源；
 - 用双端滑块控制地板约占画面的 **10–80%**，默认 **40–50%**，松手后才提交参数；
 - 用本机 MobileSAM 找地板、物件和承载区域，再由画笔精修；
-- 在记录页完成通过、备选、淘汰、收藏、问题标注和 HTML / PPTX 导出。
+- 用离线独立对色工具把新拍大面积样品图对齐历史小样，保留分辨率、纹理与光影；
+- 在生成结果卡直接切换 B2 / Pro 与候选图，并完成通过、备选、淘汰和收藏；记录页继续负责问题标注与 HTML / PPTX 导出。
 
 ## Product Gallery
 
 ### Swatch → planning → production
 
-生成页不是一个巨大的提示词输入框。色板、工作流、地域、房间、材质、镜头、电影真实感和地板面积都被组织成可复用参数；右侧任务区同时展示多模型候选与实时状态。
+生成页不是一个巨大的提示词输入框。色板、场景和输出被组织成三步手风琴，房间、风格、光线、镜头保持在核心层，地域、材质和地板面积按需展开；右侧以模型页签和候选缩略条承载实时结果与评审。
 
 ![从色板规划到批量生成、校色和智能修补](./docs/media/feature-tour.webp)
 
@@ -59,6 +68,12 @@ Floor Rendering Engine 把这套隐性的人工流程改成一组可执行、可
 生成模型经常把地板颜色带偏。系统先分割地板，再在 LAB 色彩空间内把结果拉回色板目标；修改限制在蒙版内，尽量保留墙面、家具和环境光。
 
 ![API 原图与自动校色结果对比](./docs/media/quality-before-after.webp)
+
+### 新拍大样，也能对齐历史小样
+
+仓库同时提供一个可脱离主系统运行的[独立样品对色工具](./standalone_color_calibrator/README.md)。它复用 Floor Engine 已验证的 LAB / Reinhard 色彩统计思路：在新拍大图中框选一块干净材料区域，以旧小样为参考，把校正应用到整张高分辨率图片。默认仅迁移 LAB 色彩通道，木纹、压纹、倒角、受光和阴影仍来自新照片；需要统一两次拍摄曝光时，也可以选择“颜色 + 明暗”。
+
+这让设计、样册、电商和社媒团队无需先启动整套生图服务，也能快速得到产品色更一致的素材底图。全程本地处理，不上传图片，不产生模型 API 费用。
 
 ### Click an object, then refine the mask
 
@@ -135,7 +150,7 @@ FastAPI / task orchestration / queue recovery
 
 - B2、Pro 与 SD 使用独立并发槽；服务默认只监听 `127.0.0.1`。
 - 配置、输出、日志和任务恢复状态保存在本机数据目录。
-- 当前回归集覆盖提示词黄金样本、路由契约、路径安全、队列恢复、电影规划、地板占比、校色、智能选区和记录链路；本次发布为 **211 tests passed**。
+- 当前回归集覆盖提示词黄金样本、路由契约、路径安全、队列恢复、电影规划、地板占比、校色、独立样品对色、智能选区和记录链路；本次发布为 **215 tests passed**。
 
 ## My Role
 
@@ -152,6 +167,16 @@ FastAPI / task orchestration / queue recovery
 ## Quick Start
 
 要求：Python 3.10+、Node.js 20+，并至少配置一个可用图像模型 API——[Google AI Studio](https://aistudio.google.com/)（Gemini）或 [fal.ai](https://fal.ai/) 任一即可；也可连接自备的 ComfyUI 实例，本地算力零 API 费用。MobileSAM 模型资产已包含在仓库中。
+
+### 只需要样品对色
+
+Windows 双击 [`standalone_color_calibrator/启动校色工具.bat`](./standalone_color_calibrator/启动校色工具.bat)，依次载入新拍大图和旧小样即可。它只依赖 Pillow 与 NumPy，不需要 Node.js、API Key 或 Floor Engine 服务。命令行也可直接运行：
+
+```powershell
+python standalone_color_calibrator/app.py --source 新大图.jpg --reference 旧小样.jpg --output 对色结果.jpg
+```
+
+完整图形界面、框选建议和参数说明见[独立样品对色工具文档](./standalone_color_calibrator/README.md)。
 
 ### Windows
 
@@ -180,6 +205,7 @@ python serve.py
 - [产品案例（中文）](./docs/PRODUCT_CASE_STUDY.zh-CN.md) / [Product case study (English)](./docs/PRODUCT_CASE_STUDY.en.md)
 - [开发手册](./DEVGUIDE.md)
 - [开发日志](./开发日志.md)
+- [独立样品对色工具](./standalone_color_calibrator/README.md)
 - [SaaS 架构路线](./SAAS_ARCHITECTURE.md)
 - [第三方组件与模型声明](./THIRD_PARTY_NOTICES.md)
 - [商业授权说明](./COMMERCIAL_LICENSING.md)
