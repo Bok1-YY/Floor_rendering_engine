@@ -64,6 +64,41 @@ def job_view(job: JobRecord) -> dict:
     ensure_model_runs(job)
     ensure_candidate_lists(job)   # 向后兼容 + 同步 *_path = *_paths[*_idx]
     effective_error = job.operation_error or job.error
+    panorama_resume = None
+    vr_run = job.model_runs.get('vr360') or {}
+    vr_settings = vr_run.get('settings') or {}
+    pano_handles = vr_settings.get('pano_queue_handles') or {}
+    direct_handles = vr_settings.get('direct_queue_handles') or {}
+    for preview_id, preview in sorted(
+            (job.panorama_previews or {}).items(),
+            key=lambda item: float((item[1] or {}).get('created_at_epoch') or 0),
+            reverse=True):
+        if not isinstance(preview, dict) or preview.get('status') != 'interrupted':
+            continue
+        route = ('direct_cubemap_atlas'
+                 if str(preview.get('policy') or '').startswith('direct_cubemap_atlas')
+                 else 'perspective_to_erp')
+        handles = ((direct_handles.get(preview_id) or {}) if route == 'direct_cubemap_atlas'
+                   else (pano_handles.get(preview_id) or {}))
+        if not handles or not preview.get('preview_hash'):
+            continue
+        request_ids = []
+        if route == 'direct_cubemap_atlas':
+            request_ids = [str(value.get('request_id') or '') for value in handles.values()
+                           if isinstance(value, dict) and value.get('request_id')]
+        elif isinstance(handles, dict) and handles.get('request_id'):
+            request_ids = [str(handles.get('request_id'))]
+        panorama_resume = {
+            'preview_id': str(preview_id),
+            'preview_hash': str(preview.get('preview_hash') or ''),
+            'route': route,
+            'request_ids': request_ids,
+            'source_model': str(preview.get('source_model') or ''),
+            'source_index': int(preview.get('source_index') or 0),
+            'created_at_epoch': float(preview.get('created_at_epoch') or 0),
+            'reason': str(preview.get('error') or ''),
+        }
+        break
     runs = {}
     for key in job.model_targets:
         run = job.model_runs.get(key) or {}
@@ -71,7 +106,23 @@ def job_view(job: JobRecord) -> dict:
         idx = max(0, min(int(run.get('index') or 0), len(paths) - 1)) if paths else 0
         current = paths[idx] if paths else ''
         settings = run.get('settings') or {}
+        public_settings = dict(settings)
+        # Fal request handles are resumability state, not a browser contract.
+        public_settings.pop('pano_queue_handles', None)
+        public_settings.pop('direct_queue_handles', None)
         api_original = run.get('base_path') if settings.get('auto_color_match_enabled') else ''
+        candidate_meta = list(run.get('candidate_meta') or [])
+        candidates = []
+        for candidate_index, candidate_path in enumerate(paths):
+            metadata = (candidate_meta[candidate_index]
+                        if candidate_index < len(candidate_meta)
+                        and isinstance(candidate_meta[candidate_index], dict) else {})
+            candidates.append({
+                'idx': candidate_index,
+                'url': to_url(candidate_path),
+                'thumb': result_thumb_url(candidate_path),
+                'metadata': dict(metadata),
+            })
         runs[key] = {
             'key': key,
             'label': run.get('label') or key,
@@ -92,7 +143,8 @@ def job_view(job: JobRecord) -> dict:
             'auto_color_error': settings.get('auto_color_error') or '',
             'delivery_status': run.get('delivery_status') or '',
             'seed': run.get('seed'),
-            'settings': settings,
+            'settings': public_settings,
+            'candidates': candidates,
         }
     return {
         'job_id': job.job_id,
@@ -103,6 +155,7 @@ def job_view(job: JobRecord) -> dict:
         'model_targets': job.model_targets,
         'model_runs': runs,
         'workflow_mode': job.workflow_mode,
+        'delivery_mode': job.delivery_mode,
         'error': job.error,
         'error_kb': classify_failure(effective_error) if (effective_error and '取消' not in effective_error) else None,
         'b2_stage': job.b2_stage,
@@ -115,6 +168,7 @@ def job_view(job: JobRecord) -> dict:
         'operation': job.operation,
         'operation_status': job.operation_status,
         'operation_error': job.operation_error,
+        'panorama_resume': panorama_resume,
         'has_retry': bool(job.retry_ctx),
         'record_id': job.record_id,
         'json_path': job.json_path,

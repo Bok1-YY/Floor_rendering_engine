@@ -99,6 +99,11 @@ def _resolve_floor_source(target: FloorVisualizeTarget):
         rec = next((r for r in recs if r.get('id') == target.record_id), None)
         if not rec:
             raise HTTPException(404, '未找到记录')
+        if rec.get('immutable_audit'):
+            raise HTTPException(409, {
+                'code': 'immutable_audit_record',
+                'message': '全景门禁审计记录不能从通用历史页贴地板',
+            })
         result = next((r for r in rec.get('results', []) if r.get('result_id') == target.result_id), None)
         if result is None:
             raise HTTPException(404, '未找到该效果图')
@@ -474,6 +479,11 @@ def record_color_match(req: RecordColorMatchRequest):
     rec = next((r for r in recs if r.get('id') == req.record_id), None)
     if not rec:
         raise HTTPException(404, '未找到记录')
+    if rec.get('immutable_audit'):
+        raise HTTPException(409, {
+            'code': 'immutable_audit_record',
+            'message': '全景门禁审计记录不能从通用历史页校色',
+        })
     res = next((item for item in rec.get('results', [])
                 if item.get('result_id') == req.result_id), None)
     if res is None:

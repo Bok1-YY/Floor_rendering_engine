@@ -8,6 +8,8 @@
 
 只做新旧样品照片对色时，不必启动完整服务：`standalone_color_calibrator/` 是从现有 LAB 校色核心抽出的独立 Pillow / NumPy / OpenCV 桌面与命令行工具，入口和参数见其 [README](./standalone_color_calibrator/README.md)。
 
+户型主链路已改为“整屋统一建模 → 完整 3D 灰模 → 本地安全候选 → Gemini 受限复排 → 自动固化多通道约束并出图”，人工选机位只作为高级纠偏，不再使用按房间独立灰盒作为默认入口。数据结构、提示词角色、API 和真实冒烟记录见 [整屋 3D 约束链路](./docs/WHOLE_HOME_3D_PIPELINE.md)。
+
 ---
 
 ## 零、快速启动 ⭐（先看这里）
@@ -16,6 +18,57 @@
 Windows 直接双击仓库内脚本：
 - `start-windows.bat`：生产静态前端与 FastAPI 合一运行在 **7870**；
 - `dev-windows.bat`：FastAPI **7870** + Next.js dev **3000** 两个进程。
+
+#### 整屋 Manual Release v1（当前默认）
+
+`start-windows.bat` 当前明确启动 **manual-safe**，并把 agent workflow、external review、reference WIP、development autopilot 和付费提交全部设为关闭。这个启动分支不会迁移历史记录、恢复中断任务或自动应用账本对账；它会持有整个 `data` 根的进程锁，第二个服务进程会直接拒绝启动。脚本也不会运行 `npm ci`：缺少 `web/node_modules` 或静态构建时会报错，依赖安装必须由操作者单独执行。
+
+不付费查看、建模、保存机位和生成只读预览：
+
+```powershell
+.\tools\start_whole_home_manual.ps1
+```
+
+明确允许一次受限人工提交时，先关闭旧服务，再由同一终端执行：
+
+```powershell
+.\tools\start_whole_home_manual.ps1 -AllowPaid
+```
+
+浏览器中的付费步骤固定为：
+
+1. 上传并锁定一个 CAD 整屋模型，上传地板小样；
+2. 在 3D 灰模中人工布置并保存机位。保存机位永远不会自动生图；
+3. 只勾选 **1 个机位**和 **1 个模型**。候选固定 1、分辨率固定 2K、材质固定 `floor_sample`；
+4. 点击“生成只读付费预览”。后端会绑定项目版本及户型、地板、机位通道等全部输入文件的 SHA-256；此步不调用 provider；
+5. 核对 preview ID、SHA-256 和 4 次生图 / 8 次 QA 硬上限，逐字输入页面显示的动态确认短语；
+6. 只有服务使用 `-AllowPaid` 启动且短语、preview hash、项目版本和所有输入文件复算完全一致时，“确认并提交受限任务”才会创建任务。preview 只能成功消费一次。
+
+普通 `POST /api/whole-home/runs`、续跑和 QA retry 在 manual-safe 下被拒绝；reference、AI 自动机位、续跑和 QA retry 控件默认隐藏。开发中的 workflow/external-review/reference/development-paid 各自使用独立开关，manual 启动脚本不会开启它们。
+
+历史 development session 对账只允许使用本地 provider-free CLI。默认命令是 dry-run；请把每个相关 run JSON 用重复的 `--run` 明确列出：
+
+```powershell
+.venv\Scripts\python.exe tools\whole_home_manual.py dry-run `
+  --session "<session.json>" `
+  --run "<run-1.json>" --run "<run-2.json>"
+```
+
+dry-run 输出 `session_sha256`、`run_manifest_sha256`、`state_version`、`plan_hash` 和动态 `confirmation_phrase`，且不会修改 session。人工核对后，apply 必须原样携带这些值、一个新的幂等键以及独立备份目录：
+
+```powershell
+.venv\Scripts\python.exe tools\whole_home_manual.py apply `
+  --session "<session.json>" --run "<run-1.json>" --run "<run-2.json>" `
+  --expected-session-sha256 "<dry-run value>" `
+  --expected-run-manifest-sha256 "<dry-run value>" `
+  --expected-state-version <dry-run value> `
+  --expected-plan-hash "<dry-run value>" `
+  --idempotency-key "<new operator key>" `
+  --confirmation-phrase "<exact dry-run phrase>" `
+  --backup-dir "<new backup directory>"
+```
+
+apply 会先用排他创建方式写入并校验不可覆盖备份，然后才执行 CAS 对账；任一 hash、版本、计划或短语变化都会拒绝。legacy schema 1 的所有 `reserved` / `dispatched` 一律记为 `uncertain_after_restart`，不推测退款，并把 session 暂停等待人工检查。该 CLI 不导入或调用生图 provider。
 
 Linux / macOS 仍可使用原有上级目录启动脚本，或按 0.2 的命令手动启动。
 
@@ -63,7 +116,7 @@ cd Floor_engine_server/web && npm install
 
 ### 0.5 启动逻辑（一键启动脚本到底做了什么）
 生产与开发脚本职责不同：
-- `start-windows.bat` 先切到仓库根目录、检查 `.venv`，再比较 `web/src`、前端配置文件与 `web/out/index.html` 的修改时间。只有静态产物缺失或过期时才运行 `npm run build`；`node_modules` 缺失时才运行 `npm ci`，避免源码已经更新却继续启动旧界面。
+- `start-windows.bat` 先切到仓库根目录、检查 `.venv`，再比较 `web/src`、前端配置文件与 `web/out/index.html` 的修改时间。静态产物缺失/过期或构建依赖缺失时会明确报错并退出；启动脚本不会代替操作者执行 `npm ci` 或 `npm run build`，避免启动动作隐式改依赖和产物。
 - 生产启动把 `FLOOR_DATA_DIR` 固定到仓库内 `data/`，然后执行 `python serve.py`。FastAPI 与 `web/out` 使用同一个 **7870** 端口，`serve.py` 默认自动打开浏览器；设 `FLOOR_NO_BROWSER=1` 可禁用。
 - `dev-windows.bat` 才使用两个独立进程：FastAPI **7870** + Next.js dev **3000**。前后端解耦，后端生成 4K 图时不会阻塞前端 HMR。
 - Linux / macOS 当前使用手动命令：先 `npm run build`，再从仓库根目录运行 `python serve.py`。
@@ -114,15 +167,20 @@ cd Floor_engine_server/web && npm install
 ```
 Floor_engine_server/
 │   ── Web 层（2026-07 拆包：server_api 只组装，业务在 routes_*）──
-├── server_api.py        FastAPI app 组装器：lifespan、CORS/同源守卫、healthz、include_router ×6、静态/缩略图、前端挂载
+├── server_api.py        FastAPI app 组装器：lifespan、CORS/同源守卫、healthz、业务路由、静态/缩略图、前端挂载
 ├── routes_jobs.py       任务队列端点 + 全部生图后台协程（4K 主编排 _run_job_bg/_edit_bg 在此，改动务必人工冒烟）
 ├── routes_previews.py   快速预览（NB2 Lite 1K，不进队列不写记录）
 ├── routes_library.py    上传/历史小样、记录列表与揭示、收藏/评审、导出、用量
 ├── routes_config.py     配方/失败库/连通性/配置/Omakase/模型与选项词表
 ├── routes_tools.py      识色 + 地板可视化渲染 + AI 蒙版/局部与兼容全图校色
+├── routes_whole_home.py ★ 整屋主链路：统一模型版本/锁定、自动机位计划、3D 四通道、B2/Pro 两轮任务、自动 QA 与取消
+├── whole_home_engine.py ★ 米制整屋模型、共享墙图、AI 识图/机位受限复排、几何检查/哈希、提示词、缓冲/项目/任务持久化
+├── routes_floorplans.py 旧户型图/PDF、按房间空间规划/灰模/套图兼容接口；新页面不再以它为主流程
+├── floorplan_engine.py  旧房间标注与套图兼容引擎，并向整屋导入提供历史分析读取
+├── floorplan_annotations.py 人工标注版本、操作日志、几何验收、授权过滤与 JSONL 数据集导出
 ├── routes_inpaint.py    生成式修补（AI 智能选区 + 两段式抽卡）
 ├── server_state.py      全部可变运行时状态：JOBS/PREVIEWS/INPAINTS 注册表、按模型信号量、spawn；路由经 `state.X` 访问（测试注入唯一入口）
-├── server_schemas.py    31 个 Pydantic 请求模型（前端契约，改字段先确认前端）
+├── server_schemas.py    Pydantic 请求模型（前端契约，改字段先确认前端）
 ├── server_helpers.py    路由共享工具：URL 映射、job_view、路径守卫(require_*)、上传落盘、导出响应
 ├── image_ops.py         纯 PIL：mask 解码/羽化、EXIF 归一化、修补候选落盘
 ├── task_registry.py     泛型 TaskRegistry：dict+锁+取消集合+trim 四件套的统一容器（jobs/previews/inpaints 共用）
@@ -141,6 +199,10 @@ Floor_engine_server/
 ├── api.py               外部模型客户端：Google/Fal 生图、FAL 持久队列、SD3.5 IP-Adapter、AuraSR、磨缝二改、生成式修补调度
 ├── color_match.py       本地色彩算法：全图 Reinhard、区域诊断、蒙版内稳健 a/b 校正及 4K 分片变体
 ├── floor_segmentation.py 离线 MobileSAM ONNX、地板正负点提示、通用物件扫描、单点区域提示、RLE 与严格手绘降级
+├── local_depth.py        离线 Depth Anything V2 Small ONNX；只输出相对深度与遮挡边界，不提供米制尺寸
+├── local_floor_semantics.py 离线 CLIPSeg 量化 ONNX；floor/flooring 文本语义，禁止把柜体/桌面当地面
+├── panorama_local_geometry.py  透视相机/Manhattan 合同、源图→ERP 配准、深度蒙版审计与轻度墙体门禁
+├── panorama_film_material.py   原厂彩膜自动本地材质终稿；禁止模型生成木纹
 ├── records.py           记录持久化核心：队列状态、记录 CRUD、结果图落盘、收藏/评审、复盘聚合、迁移/揭示
 ├── usage_stats.py       用量统计：模式×模型×线路计数 + 成本估算（全程吞异常，绝不拖垮生图）
 ├── exports.py           导出层：记录 HTML 对照文档、客户提案 PPTX（单记录/收藏夹）
@@ -151,8 +213,8 @@ Floor_engine_server/
 ├── logging_setup.py     logger（输出到 test/app_local_save.log）
 │
 ├── web/                 ★ Next.js 前端（见 §五）
-├── tests/               pytest：golden 提示词、69 端点路由契约快照、AI 智能选区、TaskRegistry/用量直测、安全硬化、校色回归
-├── assets/              倒角参考图、logo、MobileSAM ONNX 与模型许可证 —— 入库
+├── tests/               pytest：golden 提示词、105 端点路由契约、整屋拓扑/自动机位/灰模/两轮套图/QA 补评、旧户型兼容、AI 智能选区、TaskRegistry、安全硬化、校色回归
+├── assets/              倒角参考图、logo、CLIPSeg/MobileSAM/Depth Anything ONNX 与模型许可证 —— 入库
 ├── requirements.txt     Python 依赖
 ├── 开发日志.md          每次会话改了啥、为什么（最新在最上，接手前先读）
 ├── README.md / DEVGUIDE.md
@@ -171,6 +233,7 @@ Floor_engine_server/
 |---|---|
 | `output_files/` | 出图、每个素材的 `*_记录.json`、优化图、磨缝候选 |
 | `output_files/.queue_state.json` | 任务队列持久化（最多 60 条，重启恢复） |
+| `output_files/_whole_home/` | 整屋项目、自动机位候选/联系表/AI 理由、运行任务与每机位 RGB/depth/normal/edge 缓冲；均为可追溯记录，不自动清理 |
 | `engine_config.json` | **密钥**(gemini/fal)、proxy、provider、speed_profile、auto_failover、tls_verify/ca、并发等。**含敏感信息，已 gitignore，且在 `test/` 不在本仓库** |
 | `custom_recipes.json` | 用户保存的“我的配方”（位于仓库上级，不进入本仓库） |
 | `_ng_uploads/logo_*` | PPTX 提案使用的品牌 Logo（由程序上传和清理） |
@@ -216,6 +279,9 @@ POST /api/jobs ──秒回 job_id──▶ 后台 asyncio task(routes_jobs._run
 - **评审复盘**：`GET /api/review/summary` 聚合维度统计 · `GET /api/review/gallery?filter=pass|best` 好图样本库。
 - **失败** `POST /api/failure/classify` · `GET /api/failure/rules`；**连通** `GET /api/connection/test`。
 - **配置** `GET/PUT /api/config`；**模型** `GET /api/models`；**选项** `GET /api/options`(前端下拉真源)；**用量** `GET /api/usage`；**健康** `GET /api/healthz`。
+- **户型标注、灰模确认与分房间两轮出图**：`POST /api/uploads/floorplan` 接收图片/PDF；`POST /api/floorplans/analyze` 使用 Gemini 起稿，`POST /api/floorplans/manual` 创建纯手工草稿。AI 门/窗/连通口统一存为 `ai_suggested + pending`，未审核候选既不能通过 `POST .../verify`，也不会进入硬约束。前端既支持逐项审核，也支持一次 `bulk_accept_ai_plan`：只把 pending AI 开口设为 accepted、只确认当前 selected 房间的 AI 建议机位、设置整轮门窗审核完成，再通过既有 `PUT .../draft` 与 `POST .../verify` 顺序保存和验收；若仍有重叠/越界等真实 hard error，则停在草稿显示异常。批量操作不改变房间 selected 状态，因此湿区/阳台不会被意外开启。机位来源区分 `ai_suggested`（原样被采纳）、`ai_edited`（人工移动）和 `manual`（人工新建），避免训练标签污染。验收后，`POST .../spatial-plans/generate` 读取原图与人工叠图产出结构化规划，本地机位几何覆盖 AI 可能冲突的左右/远近描述；锁定接口拒绝不存在于已接受开口集合的 `required_opening_ids`。前端以 Three.js 渲染干净灰模，`POST .../view-proxies/{camera_id}/confirm` 保存 PNG、画幅、相机参数与覆盖 annotation/plan/opening/aspect 的 source hash。任何上游标注或规划变动都会清空或标记灰模过期。
+
+  `POST /api/floorplan-suites` 只接受当前验收 revision 的锁定规划和 source hash 完全匹配、画幅一致的已确认灰模。第一轮 B2/Pro 输入仅为灰模（另可有纯风格参考），生成中性地板的写实结构图；结构 QA 硬失败时停止第二轮以节省计费。第二轮输入仅为结构图和地板小样，并被要求只替换可见地板。标注户型图、红色机位箭头、编号约束叠图与产品小样不会进入第一轮，因此不会再被复制到成图。最终 QA 同时对照灰模、第一轮结构图和地板样品，逐条输出 pass/fail/uncertain；产物保存 `structure_path`、`material_path`、`final_path` 与 generation trace。成本预估按每个最终候选两次模型调用计算。授权训练导出包含 schema v3 标注、灰模、空间规划、两轮结果图片路径、QA 和人工评价。`model_keys` 可同时选择 B2、Pro；新任务按房间/机位独立并发，旧一致性任务仅做读取兼容。
 - **静态/缩略图**：`GET /thumb/{uploads,outputs}`(懒生成 JPEG)；`/outputs`、`/uploads` 挂目录服原图。
 
 ### 4.4 加新端点的范式
@@ -344,7 +410,7 @@ web/src/
 6. 在 **`开发日志.md` 顶部追加一条**（改了啥、为什么）。
 7. 提交（见 §九）。
 
-**测试**：`cd Floor_engine_server && python -m pytest`（引擎层 golden 提示词、安全硬化、人工评审元数据、AI/手绘蒙版与局部/全图校色、独立样品对色、SD 提示词/IP-Adapter/FAL 队列恢复、生成式修补智能选区的 RLE/扫描过滤/点击策略/路由契约，以及模式化 mask/提示词/EXIF/候选计费/无损落盘和非校色新功能回归；当前 **220 项**）。本机若系统 `python` 无 pytest，可用项目虚拟环境：`.venv/bin/python -m pytest`。`tests/golden/` 基准入库，缓存不入。
+**测试**：在仓库根目录运行 `python -m pytest`（引擎层 golden 提示词、安全硬化、整屋模型坐标/外墙闭环/封闭房间缺墙/图纸对齐/三阶段审计/历史择优/版本 hash、四类机位缓冲、两轮输入隔离、硬约束 QA 与网络失败补评历史、旧户型人工标注兼容、套图提示词/质量评分、人工评审元数据、AI/手绘蒙版与局部/全图校色、独立样品对色、SD 提示词/IP-Adapter/FAL 队列恢复、生成式修补智能选区的 RLE/扫描过滤/点击策略/路由契约，以及模式化 mask/提示词/EXIF/候选计费/无损落盘和非校色新功能回归；当前 **265 项**）。本机若系统 `python` 无 pytest，可用项目虚拟环境：Windows 为 `.venv\Scripts\python.exe -m pytest`，Linux/macOS 为 `.venv/bin/python -m pytest`。`tests/golden/` 基准入库，缓存不入。
 
 ---
 

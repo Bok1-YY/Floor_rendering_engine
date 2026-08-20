@@ -931,6 +931,8 @@ async def create_job(req: JobSubmitRequest):
         if '纯效果图' not in (req.params.workflow_mode or ''):
             raise HTTPException(422, 'SD 3.5 首期仅支持纯效果图工作流')
     req.image_path = require_upload_image_path(req.image_path, '地板图', required=True)
+    if req.params.film_path:
+        req.params.film_path = require_upload_image_path(req.params.film_path, '原厂彩膜') or ''
     req.room_path = require_upload_image_path(req.room_path, '房间图')
     req.ref_path = require_upload_image_path(req.ref_path, '参照图')
     panel_require_second_image(req)
@@ -1114,8 +1116,12 @@ def job_result(jid: str, model: str = 'pro', idx: int = -1):
         raise HTTPException(404, 'no result for this model')
     requested = int(run.get('index') or 0) if idx < 0 else idx
     i, total, path = nav_model_candidate(job, model, requested)
+    candidate_meta = list(run.get('candidate_meta') or [])
+    metadata = (candidate_meta[i] if i < len(candidate_meta)
+                and isinstance(candidate_meta[i], dict) else {})
     return {'model': model, 'idx': i, 'total': total,
-            'url': to_url(path), 'thumb': result_thumb_url(path)}
+            'url': to_url(path), 'thumb': result_thumb_url(path),
+            'metadata': dict(metadata)}
 
 
 # ── 编辑 / 磨缝（对 job 现有成图）──
@@ -1328,6 +1334,11 @@ async def record_edit(req: RecordEditRequest):
     rec = next((r for r in recs if r.get('id') == req.record_id), None)
     if not rec:
         raise HTTPException(404, '未找到记录')
+    if rec.get('immutable_audit'):
+        raise HTTPException(409, {
+            'code': 'immutable_audit_record',
+            'message': '全景门禁审计记录不能从通用历史页发起二改',
+        })
     results = rec.get('results', [])
     res = next((item for item in results if item.get('result_id') == req.result_id), None)
     if res is None:

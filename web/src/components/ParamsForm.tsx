@@ -26,6 +26,7 @@ const short = (s: string) => cleanLabel(s.split(" (")[0]);
 
 const WF_SUB: Record<string, string> = {
   纯效果图: "用地板小样直接生成全新空间",
+  球面效果图: "同球心六面图集直出，再确定性合成 360° VR",
   参照模式: "按参照图的风格与氛围生成",
   宠物友好: "画面中加入宠物生活场景",
   地板替换: "保留原图空间，仅替换原地面",
@@ -200,6 +201,7 @@ export function ParamsForm({
   const isPanel = params.workflow_mode.includes("墙板");
   const isFree = params.workflow_mode.includes("自由创作");
   const isPure = params.workflow_mode.includes("纯效果图");
+  const isSphere = params.workflow_mode.includes("球面效果图");
   const supportsCinematic = isPure || isPet || isRef || isOmakase;
   const panelSub = params.panel_submode || "再设计";
   const isPanelScene = isPanel && !panelSub.includes("替换"); // 再设计/纯原创：暴露场景控件；替换保留原图
@@ -310,6 +312,12 @@ export function ParamsForm({
         {supportsCinematic ? " · 支持电影模式" : ""}
       </p>
 
+      {isSphere && (
+        <div className="mt-3 rounded-xl border border-primary/35 bg-primary-soft px-3 py-2.5 text-[11.5px] leading-relaxed text-accent-foreground">
+          这条路线不先生成普通透视图：B2 与 GPT Image 2 会各自一次性生成六个同球心方向，系统随后自动拆面、校验边界并合成可拖动查看的 2:1 全景。
+        </div>
+      )}
+
       {isFree && (
         <FreeModePanel
           prompt={freePrompt}
@@ -319,8 +327,8 @@ export function ParamsForm({
         />
       )}
 
-      {/* ── 源图上传：随工作流出现（地板替换=房间原图 / 参照模式=参照图）── */}
-      {(isReplace || isRef) && (
+      {/* ── 源图上传：替换必传 / 参照必传 / 球面几何锚点可选 ── */}
+      {(isReplace || isRef || isSphere) && (
         <div className="mt-[13px] space-y-2.5 rounded-xl border border-primary/40 bg-primary-soft p-[13px]">
           {isReplace && (
             <div className="flex flex-col gap-1.5">
@@ -359,6 +367,23 @@ export function ParamsForm({
                   }
                 />
               )}
+            </div>
+          )}
+          {isSphere && (
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[11.5px] font-semibold text-accent-foreground">
+                空间参考效果图（可选 · 本地几何锚点）
+              </span>
+              <ImageUpload
+                value={roomValue}
+                onPick={onRoomPick}
+                uploadFn={api.uploadRoom}
+                buttonLabel="上传空间参考图"
+                okMsg="空间参考图已上传"
+              />
+              <span className="text-[11px] leading-relaxed text-muted-foreground">
+                有图时，本地算法锁定正前方地平线、墙体比例、铺装方向和尺度；不上传仍可直出六面，但不会宣称与某张房间原图一致。
+              </span>
             </div>
           )}
           {isRef && (
@@ -513,18 +538,20 @@ export function ParamsForm({
               options={options.lightings}
               adjusted={(params.lighting || options.lightings[0]) !== options.lightings[0]}
             />
-            <Field
-              label="镜头"
-              value={params.angle || options.angles[0]}
-              onChange={(angle) => onParams({ angle })}
-              options={options.angles}
-              adjusted={(params.angle || options.angles[0]) !== options.angles[0]}
-            />
+            {!isSphere && (
+              <Field
+                label="镜头"
+                value={params.angle || options.angles[0]}
+                onChange={(angle) => onParams({ angle })}
+                options={options.angles}
+                adjusted={(params.angle || options.angles[0]) !== options.angles[0]}
+              />
+            )}
           </div>
         </div>
       )}
 
-      {!isFree && (
+      {!isFree && !isSphere && (
         <div
           className={cn(
             "mt-[14px] flex items-start justify-between gap-4 rounded-xl border p-[12px] transition-colors",

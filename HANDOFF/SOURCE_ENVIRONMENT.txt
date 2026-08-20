@@ -1,0 +1,12 @@
+Captured: 2026-08-19 Asia/Singapore
+Source: C:\Users\Boki\Floor_engine_Linux
+Git HEAD: 54c9e51736f677fbe93a23daa2b8e606058851d5
+Git branch: main
+Python: Python 3.12.10
+Node: v26.5.1
+npm: 12.0.2
+OS: Microsoft Windows NT 10.0.26200.0
+PowerShell: 7.6.5
+Blender: not installed on source machine
+GPU: Honor Virtual Display Device; Intel(R) Iris(R) Xe Graphics
+Source handoff doc: docs/CODEX_BLENDER_360VR_IMPLEMENTATION_HANDOFF.md

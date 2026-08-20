@@ -145,6 +145,17 @@ def load_persisted_jobs() -> List[JobRecord]:
                 run['stage'] = ''
                 if run.get('status') in ('queued', 'running'):
                     run['status'] = 'partial' if run.get('paths') else 'failed'
+        if (job.operation in ('panorama_generate', 'panorama_repair', 'panorama_direct')
+                and job.operation_status == 'running'):
+            # Fal queue handle is retained in the vr360 run.  A repeated commit
+            # can resume that exact paid request; startup must not leave the UI
+            # permanently active or submit anything automatically.
+            job.operation_status = 'failed'
+            job.operation_error = '程序重启，全景付费请求已中断；可用原确认恢复已有队列请求'
+            for preview in (job.panorama_previews or {}).values():
+                if isinstance(preview, dict) and preview.get('status') in ('claimed', 'running'):
+                    preview['status'] = 'interrupted'
+                    preview['error'] = job.operation_error
         if isinstance(job.retry_ctx, dict):
             for key in ('cpt', 'cpt_pro', 'sd_positive', 'sd_negative'):
                 encoded = job.retry_ctx.pop(f'{key}_obf', '')
@@ -162,7 +173,7 @@ def load_persisted_jobs() -> List[JobRecord]:
 # ── 历史地板小样扫描（_ng_uploads 里的原始上传，供 webui 历史小样 picker）─────
 _FLOOR_SWATCH_EXTS = ('.jpg', '.jpeg', '.png', '.webp')
 # 历史小样里要排除的非地板上传：房间图/参照图/记录管理上传/测试临时图/匿名兜底名
-_FLOOR_SWATCH_SKIP_PREFIX = ('room_', 'ref_', 'mgr_a_', 'mgr_b_', 'ZZ', 'upload_', 'logo_')
+_FLOOR_SWATCH_SKIP_PREFIX = ('room_', 'ref_', 'film_', 'mgr_a_', 'mgr_b_', 'ZZ', 'upload_', 'logo_')
 
 def list_recent_floor_swatches(limit: int = 24):
     """扫 _ng_uploads 里的历史地板小样(原始上传)，按最近修改时间倒序返回绝对路径列表。
@@ -343,7 +354,11 @@ def scan_json_files():
     for root, dirs, files in os.walk(MAIN_OUTPUT_DIR):
         for f in files:
             if f.endswith('_记录.json'): results.append(os.path.join(root, f))
-    return sorted(results, reverse=True)
+    # 历史页默认打开第一项；按实际更新时间而不是文件名排序，确保最新验收/出图在最前。
+    def _mtime(path):
+        try: return os.path.getmtime(path)
+        except OSError: return 0.0
+    return sorted(results, key=lambda path: (_mtime(path), path), reverse=True)
 
 def get_record_labels(json_path, records=None):
     """返回记录选项标签。records 可由调用方传入，避免文件列表汇总时重复读盘。"""
@@ -453,14 +468,22 @@ def api_write_to_record(pil_img, model_key: str, json_path_val: str, record_id_v
         logger.error(f"❌ 写入记录失败 ({model_key}): {e}")
     return None
 
+def _bounded_result_stem(value: str, *, max_chars: int = 72) -> str:
+    safe = ''.join(c if (c.isalnum() or c in '._-') else '_' for c in str(value or 'result')).strip('._') or 'result'
+    if len(safe) <= max_chars:
+        return safe
+    digest = hashlib.sha256(safe.encode('utf-8')).hexdigest()[:12]
+    return f"{safe[:max_chars - 13]}_{digest}"
+
+
 def save_api_result_jpg(pil_img, model_key: str, png_path_val: str) -> str:
     tmp_path = None
     try:
         ts = time.strftime("%Y%m%d_%H%M%S") + f"_{int(time.time_ns() % 1_000_000_000):09d}"
-        safe_key = ''.join(c if (c.isalnum() or c in '._-') else '_' for c in str(model_key or 'result')).strip('._') or 'result'
+        safe_key = _bounded_result_stem(model_key, max_chars=36)
         raw_base = os.path.basename(png_path_val or "api")
         orig_name = raw_base.replace('_优化图.png', '').replace('.png', '') or "result"
-        orig_name = ''.join(c if (c.isalnum() or c in '._-') else '_' for c in orig_name).strip('._') or 'result'
+        orig_name = _bounded_result_stem(orig_name)
         fname = f"{orig_name}_{safe_key}_{ts}_{uuid.uuid4().hex[:10]}.jpg"
         fpath = os.path.join(MAIN_OUTPUT_DIR, fname)
         img = pil_img.copy()
@@ -486,10 +509,10 @@ def save_api_result_png(pil_img, model_key: str, source_path: str,
     tmp_path = None
     try:
         ts = time.strftime("%Y%m%d_%H%M%S") + f"_{int(time.time_ns() % 1_000_000_000):09d}"
-        safe_key = ''.join(c if (c.isalnum() or c in '._-') else '_' for c in str(model_key or 'result')).strip('._') or 'result'
+        safe_key = _bounded_result_stem(model_key, max_chars=36)
         raw_base = os.path.basename(source_path or "api")
         orig_name = raw_base.replace('_优化图.png', '').rsplit('.', 1)[0] or "result"
-        orig_name = ''.join(c if (c.isalnum() or c in '._-') else '_' for c in orig_name).strip('._') or 'result'
+        orig_name = _bounded_result_stem(orig_name)
         fpath = os.path.join(MAIN_OUTPUT_DIR, f"{orig_name}_{safe_key}_{ts}_{uuid.uuid4().hex[:10]}.png")
         fd, tmp_path = tempfile.mkstemp(prefix='.result_', suffix='.png', dir=MAIN_OUTPUT_DIR)
         os.close(fd)
@@ -642,6 +665,56 @@ def update_result_review(json_path, record_id, result_ref, *,
                 'reviewed_at': target['reviewed_at'],
             }
     logger.warning(f"[记录] 评审更新失败 json={json_path}, record={record_id}, result={result_ref}")
+    return None
+
+
+def find_record_result_id_by_image_file(json_path: str, record_id: str,
+                                        image_file: str) -> Optional[str]:
+    """Resolve a job candidate file back to its stable record result id."""
+    target_rel = _rel_result_path(image_file)
+    if not json_path or not record_id or not target_rel:
+        return None
+    normalized = os.path.normcase(os.path.normpath(target_rel))
+    with record_file_lock(json_path):
+        records = load_records_file(json_path)
+        record = next((row for row in records if row.get('id') == record_id), None)
+        if not isinstance(record, dict):
+            return None
+        for result in record.get('results') or []:
+            rel = str(result.get('result_image_file') or '')
+            if rel and os.path.normcase(os.path.normpath(rel)) == normalized:
+                return str(result.get('result_id') or '') or None
+    return None
+
+
+def update_result_panorama_metadata(json_path: str, record_id: str, result_ref,
+                                    panorama: dict) -> Optional[dict]:
+    """Update the per-result panorama audit/review without affecting sibling results."""
+    with record_file_lock(json_path):
+        records = load_records_file(json_path)
+        for record in records:
+            if record.get('id') != record_id:
+                continue
+            results = record.get('results') or []
+            index = _result_index(results, result_ref)
+            if index < 0:
+                break
+            target = results[index]
+            metadata = dict(target.get('generation_metadata') or {})
+            metadata['projection'] = 'equirectangular'
+            metadata['panorama'] = dict(panorama or {})
+            target['generation_metadata'] = metadata
+            review_status = str((panorama.get('review') or {}).get('status') or '')
+            if review_status == 'accepted':
+                target['review_status'] = 'pass'
+            elif review_status == 'rejected':
+                target['review_status'] = 'rejected'
+            elif review_status:
+                target['review_status'] = 'unreviewed'
+            save_records_file(json_path, records)
+            return dict(metadata['panorama'])
+    logger.warning(
+        f"[记录] 全景元数据更新失败 json={json_path}, record={record_id}, result={result_ref}")
     return None
 
 # ── 评审复盘：人工评审标签的聚合统计与好图样本库 ─────────────────────
@@ -802,6 +875,7 @@ __all__ = [
     'api_write_to_record', 'save_api_result_jpg', 'migrate_record_file',
     'migrate_record_storage', 'migrate_all_record_storage',
     'toggle_result_favorite', 'update_result_review',
+    'find_record_result_id_by_image_file', 'update_result_panorama_metadata',
     'attach_generation_context', 'load_review_summary', 'collect_review_gallery',
     'persist_jobs', 'load_persisted_jobs', 'list_recent_floor_swatches',
     'create_free_generation_record',

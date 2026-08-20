@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "description": "Deterministic 0-100 difficulty score. A case may include both vector and raster challenge variants, so category scores are additive and capped.",
+  "groups": {
+    "geometry_topology": {
+      "cap": 30,
+      "metrics": {
+        "room_count": {
+          "bands": [
+            {"min": 4, "max": 8, "points": 2},
+            {"min": 9, "max": 15, "points": 5},
+            {"min": 16, "max": 30, "points": 8},
+            {"min": 31, "points": 10}
+          ]
+        },
+        "non_rectangular_outline": {"points": 3},
+        "non_orthogonal_walls": {"points": 4},
+        "curved_boundaries": {"points": 4},
+        "multiple_wall_thicknesses": {"points": 2},
+        "has_columns_or_shafts": {"points": 3},
+        "has_stairs": {"points": 4}
+      }
+    },
+    "drawing_expression": {
+      "cap": 25,
+      "metrics": {
+        "cad_has_blocks": {"points": 4},
+        "cad_has_nested_inserts": {"points": 4},
+        "cad_many_layers": {"points": 3},
+        "cad_has_hatches": {"points": 2},
+        "cad_has_dimensions": {"points": 2},
+        "cad_has_labels": {"points": 2},
+        "cad_has_furniture": {"points": 2},
+        "cad_multiple_plan_candidates": {"points": 4},
+        "cad_paperspace_xref_or_far_origin": {"points": 2}
+      }
+    },
+    "openings_semantics": {
+      "cap": 15,
+      "metrics": {
+        "opening_count": {
+          "bands": [
+            {"min": 5, "max": 15, "points": 3},
+            {"min": 16, "points": 5}
+          ]
+        },
+        "has_door_window_open_connection": {"points": 4},
+        "has_open_plan": {"points": 3},
+        "openings_occluded": {"points": 3}
+      }
+    },
+    "raster_quality": {
+      "cap": 20,
+      "metrics": {
+        "raster_quality": {
+          "mapping": {
+            "clean_vector": 0,
+            "compressed": 3,
+            "scanned": 7,
+            "phone_perspective": 10
+          }
+        },
+        "raster_dense_annotations": {"points": 3},
+        "raster_bilingual_or_low_contrast": {"points": 3},
+        "raster_low_resolution": {"points": 4}
+      }
+    },
+    "scale_storey_units": {
+      "cap": 10,
+      "metrics": {
+        "missing_or_mixed_units": {"points": 4},
+        "multi_storey_or_page": {"points": 3},
+        "far_origin_mirror_or_nested_transform": {"points": 3}
+      }
+    }
+  },
+  "levels": [
+    {"level": "L1", "min": 0, "max": 20},
+    {"level": "L2", "min": 21, "max": 40},
+    {"level": "L3", "min": 41, "max": 60},
+    {"level": "L4", "min": 61, "max": 80},
+    {"level": "L5", "min": 81, "max": 100}
+  ],
+  "blocking_l1_minimum": {
+    "room_count": 4,
+    "opening_count": 5,
+    "requires_one_of": [
+      "non_rectangular_outline",
+      "non_orthogonal_walls",
+      "has_stairs",
+      "has_open_plan",
+      "multiple_wall_thicknesses"
+    ]
+  }
+}

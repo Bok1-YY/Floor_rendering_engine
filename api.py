@@ -26,6 +26,8 @@ from .config import (
     BASE_DIR, MAIN_OUTPUT_DIR, CONFIG_FILE,
     GEMINI_MODEL_MAP, FAL_MODEL_MAP, LEGACY_IMAGE_MODEL_ALIASES,
     LITE_PREVIEW_MODEL, DEFAULT_IMAGE_PROVIDER,
+    GPT_IMAGE_2_MODEL, FAL_GPT_IMAGE_2_ENDPOINT, OPENAI_IMAGE_EDITS_URL,
+    GPT_IMAGE_2_ERP_SIZE, FAL_FLUX_CANNY_ERP_ENDPOINT,
     logger, short_text, load_config, save_config,
     get_speed_profile_params,
     get_text_models, get_gen_sampling, get_omakase_gemini_model,
@@ -562,10 +564,20 @@ def _call_fal_queue_json(api_key: str, endpoint: str, payload: dict, *, on_stage
         _notify_stage(on_stage, "🔄 恢复已有 Fal 队列任务…")
     else:
         try:
+            # Multi-channel 4K ERP edits carry several lossless PNG data URIs.
+            # ``requests`` applies the connect timeout while writing the request
+            # body as well, so the former 30 s value aborted a valid 10-20 MB
+            # upload before Fal could return a durable request_id.  This remains
+            # a single submit: a timeout is never retried automatically.
+            try:
+                submit_timeout = max(
+                    30, min(600, int(cfg.get('fal_queue_submit_timeout', 180))))
+            except Exception:
+                submit_timeout = 180
             # 提交响应丢失时无法判断服务器是否已接单，因此绝不自动重交；由用户显式重试。
             response = session.post(
                 f"https://queue.fal.run/{endpoint}", json=payload, headers=headers,
-                timeout=(30, 120), verify=verify,
+                timeout=(submit_timeout, max(120, submit_timeout)), verify=verify,
             )
             if response.status_code not in (200, 201, 202):
                 return None, f"队列提交 HTTP {response.status_code}: {_detail(response)}"
@@ -638,7 +650,157 @@ def _call_fal_queue_json(api_key: str, endpoint: str, payload: dict, *, on_stage
     return None, "Fal 队列等待超时；任务可能仍在服务端运行，请稍后按原任务重试"
 
 
-def _fal_image_from_result(data: dict, *, plural: bool = True, direct: bool = False):
+_FAL_MEDIA_MAX_BYTES = 128 * 1024 * 1024
+
+
+def _fal_media_routes(cfg: dict, *, direct: bool, attempts: int) -> list[tuple[str, str]]:
+    """Build a deterministic download route plan without consulting ambient proxy env vars."""
+    general_proxy = str(cfg.get("proxy") or "").strip()
+    queue_proxy = str(cfg.get("fal_queue_proxy") or "").strip()
+    primary_proxy = queue_proxy if direct else general_proxy
+    primary = (("fal_queue_proxy" if direct else "proxy"), primary_proxy) if primary_proxy else ("direct", "")
+    alternatives: list[tuple[str, str]] = []
+    for candidate in (
+        ("proxy", general_proxy),
+        ("fal_queue_proxy", queue_proxy),
+        ("direct", ""),
+    ):
+        if candidate != primary and candidate not in alternatives and (candidate[1] or candidate[0] == "direct"):
+            alternatives.append(candidate)
+    # Give the configured primary route one immediate retry before switching;
+    # after all alternatives, return to the primary because transient tunnels
+    # often recover within a few seconds.
+    plan = [primary, primary, *alternatives, primary]
+    if not plan:
+        plan = [("direct", "")]
+    while len(plan) < attempts:
+        plan.extend([primary, *alternatives])
+    return plan[:attempts]
+
+
+def _download_fal_media(url: str, *, direct: bool = False, on_stage=None,
+                        should_cancel=None) -> bytes:
+    """Reliably read one already-generated Fal asset without another paid submit.
+
+    The byte buffer survives transport failures.  When Fal advertises byte
+    ranges, the next attempt resumes from the last complete chunk; otherwise a
+    200 response safely restarts the same URL from byte zero.  Attempts may
+    alternate the configured proxy and direct routes, but they never call a Fal
+    generation endpoint.
+    """
+    cfg = load_config()
+    try:
+        attempts = max(2, min(6, int(cfg.get("fal_media_download_attempts", 4))))
+    except Exception:
+        attempts = 4
+    try:
+        chunk_size = max(64 * 1024, min(1024 * 1024,
+                         int(cfg.get("fal_media_chunk_bytes", 256 * 1024))))
+    except Exception:
+        chunk_size = 256 * 1024
+    configured_backoffs = cfg.get("fal_media_retry_backoffs")
+    retry_backoffs = (
+        [max(0.0, min(30.0, float(value))) for value in configured_backoffs[:5]]
+        if isinstance(configured_backoffs, list) and configured_backoffs else
+        [0.75, 1.5, 3.0, 5.0, 8.0]
+    )
+    routes = _fal_media_routes(cfg, direct=direct, attempts=attempts)
+    verify = _verify_arg(cfg)
+    payload = bytearray()
+    expected_total: Optional[int] = None
+    errors: list[str] = []
+
+    for attempt, (route_label, proxy) in enumerate(routes, 1):
+        if should_cancel and should_cancel():
+            raise RuntimeError("已取消")
+        if attempt > 1:
+            _notify_stage(on_stage, f"🔄 恢复下载 Fal 结果 {attempt}/{attempts}…")
+        session = _req.Session()
+        session.trust_env = False
+        if proxy:
+            session.proxies.update({"http": proxy, "https": proxy})
+        response = None
+        offset = len(payload)
+        headers = {"Range": f"bytes={offset}-"} if offset else {}
+        try:
+            response = session.get(
+                url, headers=headers, stream=True,
+                timeout=(30, 300), verify=verify,
+            )
+            response.raise_for_status()
+            if offset and response.status_code == 206:
+                content_range = str(response.headers.get("Content-Range") or "")
+                match = re.match(r"bytes\s+(\d+)-(\d+)/(\d+|\*)", content_range, re.I)
+                if not match or int(match.group(1)) != offset:
+                    raise _req.exceptions.ChunkedEncodingError(
+                        f"Fal Range 响应起点不匹配: expected={offset}, got={content_range or 'missing'}")
+                if match.group(3) != "*":
+                    expected_total = int(match.group(3))
+            elif response.status_code == 200:
+                # The host ignored Range. Restarting the download is safe: this
+                # is the same immutable result URL and creates no provider call.
+                if offset:
+                    payload.clear()
+                    offset = 0
+                content_length = response.headers.get("Content-Length")
+                expected_total = int(content_length) if content_length else None
+            elif response.status_code == 206:
+                content_range = str(response.headers.get("Content-Range") or "")
+                match = re.match(r"bytes\s+(\d+)-(\d+)/(\d+|\*)", content_range, re.I)
+                if match and match.group(3) != "*":
+                    expected_total = int(match.group(3))
+
+            for chunk in response.iter_content(chunk_size=chunk_size):
+                if should_cancel and should_cancel():
+                    raise RuntimeError("已取消")
+                if not chunk:
+                    continue
+                payload.extend(chunk)
+                if len(payload) > _FAL_MEDIA_MAX_BYTES:
+                    raise ValueError("Fal 结果图片超过 128 MiB 安全上限")
+
+            if expected_total is not None and len(payload) != expected_total:
+                raise _req.exceptions.ChunkedEncodingError(
+                    f"Fal 结果下载不完整: {len(payload)}/{expected_total} bytes")
+            if not payload:
+                raise _req.exceptions.ChunkedEncodingError("Fal 结果下载为空")
+            logger.info(
+                "[Fal结果下载] success route=%s attempt=%s/%s bytes=%s resumed_from=%s",
+                route_label, attempt, attempts, len(payload), offset,
+            )
+            return bytes(payload)
+        except Exception as ex:
+            error = f"{route_label}: {_redact_api_key(ex)}"
+            errors.append(error)
+            logger.warning(
+                "[Fal结果下载] failed route=%s attempt=%s/%s received=%s expected=%s error=%s",
+                route_label, attempt, attempts, len(payload), expected_total,
+                _redact_api_key(ex),
+            )
+            if str(ex) == "已取消":
+                raise
+            if attempt < attempts:
+                delay = retry_backoffs[min(attempt - 1, len(retry_backoffs) - 1)]
+                deadline = time.time() + delay
+                while time.time() < deadline:
+                    if should_cancel and should_cancel():
+                        raise RuntimeError("已取消")
+                    time.sleep(min(0.25, max(0.0, deadline - time.time())))
+        finally:
+            if response is not None:
+                try:
+                    response.close()
+                except Exception:
+                    pass
+            try:
+                session.close()
+            except Exception:
+                pass
+    raise RuntimeError("；".join(errors[-attempts:]) or "Fal 结果下载失败")
+
+
+def _fal_image_from_result(data: dict, *, plural: bool = True, direct: bool = False,
+                           on_stage=None, should_cancel=None):
     item = ((data.get("images") or [None])[0] if plural else data.get("image")) if isinstance(data, dict) else None
     url = item.get("url") if isinstance(item, dict) else None
     if not url:
@@ -647,17 +809,10 @@ def _fal_image_from_result(data: dict, *, plural: bool = True, direct: bool = Fa
         if url.startswith("data:"):
             raw = base64.b64decode(url.split(",", 1)[1])
         else:
-            cfg = load_config()
-            raw_proxy = cfg.get("fal_queue_proxy") if direct else cfg.get("proxy")
-            proxy = str(raw_proxy or "").strip()
-            session = _req.Session()
-            if proxy:
-                session.proxies.update({"http": proxy, "https": proxy})
-            elif direct:
-                session.trust_env = False
-            resp = session.get(url, timeout=(30, 300), verify=_verify_arg(cfg))
-            resp.raise_for_status()
-            raw = resp.content
+            raw = _download_fal_media(
+                url, direct=direct, on_stage=on_stage,
+                should_cancel=should_cancel,
+            )
         image = Image.open(_io_mod.BytesIO(raw)); image.load()
         return image, None
     except Exception as ex:
@@ -1458,6 +1613,220 @@ def call_image_generate(api_key: str, model_id: str, prompt_text: str, image_pat
     return None, err, "google"
 
 
+def call_gpt_image_edit(api_key: str, edit_prompt: str, source_image_paths: list[str],
+                        mask_image_path: str = '',
+                        *, model_id: str = GPT_IMAGE_2_MODEL,
+                        size: str = GPT_IMAGE_2_ERP_SIZE,
+                        provider: str = 'fal', endpoint: str = '',
+                        resume_handle: Optional[dict] = None, on_submitted=None,
+                        on_stage=None, should_cancel=None,
+                        ) -> Tuple[Optional[Image.Image], Optional[str]]:
+    """GPT Image 2 整张 ERP 编辑(文档 §7.5,定点球面全景 P0 专用)。
+
+    与 call_gemini_edit 同契约:返回 (PIL.Image, None) 或 (None, 错误字符串)。
+    provider 必须显式选择 fal/openai；付费请求禁止跨 provider 自动 fallback，
+    避免超时后无法判断是否已接单而重复计费。fal 使用持久队列且仅提交一次；
+    OpenAI /v1/images/edits 按官方合同使用 multipart image[]/mask。mask 为提示性
+    指导(OpenAI 官方不保证像素级硬边界,文档 §6.2),
+    修补前后必须由球面 gate 复核 mask 外结构。
+    """
+    def _stage(text):
+        _notify_stage(on_stage, text)
+
+    cfg = load_config()
+    if should_cancel and should_cancel():
+        return None, "已取消"
+    paths = [path for path in source_image_paths if path and os.path.exists(path)]
+    if not paths:
+        return None, "编辑源图不存在"
+    match = re.fullmatch(r'(\d+)x(\d+)', str(size or '').strip())
+    if not match:
+        return None, f"非法输出尺寸: {size}"
+    output_width, output_height = int(match.group(1)), int(match.group(2))
+    if (output_width > 3840 or output_height > 3840
+            or output_width % 16 or output_height % 16
+            or max(output_width, output_height) / min(output_width, output_height) > 3
+            or not 655_360 <= output_width * output_height <= 8_294_400):
+        return None, f"输出尺寸超出 GPT Image 2 合同: {size}"
+    proxy = cfg.get("proxy", "").strip()
+    proxies = {"http": proxy, "https": proxy} if proxy else None
+    verify = _verify_arg(cfg)
+
+    def _decode(data_uri_or_url: str) -> Image.Image:
+        if data_uri_or_url.startswith("data:"):
+            raw = base64.b64decode(data_uri_or_url.split(",", 1)[1])
+        else:
+            response = _req.get(data_uri_or_url, timeout=(30, 300), proxies=proxies, verify=verify)
+            response.raise_for_status()
+            raw = response.content
+        image = Image.open(_io_mod.BytesIO(raw))
+        image.load()
+        return image
+
+    provider_key = str(provider or 'fal').strip().lower()
+    if provider_key not in {'fal', 'openai'}:
+        return None, f"不支持的 GPT Image provider: {provider}"
+
+    if provider_key == 'fal':
+        fal_key = (api_key or "").strip() or (cfg.get("fal_api_key") or "").strip()
+        if not fal_key:
+            return None, "未配置 fal_api_key"
+        uris = [_file_to_data_uri(path) for path in paths]
+        uris = [uri for uri in uris if uri]
+        if not uris:
+            return None, "编辑源图无法编码"
+        mask_uri = _file_to_data_uri(mask_image_path) if mask_image_path else ""
+        actual_endpoint = str(endpoint or cfg.get("fal_gpt_image_endpoint")
+                              or FAL_GPT_IMAGE_2_ENDPOINT).strip()
+        payload = {
+            "prompt": edit_prompt,
+            "image_urls": uris,
+            "image_size": {"width": output_width, "height": output_height},
+            "quality": "high",
+            "num_images": 1,
+            "output_format": "png",
+            "sync_mode": False,
+        }
+        if mask_uri:
+            payload["mask_image_url"] = mask_uri
+        _stage("🎨 GPT Image 2 整张 ERP 编辑(fal)…")
+        data, error = _call_fal_queue_json(
+            fal_key, actual_endpoint, payload, on_stage=on_stage,
+            should_cancel=should_cancel, resume_handle=resume_handle,
+            on_submitted=on_submitted)
+        if data is None:
+            return None, error or "fal 队列编辑失败"
+        return _fal_image_from_result(
+            data, plural=True, direct=False,
+            on_stage=on_stage, should_cancel=should_cancel,
+        )
+
+    # OpenAI 直连只在显式选中时使用，不是 fal 的隐式 fallback。
+    openai_key = (api_key or "").strip() or (cfg.get("openai_api_key") or "").strip()
+    if not openai_key:
+        return None, "未配置 openai_api_key"
+    form = {
+        "model": model_id,
+        "prompt": edit_prompt,
+        "size": size,
+        "quality": "high",
+        "output_format": "png",
+    }
+    _stage("🎨 GPT Image 2 整张 ERP 编辑(OpenAI 直连)…")
+    handles = []
+    try:
+        files = []
+        for path in paths:
+            handle = open(path, 'rb')
+            handles.append(handle)
+            mime = _IMAGE_MIME.get(os.path.splitext(path)[1].lower().lstrip('.'), 'image/png')
+            files.append(('image[]', (os.path.basename(path), handle, mime)))
+        if mask_image_path:
+            handle = open(mask_image_path, 'rb')
+            handles.append(handle)
+            mask_mime = _IMAGE_MIME.get(
+                os.path.splitext(mask_image_path)[1].lower().lstrip('.'), 'image/png')
+            files.append(('mask', (os.path.basename(mask_image_path), handle, mask_mime)))
+        response = _req.post(
+            OPENAI_IMAGE_EDITS_URL, data=form, files=files,
+            headers={"Authorization": f"Bearer {openai_key}"},
+            timeout=(30, 600), proxies=proxies, verify=verify,
+        )
+    except Exception as ex:
+        return None, f"OpenAI 编辑请求网络错误: {_redact_api_key(ex)}"
+    finally:
+        for handle in handles:
+            handle.close()
+    if response.status_code not in (200, 201):
+        return None, f"OpenAI 编辑 HTTP {response.status_code}: {short_text(response.text, 400)}"
+    try:
+        data = response.json()
+    except Exception as ex:
+        return None, f"OpenAI 响应解析失败: {ex}"
+    rows = (data or {}).get("data") or []
+    if not rows:
+        return None, "OpenAI 编辑响应缺少 data"
+    row = rows[0]
+    b64 = row.get("b64_json") or ""
+    if b64:
+        image = Image.open(_io_mod.BytesIO(base64.b64decode(b64)))
+        image.load()
+    return image, None
+
+
+def call_fal_flux_canny_edit(
+        api_key: str, prompt: str, rgb_image_path: str, canny_image_path: str, *,
+        size: str = '1536x704', seed: int = 24681357,
+        strength: float = .82, control_lora_strength: float = 1.25,
+        num_inference_steps: int = 32, guidance_scale: float = 3.0,
+        endpoint: str = FAL_FLUX_CANNY_ERP_ENDPOINT,
+        resume_handle: Optional[dict] = None, on_submitted=None,
+        on_stage=None, should_cancel=None,
+        ) -> Tuple[Optional[Image.Image], Optional[str]]:
+    """Structure-controlled fal FLUX ERP edit with a separately audited Canny map.
+
+    This function performs exactly one durable queue submission and never falls
+    back to another provider.  ``rgb_image_path`` and ``canny_image_path`` must
+    already have identical dimensions; panorama wrap gutters are prepared by
+    the whole-home route so their exact files/hashes remain visible in history.
+    """
+    cfg = load_config()
+    fal_key = (api_key or '').strip() or str(cfg.get('fal_api_key') or '').strip()
+    if not fal_key:
+        return None, '未配置 fal_api_key'
+    match = re.fullmatch(r'(\d+)x(\d+)', str(size or '').strip())
+    if not match:
+        return None, f'非法输出尺寸: {size}'
+    width, height = int(match.group(1)), int(match.group(2))
+    if (width < 512 or height < 512 or width > 4096 or height > 4096
+            or width % 32 or height % 32 or width * height > 8_294_400):
+        return None, f'输出尺寸超出 FLUX Canny 合同: {size}'
+    rgb_uri = _file_to_data_uri(rgb_image_path)
+    canny_uri = _file_to_data_uri(canny_image_path)
+    if not rgb_uri or not canny_uri:
+        return None, 'FLUX Canny 的 RGB/control 输入不存在或无法编码'
+    try:
+        with Image.open(rgb_image_path) as rgb, Image.open(canny_image_path) as canny:
+            if rgb.size != (width, height) or canny.size != (width, height):
+                return None, (
+                    f'FLUX Canny 输入尺寸不匹配: rgb={rgb.size}, control={canny.size}, '
+                    f'expected={(width, height)}')
+    except Exception as ex:
+        return None, f'FLUX Canny 输入无法读取: {_redact_api_key(ex)}'
+    payload = {
+        'prompt': str(prompt or '').strip(),
+        'image_url': rgb_uri,
+        'control_lora_image_url': canny_uri,
+        'image_size': {'width': width, 'height': height},
+        'num_inference_steps': max(10, min(50, int(num_inference_steps))),
+        'seed': max(0, int(seed)),
+        'guidance_scale': max(1.0, min(10.0, float(guidance_scale))),
+        'num_images': 1,
+        'enable_safety_checker': True,
+        'output_format': 'png',
+        'sync_mode': False,
+        'control_lora_strength': max(0.0, min(2.0, float(control_lora_strength))),
+        'strength': max(0.0, min(1.0, float(strength))),
+    }
+    _notify_stage(on_stage, '🎨 FLUX Canny 结构受控 ERP 编辑(fal)…')
+    data, error = _call_fal_queue_json(
+        fal_key, str(endpoint or FAL_FLUX_CANNY_ERP_ENDPOINT), payload,
+        on_stage=on_stage, should_cancel=should_cancel,
+        resume_handle=resume_handle, on_submitted=on_submitted)
+    if data is None:
+        return None, error or 'fal FLUX Canny 队列编辑失败'
+    # fal.media downloads in the user's network require the configured proxy;
+    # queue submission itself remains direct via fal_queue_proxy policy.
+    return _fal_image_from_result(
+        data, plural=True, direct=False,
+        on_stage=on_stage, should_cancel=should_cancel,
+    )
+    url = row.get("url") or ""
+    if url:
+        return _decode(url), None
+    return None, f"OpenAI 编辑响应缺少图片: {short_text(data, 300)}"
+
+
 def call_gemini_edit(api_key: str, model_id: str, edit_instruction: str, source_image_b64: str,
                      image_size: str = "4K", aspect_ratio: str = "4:3", preserve_floor_geometry: bool = True,
                      on_stage=None, should_cancel=None):
@@ -2127,7 +2496,8 @@ def test_connection(gemini_api_key: str, fal_api_key: str = "", proxy: str = "")
 
 __all__ = [
     'call_gemini_generate', 'call_fal_generate', 'call_image_generate',
-    'call_gemini_edit', 'analyze_style_image', 'test_connection',
+    'call_gemini_edit', 'call_gpt_image_edit', 'call_fal_flux_canny_edit',
+    'analyze_style_image', 'test_connection',
     'call_gemini_scenes', 'call_deepseek_scenes', 'call_omakase_scenes',
     'FLOOR_DESEAM_INSTRUCTION',
     'infer_aspect_ratio_from_b64',

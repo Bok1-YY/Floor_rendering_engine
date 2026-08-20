@@ -1,0 +1,44 @@
+{
+  "case_id": "08",
+  "coordinate_contract": {
+    "coordinate_system": "cad-meters-x-east-y-north-v2",
+    "schema_version": 2,
+    "screen_mapping": {
+      "cad_x": "+screen_right",
+      "cad_y": "+screen_up"
+    },
+    "topdown_view": "sky-to-ground"
+  },
+  "geometry": {
+    "forbidden_entity_handles": [],
+    "openings": [],
+    "rooms": [],
+    "walls": []
+  },
+  "independence": {
+    "method": "independent_manual_or_external_annotation",
+    "note": "Pending independent wall/room/opening annotation; no production parser claims imported.",
+    "production_parser_derived": false,
+    "reviewed_at": "",
+    "reviewer": ""
+  },
+  "level": "L4",
+  "reference_evidence": {
+    "file_name": "08_2br_freecad_40sqm.png",
+    "role": "cad_preview",
+    "sha256": "fd5cb98ea352558b95846e74b7960336ed284535ece1453a0f90457bd011159f",
+    "size_bytes": 194516
+  },
+  "schema_name": "DwgGeometryTruthV1",
+  "schema_version": 1,
+  "source": {
+    "dwg_signature": "AC1018",
+    "file_name": "08_2br_freecad_40sqm.dwg",
+    "insunits": 1,
+    "sha256": "7e5329918be7e797cb91e6801d1405589b2d113495d1aec56b71c49e34b2e8b0",
+    "size_bytes": 180721
+  },
+  "status": "pending",
+  "title": "08_2br_freecad_40sqm",
+  "truth_hash": "fa9aebf49739819fd677c4dcc17fdbd22f3ab07021be738ac11b0df09916a511"
+}

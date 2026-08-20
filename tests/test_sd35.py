@@ -126,10 +126,12 @@ class _Session:
 
 def test_fal_queue_submits_once_then_polls(monkeypatch):
     calls = {"post": 0, "status": 0, "result": 0}
+    submitted = {}
     base = "https://queue.fal.run/fal-ai/demo/requests/r1"
 
     def post(url, **kwargs):
         calls["post"] += 1
+        submitted.update(kwargs)
         return _Response({
             "request_id": "r1",
             "status_url": base + "/status",
@@ -153,6 +155,7 @@ def test_fal_queue_submits_once_then_polls(monkeypatch):
     assert err is None and data["images"]
     assert calls == {"post": 1, "status": 2, "result": 1}
     assert session.trust_env is False
+    assert submitted["timeout"] == (180, 180)
 
 
 def test_fal_queue_persists_submitted_handle(monkeypatch):

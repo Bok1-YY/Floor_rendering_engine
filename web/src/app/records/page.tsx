@@ -3,7 +3,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
-import type { RecordEntry, RecordFile, RecordResult, ReviewStatus } from "@/lib/types";
+import type {
+  GeometryAuditMetadata,
+  RecordEntry,
+  RecordFile,
+  RecordResult,
+  ReviewStatus,
+  PanoramaGateStatus,
+} from "@/lib/types";
 import { saveReuseRequest } from "@/lib/draft";
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
@@ -13,6 +20,9 @@ import { CompareSlider } from "@/components/CompareSlider";
 import { ColorMatchDialog } from "@/components/ColorMatchDialog";
 import { InpaintDialog } from "@/components/InpaintDialog";
 import { FloorVisualizeDialog } from "@/components/FloorVisualizeDialog";
+import PanoramaFloorDialog from "@/components/PanoramaFloorDialog";
+import PanoViewer from "@/components/PanoViewer";
+import { panoramaGateLabel, panoramaGateTone } from "@/lib/pureRenderPano";
 import { cn } from "@/lib/utils";
 
 const toolBtn =
@@ -39,6 +49,283 @@ const REVIEW_STATUS: { value: ReviewStatus; label: string; color: string }[] = [
   { value: "rejected", label: "淘汰", color: "var(--destructive)" },
 ];
 
+function shortHash(value?: string) {
+  if (!value) return "—";
+  return value.length > 24 ? `${value.slice(0, 12)}…${value.slice(-8)}` : value;
+}
+
+function auditUnit(unit: string) {
+  if (unit === "ratio") return "";
+  if (unit === "count") return " 项";
+  return unit ? ` ${unit}` : "";
+}
+
+function bytesLabel(value: number) {
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / 1024 / 1024).toFixed(2)} MB`;
+}
+
+const extractionWarningLabels: Record<string, string> = {
+  ifc_physical_storey_slice_recovered: "从物理楼层切片恢复空间与墙体",
+  ifc_openings_recovered_from_fill_elements: "从门窗填充构件恢复开口",
+  ifc_container_geometry_from_decomposition: "从 IFC 分解子构件恢复几何",
+  ifc_optional_entity_has_no_geometry: "可选 IFC 构件没有可用几何",
+  ifc_unrelated_wall_component_excluded: "排除与本楼层空间无关的墙体",
+  ifc_spaces_are_overlapping_unit_containers: "源空间是重叠单元容器",
+};
+
+function extractionWarningSummary(warning: Record<string, unknown>) {
+  const code = String(warning.code || "ifc_extraction_note");
+  const facts = [
+    typeof warning.base_elevation_m === "number" ? `基准 ${warning.base_elevation_m} m` : "",
+    typeof warning.slice_elevation_m === "number" ? `切片 ${Number(warning.slice_elevation_m).toFixed(2)} m` : "",
+    typeof warning.selected_wall_count === "number" ? `墙 ${warning.selected_wall_count}` : "",
+    typeof warning.recovered_space_count === "number" ? `空间 ${warning.recovered_space_count}` : "",
+    typeof warning.associated_opening_count === "number" ? `开口 ${warning.associated_opening_count}` : "",
+    typeof warning.maximum_host_distance_m === "number" ? `宿主容差 ${warning.maximum_host_distance_m} m` : "",
+  ].filter(Boolean);
+  return {
+    code,
+    label: extractionWarningLabels[code] || code,
+    facts: facts.join(" · "),
+  };
+}
+
+function GeometryAuditDetail({
+  audit,
+  jsonPath,
+  recordId,
+  onSaved,
+}: {
+  audit: GeometryAuditMetadata;
+  jsonPath: string;
+  recordId: string;
+  onSaved: () => void;
+}) {
+  const [checked, setChecked] = useState<string[]>(audit.review?.checked_metric_ids || []);
+  const [reviewer, setReviewer] = useState(audit.review?.reviewer || "");
+  const [note, setNote] = useState(audit.review?.note || "");
+  const [saving, setSaving] = useState(false);
+  const metrics = audit.channels.flatMap((channel) => channel.metrics || []);
+
+  async function saveReview(nextChecked = checked) {
+    setSaving(true);
+    try {
+      await api.reviewGeometryAudit({
+        json_path: jsonPath,
+        record_id: recordId,
+        checked_metric_ids: nextChecked,
+        reviewer,
+        note,
+      });
+      toast.success(`复核进度已保存：${nextChecked.length}/${metrics.length}`);
+      onSaved();
+    } catch (error) {
+      toast.error((error as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function toggleMetric(metricId: string) {
+    const next = checked.includes(metricId)
+      ? checked.filter((id) => id !== metricId)
+      : [...checked, metricId];
+    setChecked(next);
+    await saveReview(next);
+  }
+
+  const statusPassed = audit.status === "passed";
+  const progress = metrics.length ? Math.round((checked.length / metrics.length) * 100) : 0;
+  const counts = Object.entries(audit.source.counts || {});
+  const extractionWarnings = audit.source.extraction_warnings || [];
+  return (
+    <div className="mb-4 space-y-4 rounded-xl border border-border bg-panel p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={cn(
+              "rounded-full px-2.5 py-1 text-[11px] font-black",
+              statusPassed ? "bg-success-soft text-success" : "bg-destructive-soft text-destructive",
+            )}>
+              {audit.level} · {statusPassed ? "自动验收通过" : "自动验收失败"}
+            </span>
+            <span className="text-[12px] font-semibold text-secondary-foreground">
+              {audit.source.dataset} · {audit.source.license}
+            </span>
+          </div>
+          <h3 className="mt-2 text-[16px] font-black text-foreground">{audit.title}</h3>
+          <p className="mt-1 text-[11.5px] text-muted-foreground">
+            执行时间 {audit.executed_at} · runner {audit.runner_version}
+          </p>
+        </div>
+        <div className="min-w-[220px] rounded-lg border border-border bg-card px-3 py-2.5">
+          <div className="flex items-center justify-between text-[11px] font-bold">
+            <span>人工逐项复核</span>
+            <span className={progress === 100 ? "text-success" : "text-muted-foreground"}>
+              {checked.length}/{metrics.length} · {progress}%
+            </span>
+          </div>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
+            <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${progress}%` }} />
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 text-[11.5px] lg:grid-cols-4">
+        <div className="rounded-lg border border-border bg-card p-2.5">
+          <div className="text-muted-foreground">楼层</div>
+          <div className="mt-1 font-bold">{audit.source.storey?.name || "—"}</div>
+        </div>
+        <div className="rounded-lg border border-border bg-card p-2.5">
+          <div className="text-muted-foreground">证据完整性</div>
+          <div className={cn("mt-1 font-bold", audit.integrity.status === "passed" ? "text-success" : "text-destructive")}>
+            {audit.integrity.status === "passed" ? `通过 · ${audit.integrity.checked_count} 个文件` : "失败"}
+          </div>
+        </div>
+        <div className="rounded-lg border border-border bg-card p-2.5">
+          <div className="text-muted-foreground">源 IFC SHA-256</div>
+          <div className="mt-1 font-mono font-bold" title={audit.source.source_sha256}>
+            {shortHash(audit.source.source_sha256)}
+          </div>
+        </div>
+        <div className="rounded-lg border border-border bg-card p-2.5">
+          <div className="text-muted-foreground">审计报告 hash</div>
+          <div className="mt-1 font-mono font-bold" title={audit.audit_hash}>{shortHash(audit.audit_hash)}</div>
+        </div>
+      </div>
+
+      {counts.length > 0 && (
+        <div className="flex flex-wrap gap-2">
+          {counts.map(([key, value]) => (
+            <span key={key} className="rounded-md border border-border bg-card px-2 py-1 text-[11px]">
+              <span className="text-muted-foreground">{key}</span> <b>{value}</b>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {extractionWarnings.length > 0 && (
+        <details className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-[11.5px] text-amber-950 dark:border-amber-900 dark:bg-amber-950/20 dark:text-amber-100">
+          <summary className="cursor-pointer font-black">
+            IFC 恢复与取舍依据 · {extractionWarnings.length} 条（展开逐项核对）
+          </summary>
+          <div className="mt-3 space-y-2">
+            {extractionWarnings.map((warning, index) => {
+              const summary = extractionWarningSummary(warning);
+              return <div key={`${summary.code}-${index}`} className="rounded-md border border-amber-300/70 bg-white/60 p-2 dark:bg-black/10">
+                <div className="font-bold">{summary.label}</div>
+                <div className="mt-0.5 font-mono text-[10px] opacity-75">{summary.code}</div>
+                {summary.facts ? <div className="mt-1">{summary.facts}</div> : null}
+                {typeof warning.reason === "string" ? <div className="mt-1 text-[10.5px] opacity-80">{warning.reason}</div> : null}
+              </div>;
+            })}
+          </div>
+        </details>
+      )}
+
+      {audit.channels.map((channel) => (
+        <section key={channel.channel_id} className="overflow-hidden rounded-lg border border-border bg-card">
+          <div className="flex items-center justify-between border-b border-border px-3 py-2.5">
+            <div className="text-[12.5px] font-black">{channel.label}</div>
+            <span className={cn(
+              "rounded-md px-2 py-0.5 text-[10.5px] font-black",
+              channel.status === "passed" ? "bg-success-soft text-success" : "bg-destructive-soft text-destructive",
+            )}>
+              {channel.status === "passed" ? "PASSED" : channel.status.toUpperCase()}
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[650px] border-collapse text-left text-[11.5px]">
+              <thead className="bg-muted/60 text-muted-foreground">
+                <tr>
+                  <th className="w-16 px-3 py-2">核对</th>
+                  <th className="px-3 py-2">指标</th>
+                  <th className="px-3 py-2">实测值</th>
+                  <th className="px-3 py-2">通过阈值</th>
+                  <th className="px-3 py-2">机器判定</th>
+                </tr>
+              </thead>
+              <tbody>
+                {channel.metrics.map((metric) => (
+                  <tr key={metric.metric_id} className="border-t border-border first:border-t-0">
+                    <td className="px-3 py-2.5">
+                      <input
+                        type="checkbox"
+                        checked={checked.includes(metric.metric_id)}
+                        disabled={saving}
+                        aria-label={`核对 ${metric.label}`}
+                        onChange={() => void toggleMetric(metric.metric_id)}
+                        className="h-4 w-4 accent-primary"
+                      />
+                    </td>
+                    <td className="px-3 py-2.5 font-semibold">{metric.label}</td>
+                    <td className="px-3 py-2.5 font-mono font-bold">
+                      {metric.actual_display}{auditUnit(metric.unit)}
+                    </td>
+                    <td className="px-3 py-2.5 font-mono text-muted-foreground">
+                      {metric.operator} {metric.threshold_display}{auditUnit(metric.unit)}
+                    </td>
+                    <td className={cn("px-3 py-2.5 font-black", metric.status === "passed" ? "text-success" : "text-destructive")}>
+                      {metric.status === "passed" ? "✓ 通过" : "✕ 失败"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ))}
+
+      <section className="rounded-lg border border-border bg-card p-3">
+        <div className="mb-2 text-[12.5px] font-black">证据文件与校验和</div>
+        <div className="grid gap-2 lg:grid-cols-2">
+          {audit.artifacts.map((artifact) => (
+            <div key={artifact.artifact_id} className="flex min-w-0 items-center justify-between gap-2 rounded-md border border-border px-2.5 py-2">
+              <div className="min-w-0">
+                <div className="truncate text-[11.5px] font-bold" title={artifact.file_name}>{artifact.label}</div>
+                <div className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground" title={artifact.sha256}>
+                  {bytesLabel(artifact.size_bytes)} · {shortHash(artifact.sha256)}
+                </div>
+              </div>
+              <div className="flex flex-none items-center gap-1.5">
+                <span className={cn("text-[10.5px] font-black", artifact.integrity_status === "passed" ? "text-success" : "text-destructive")}>
+                  {artifact.integrity_status === "passed" ? "SHA ✓" : "校验失败"}
+                </span>
+                {artifact.available && (
+                  <button
+                    className={resultToolBtn}
+                    onClick={() => window.open(api.geometryAuditArtifactUrl(jsonPath, recordId, artifact.artifact_id), "_blank")}
+                  >
+                    下载
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-border bg-card p-3">
+        <div className="mb-2 text-[12.5px] font-black">我的复核记录</div>
+        <div className="grid gap-2 lg:grid-cols-[220px_1fr_auto]">
+          <Input value={reviewer} onChange={(event) => setReviewer(event.target.value)} placeholder="复核人（可选）" className="h-9" />
+          <Input value={note} onChange={(event) => setNote(event.target.value)} placeholder="核对备注（可选）" className="h-9" />
+          <button disabled={saving} onClick={() => void saveReview()} className={cn(toolBtn, "disabled:opacity-50")}>
+            {saving ? "保存中…" : "保存备注"}
+          </button>
+        </div>
+        {audit.review?.reviewed_at && (
+          <div className="mt-2 text-[10.5px] text-muted-foreground">
+            上次保存：{audit.review.reviewed_at}{audit.review.reviewer ? ` · ${audit.review.reviewer}` : ""}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
 export default function RecordsPage() {
   const router = useRouter();
   const [files, setFiles] = useState<RecordFile[]>([]);
@@ -50,6 +337,15 @@ export default function RecordsPage() {
   const [reviewFilter, setReviewFilter] = useState<"__all__" | ReviewStatus | "__best__">("__all__");
   const [loading, setLoading] = useState(false);
   const [zoom, setZoom] = useState<string | null>(null);
+  const [panoView, setPanoView] = useState<{
+    url: string;
+    label: string;
+    kind: "whole_home" | "pure_render";
+    gatePass?: boolean;
+    gateStatus?: PanoramaGateStatus;
+    failures: string[];
+    initialYawDeg: number;
+  } | null>(null);
   // 前后对比（替换类工作流的记录才有 gen_context.room_url）
   const [compare, setCompare] = useState<{ before: string; after: string } | null>(null);
   // 手动校色（新旧记录均由后端解析参照小样）
@@ -72,6 +368,13 @@ export default function RecordsPage() {
   } | null>(null);
   const [floorVisualize, setFloorVisualize] = useState<{
     open: boolean;
+    srcUrl: string;
+    textureUrl: string;
+    texturePath: string;
+    recordId: string;
+    resultId: string;
+  } | null>(null);
+  const [panoramaFloor, setPanoramaFloor] = useState<{
     srcUrl: string;
     textureUrl: string;
     texturePath: string;
@@ -124,12 +427,26 @@ export default function RecordsPage() {
         const next = await api.listRecords();
         if (seq !== openSeq.current) return;
         setFiles(next);
-        const latest = next[0]?.json_path;
-        if (!latest) return;
-        setActive(latest);
+        const searchParams = new URLSearchParams(window.location.search);
+        const requestedPath = searchParams.get("json_path") || "";
+        const requestedRecordId = searchParams.get("record_id") || "";
+        const targetPath = next.some((file) => file.json_path === requestedPath)
+          ? requestedPath
+          : next[0]?.json_path;
+        if (!targetPath) return;
+        setActive(targetPath);
         setLoading(true);
-        const recs = await api.loadRecord(latest);
-        if (seq === openSeq.current) setRecords(recs);
+        const recs = await api.loadRecord(targetPath);
+        if (seq === openSeq.current) {
+          setRecords(recs);
+          if (requestedRecordId && recs.some((record) => record.id === requestedRecordId)) {
+            window.requestAnimationFrame(() => {
+              window.requestAnimationFrame(() => {
+                document.getElementById(`record-${requestedRecordId}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+              });
+            });
+          }
+        }
       } catch (e) {
         if (seq === openSeq.current) toast.error((e as Error).message);
       } finally {
@@ -209,7 +526,7 @@ export default function RecordsPage() {
         .map((res, idx) => ({ ...res, __idx: idx }))
         .filter(resultVisible),
     }))
-    .filter((r) => (r.results || []).length > 0);
+    .filter((r) => Boolean(r.geometry_audit) || (r.results || []).length > 0);
 
   function download(url: string) {
     window.open(url, "_blank");
@@ -294,6 +611,7 @@ export default function RecordsPage() {
   // 替换类工作流（地板替换 / 墙板·替换）且有房间原图 → 结果图可做前后对比
   function compareBeforeUrl(r: RecordEntry): string {
     const gc = r.gen_context;
+    if (r.pano_audit && gc?.room_url) return gc.room_url;
     if (!gc?.room_url || !gc.params) return "";
     const wf = gc.params.workflow_mode || "";
     const isReplace =
@@ -405,7 +723,7 @@ export default function RecordsPage() {
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="搜索材料名…"
+            placeholder="搜索历史记录…"
             className="h-9 rounded-[9px] bg-card pl-8 text-[13px]"
           />
         </div>
@@ -430,7 +748,7 @@ export default function RecordsPage() {
           ⭐ 导出收藏夹 PPTX
         </button>
         <div className="px-1 pb-1.5 text-[11px] font-semibold text-muted-foreground">
-          材料记录
+          历史记录
         </div>
         <div className="flex flex-1 flex-col gap-0.5 overflow-y-auto">
           {visibleFiles.length === 0 && (
@@ -472,7 +790,7 @@ export default function RecordsPage() {
                 <rect x="3" y="14" width="18" height="6" rx="1.6" />
               </svg>
               <div className="text-[13.5px] font-semibold">
-                从左侧选择一个材料记录查看
+                从左侧选择一条历史记录查看
               </div>
             </div>
           </div>
@@ -544,19 +862,29 @@ export default function RecordsPage() {
               {!loading &&
                 shownRecords.map((r, i) => {
                   const rid = r.id || "";
+                  const immutableAudit = Boolean(r.immutable_audit);
+                  const panoAudit = r.pano_audit;
+                  const geometryAudit = r.geometry_audit;
+                  const isLegacyPanoRecord = Boolean(
+                    immutableAudit && panoAudit &&
+                    (!panoAudit.projection || panoAudit.projection === "equirectangular"),
+                  );
                   return (
                     <div
                       key={rid || i}
+                      id={rid ? `record-${rid}` : undefined}
+                      data-record-id={rid || undefined}
                       className="rounded-[14px] border border-border bg-card p-[15px] shadow-[0_2px_8px_rgba(120,90,60,.05)]"
                     >
                       <div className="mb-3 flex items-start justify-between gap-2">
                         <span className="min-w-0 flex-1 break-words text-[13.5px] font-bold leading-snug text-foreground">
-                          {rid || `记录 ${i + 1}`}
-                          {r.room_type ? ` · ${r.room_type}` : ""}
-                          {r.workflow_mode ? ` · ${String(r.workflow_mode)}` : ""}
+                          {geometryAudit?.title || rid || `记录 ${i + 1}`}
+                          {geometryAudit ? ` · ${geometryAudit.level}` : ""}
+                          {!geometryAudit && r.room_type ? ` · ${r.room_type}` : ""}
+                          {!geometryAudit && r.workflow_mode ? ` · ${String(r.workflow_mode)}` : ""}
                         </span>
                         <div className="flex flex-none flex-wrap justify-end gap-1.5 text-muted-foreground">
-                          {(r.gen_context?.params || (r.user_prompt && r.gen_context?.free_image_paths?.length)) && (
+                          {!immutableAudit && (r.gen_context?.params || (r.user_prompt && r.gen_context?.free_image_paths?.length)) && (
                             <button
                               title="用这套参数再生成"
                               onClick={() => doReuse(r)}
@@ -565,7 +893,7 @@ export default function RecordsPage() {
                               ⟳ 复用
                             </button>
                           )}
-                          {!r.user_prompt && (
+                          {!immutableAudit && !r.user_prompt && (
                             <button
                               title="解密提示词"
                               onClick={() => setReveal({ open: true, rid, pw: "", text: "" })}
@@ -574,13 +902,19 @@ export default function RecordsPage() {
                               🔑 提示词
                             </button>
                           )}
-                          <button
-                            title="删除记录"
-                            onClick={() => doDeleteRecord(rid)}
-                            className="h-[30px] rounded-lg border border-border bg-card px-2.5 text-[11.5px] font-semibold hover:bg-destructive-soft hover:text-destructive"
-                          >
-                            删除
-                          </button>
+                          {immutableAudit ? (
+                            <span className="rounded-md bg-muted px-2 py-1 text-[11px] font-bold">
+                              {geometryAudit ? "只读几何证据" : "只读审计记录"}
+                            </span>
+                          ) : (
+                            <button
+                              title="删除记录"
+                              onClick={() => doDeleteRecord(rid)}
+                              className="h-[30px] rounded-lg border border-border bg-card px-2.5 text-[11.5px] font-semibold hover:bg-destructive-soft hover:text-destructive"
+                            >
+                              删除
+                            </button>
+                          )}
                         </div>
                       </div>
 
@@ -604,6 +938,16 @@ export default function RecordsPage() {
                         </div>
                       )}
 
+                      {geometryAudit && active && (
+                        <GeometryAuditDetail
+                          key={`${geometryAudit.audit_hash}:${geometryAudit.review?.reviewed_at || ""}`}
+                          audit={geometryAudit}
+                          jsonPath={active}
+                          recordId={rid}
+                          onSaved={() => void reload()}
+                        />
+                      )}
+
                       <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-[14px]">
                         {(r.results || []).map((res, j) => {
                           const resultId = res.result_id;
@@ -612,15 +956,33 @@ export default function RecordsPage() {
                           const status = res.review_status || "unreviewed";
                           const statusMeta =
                             REVIEW_STATUS.find((s) => s.value === status) || REVIEW_STATUS[0];
+                          const purePanorama = res.generation_metadata?.panorama;
+                          const isPanoResult = Boolean(
+                            purePanorama?.projection === "equirectangular" || isLegacyPanoRecord,
+                          );
+                          const openPano = () => setPanoView({
+                            url: api.imgUrl(url),
+                            label: `${rid} · ${res.model_label || "球面全景"}`,
+                            kind: purePanorama ? "pure_render" : "whole_home",
+                            gatePass: purePanorama
+                              ? purePanorama.gate?.status === "passed"
+                              : panoAudit?.gate?.gate_pass,
+                            gateStatus: purePanorama?.gate?.status,
+                            failures: purePanorama?.gate?.failures || panoAudit?.gate?.failures || [],
+                            initialYawDeg: purePanorama?.viewer_initial_yaw_deg ?? 0,
+                          });
                           return (
                             <div key={resultId || j}>
-                              <div className="relative aspect-[4/3] overflow-hidden rounded-[10px] border border-border">
+                              <div className={cn(
+                                "relative overflow-hidden rounded-[10px] border border-border",
+                                isPanoResult ? "aspect-[2/1]" : "aspect-[4/3]",
+                              )}>
                                 {url ? (
                                   <>
                                     <img
                                       src={api.imgUrl(thumb)}
                                       alt={res.model_label || "result"}
-                                      onClick={() => setZoom(api.imgUrl(url))}
+                                      onClick={() => isPanoResult ? openPano() : setZoom(api.imgUrl(url))}
                                       className="absolute inset-0 h-full w-full cursor-zoom-in object-cover"
                                     />
                                     {res.model_label && (
@@ -631,6 +993,11 @@ export default function RecordsPage() {
                                     {res.best && (
                                       <span className="absolute right-[7px] top-[7px] rounded-md bg-primary px-[7px] py-[2px] text-[10px] font-bold text-white">
                                         最佳
+                                      </span>
+                                    )}
+                                    {isPanoResult && (
+                                      <span className="absolute bottom-[7px] right-[7px] rounded-md bg-sky-600 px-[7px] py-[2px] text-[10px] font-bold text-white">
+                                        360°
                                       </span>
                                     )}
                                   </>
@@ -650,7 +1017,7 @@ export default function RecordsPage() {
                                   >
                                     {res.favorite ? "★ 已收藏" : "☆ 收藏"}
                                   </button>
-                                  <button
+                                  {!immutableAudit && !isPanoResult && <button
                                     title="二改"
                                     onClick={() =>
                                       setEdit({ open: true, rid, resultId, instruction: "", colorMatch: true })
@@ -658,8 +1025,8 @@ export default function RecordsPage() {
                                     className={resultToolBtn}
                                   >
                                     ✎ 二改
-                                  </button>
-                                  {url && url.startsWith("/outputs/") && (
+                                  </button>}
+                                  {!immutableAudit && !isPanoResult && url && url.startsWith("/outputs/") && (
                                     <button
                                       title="用原始小样像素重新投影地板（无生成模型费用）"
                                       onClick={() =>
@@ -678,7 +1045,7 @@ export default function RecordsPage() {
                                       🪵 贴地板
                                     </button>
                                   )}
-                                  {url && url.startsWith("/outputs/") && (
+                                  {!immutableAudit && !isPanoResult && url && url.startsWith("/outputs/") && (
                                     <button
                                       title="生成式修补（画笔涂抹移除/添加物体）"
                                       onClick={() =>
@@ -689,7 +1056,7 @@ export default function RecordsPage() {
                                       🖌️ 智能修补
                                     </button>
                                   )}
-                                  {url && url.startsWith("/outputs/") && (
+                                  {!immutableAudit && !isPanoResult && url && url.startsWith("/outputs/") && (
                                     <button
                                       title="手动校色（以地板小样为参照，框选地板区域）"
                                       onClick={() =>
@@ -708,7 +1075,7 @@ export default function RecordsPage() {
                                       🎯 校色
                                     </button>
                                   )}
-                                  {url && compareBeforeUrl(r) && (
+                                  {url && !isPanoResult && compareBeforeUrl(r) && (
                                     <button
                                       title="前后对比"
                                       onClick={() =>
@@ -722,6 +1089,39 @@ export default function RecordsPage() {
                                       ⇔ 对比
                                     </button>
                                   )}
+                                  {url && isPanoResult && (
+                                    <button
+                                      title="用鼠标拖动查看 360° 球面全景"
+                                      onClick={openPano}
+                                      className={resultToolBtn}
+                                    >
+                                      ◉ 360°查看
+                                    </button>
+                                  )}
+                                  {!immutableAudit && url && isPanoResult && purePanorama && (r.gen_context?.image_path || r.gen_context?.floor_path) && (
+                                    <button
+                                      title="把地板小样投影到同一球面地板平面，修复 360° 错铺"
+                                      onClick={() => setPanoramaFloor({
+                                        srcUrl: url,
+                                        textureUrl: r.gen_context?.image_url || r.gen_context?.floor_url || "",
+                                        texturePath: r.gen_context?.image_path || r.gen_context?.floor_path || "",
+                                        recordId: rid,
+                                        resultId,
+                                      })}
+                                      className={resultToolBtn}
+                                    >
+                                      🪵 本地几何/地板校准
+                                    </button>
+                                  )}
+                                  {url && isPanoResult && (
+                                    <button
+                                      title="查看原始 2:1 ERP 图片"
+                                      onClick={() => setZoom(api.imgUrl(url))}
+                                      className={resultToolBtn}
+                                    >
+                                      ▣ 原始2:1
+                                    </button>
+                                  )}
                                   {url && (
                                     <button
                                       title="下载"
@@ -731,16 +1131,16 @@ export default function RecordsPage() {
                                       ↓ 下载
                                     </button>
                                   )}
-                                  <button
+                                  {!immutableAudit && <button
                                     title="删除"
                                     onClick={() => doDeleteResult(rid, resultId)}
                                     className={cn(resultToolBtn, "hover:bg-destructive-soft hover:text-destructive")}
                                   >
                                     删除
-                                  </button>
+                                  </button>}
                                 </span>
                               </div>
-                              <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                              {!immutableAudit && !isPanoResult && <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                                 {REVIEW_STATUS.slice(1).map((s) => (
                                   <button
                                     key={s.value}
@@ -782,7 +1182,7 @@ export default function RecordsPage() {
                                 >
                                   标注
                                 </button>
-                              </div>
+                              </div>}
                               <div className="mt-1 flex items-center gap-1.5 text-[11px]">
                                 <span style={{ color: statusMeta.color }} className="font-bold">
                                   {statusMeta.label}
@@ -817,6 +1217,50 @@ export default function RecordsPage() {
 
       {/* 放大 */}
       <ImageZoom url={zoom} onClose={() => setZoom(null)} />
+
+      {/* 历史记录中的 2:1 ERP 球面浏览 */}
+      <Dialog open={Boolean(panoView)} onOpenChange={(open) => { if (!open) setPanoView(null); }}>
+        <DialogContent className="max-h-[96vh] max-w-[98vw] overflow-y-auto sm:max-w-[min(96vw,1200px)]">
+          {panoView && (
+            <>
+              <div className="pr-10 text-sm font-bold">360° 球面全景 · {panoView.label}</div>
+              <div className={cn(
+                "rounded-lg px-3 py-2 text-xs font-bold",
+                panoView.kind === "pure_render"
+                  ? panoramaGateTone(panoView.gateStatus)
+                  : panoView.gatePass
+                    ? "bg-emerald-50 text-emerald-800"
+                    : "bg-red-50 text-red-800",
+              )}>
+                {panoView.kind === "pure_render"
+                  ? `视觉门禁：${panoramaGateLabel(panoView.gateStatus)} · AI 扩展、非几何锁定`
+                  : `P0 门禁：${panoView.gatePass ? "通过" : "未通过"}`}
+                {panoView.failures.length ? ` · ${panoView.failures.join(", ")}` : ""}
+              </div>
+              <PanoViewer erpUrl={panoView.url} mode="view"
+                initialYawDeg={panoView.initialYawDeg}
+              />
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {panoramaFloor && active && (
+        <PanoramaFloorDialog
+          open
+          onOpenChange={(open) => !open && setPanoramaFloor(null)}
+          panoramaIndex={0}
+          erpUrl={panoramaFloor.srcUrl}
+          textureUrl={panoramaFloor.textureUrl}
+          recordTarget={{
+            json_path: active,
+            record_id: panoramaFloor.recordId,
+            result_id: panoramaFloor.resultId,
+            texture_path: panoramaFloor.texturePath,
+          }}
+          onDone={() => void reload()}
+        />
+      )}
 
       {/* 生成式修补 */}
       {inpaint && active && (

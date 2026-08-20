@@ -1,0 +1,317 @@
+Captured: 2026-08-19 Asia/Singapore
+Git HEAD: 54c9e51736f677fbe93a23daa2b8e606058851d5
+Branch: main
+Do not reset or discard this dirty worktree.
+
+ M DEVGUIDE.md
+ M README.en.md
+ M README.md
+ M THIRD_PARTY_NOTICES.md
+ M api.py
+ M config.py
+ M models.py
+ M prompt_data.py
+ M pytest.ini
+ M records.py
+ M requirements-dev.txt
+ M requirements.txt
+ M routes_inpaint.py
+ M routes_jobs.py
+ M routes_library.py
+ M routes_tools.py
+ M server_api.py
+ M server_helpers.py
+ M server_schemas.py
+ M server_state.py
+ M start-windows.bat
+ M tests/test_route_contract.py
+ M tests/test_sd35.py
+ M tests/test_server_hardening.py
+ M usage_stats.py
+ M web/package-lock.json
+ M web/package.json
+ M web/src/app/page.tsx
+ M web/src/app/records/page.tsx
+ M web/src/app/settings/page.tsx
+ M web/src/components/AppShell.tsx
+ M web/src/components/ColorMatchDialog.tsx
+ M web/src/components/InpaintDialog.tsx
+ M web/src/components/JobCard.tsx
+ M web/src/components/OutputForm.tsx
+ M web/src/components/ParamsForm.tsx
+ M web/src/lib/api.ts
+ M web/src/lib/types.ts
+ M "\345\274\200\345\217\221\346\227\245\345\277\227.md"
+?? .browser_profiles/
+?? .pt_acadsharp_first/
+?? .pt_acadsharp_hybrid/
+?? .pt_acadsharp_second/
+?? .pt_acadsharp_selection/
+?? .pt_autopilot_compact/
+?? .pt_cad_backend_broad/
+?? .pt_cad_backend_broad2/
+?? .pt_cad_backend_final/
+?? .pt_cad_backend_final2/
+?? .pt_cad_backend_handoff/
+?? .pt_cad_backend_last/
+?? .pt_cad_hybrid/
+?? .pt_cad_hybrid2/
+?? .pt_cad_space_all2/
+?? .pt_cad_space_backend/
+?? .pt_cad_space_new/
+?? .pt_cad_space_new2/
+?? .pt_camera_portal_full/
+?? .pt_camera_portal_pretests/
+?? .pt_camera_portal_round3/
+?? .pt_camera_portal_round3_r2/
+?? .pt_camera_portal_round3_r3/
+?? .pt_camera_portal_round4/
+?? .pt_camera_portal_round4_full/
+?? .pt_camera_portal_round4_r2/
+?? .pt_camera_portal_round4_r3/
+?? .pt_cpu_ref_capture/
+?? .pt_cpu_route_cad/
+?? .pt_cpu_route_cad2/
+?? .pt_cycle1_rework_autopilot/
+?? .pt_cycle1_rework_autopilot2/
+?? .pt_cycle1_rework_autopilot3/
+?? .pt_cycle1_rework_autopilot4/
+?? .pt_cycle1_rework_autopilot5/
+?? .pt_cycle1_rework_autopilot6/
+?? .pt_dwg_anchor2_0812/
+?? .pt_dwg_anchor3_0812/
+?? .pt_dwg_anchor_0812/
+?? .pt_dwg_cpu_final/
+?? .pt_dwg_cpu_final2/
+?? .pt_dwg_derivation/
+?? .pt_dwg_final_0812/
+?? .pt_dwg_final_full/
+?? .pt_dwg_full/
+?? .pt_dwg_opening_filter/
+?? .pt_dwg_openplan/
+?? .pt_dwg_openplan2/
+?? .pt_dwg_overlap_filter/
+?? .pt_dwg_polygon_filter/
+?? .pt_dwg_skill_target/
+?? .pt_dwg_skill_target2/
+?? .pt_final_cad_live/
+?? .pt_human_loop_backend_delivery/
+?? .pt_human_loop_backend_final_full/
+?? .pt_human_loop_backend_final_target/
+?? .pt_human_loop_backend_full/
+?? .pt_human_loop_backend_last/
+?? .pt_human_loop_backend_p0_full/
+?? .pt_human_loop_backend_p0_target/
+?? .pt_human_loop_backend_target/
+?? .pt_human_loop_backend_target2/
+?? .pt_human_loop_backend_whole/
+?? .pt_kitchen_fast/
+?? .pt_kitchen_frame/
+?? .pt_main_autopilot_review/
+?? .pt_main_cad_dep/
+?? .pt_main_cad_final/
+?? .pt_main_hloop_full2/
+?? .pt_main_human_loop_backend/
+?? .pt_main_r7_review/
+?? .pt_main_reference_camera/
+?? .pt_main_round5_verify/
+?? .pt_main_round6_verify2/
+?? .pt_manual_baseline_fail_probe/
+?? .pt_manual_impl_1/
+?? .pt_manual_impl_2/
+?? .pt_manual_impl_3/
+?? .pt_manual_impl_4/
+?? .pt_manual_impl_5/
+?? .pt_manual_impl_6/
+?? .pt_manual_impl_eng/
+?? .pt_manual_impl_eng_atom/
+?? .pt_manual_impl_engine_full/
+?? .pt_manual_impl_final_smoke/
+?? .pt_manual_impl_handoff/
+?? .pt_manual_impl_manual/
+?? .pt_manual_impl_manual2/
+?? .pt_manual_impl_manual4/
+?? .pt_manual_impl_manual5/
+?? .pt_manual_impl_manual6/
+?? .pt_manual_impl_ref/
+?? .pt_manual_impl_reference_full/
+?? .pt_manual_impl_target_final/
+?? .pt_manual_impl_target_final2/
+?? .pt_manual_learning_fix/
+?? .pt_plan_full_interrupt_audit/
+?? .pt_plan_interrupt_audit/
+?? .pt_proxy_full/
+?? .pt_proxy_repair/
+?? .pt_r6_final/
+?? .pt_r6_final2/
+?? .pt_r6_full/
+?? .pt_r6_smoke/
+?? .pt_r71_full/
+?? .pt_r71_target/
+?? .pt_r7_blocker_final/
+?? .pt_r7_blocker_full/
+?? .pt_r7_blocker_target/
+?? .pt_r7_current/
+?? .pt_r7_final/
+?? .pt_r7_full/
+?? .pt_r7_target/
+?? .pt_r7_target2/
+?? .pt_ref_origin_fix/
+?? .pt_ref_origin_rest/
+?? .pt_refcam_current/
+?? .pt_refcam_fast2/
+?? .pt_reference_backend_full/
+?? .pt_reference_backend_full2/
+?? .pt_reference_backend_full3/
+?? .pt_reference_backend_target/
+?? .pt_reference_backend_target2/
+?? .pt_reference_backend_target3/
+?? .pt_reference_backend_target4/
+?? .pt_refprofile_hotfix/
+?? .pt_round5_full/
+?? .pt_round5_full_r2/
+?? .pt_round5_target/
+?? .pt_round5_target_r2/
+?? .pt_round6_target/
+?? .pt_round6_target_r2/
+?? .pt_sem_geom/
+?? .pt_sem_geom_r2/
+?? .pt_subject_qa/
+?? .pt_subject_qa2/
+?? .pytest_tmp_auto_camera_20260811/
+?? .pytest_tmp_full_20260811/
+?? .pytest_tmp_generation_full/
+?? .pytest_tmp_generation_full_r2/
+?? .pytest_tmp_generation_full_r3/
+?? .pytest_tmp_generation_state/
+?? .pytest_tmp_generation_state_r2/
+?? .pytest_tmp_generation_state_r3/
+?? .pytest_tmp_generation_state_r4/
+?? .pytest_tmp_generation_state_r5/
+?? .pytest_tmp_main_full_v2/
+?? .pytest_tmp_main_review_camera/
+?? .pytest_tmp_main_review_semantic/
+?? .pytest_tmp_main_review_semantic2/
+?? .pytest_tmp_qa_retry_20260811/
+?? .pytest_tmp_qa_retry_r2_20260811/
+?? .pytest_tmp_semantic_camera_v2/
+?? .pytest_tmp_semantic_geometry_repair/
+?? .pytest_tmp_semantic_geometry_repair_full/
+?? .pytest_tmp_semantic_v2/
+?? .tools/
+?? assets/clipseg/
+?? assets/depth_anything_v2/
+?? docs/CODEX_BLENDER_360VR_IMPLEMENTATION_HANDOFF.md
+?? docs/PLAN_TO_3D_CORRESPONDENCE_LOCK_V1.md
+?? docs/WHOLE_HOME_3D_PIPELINE.md
+?? "docs/\345\205\250\345\261\213\350\207\252\345\212\250\345\273\272\346\250\241_\345\244\232\347\202\271\344\270\200\350\207\264\346\200\247\344\270\216Image2\350\264\250\346\204\237_\345\205\250\346\265\201\347\250\213\345\274\200\345\217\221\350\256\241\345\210\222.md"
+?? "docs/\345\256\232\347\202\271\347\220\203\351\235\242\345\205\250\346\231\257_AI\347\224\237\346\210\220\344\270\216\344\270\200\350\207\264\346\200\247\346\226\271\346\241\210.md"
+?? dwg_test/
+?? film_repeat_floor.py
+?? floorplan_annotations.py
+?? floorplan_engine.py
+?? local_depth.py
+?? local_floor_semantics.py
+?? panorama_film_material.py
+?? panorama_local_geometry.py
+?? panorama_quality_planner.py
+?? pure_render_pano.py
+?? pure_render_pano_atlas.py
+?? routes_floorplans.py
+?? routes_panorama.py
+?? routes_panorama_direct.py
+?? routes_panorama_floor.py
+?? routes_whole_home.py
+?? spherical_floor_renderer.py
+?? stop-floor-engine-ports.bat
+?? tests/datasets/
+?? tests/test_fal_media_download.py
+?? tests/test_film_repeat_floor.py
+?? tests/test_floorplan_engine.py
+?? tests/test_gpt_image_edit_contract.py
+?? tests/test_local_floor_semantics.py
+?? tests/test_panorama_local_geometry.py
+?? tests/test_panorama_quality_planner.py
+?? tests/test_pure_render_pano.py
+?? tests/test_pure_render_pano_atlas.py
+?? tests/test_spherical_floor_renderer.py
+?? tests/test_static_export_compat.py
+?? tests/test_whole_home_agent_workflow.py
+?? tests/test_whole_home_autopilot.py
+?? tests/test_whole_home_cad.py
+?? tests/test_whole_home_dataset.py
+?? tests/test_whole_home_dwg_audit.py
+?? tests/test_whole_home_engine.py
+?? tests/test_whole_home_geometry_acceptance.py
+?? tests/test_whole_home_geometry_acceptance_measurement.py
+?? tests/test_whole_home_geometry_history.py
+?? tests/test_whole_home_geometry_kernel.py
+?? tests/test_whole_home_geometry_routes.py
+?? tests/test_whole_home_geometry_strict_gate.py
+?? tests/test_whole_home_global_topology.py
+?? tests/test_whole_home_history_replay.py
+?? tests/test_whole_home_ifc_gold.py
+?? tests/test_whole_home_learning.py
+?? tests/test_whole_home_manual.py
+?? tests/test_whole_home_pano.py
+?? tests/test_whole_home_pano_edit.py
+?? tests/test_whole_home_pano_gate.py
+?? tests/test_whole_home_pano_integration.py
+?? tests/test_whole_home_professional.py
+?? tests/test_whole_home_professional_routes.py
+?? tests/test_whole_home_raster_registration.py
+?? tests/test_whole_home_reference_camera.py
+?? tests/test_whole_home_wall_assembly.py
+?? tools/
+?? web/src/app/floorplan/
+?? web/src/components/CadSpaceDraftEditor.tsx
+?? web/src/components/FilmRepeatPanel.tsx
+?? web/src/components/FloorplanViewProxy.tsx
+?? web/src/components/GeometryAuditModelViewer.tsx
+?? web/src/components/PanoViewer.tsx
+?? web/src/components/PanoramaFloorDialog.tsx
+?? web/src/components/PureRenderPanoramaDialogs.tsx
+?? web/src/components/WholeHomeHistoryPanel.tsx
+?? web/src/components/WholeHomeHumanReview.tsx
+?? web/src/components/WholeHomeProfessionalProposal.tsx
+?? web/src/components/WholeHomeStudio.tsx
+?? web/src/lib/pureRenderPano.ts
+?? web/src/lib/wholeHomeCad.ts
+?? web/src/lib/wholeHomeCadSpace.ts
+?? web/src/lib/wholeHomeEdgePass.ts
+?? web/src/lib/wholeHomeHumanReview.ts
+?? web/src/lib/wholeHomeOrthographicAudit.ts
+?? web/src/lib/wholeHomePano.ts
+?? web/src/lib/wholeHomeRenderGate.ts
+?? web/src/lib/wholeHomeSubjectId.ts
+?? web/src/lib/wholeHomeWallOpenings.ts
+?? web/tests/
+?? whole_home_agent_workflow.py
+?? whole_home_autopilot.py
+?? whole_home_cad.py
+?? whole_home_cad_reparse.py
+?? whole_home_cad_space.py
+?? whole_home_dataset.py
+?? whole_home_dev_lock.py
+?? whole_home_dwg_audit.py
+?? whole_home_engine.py
+?? whole_home_external_review.py
+?? whole_home_geometry.py
+?? whole_home_geometry_acceptance.py
+?? whole_home_geometry_history.py
+?? whole_home_geometry_kernel.py
+?? whole_home_global_topology.py
+?? whole_home_history.py
+?? whole_home_ifc_gold.py
+?? whole_home_learning.py
+?? whole_home_manual.py
+?? whole_home_pano_edit.py
+?? whole_home_pano_gate.py
+?? whole_home_pano_material.py
+?? whole_home_pano_paid.py
+?? whole_home_pano_render.py
+?? whole_home_professional.py
+?? whole_home_raster_registration.py
+?? whole_home_reference_camera.py
+?? whole_home_software_renderer.py
+?? whole_home_wall_assembly.py

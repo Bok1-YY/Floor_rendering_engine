@@ -24,6 +24,7 @@ def _short_mode_label(mode: str) -> str:
 
 def _short_model_label(model: str) -> str:
     m = model or ""
+    if "VR360" in m or "GPT Image" in m: return "VR360"
     if "Aura" in m: return "AuraSR"
     if "SD35" in m or "SD 3.5" in m: return "SD35"
     if "Lite" in m: return "Lite"

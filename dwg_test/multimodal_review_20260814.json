@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "reviewed_at": "2026-08-14 23:35:00",
+  "reviewer": "Codex multimodal visual comparison",
+  "baseline_path": "C:\\Users\\Boki\\output_files\\dwg_test_production_baseline_20260814.json",
+  "policy": "A production parser return is not a visual pass. Pending independent vector truth and any unresolved production wall evidence prevent acceptance.",
+  "cases": {
+    "01": {
+      "overall_status": "failed",
+      "checks": {
+        "candidate_view": ["passed", "cad_plan_2 is the correct single-unit floor plan."],
+        "outer_footprint": ["passed", "The main exterior outline broadly matches the CAD preview."],
+        "interior_walls": ["failed", "Main partitions are recognizable, but 31 WallAssembly decisions remain unresolved."],
+        "openings": ["failed", "Four of five real door-swing candidates bind after repair; one variable-thickness host remains unresolved."],
+        "room_topology": ["failed", "The compatibility rooms contain artificial radial/Voronoi boundaries that do not follow CAD walls."],
+        "forbidden_entities": ["passed", "Beds, table, sofa and sanitary fixtures are not promoted to wall solids."]
+      }
+    },
+    "02": {
+      "overall_status": "failed",
+      "checks": {
+        "candidate_view": ["passed", "cad_plan_6 is the correct single-unit floor plan."],
+        "outer_footprint": ["passed", "The main exterior wall footprint broadly matches the CAD preview."],
+        "interior_walls": ["failed", "Twenty-three WallAssembly decisions remain unresolved."],
+        "openings": ["failed", "Four of five source-backed ARC door candidates bind, so strict opening completeness is not met."],
+        "room_topology": ["failed", "Bedroom, bathroom and kitchen regions are visibly split by artificial radial/Voronoi edges."],
+        "forbidden_entities": ["passed", "Furniture symbols remain contextual and are not promoted to wall solids."]
+      }
+    },
+    "03": {
+      "overall_status": "failed",
+      "checks": {
+        "candidate_view": ["passed", "The selected preview is the intended two-bedroom plan."],
+        "outer_footprint": ["failed", "The produced footprint is an almost solid black slab instead of the source wall network."],
+        "interior_walls": ["failed", "No usable interior rooms or partitions survive in the model preview."],
+        "openings": ["failed", "No door or window opening is modeled."],
+        "room_topology": ["failed", "No closed room is produced."],
+        "forbidden_entities": ["pending", "The unit-scale failure prevents a meaningful furniture false-positive judgment."]
+      }
+    },
+    "04": {
+      "overall_status": "failed",
+      "checks": {
+        "candidate_view": ["passed", "The selected preview is the intended compact two-bedroom plan."],
+        "outer_footprint": ["failed", "The produced footprint is an almost solid black slab instead of the source wall network."],
+        "interior_walls": ["failed", "No usable interior partitions survive in the model preview."],
+        "openings": ["failed", "No door or window opening is modeled."],
+        "room_topology": ["failed", "No closed room is produced."],
+        "forbidden_entities": ["pending", "The unit-scale failure prevents a meaningful furniture false-positive judgment."]
+      }
+    },
+    "05": {
+      "overall_status": "failed",
+      "checks": {
+        "candidate_view": ["pending", "No production wall candidate is selected."],
+        "outer_footprint": ["pending", "No model footprint exists."],
+        "interior_walls": ["pending", "No model partitions exist."],
+        "openings": ["pending", "No model openings exist."],
+        "room_topology": ["pending", "No model rooms exist."],
+        "forbidden_entities": ["pending", "The fail-closed parser correctly refuses to treat all ordinary two-layer linework as walls, but no model exists to compare."]
+      }
+    },
+    "06": {
+      "overall_status": "failed",
+      "checks": {
+        "candidate_view": ["passed", "The selected view is the intended 2BHK plan."],
+        "outer_footprint": ["failed", "Only a coarse perimeter/review surface is present; the formal wall model is incomplete."],
+        "interior_walls": ["failed", "The source has clear orthogonal partitions while the preview has floor traces and large artificial diagonals."],
+        "openings": ["failed", "The source shows multiple cyan door swings and red windows; the model contains zero openings."],
+        "room_topology": ["failed", "The displayed zones are radial/Voronoi subdivisions rather than wall-bounded rooms."],
+        "forbidden_entities": ["passed", "Beds, sofa, refrigerator and toilets are shown as objects, not wall solids."]
+      }
+    },
+    "07": {
+      "overall_status": "failed",
+      "checks": {
+        "candidate_view": ["passed", "The selected view is the intended inner-court residence."],
+        "outer_footprint": ["failed", "The produced footprint is a large filled slab with an incorrect lower cutout."],
+        "interior_walls": ["failed", "No usable interior wall layout remains."],
+        "openings": ["failed", "No opening is modeled despite many visible source doors and windows."],
+        "room_topology": ["failed", "No closed room is produced."],
+        "forbidden_entities": ["pending", "The unit-scale failure prevents a reliable courtyard/furniture false-positive judgment."]
+      }
+    },
+    "08": {
+      "overall_status": "failed",
+      "checks": {
+        "candidate_view": ["failed", "The sheet contains plan plus elevations/sections, but production has no proven plan candidate."],
+        "outer_footprint": ["pending", "No model footprint exists."],
+        "interior_walls": ["pending", "No model partitions exist."],
+        "openings": ["pending", "No model openings exist."],
+        "room_topology": ["pending", "No model rooms exist."],
+        "forbidden_entities": ["pending", "Multi-view separation has not completed."]
+      }
+    },
+    "09": {
+      "overall_status": "failed",
+      "checks": {
+        "candidate_view": ["failed", "The sheet contains a floor plan plus elevations and vehicles, but production has no proven plan candidate."],
+        "outer_footprint": ["pending", "No model footprint exists."],
+        "interior_walls": ["pending", "No model partitions exist."],
+        "openings": ["pending", "No model openings exist."],
+        "room_topology": ["pending", "No model rooms exist."],
+        "forbidden_entities": ["pending", "Block expansion and multi-view separation have not completed."]
+      }
+    },
+    "10": {
+      "overall_status": "failed",
+      "checks": {
+        "candidate_view": ["failed", "The sheet contains plan, roof and four elevations, but production has no proven plan candidate."],
+        "outer_footprint": ["pending", "No model footprint exists."],
+        "interior_walls": ["pending", "No model partitions exist."],
+        "openings": ["pending", "No model openings exist."],
+        "room_topology": ["pending", "No model rooms exist."],
+        "forbidden_entities": ["pending", "Multi-view separation has not completed."]
+      }
+    }
+  }
+}

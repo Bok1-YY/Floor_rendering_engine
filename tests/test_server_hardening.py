@@ -100,6 +100,20 @@ def test_record_api_response_redacts_prompt_fields(tmp_path, monkeypatch):
     assert not ({"prompt_en", "prompt_en_pro", "_pe", "_pe_pro", "sample_image_b64"} & response.keys())
 
 
+def test_record_api_defaults_legacy_pano_audit_projection(tmp_path, monkeypatch):
+    path = tmp_path / "pano_记录.json"
+    path.write_text(json.dumps([{
+        "id": "pano-1", "immutable_audit": True,
+        "pano_audit": {"candidate_sha256": "a" * 64},
+        "results": [{"result_id": "pano-result"}],
+    }]), encoding="utf-8")
+    monkeypatch.setattr(server_helpers, "MAIN_OUTPUT_DIR", str(tmp_path))
+
+    response = routes_library.load_records(str(path))[0]
+
+    assert response["pano_audit"]["projection"] == "equirectangular"
+
+
 def test_record_api_exposes_legacy_color_match_reference(tmp_path, monkeypatch):
     out_dir = tmp_path / "output_files"
     material_dir = out_dir / "oak"

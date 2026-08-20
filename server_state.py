@@ -27,6 +27,8 @@ def init_runtime(concurrency_limit: int) -> None:
     model_semaphores = {key: asyncio.Semaphore(concurrency_limit) for key in ('b2', 'pro', 'sd35')}
     # 生成式修补独立信号量(恒 1):修补与主生成互不阻塞、也不占 b2/pro 槽
     model_semaphores['inpaint'] = asyncio.Semaphore(1)
+    # 3840x1920 GPT Image 2 全景为付费重任务；串行并与主生图槽隔离。
+    model_semaphores['vr360'] = asyncio.Semaphore(1)
     task_prep_lock = asyncio.Lock()
 
 

@@ -22,7 +22,8 @@ import { ColorMaskEditor } from "@/components/ColorMaskEditor";
 /** 校色目标：任务候选（并入该 stage 候选列表）或记录结果（append 回记录）。 */
 export type ColorMatchTarget =
   | { kind: "job"; jobId: string; stage: ModelKey }
-  | { kind: "record"; jsonPath: string; recordId: string; resultId: string };
+  | { kind: "record"; jsonPath: string; recordId: string; resultId: string }
+  | { kind: "suite"; suiteId: string; roomId: string; resultId: string };
 
 const DEFAULT_RECT: ColorMatchRect = { x: 0.05, y: 0.45, w: 0.9, h: 0.5 };
 const DEFAULT_ADJUSTMENTS: ColorMatchAdjustments = {
@@ -485,7 +486,7 @@ function ColorMatchSession({
         });
         toast.success("已保存为新候选（‹n/N› 可切回原图对比）");
         onDone?.(jv);
-      } else {
+      } else if (target.kind === "record") {
         await api.recordColorMatch({
           json_path: target.jsonPath,
           record_id: target.recordId,
@@ -502,6 +503,25 @@ function ColorMatchSession({
           illumination_mode: illuminationMode,
         });
         toast.success("校色结果已追加到该记录");
+        onDone?.();
+      } else {
+        await api.suiteColorMatch(target.suiteId, {
+          suite_id: target.suiteId,
+          room_id: target.roomId,
+          result_id: target.resultId,
+          image_rel: imageRel,
+          ref_path: ref.path,
+          rect,
+          strength,
+          adjustments,
+          adjustment_mode: adjustmentMode,
+          scope,
+          mask_b64: maskB64,
+          mask_feather: maskFeather,
+          algorithm,
+          illumination_mode: illuminationMode,
+        });
+        toast.success("校色结果已追加到该房间候选");
         onDone?.();
       }
       onOpenChange(false);
@@ -998,6 +1018,8 @@ function ColorMatchSession({
                   ? "更新预览中…"
                   : target.kind === "job"
                   ? "保存为新候选"
+                  : target.kind === "suite"
+                  ? "保存到房间候选"
                   : "保存到记录"}
               </button>
             </div>

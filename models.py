@@ -13,6 +13,7 @@ MODEL_LABELS = {
     'b2': 'B2',
     'pro': 'Pro',
     'sd35': 'SD 3.5',
+    'vr360': '360° VR',
 }
 
 
@@ -25,6 +26,8 @@ class JobRecord:
     status: str = 'queued'
     model_filter: str = 'both'  # "b2" | "pro" | "both"
     workflow_mode: str = ''     # 提交时的工作流模式(纯效果图/地板替换/宠物友好/参照模式)，用量统计按它归类
+    # perspective=普通透视效果图；direct_cubemap_atlas=单球心六面图集直出 ERP。
+    delivery_mode: str = 'perspective'
     b2_path: Optional[str] = None
     pro_path: Optional[str] = None
     error: str = ''
@@ -56,6 +59,9 @@ class JobRecord:
     # 无需继续给 JobRecord 增加 sd_path/sd_stage/... 一整套固定字段。
     model_targets: List[str] = field(default_factory=list)
     model_runs: Dict[str, dict] = field(default_factory=dict)
+    # 纯效果图派生全景的付费预览。预览在真正提交前也要持久化，不能依赖
+    # vr360 run 已经存在；commit 通过 preview_id 查回并验证源文件哈希。
+    panorama_previews: Dict[str, dict] = field(default_factory=dict)
 
 
 # ── JobRecord 相关纯逻辑（从 webui 下沉，无 UI/IO 依赖）─────────────────────
@@ -106,12 +112,25 @@ def _new_model_run(key: str) -> dict:
         'seconds': None,
         'error': '',
         'paths': [],
+        # 与 paths 严格按索引对齐。老记录没有该字段时由 ensure_model_runs 补空对象。
+        'candidate_meta': [],
         'index': 0,
         'base_path': '',
         'delivery_status': '',
         'seed': None,
         'settings': {},
     }
+
+
+def _normalize_candidate_meta(run: dict) -> None:
+    paths = list(run.get('paths') or [])
+    raw = run.get('candidate_meta')
+    metas = [dict(value) if isinstance(value, dict) else {} for value in (raw or [])]
+    if len(metas) > len(paths):
+        metas = metas[-len(paths):] if paths else []
+    elif len(metas) < len(paths):
+        metas.extend({} for _ in range(len(paths) - len(metas)))
+    run['candidate_meta'] = metas
 
 
 def ensure_model_runs(job: JobRecord) -> None:
@@ -134,6 +153,7 @@ def ensure_model_runs(job: JobRecord) -> None:
             defaults['paths'] = list(defaults.get('paths') or [])
             defaults['settings'] = dict(defaults.get('settings') or {})
             job.model_runs[key] = run = defaults
+        _normalize_candidate_meta(run)
 
     # B2/Pro 旧字段仍被既有编辑链使用；以它们为源同步到通用结构。
     ensure_candidate_lists(job)
@@ -148,6 +168,7 @@ def ensure_model_runs(job: JobRecord) -> None:
         run['seconds'] = getattr(job, f'{key}_secs')
         if getattr(job, f'{key}_path'):
             run['status'] = 'done'
+        _normalize_candidate_meta(run)
 
 
 def update_model_run(job: JobRecord, key: str, **values) -> dict:
@@ -159,20 +180,31 @@ def update_model_run(job: JobRecord, key: str, **values) -> dict:
     return run
 
 
-def add_model_candidate(job: JobRecord, key: str, path: str) -> int:
+def add_model_candidate(job: JobRecord, key: str, path: str,
+                        metadata: Optional[dict] = None) -> int:
     """通用候选追加；B2/Pro 继续双写旧槽以兼容现有编辑链。"""
+    ensure_model_runs(job)
+    prior = job.model_runs.get(key) or _new_model_run(key)
+    prior_meta = list(prior.get('candidate_meta') or [])
     if key in CANDIDATE_SLOTS:
         idx = add_candidate(job, key, path)
         ensure_model_runs(job)
         run = job.model_runs[key]
-        run.update(paths=list(getattr(job, f'{key}_paths')), index=idx, status='done')
+        paths = list(getattr(job, f'{key}_paths'))
+        metas = prior_meta + [dict(metadata or {})]
+        metas = metas[-len(paths):] if paths else []
+        run.update(paths=paths, candidate_meta=metas, index=idx, status='done')
         return idx
     run = update_model_run(job, key)
     paths = list(run.get('paths') or [])
+    metas = list(run.get('candidate_meta') or [])
     paths.append(path)
+    metas.append(dict(metadata or {}))
     if len(paths) > MAX_CANDIDATES_PER_SLOT:
-        paths = paths[-MAX_CANDIDATES_PER_SLOT:]
-    run.update(paths=paths, index=len(paths) - 1, status='done')
+        trim = len(paths) - MAX_CANDIDATES_PER_SLOT
+        paths = paths[trim:]
+        metas = metas[trim:]
+    run.update(paths=paths, candidate_meta=metas, index=len(paths) - 1, status='done')
     return len(paths) - 1
 
 
@@ -360,6 +392,11 @@ class TaskParams:
     floor_size: str = ''
     seam_type: str = '无缝拼接 (SPC/LVT专用)'
     glossiness: str = '哑光 (3-5°)'
+    film_path: str = ''
+    film_width_mm: Optional[float] = None
+    film_repeat_length_mm: Optional[float] = None
+    film_repeat_axis: str = 'long_edge'
+    film_slit_origin_mm: Optional[float] = None
     floor_coverage_min: int = 40
     floor_coverage_max: int = 50
 

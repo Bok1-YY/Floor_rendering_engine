@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "fixtures": [
+    {
+      "fixture_id": "contract_example",
+      "candidate_file": "contract_example.json",
+      "data_class": "synthetic_contract_only",
+      "ground_truth_status": "annotation_required",
+      "commit_eligible": true
+    },
+    {
+      "fixture_id": "cad_real_001",
+      "candidate_file": "cad_real_001.json",
+      "candidate_file_sha256": "8372ca44a3b405bfc51bd5148f6433e0ae6ca5f1e4950ff98408af94800477f1",
+      "fixture_hash": "982a155fb82fbdd4fe90fa697e9e16991685d35465b021cf3751e2ab503083e7",
+      "data_class": "sanitized_real_cad_regression",
+      "ground_truth_status": "annotation_required",
+      "privacy_gate": "automated_pass",
+      "manual_privacy_review": "pending",
+      "commit_eligible": true,
+      "production_gold_eligible": false
+    }
+  ]
+}

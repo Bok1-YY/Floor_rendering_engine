@@ -1,0 +1,44 @@
+{
+  "case_id": "03",
+  "coordinate_contract": {
+    "coordinate_system": "cad-meters-x-east-y-north-v2",
+    "schema_version": 2,
+    "screen_mapping": {
+      "cad_x": "+screen_right",
+      "cad_y": "+screen_up"
+    },
+    "topdown_view": "sky-to-ground"
+  },
+  "geometry": {
+    "forbidden_entity_handles": [],
+    "openings": [],
+    "rooms": [],
+    "walls": []
+  },
+  "independence": {
+    "method": "independent_manual_or_external_annotation",
+    "note": "Pending independent wall/room/opening annotation; no production parser claims imported.",
+    "production_parser_derived": false,
+    "reviewed_at": "",
+    "reviewer": ""
+  },
+  "level": "L2",
+  "reference_evidence": {
+    "file_name": "03_2br_dwglab_open_kitchen.png",
+    "role": "cad_preview",
+    "sha256": "fac6928049711436263e7cfe0df4f5e89dff8c8e6ccb24c03384f51d77acb5f7",
+    "size_bytes": 20113
+  },
+  "schema_name": "DwgGeometryTruthV1",
+  "schema_version": 1,
+  "source": {
+    "dwg_signature": "AC1015",
+    "file_name": "03_2br_dwglab_open_kitchen.dwg",
+    "insunits": 1,
+    "sha256": "41a15f3d0293cb2329a05d6c921636854a7201f3b208ff701ee7fb76987b019d",
+    "size_bytes": 225280
+  },
+  "status": "pending",
+  "title": "03_2br_dwglab_open_kitchen",
+  "truth_hash": "8d8beecc62522a75525b85df1ca155e94e1c12359e6a92c19216f82fcb989213"
+}

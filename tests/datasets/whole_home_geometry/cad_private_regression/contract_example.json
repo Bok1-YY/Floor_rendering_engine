@@ -1,0 +1,110 @@
+{
+  "schema_version": 1,
+  "fixture_id": "contract_example",
+  "data_class": "sanitized_real_cad_regression",
+  "source_commitments": [
+    {
+      "scope": "original_binary_cad",
+      "algorithm": "hmac-sha256",
+      "key_id": "0123456789abcdef",
+      "value": "1111111111111111111111111111111111111111111111111111111111111111"
+    },
+    {
+      "scope": "converted_exchange_cad",
+      "algorithm": "hmac-sha256",
+      "key_id": "0123456789abcdef",
+      "value": "2222222222222222222222222222222222222222222222222222222222222222"
+    }
+  ],
+  "conversion": {
+    "adapter": "acadsharp",
+    "input_family": "binary_cad",
+    "output_family": "exchange_cad"
+  },
+  "normalization": {
+    "coordinate_system": "metres_x_z",
+    "origin_method": "selected_geometry_min_corner",
+    "precision_decimals": 6,
+    "source_unit_code": 4,
+    "unit_scale_to_m": 0.001,
+    "translation_only": true
+  },
+  "selection": {
+    "candidate_count": 2,
+    "selected_candidate_ordinal": 1,
+    "structural_entity_count": 8,
+    "ignored_nonstructural_count": 3
+  },
+  "normalized_entities": {
+    "walls": [
+      {
+        "id": "wall_0001",
+        "start": [0.0, 0.0],
+        "end": [4.0, 0.0],
+        "thickness_m": 0.2,
+        "height_m": 2.8,
+        "boundary_kind": "centerline",
+        "source_kind": "line",
+        "nested_insert_depth": 0,
+        "entity_hash": "eaf0db0ab33606061d4c787214564de7c5821e9c81f71ce9d6949e24464e28d9"
+      }
+    ],
+    "wall_assemblies": [],
+    "openings": [
+      {
+        "id": "opening_0001",
+        "wall_id": "wall_0001",
+        "kind": "door",
+        "offset_m": 1.0,
+        "width_m": 0.9,
+        "height_m": 2.1,
+        "sill_height_m": 0.0,
+        "source_kind": "insert",
+        "nested_insert_depth": 1,
+        "entity_hash": "b6a6ea1d4fe1cb45a622747e18d942a638dee4e936c138056514b03a31d974c3"
+      }
+    ],
+    "face_candidates": [
+      {
+        "id": "face_0001",
+        "polygon": [[0.0, 0.0], [4.0, 0.0], [4.0, 3.0], [0.0, 3.0]],
+        "holes": [],
+        "area_m2": 12.0,
+        "manual_eligible": true,
+        "entity_hash": "3e06b028bea52a137d4248b672a64f88a9739bc258a906866e92468d6be6e79d"
+      }
+    ]
+  },
+  "candidate_review": {
+    "state": "needs_review",
+    "physical_space_candidate_count": 1,
+    "semantic_zone_candidate_count": 0,
+    "unresolved_wall_assembly_count": 0
+  },
+  "ground_truth": {
+    "schema_version": 1,
+    "status": "annotation_required",
+    "methodology": "independent_dual_view_manual_annotation",
+    "walls": {
+      "accepted_ids": [],
+      "rejected_ids": [],
+      "corrections": []
+    },
+    "openings": [],
+    "physical_spaces": [],
+    "excluded_face_ids": [],
+    "review_checks": {
+      "walls_complete": false,
+      "openings_complete": false,
+      "spaces_complete": false,
+      "source_alignment_checked": false
+    },
+    "missing_tasks": [
+      "classify_all_walls",
+      "annotate_all_openings",
+      "partition_all_eligible_faces",
+      "independent_source_alignment_review"
+    ]
+  },
+  "fixture_hash": "3596fbe4f1f28aa83ee4b3415bde0f90bdc0af14a74aa1d17e6128781a9c0a02"
+}

@@ -1,0 +1,44 @@
+{
+  "case_id": "02",
+  "coordinate_contract": {
+    "coordinate_system": "cad-meters-x-east-y-north-v2",
+    "schema_version": 2,
+    "screen_mapping": {
+      "cad_x": "+screen_right",
+      "cad_y": "+screen_up"
+    },
+    "topdown_view": "sky-to-ground"
+  },
+  "geometry": {
+    "forbidden_entity_handles": [],
+    "openings": [],
+    "rooms": [],
+    "walls": []
+  },
+  "independence": {
+    "method": "independent_manual_or_external_annotation",
+    "note": "Pending independent wall/room/opening annotation; no production parser claims imported.",
+    "production_parser_derived": false,
+    "reviewed_at": "",
+    "reviewer": ""
+  },
+  "level": "L1",
+  "reference_evidence": {
+    "file_name": "02_2br_zas_rectangular_option2.png",
+    "role": "cad_preview",
+    "sha256": "402e35719a2ab4e0326c7cef7d3a97bd5405e4f17a109b78f2ee1bb1e8d4350e",
+    "size_bytes": 20238
+  },
+  "schema_name": "DwgGeometryTruthV1",
+  "schema_version": 1,
+  "source": {
+    "dwg_signature": "AC1027",
+    "file_name": "02_2br_zas_rectangular_option2.dwg",
+    "insunits": 4,
+    "sha256": "a3fb4a373d96571ccbd4a2c2237d2f9020b7591bfdcb3e99383d8471a5d8d353",
+    "size_bytes": 194858
+  },
+  "status": "pending",
+  "title": "02_2br_zas_rectangular_option2",
+  "truth_hash": "0fbd0c025f1b35f16b725e08e1e4d5ac458343102ade20c3ab1481e2d6e82b82"
+}

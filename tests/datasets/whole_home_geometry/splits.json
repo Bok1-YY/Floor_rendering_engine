@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "grouping_key": "building_group",
+  "rule": "Every building_group belongs to exactly one split; image, CAD, storey, and degradation variants inherit that split.",
+  "levels": {
+    "L1": {
+      "development": ["ifcbench_fzk_house"],
+      "validation": [],
+      "sealed_holdout": []
+    },
+    "L2": {
+      "development": ["ifcbench_city_house_munich", "cubicasa5k_furnished_residential"],
+      "validation": ["ifcbench_duplex"],
+      "sealed_holdout": ["mlstructfp_large_residential_floor"]
+    },
+    "L3": {
+      "development": ["ifcbench_fantasy_residential_building_1"],
+      "validation": ["ifcbench_samuel_macalister_sample_house", "floorplancad_complex_commercial"],
+      "sealed_holdout": []
+    },
+    "L4": {
+      "development": ["ifcbench_smiley_west", "structured3d_complex_residential"],
+      "validation": [],
+      "sealed_holdout": []
+    },
+    "L5": {
+      "development": ["ifcbench_schependomlaan", "zind_extreme_multi_floor_residence"],
+      "validation": ["ifcbench_sixty5"],
+      "sealed_holdout": []
+    }
+  }
+}

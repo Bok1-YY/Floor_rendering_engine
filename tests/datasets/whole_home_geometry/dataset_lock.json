@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "catalog_revision": "ifc-bench-v2-2026-07-01",
+  "upstream_revisions": {
+    "ifc_bench": "4b37e5d77f12f30dfd7cb7375e15278e1037c808"
+  },
+  "artifacts": {
+    "ifcbench_fzk_house_arc_ifc": {
+      "case_id": "ifcbench_fzk_house",
+      "relative_path": "ifcbench_fzk_house/arc.ifc",
+      "url": "https://huggingface.co/datasets/sylvainHellin/ifc-bench/resolve/4b37e5d77f12f30dfd7cb7375e15278e1037c808/projects/fzk_house/arc.ifc?download=true",
+      "sha256": "70cc8ff245fc0894201d96496c031005a5cbd7a96b22d8a1b87c5a883fb77994",
+      "size_bytes": 2570803
+    },
+    "ifcbench_fzk_house_snapshot": {
+      "case_id": "ifcbench_fzk_house",
+      "relative_path": "ifcbench_fzk_house/snapshot.png",
+      "url": "https://huggingface.co/datasets/sylvainHellin/ifc-bench/resolve/4b37e5d77f12f30dfd7cb7375e15278e1037c808/projects/fzk_house/snapshot.png?download=true",
+      "sha256": "b198d61d21e92d81a1a86d9d4f12a5d998d503dc5f1f2ad50dfc6edb9d137e90",
+      "size_bytes": 129885
+    },
+    "ifcbench_city_house_munich_arc_ifc": {
+      "case_id": "ifcbench_city_house_munich",
+      "relative_path": "ifcbench_city_house_munich/arc.ifc",
+      "url": "https://huggingface.co/datasets/sylvainHellin/ifc-bench/resolve/4b37e5d77f12f30dfd7cb7375e15278e1037c808/projects/city_house_munich/arc.ifc?download=true",
+      "sha256": "d03e5268dc55b2494b12f278c7dab978fb689b7095a970771eda4e5f88ce3dd3",
+      "size_bytes": 33499586
+    },
+    "ifcbench_city_house_munich_snapshot": {
+      "case_id": "ifcbench_city_house_munich",
+      "relative_path": "ifcbench_city_house_munich/snapshot.png",
+      "url": "https://huggingface.co/datasets/sylvainHellin/ifc-bench/resolve/4b37e5d77f12f30dfd7cb7375e15278e1037c808/projects/city_house_munich/snapshot.png?download=true",
+      "sha256": "fb6d210d545127ab2f56a7dceb3523e9ea11e1e1d8490c69e1042e9ad818c46f",
+      "size_bytes": 102614
+    },
+    "ifcbench_duplex_arc_ifc": {
+      "case_id": "ifcbench_duplex",
+      "relative_path": "ifcbench_duplex/arc.ifc",
+      "url": "https://huggingface.co/datasets/sylvainHellin/ifc-bench/resolve/4b37e5d77f12f30dfd7cb7375e15278e1037c808/projects/duplex/arc.ifc?download=true",
+      "sha256": "707a032566dee8e969a44d95509be46d646440e2443624709f8d3ae2b45f4656",
+      "size_bytes": 1656153
+    },
+    "ifcbench_duplex_snapshot": {
+      "case_id": "ifcbench_duplex",
+      "relative_path": "ifcbench_duplex/snapshot.png",
+      "url": "https://huggingface.co/datasets/sylvainHellin/ifc-bench/resolve/4b37e5d77f12f30dfd7cb7375e15278e1037c808/projects/duplex/snapshot.png?download=true",
+      "sha256": "128969d956a45f1b64bee9da1ac650ac9e47c7d6b05980fe90effab3dd7ef88b",
+      "size_bytes": 137761
+    },
+    "ifcbench_fantasy_residential_arc_ifc": {
+      "case_id": "ifcbench_fantasy_residential_building_1",
+      "relative_path": "ifcbench_fantasy_residential_building_1/arc.ifc",
+      "url": "https://huggingface.co/datasets/sylvainHellin/ifc-bench/resolve/4b37e5d77f12f30dfd7cb7375e15278e1037c808/projects/fantasy_residential_building_1/arc.ifc?download=true",
+      "sha256": "dd7000fc4d1d4f651044375e32d48f947ee3aaf6ce8efc634c0e65a4bed48a1c",
+      "size_bytes": 19719618
+    },
+    "ifcbench_fantasy_residential_snapshot": {
+      "case_id": "ifcbench_fantasy_residential_building_1",
+      "relative_path": "ifcbench_fantasy_residential_building_1/snapshot.png",
+      "url": "https://huggingface.co/datasets/sylvainHellin/ifc-bench/resolve/4b37e5d77f12f30dfd7cb7375e15278e1037c808/projects/fantasy_residential_building_1/snapshot.png?download=true",
+      "sha256": "3871a3a8cfa5dd08d085519e6c983538fbb24935a46a131202b1a8253612e00e",
+      "size_bytes": 324052
+    },
+    "ifcbench_samuel_macalister_arc_ifc": {
+      "case_id": "ifcbench_samuel_macalister_sample_house",
+      "relative_path": "ifcbench_samuel_macalister_sample_house/arc.ifc",
+      "url": "https://huggingface.co/datasets/sylvainHellin/ifc-bench/resolve/4b37e5d77f12f30dfd7cb7375e15278e1037c808/projects/samuel_macalister_sample_house/arc.ifc?download=true",
+      "sha256": "1421b55315b99044b639db2704dc086aeb42a37d6032bbc2aecdc8649f7c05f2",
+      "size_bytes": 25400254
+    },
+    "ifcbench_samuel_macalister_snapshot": {
+      "case_id": "ifcbench_samuel_macalister_sample_house",
+      "relative_path": "ifcbench_samuel_macalister_sample_house/snapshot.png",
+      "url": "https://huggingface.co/datasets/sylvainHellin/ifc-bench/resolve/4b37e5d77f12f30dfd7cb7375e15278e1037c808/projects/samuel_macalister_sample_house/snapshot.png?download=true",
+      "sha256": "edeeb514da1684ecc42412fd73fe390779b6b97cf2146b973aa385fdb7cf23a1",
+      "size_bytes": 313363
+    },
+    "ifcbench_smiley_west_arc_ifc": {
+      "case_id": "ifcbench_smiley_west",
+      "relative_path": "ifcbench_smiley_west/arc.ifc",
+      "url": "https://huggingface.co/datasets/sylvainHellin/ifc-bench/resolve/4b37e5d77f12f30dfd7cb7375e15278e1037c808/projects/smiley_west/arc.ifc?download=true",
+      "sha256": "26734e67bdc0fd2ab30cb560bddc279a0a4f23eb4d28861509524e4bbe201c48",
+      "size_bytes": 6109213
+    },
+    "ifcbench_smiley_west_snapshot": {
+      "case_id": "ifcbench_smiley_west",
+      "relative_path": "ifcbench_smiley_west/snapshot.png",
+      "url": "https://huggingface.co/datasets/sylvainHellin/ifc-bench/resolve/4b37e5d77f12f30dfd7cb7375e15278e1037c808/projects/smiley_west/snapshot.png?download=true",
+      "sha256": "e2fa01e8b35ff6fbd386b08e35eea5248033e3e630e34e955a57b2413b855d0e",
+      "size_bytes": 194885
+    },
+    "ifcbench_schependomlaan_arc_ifc": {
+      "case_id": "ifcbench_schependomlaan",
+      "relative_path": "ifcbench_schependomlaan/arc.ifc",
+      "url": "https://huggingface.co/datasets/sylvainHellin/ifc-bench/resolve/4b37e5d77f12f30dfd7cb7375e15278e1037c808/projects/schependomlaan/arc.ifc?download=true",
+      "sha256": "57fafa59f03b18c05be211a456e346bdd0445d5c35d66522e598d339e81dfcf4",
+      "size_bytes": 65078748
+    },
+    "ifcbench_schependomlaan_snapshot": {
+      "case_id": "ifcbench_schependomlaan",
+      "relative_path": "ifcbench_schependomlaan/snapshot.png",
+      "url": "https://huggingface.co/datasets/sylvainHellin/ifc-bench/resolve/4b37e5d77f12f30dfd7cb7375e15278e1037c808/projects/schependomlaan/snapshot.png?download=true",
+      "sha256": "90e0dc0bd7c9b31776bd60bd88ffb7a8d2a005d82d58ffe08541bd61adc671b2",
+      "size_bytes": 219783
+    },
+    "ifcbench_sixty5_arc_ifc": {
+      "case_id": "ifcbench_sixty5",
+      "relative_path": "ifcbench_sixty5/arc.ifc",
+      "url": "https://huggingface.co/datasets/sylvainHellin/ifc-bench/resolve/4b37e5d77f12f30dfd7cb7375e15278e1037c808/projects/sixty5/arc.ifc?download=true",
+      "sha256": "e91ddbbd672bbde946af14631de4c732f0cf8a7cfae5dbbf06fbeab03b5c46df",
+      "size_bytes": 342657851
+    },
+    "ifcbench_sixty5_snapshot": {
+      "case_id": "ifcbench_sixty5",
+      "relative_path": "ifcbench_sixty5/snapshot.png",
+      "url": "https://huggingface.co/datasets/sylvainHellin/ifc-bench/resolve/4b37e5d77f12f30dfd7cb7375e15278e1037c808/projects/sixty5/snapshot.png?download=true",
+      "sha256": "bd7160468e977bdb3f91f8b6afe7cae7217baeeb8a684c66d1e6143ef6e5d152",
+      "size_bytes": 530243
+    }
+  }
+}

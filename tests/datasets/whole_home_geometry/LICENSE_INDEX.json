@@ -1,0 +1,71 @@
+{
+  "schema_version": 1,
+  "licenses": {
+    "CC-BY-4.0": {
+      "classification": "redistributable",
+      "commercial_use": true,
+      "derivatives": true,
+      "redistribution": true,
+      "attribution_required": true,
+      "auto_download": true,
+      "canonical_url": "https://creativecommons.org/licenses/by/4.0/"
+    },
+    "MIT": {
+      "classification": "redistributable",
+      "commercial_use": true,
+      "derivatives": true,
+      "redistribution": true,
+      "attribution_required": true,
+      "auto_download": true,
+      "canonical_url": "https://opensource.org/license/mit"
+    },
+    "GPL-3.0-or-later": {
+      "classification": "redistributable_copyleft",
+      "commercial_use": true,
+      "derivatives": true,
+      "redistribution": true,
+      "attribution_required": true,
+      "source_offer_required_for_distribution": true,
+      "auto_download": true,
+      "restriction": "Any redistributed derivative must retain the GPL notice and comply with GPL-3.0-or-later source and copyleft obligations.",
+      "canonical_url": "https://www.gnu.org/licenses/gpl-3.0.html"
+    },
+    "CC-BY-NC-4.0": {
+      "classification": "local_restricted",
+      "commercial_use": false,
+      "derivatives": true,
+      "redistribution": true,
+      "attribution_required": true,
+      "auto_download": false,
+      "restriction": "Non-commercial only; never include in commercial CI, product training, or redistributed default assets.",
+      "canonical_url": "https://creativecommons.org/licenses/by-nc/4.0/"
+    },
+    "ZIND-RESEARCH-NONCOMMERCIAL": {
+      "classification": "local_restricted",
+      "commercial_use": false,
+      "derivatives": false,
+      "redistribution": false,
+      "attribution_required": true,
+      "auto_download": false,
+      "restriction": "Registration, approval, token, and Zillow research/non-commercial terms are required."
+    },
+    "STRUCTURED3D-AGREEMENT": {
+      "classification": "local_restricted",
+      "commercial_use": false,
+      "derivatives": false,
+      "redistribution": false,
+      "attribution_required": true,
+      "auto_download": false,
+      "restriction": "A separate signed Terms of Use agreement is required before download."
+    },
+    "MLSTRUCTFP-PENDING-DATA-TERMS": {
+      "classification": "link_only",
+      "commercial_use": false,
+      "derivatives": false,
+      "redistribution": false,
+      "attribution_required": true,
+      "auto_download": false,
+      "restriction": "The repository code license does not establish the external archive's data license; retain as link-only until the supplied data terms are reviewed."
+    }
+  }
+}

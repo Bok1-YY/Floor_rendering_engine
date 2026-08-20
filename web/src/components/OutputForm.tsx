@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Cuboid, Globe2, Sparkles } from "lucide-react";
 import type { GenParams, ModelKey, OptionsView, SDOptions } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -63,6 +63,7 @@ export function OutputForm({
 }) {
   const [sdOpen, setSdOpen] = useState(false);
   const isFree = params.workflow_mode.includes("自由创作");
+  const isSphere = params.workflow_mode.includes("球面效果图");
 
   const toggleModel = (key: ModelKey) => {
     const selected = modelTargets.includes(key);
@@ -70,6 +71,49 @@ export function OutputForm({
     if (disabled) return;
     onModelTargets(selected ? modelTargets.filter((model) => model !== key) : [...modelTargets, key]);
   };
+
+  if (isSphere) {
+    return (
+      <div className="space-y-3">
+        <div className="rounded-xl border border-primary/35 bg-primary-soft p-3.5">
+          <div className="flex items-start gap-3">
+            <div className="flex size-10 flex-none items-center justify-center rounded-xl bg-primary text-primary-foreground">
+              <Globe2 size={19} />
+            </div>
+            <div className="min-w-0">
+              <div className="text-[13px] font-extrabold text-foreground">双引擎球面候选</div>
+              <p className="mt-1 text-[11.5px] leading-relaxed text-muted-foreground">
+                B2 与 GPT Image 2 各生成一张同球心 3×2 六面图集，再由本地算法拆成六面并合成全景。
+              </p>
+            </div>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <div className="rounded-lg border border-border bg-card px-3 py-2.5">
+              <div className="flex items-center gap-1.5 text-[11.5px] font-bold"><Sparkles size={13} />B2</div>
+              <div className="mt-1 text-[10.5px] text-muted-foreground">六面图集候选 A</div>
+            </div>
+            <div className="rounded-lg border border-border bg-card px-3 py-2.5">
+              <div className="flex items-center gap-1.5 text-[11.5px] font-bold"><Sparkles size={13} />GPT Image 2</div>
+              <div className="mt-1 text-[10.5px] text-muted-foreground">六面图集候选 B</div>
+            </div>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-2 text-[11px]">
+          <div className="rounded-xl border border-border bg-card px-3 py-2.5">
+            <div className="flex items-center gap-1.5 font-bold text-secondary-foreground"><Cuboid size={13} />中间格式</div>
+            <div className="mt-1 leading-relaxed text-muted-foreground">3×2 · 六个 90° 方向</div>
+          </div>
+          <div className="rounded-xl border border-border bg-card px-3 py-2.5">
+            <div className="flex items-center gap-1.5 font-bold text-secondary-foreground"><Globe2 size={13} />最终交付</div>
+            <div className="mt-1 leading-relaxed text-muted-foreground">3840×1920 · 2:1 ERP</div>
+          </div>
+        </div>
+        <p className="text-[11px] leading-relaxed text-muted-foreground">
+          此模式的引擎、图集比例和 ERP 尺寸为固定合同；点击生成后会先显示费用与两次调用上限，确认后才提交。
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-[14px]">
