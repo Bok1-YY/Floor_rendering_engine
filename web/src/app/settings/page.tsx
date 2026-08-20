@@ -57,7 +57,6 @@ export default function SettingsPage() {
   // 成本单价（元/张成功图）：字符串态便于清空；保存时空串=删除该项
   const [priceB2, setPriceB2] = useState("");
   const [pricePro, setPricePro] = useState("");
-  const [priceVR360, setPriceVR360] = useState("");
   const [priceLite, setPriceLite] = useState("");
   const [priceSD35, setPriceSD35] = useState("");
   const [priceAuraSR, setPriceAuraSR] = useState("");
@@ -98,7 +97,6 @@ export default function SettingsPage() {
         setSdEnabled(!!c.sd_enabled);
         setPriceB2(c.usage_prices?.B2 != null ? String(c.usage_prices.B2) : "");
         setPricePro(c.usage_prices?.Pro != null ? String(c.usage_prices.Pro) : "");
-        setPriceVR360(c.usage_prices?.VR360 != null ? String(c.usage_prices.VR360) : "");
         setPriceLite(c.usage_prices?.Lite != null ? String(c.usage_prices.Lite) : "");
         setPriceSD35(c.usage_prices?.SD35 != null ? String(c.usage_prices.SD35) : "");
         setPriceAuraSR(c.usage_prices?.AuraSR != null ? String(c.usage_prices.AuraSR) : "");
@@ -155,7 +153,6 @@ export default function SettingsPage() {
       for (const [key, raw] of [
         ["B2", priceB2],
         ["Pro", pricePro],
-        ["VR360", priceVR360],
         ["Lite", priceLite],
         ["SD35", priceSD35],
         ["AuraSR", priceAuraSR],
@@ -621,18 +618,6 @@ export default function SettingsPage() {
                     value={pricePro}
                     onChange={(e) => setPricePro(e.target.value)}
                     placeholder="留空不估算"
-                    className={fieldInput}
-                  />
-                </div>
-                <div className="flex flex-col gap-[7px]">
-                  <span className={fieldLabel}>360° VR 全景每次（元）</span>
-                  <Input
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    value={priceVR360}
-                    onChange={(e) => setPriceVR360(e.target.value)}
-                    placeholder="留空则确认框不显示估算"
                     className={fieldInput}
                   />
                 </div>

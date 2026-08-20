@@ -103,32 +103,6 @@ FAL_MODEL_MAP = {
     "gemini-3-pro-image":     "fal-ai/nano-banana-pro/edit",  # Nano Banana Pro
 }
 
-# ── GPT Image 2(OpenAI,经 fal 托管端点)── 定点球面全景 P0 专用 ──
-# 固定 snapshot 锁模型版本(文档 §6.2:避免 alias 更新影响 A/B)。
-# 3840×1920 属 experimental 档位,基准阶段若质量/稳定性不达标按文档 §12 停止规则转 P2。
-GPT_IMAGE_2_MODEL = "gpt-image-2-2026-04-21"
-# fal 官方 GPT Image 2 图像编辑端点。文本生图端点没有 image_urls 编辑合同，
-# 这里必须固定使用 /edit；provider 账本会记录该实际端点且不宣称 snapshot lock。
-FAL_GPT_IMAGE_2_ENDPOINT = "openai/gpt-image-2/edit"
-# OpenAI 显式直连端点(requests + bearer,不加 SDK)；绝不作为 fal 超时后的自动 fallback。
-OPENAI_IMAGE_EDITS_URL = "https://api.openai.com/v1/images/edits"
-# 整张 ERP 编辑约束:长边 ≤3840、2:1、两边 16 的倍数、总像素 ≤8,294,400。
-GPT_IMAGE_2_ERP_SIZE = "3840x1920"
-GPT_IMAGE_2_ERP_WIDTH = 3840
-GPT_IMAGE_2_ERP_HEIGHT = 1920
-
-# FLUX.1 Control LoRA Canny（fal）— 结构受控的 ERP 质感生成。
-# provider 画布在左右各带 64px 的环形邻域，中央 1408x704 才是最终 ERP；这样
-# -180/+180 经度在扩散时彼此可见。结果裁掉 gutter 后确定性放大到 3840x1920，
-# 继续交给同一套 P0 球面/结构门禁，不能因为换模型而降低验收标准。
-FAL_FLUX_CANNY_ERP_ENDPOINT = "fal-ai/flux-control-lora-canny/image-to-image"
-FLUX_CANNY_ERP_MODEL = "flux-control-lora-canny"
-FLUX_CANNY_ERP_CORE_WIDTH = 1408
-FLUX_CANNY_ERP_CORE_HEIGHT = 704
-FLUX_CANNY_ERP_GUTTER_PX = 64
-FLUX_CANNY_ERP_PROVIDER_WIDTH = FLUX_CANNY_ERP_CORE_WIDTH + 2 * FLUX_CANNY_ERP_GUTTER_PX
-FLUX_CANNY_ERP_PROVIDER_HEIGHT = FLUX_CANNY_ERP_CORE_HEIGHT
-
 # 生图线路：'google' = 直连 Google AI Studio(默认)；'fal' = 走 Fal 路由
 DEFAULT_IMAGE_PROVIDER = "google"
 

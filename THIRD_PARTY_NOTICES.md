@@ -44,27 +44,6 @@ LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
-## Depth Anything V2 Small
-
-- Project: [DepthAnything/Depth-Anything-V2](https://github.com/DepthAnything/Depth-Anything-V2)
-- Bundled representation: `assets/depth_anything_v2/depth_anything_v2_small.onnx`
-- License: Apache License 2.0 for the Small model
-
-Depth Anything V2 Small is used only for offline relative-depth and occlusion
-edge analysis in panorama floor masking. Source, conversion and checksum
-details are recorded in
-[`assets/depth_anything_v2/MODEL_SOURCE.md`](assets/depth_anything_v2/MODEL_SOURCE.md).
-
-## CLIPSeg rd64 refined
-
-- Base model: [CIDAS/clipseg-rd64-refined](https://huggingface.co/CIDAS/clipseg-rd64-refined)
-- ONNX distribution: [Xenova/clipseg-rd64-refined](https://huggingface.co/Xenova/clipseg-rd64-refined)
-- Model-card license declaration: Apache License 2.0
-
-The quantized ONNX graph is used only for offline open-vocabulary floor
-semantics. Exact model/tokenizer checksums and provenance are recorded in
-[`assets/clipseg/MODEL_SOURCE.md`](assets/clipseg/MODEL_SOURCE.md).
-
 ## Application dependencies
 
 The Python and JavaScript dependencies are distributed under their own

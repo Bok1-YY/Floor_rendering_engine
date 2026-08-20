@@ -32,7 +32,6 @@ from .server_helpers import (
 from .server_schemas import (
     GenericInpaintRequest, InpaintApplyRequest, InpaintPayload, InpaintSegmentRequest, InpaintTarget,
 )
-from .floorplan_engine import load_suite, save_suite, suite_view
 
 router = APIRouter()
 
@@ -88,23 +87,6 @@ def _resolve_inpaint_source(target: InpaintTarget):
         if src is None:
             raise HTTPException(404, '该结果无可用图片')
         return src, rec.get('workflow_mode', ''), 'record_inpaint'
-    if target.kind == 'suite':
-        suite = load_suite(target.suite_id)
-        if not suite:
-            raise HTTPException(404, '整屋套图任务不存在')
-        if suite.get('status') in ('queued', 'running'):
-            raise HTTPException(409, '套图任务进行中，请稍后修补')
-        room = next((item for item in suite.get('rooms') or [] if item.get('id') == target.room_id), None)
-        result = next((item for item in (room or {}).get('candidates') or []
-                       if item.get('result_id') == target.result_id), None)
-        if not room or not result or not result.get('path'):
-            raise HTTPException(404, '未找到该套图候选')
-        abs_src = require_output_image_rel(target.image_rel)
-        if os.path.realpath(abs_src) != os.path.realpath(result['path']):
-            raise HTTPException(400, '该图不属于指定套图房间')
-        with Image.open(abs_src) as image:
-            src = normalize_inpaint_source(image)
-        return src, '户型套图', 'suite_inpaint'
     room = require_upload_image_path(target.room_path, '房间图', required=True)
     with Image.open(room) as image:
         src = normalize_inpaint_source(image)
@@ -286,33 +268,6 @@ async def inpaint_apply(iid: str, req: InpaintApplyRequest):
             if not str(msg).startswith('✅'):
                 raise HTTPException(500, str(msg))
             resp = {'ok': True, 'result_url': to_url(ppath)}
-        elif target.kind == 'suite':
-            suite = load_suite(target.suite_id)
-            if not suite:
-                raise HTTPException(404, '整屋套图任务不存在')
-            room = next((item for item in suite.get('rooms') or [] if item.get('id') == target.room_id), None)
-            source = next((item for item in (room or {}).get('candidates') or []
-                          if item.get('result_id') == target.result_id), None)
-            if not room or not source:
-                raise HTTPException(404, '套图源候选已不存在')
-            ppath = await asyncio.to_thread(save_api_result_png, out, label, source.get('path') or cand_path)
-            if not ppath:
-                raise HTTPException(500, '结果保存失败')
-            new_candidate = {
-                'result_id': f"{room['id']}_inpaint_{uuid.uuid4().hex[:10]}",
-                'index': len(room.get('candidates') or []) + 1,
-                'status': 'done', 'stage': '', 'error': '', 'path': ppath,
-                'model': label, 'source_result_id': target.result_id,
-                'evaluation': None, 'inpaint_prompt': prompt, 'inpaint_mode': mode,
-                'analysis_id': suite.get('analysis_id'),
-                'annotation_revision': suite.get('annotation_revision', 0),
-                'annotation_room_id': room.get('annotation_room_id') or room.get('id'),
-                'camera_id': room.get('camera_id') or '', 'review_status': 'unreviewed',
-                'review_tags': [], 'review_note': '', 'best': False,
-            }
-            room.setdefault('candidates', []).append(new_candidate)
-            save_suite(suite)
-            resp = {'ok': True, 'result_url': to_url(ppath), 'suite': suite_view(suite)}
         else:
             stem = os.path.splitext(os.path.basename(target.room_path))[0]
             dest = safe_upload_path(f'{stem}_clean.png', 'room_')

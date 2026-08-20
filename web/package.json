@@ -15,9 +15,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test:whole-home-render": "node --test tests/whole-home-render-gate.test.mjs tests/whole-home-human-review.test.mjs tests/whole-home-cad-ui.test.mjs tests/whole-home-subject-id.test.mjs tests/whole-home-wall-openings.test.mjs tests/whole-home-pano-viewer.test.mjs tests/whole-home-history.test.mjs tests/whole-home-geometry-audit-ui.test.mjs tests/pure-render-panorama.test.mjs",
-    "test:whole-home-cad": "node --test tests/whole-home-cad-ui.test.mjs",
-    "test:whole-home-review": "node --test tests/whole-home-human-review.test.mjs"
+    "test:design": "node --test tests/whole-home-design.test.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

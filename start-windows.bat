@@ -16,20 +16,33 @@ if exist "web\out\index.html" (
 )
 
 if "%FRONTEND_BUILD_REQUIRED%"=="1" (
-  if not exist "web\node_modules\next\package.json" (
-    echo Frontend dependencies are missing.
-  ) else (
-    echo Frontend static build is missing or stale.
+  echo Building the Floor Engine frontend...
+  pushd "web"
+  if not exist "node_modules\next\package.json" (
+    call npm.cmd ci --replace-registry-host=always
+    if errorlevel 1 (
+      popd
+      echo Frontend dependency installation failed.
+      pause
+      exit /b 1
+    )
   )
-  echo Install dependencies explicitly if needed, then run npm run build in web.
-  pause
-  exit /b 1
+  call npm.cmd run build
+  if errorlevel 1 (
+    popd
+    echo Frontend build failed.
+    pause
+    exit /b 1
+  )
+  popd
 )
 
+set "FLOOR_DATA_DIR=%CD%\data"
+if not exist "%FLOOR_DATA_DIR%" mkdir "%FLOOR_DATA_DIR%"
+
 echo Floor Engine is starting at http://127.0.0.1:7870
-echo Manual-safe mode is ON. Paid commit is OFF.
 echo Keep this window open. Press Ctrl+C to stop the service.
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%CD%\tools\start_whole_home_manual.ps1"
+".venv\Scripts\python.exe" serve.py
 
 if errorlevel 1 (
   echo.

@@ -4,7 +4,7 @@
 ![License](https://img.shields.io/badge/license-AGPL--3.0--only-blue)
 ![Python](https://img.shields.io/badge/python-3.10%2B-3776AB)
 ![Node](https://img.shields.io/badge/node-20%2B-339933)
-![Tests](https://img.shields.io/badge/tests-389%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-244%20passed-brightgreen)
 
 Turn a real flooring swatch into spatial content that can be batch-generated, color-locked, locally repaired, reviewed, and delivered.
 
@@ -18,10 +18,7 @@ This is not a “home interior” prompt preset. It asks whether the product col
 
 ## What's New in 2026.08
 
-- **Dual-route 360° VR with spherical floor correction:** perspective renders can be expanded into 3840×1920 ERP panoramas, while swatches can also drive the B2 / GPT Image 2 cubemap-atlas route. Both use the v2 panorama gate, natural 60° vertical viewer FOV, eight-direction architectural-line diagnostics, and an explicitly confirmed structure/boundary repair when needed. Every panorama in a job or historical record now exposes Spherical Floor Correction: five local MobileSAM views (front/right/back/left/nadir) are editable before the real swatch is projected through one shared ray/plane UV system. This prevents zone-by-zone laying changes and longitude seam jumps while preserving the raw AI panorama as a reversible parent.
-- **DWG / DXF now feeds the whole-home model directly:** A local MIT-licensed ACadSharp adapter reads DWG files (including AutoCAD 2004) and emits ASCII DXF before ezdxf + Shapely audit units, layers, dynamic blocks, walls, openings, and furniture INSERTs. Multi-plan drawings require an explicit visual candidate selection. Gemini may add room labels and layout semantics, while a local facts digest freezes CAD walls, dimensions, handles, and INSERT transforms before any image-generation call.
-- **One whole-home 3D model replaces room-by-room guessing:** floor-plan parsing now separates whole-home extraction, a color-overlay topology audit, and a dedicated opening audit. Local checks enforce a closed exterior shell, enclosed-room wall coverage, room-side wall classification, and raster alignment. Re-analysis retains the best error-free wall graph for the same source plan and unions the newest opening candidates, preventing a stochastic retry from erasing a previously correct stepped wall. Humans can still edit wall endpoints, calibrate scale, review candidates, and then lock one navigable Three.js shell.
-- **Automatic cameras → five-buffer constraints → two-pass rendering → regression QA:** Local geometry first proposes safe cameras and rejects outside-wall, near-wall, and fixed-object collisions. Gemini may rank immutable previews but cannot invent coordinates. Selected cameras freeze RGB clay, linear depth, surface normals, depth-occluded edges, and semantic roles before B2 / Pro run together. Every structure candidate must first pass a deterministic normal/semantic alignment gate; every floor edit must pass a second local geometry-regression gate before Gemini QA is called. Failed attempts, red/cyan overlays, API originals, corrected images, call ledgers, and final verdicts remain permanently auditable. See [Whole-home 3D pipeline](./docs/WHOLE_HOME_3D_PIPELINE.md).
+- **Whole-home design replaces automatic whole-home 3D / 360° VR:** Upload a floor-plan image or PDF, confirm a lightweight room/entrance/wet-zone summary, generate two 2K vertical overhead 2.5D drafts from a free-form brief, then refine one structure-safe draft to a 4K final. Automated structural hard failures cannot be overridden. A locked concept can be exported as a Blender Agent task bundle containing the authoritative source plan, final design, prompt snapshots, QA evidence, hashes, and an acceptance contract. The output is explicitly a marketing concept—not CAD, BIM, or construction documentation.
 - **A redesigned production workspace:** Product → Scene → Output replaces the long parameter column. Core room, style, lighting, and camera controls stay close at hand, while B2 / Pro tabs, candidate thumbnails, and pass / alternative / reject / favorite actions now live directly on result cards.
 - **Color matching 2.0 + a standalone utility:** Match a newly photographed large sample to an older small swatch without starting Floor Engine or calling an AI service. Beyond classic LAB statistics, it now offers reliable-pixel filtering, detailed distribution transfer, optional spatial illumination correction, and a 0–100 confidence report with a four-color diagnostic overlay. Floor Engine previews default to Detailed 2.0 and always show both the selected engine and the version actually applied to the canvas; the standalone tool and legacy API retain Classic 1.0 defaults for compatibility.
 
@@ -50,10 +47,7 @@ One production job can run B2, Pro, and SD routes together, retain both API orig
 
 The current production workspace supports:
 
-- Reading DWG / DXF directly, or extracting one shared wall graph from a plan image / PDF; CAD keeps handles, layers, block chains, position, rotation, and extent evidence while the image route retains manual calibration;
-- Building one complete navigable Three.js shell, then combining deterministic safe-camera filtering with constrained Gemini ranking; manual camera selection remains available for exceptions;
-- Freezing RGB, depth, normal, and edge buffers per camera before separate structure-photorealization and floor-material passes, with B2 and Pro available together;
-- Automated regression checks for camera, walls, openings, occlusion, and floor scope on every final candidate;
+- A Whole-home Design workspace with PDF page selection, lightweight plan review, two drafts plus one refinement, a strict structural lock, and Blender task-bundle export;
 - A Product → Scene → Output accordion that keeps core controls visible and expands secondary parameters only when needed;
 - Swatch-aware tone detection and flooring-specific scene recipes;
 - Batch generation across rooms or products, with independent model concurrency;
@@ -152,14 +146,13 @@ Next.js 16 / React 19
         | HTTP + SSE
 FastAPI / task orchestration / queue recovery
         |-- Gemini / Fal / ComfyUI
-        |-- floor-plan parsing / whole-home suites / visual QA
         |-- MobileSAM / OpenCV / LAB
         `-- records / review / usage / export
 ```
 
 - B2, Pro, and SD use independent concurrency slots. The service binds to `127.0.0.1` by default.
 - Configuration, outputs, logs, and queue recovery state remain in the local data directory.
-- Regression coverage includes prompt snapshots, route contracts, path security, queue recovery, cinematic planning, whole-home coordinates, exterior-shell closure, enclosed-room gaps, raster alignment, three-pass AI auditing, historical candidate selection, shared-wall/opening topology, constrained AI camera selection and deterministic fallback, camera-version invalidation, five constraint buffers, local image-alignment gates, two-pass input isolation, hard-constraint QA and retry history, legacy floor-plan annotation compatibility, suite scoring, floor coverage, color matching, standalone sample matching, smart selection, and record lineage. This release is verified at **307 tests passed**.
+- Regression coverage includes prompt snapshots, route contracts, path security, queue recovery, cinematic planning, whole-home design revisions/structural locks/Blender bundles, floor coverage, color matching, standalone sample matching, smart selection, and record lineage. This release is verified at **244 tests passed, 1 skipped**.
 
 ## My Role
 

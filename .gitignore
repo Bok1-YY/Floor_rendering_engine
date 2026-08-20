@@ -32,3 +32,10 @@ engine_config.json
 
 # Windows standalone launcher keeps runtime data here via FLOOR_DATA_DIR.
 data/
+
+# Archived whole-home 3D handoff payloads are preserved locally but are not part
+# of the whole-home-design product branch. Source remains on the archive branch.
+.tools/
+HANDOFF_ASSETS/
+assets/clipseg/
+assets/depth_anything_v2/

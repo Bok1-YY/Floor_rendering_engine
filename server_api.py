@@ -9,24 +9,19 @@
 """Headless FastAPI layer over the floor_engine package (no NiceGUI).
 
 本模块只负责组装:lifespan(运行时初始化+启动恢复)、CORS/同源守卫、健康检查、
-七个业务路由(routes_*)、静态/缩略图服务与前端静态站挂载。
+业务路由(routes_*)、静态/缩略图服务与前端静态站挂载。
 业务逻辑分布:
   routes_jobs      任务队列 + 全部生图后台协程(4K 主编排在此)
-  routes_panorama  纯效果图候选派生单点 360° ERP / 全景复核修缝
-  routes_panorama_direct  球面效果图六面图集直出 ERP
   routes_previews  快速预览
   routes_library   上传/记录/收藏/评审/导出/用量
   routes_config    配方/失败库/连通性/配置/Omakase/选项
   routes_tools     识色/地板可视化/全图校色
   routes_inpaint   生成式修补
-  routes_floorplans 旧版房间标注兼容接口
-  routes_whole_home 整屋统一建模 + 3D 机位 + 约束生成主链路
-  floorplan_annotations 人工标注版本/几何验收/训练数据导出
+  routes_whole_home_design 户型图 → 正俯视 2.5D 全屋设计 → Blender 任务包
   server_state     注册表/信号量等全部可变状态;server_helpers 共享工具;
   server_schemas   请求模型;image_ops 纯图像处理。
 """
 import hashlib
-import json
 import mimetypes
 import os
 import re
@@ -34,7 +29,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from PIL import Image
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -44,22 +39,8 @@ from .config import MAIN_OUTPUT_DIR, UPLOAD_DIR, THUMB_DIR, logger, load_config
 from .records import migrate_all_record_storage, load_persisted_jobs, safe_output_path
 from .server_helpers import IMAGE_EXTS
 from . import (
-    routes_jobs, routes_panorama, routes_panorama_direct, routes_panorama_floor, routes_previews, routes_library, routes_config, routes_tools,
-    routes_inpaint, routes_floorplans, routes_whole_home,
-)
-from .floorplan_engine import recover_interrupted_floorplan_state
-from .whole_home_engine import load_run, recover_interrupted_whole_home_state
-from .whole_home_autopilot import (
-    DevelopmentAutopilotError,
-    development_autopilot_enabled,
-    get_development_session,
-    list_development_session_ids,
-    reconcile_development_session,
-)
-from .whole_home_manual import (
-    manual_safe_enabled,
-    request_feature_for_path,
-    service_owner,
+    routes_jobs, routes_previews, routes_library, routes_config, routes_tools,
+    routes_inpaint, routes_whole_home_design,
 )
 
 
@@ -68,52 +49,19 @@ from .whole_home_manual import (
 # ============================================================
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    # Every service mode owns the authoritative data root before config reads,
-    # migrations or recovery.  Manual-safe no longer nests a second owner lock.
-    with service_owner(MAIN_OUTPUT_DIR, timeout=0.1):
-        try:
-            lim = max(1, int(load_config().get('max_concurrent_per_model', 1)))
-        except Exception as ex:
-            logger.warning(f"读取 max_concurrent_per_model 失败，用默认 1: {ex}")
-            lim = 1
-        state.init_runtime(lim)   # 按模型信号量 + prep 锁,必须绑定本服务事件循环
-        if manual_safe_enabled():
-            state.JOBS.replace([])
-            logger.info(
-                '[server_api] 手动安全模式启动：未迁移、未恢复、未对账；'
-                '付费提交需独立 -AllowPaid 开关')
-            yield
-            return
-        migrated = migrate_all_record_storage()
-        state.JOBS.replace((j.job_id, j) for j in load_persisted_jobs())
-        fp_analyses, fp_suites = recover_interrupted_floorplan_state()
-        home_projects, home_runs = recover_interrupted_whole_home_state()
-        reconciliation_actions = 0
-        if development_autopilot_enabled():
-            # Startup is intentionally preview-only.  A controller must present the
-            # state_version from this plan to the explicit apply endpoint.
-            for session_id in list_development_session_ids():
-                try:
-                    session = get_development_session(session_id)
-                    run_records = {
-                        str(run_id): load_run(str(run_id))
-                        for run_id in session.get('runs') or []
-                    }
-                    preview = reconcile_development_session(
-                        session_id, run_records, apply=False,
-                        expected_state_version=int(session.get('state_version') or 0))
-                    reconciliation_actions += len(preview.get('actions') or [])
-                    if preview.get('actions'):
-                        logger.warning(
-                            f'[development_autopilot] {session_id} 启动恢复仅 dry-run: '
-                            f'{len(preview.get("actions") or [])} 个待对账动作，未写入真实 session')
-                except DevelopmentAutopilotError as ex:
-                    logger.warning(f'[development_autopilot] 启动 dry-run 失败 {session_id}: {ex}')
-        logger.info(f"[server_api] 启动完成：迁移 {migrated} 个记录文件，恢复 {len(state.JOBS)} 条历史任务，"
-                    f"修正旧户型解析 {fp_analyses} / 套图 {fp_suites}，整屋项目 {home_projects} / 任务 {home_runs}，每模型并发 {lim}")
-        if reconciliation_actions:
-            logger.info(f'[development_autopilot] 共发现 {reconciliation_actions} 个待人工确认的恢复动作')
-        yield
+    try:
+        lim = max(1, int(load_config().get('max_concurrent_per_model', 1)))
+    except Exception as ex:
+        logger.warning(f"读取 max_concurrent_per_model 失败，用默认 1: {ex}")
+        lim = 1
+    state.init_runtime(lim)
+    migrated = migrate_all_record_storage()
+    state.JOBS.replace((j.job_id, j) for j in load_persisted_jobs())
+    resumed = routes_whole_home_design.recover_background_tasks()
+    logger.info(
+        f"[server_api] 启动完成：迁移 {migrated} 个记录文件，恢复 {len(state.JOBS)} 条历史任务，"
+        f"恢复 {resumed} 个已有 Fal 全屋设计请求，每模型并发 {lim}")
+    yield
 
 
 app = FastAPI(title="Floor Engine API", version="step1", lifespan=lifespan)
@@ -139,27 +87,6 @@ async def reject_cross_origin_mutations(request: Request, call_next):
         same_origin = origin == f'{request.url.scheme}://{request.url.netloc}'
         if not same_origin and origin not in _ALLOWED_ORIGINS:
             return Response('Forbidden origin', status_code=403)
-    request_body = None
-    if (request.method not in ('GET', 'HEAD', 'OPTIONS')
-            and request.url.path.endswith(
-                ('/camera-candidates', '/captures'))):
-        try:
-            request_body = json.loads((await request.body()).decode('utf-8'))
-        except (UnicodeDecodeError, json.JSONDecodeError):
-            request_body = None
-    disabled = request_feature_for_path(
-        request.url.path, request.method, body=request_body)
-    if disabled:
-        status_code = 409 if disabled in {
-            'ordinary_paid_run', 'continuation', 'qa_retry',
-        } else 404
-        return JSONResponse({
-            'detail': {
-                'code': 'whole_home_feature_disabled',
-                'feature': disabled,
-                'manual_safe': manual_safe_enabled(),
-            }
-        }, status_code=status_code)
     return await call_next(request)
 
 
@@ -171,16 +98,12 @@ def healthz():
 
 # ── 业务路由 ──
 app.include_router(routes_jobs.router)
-app.include_router(routes_panorama.router)
-app.include_router(routes_panorama_direct.router)
-app.include_router(routes_panorama_floor.router)
 app.include_router(routes_previews.router)
 app.include_router(routes_library.router)
 app.include_router(routes_config.router)
 app.include_router(routes_tools.router)
 app.include_router(routes_inpaint.router)
-app.include_router(routes_floorplans.router)
-app.include_router(routes_whole_home.router)
+app.include_router(routes_whole_home_design.router)
 # ============================================================
 # 静态/缩略图（移植自 webui：懒生成缩略图 + safe_output_path 越界防护）
 # ============================================================

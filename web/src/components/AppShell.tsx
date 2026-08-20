@@ -35,8 +35,8 @@ const NAV: NavItem[] = [
     ),
   },
   {
-    href: "/floorplan",
-    label: "户型 VR",
+    href: "/design",
+    label: "全屋设计",
     icon: (
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
         <path d="M3 3h18v18H3zM9 3v7H3M15 21v-7h6M9 10h6v4H9z" />
@@ -77,8 +77,8 @@ const NAV: NavItem[] = [
 
 const TITLES: Record<string, [string, string]> = {
   "/": ["生成", "三步完成一批出图 · 参数按需展开"],
-  "/records": ["记录", "生成与几何验收历史 · 逐项复核 · 证据导出"],
-  "/floorplan": ["空户型图全屋 VR", "少量校正 · 整屋一致方案 · 360° 营销提案"],
+  "/records": ["记录", "生成历史 · 逐项复核 · 证据导出 · 旧 360° 只读查看"],
+  "/design": ["全屋设计", "户型摘要 · 两张草稿 · 4K 精修 · Blender 任务包"],
   "/review": ["复盘", "评审通过率 · 问题标签分布 · 好图样本库"],
   "/usage": ["用量", "出图统计 · 模型与线路明细"],
   "/settings": ["设置", "密钥 · 线路 · 网络策略"],

@@ -7,7 +7,6 @@ import type {
   InpaintStatusView,
   InpaintTargetPayload,
   JobView,
-  FloorplanSuite,
   ModelKey,
   SmartMaskCandidate,
 } from "@/lib/types";
@@ -21,8 +20,7 @@ import { cn } from "@/lib/utils";
 export type InpaintTarget =
   | { kind: "job"; jobId: string; stage: ModelKey; imageRel: string }
   | { kind: "record"; jsonPath: string; recordId: string; resultId: string }
-  | { kind: "room"; roomPath: string }
-  | { kind: "suite"; suiteId: string; roomId: string; resultId: string; imageRel: string };
+  | { kind: "room"; roomPath: string };
 
 type InpaintDialogProps = {
   open: boolean;
@@ -31,8 +29,6 @@ type InpaintDialogProps = {
   target: InpaintTarget;
   /** job 目标：apply 后带回任务快照；record 目标：无参调用（外层刷新） */
   onDone?: (jobView?: JobView) => void;
-  /** suite 目标：apply 后回填整屋任务快照 */
-  onSuiteDone?: (suite: FloorplanSuite) => void;
   /** room 目标专用：apply 后回填新房间图 */
   onRoomCleaned?: (path: string, url: string, thumb: string) => void;
 };
@@ -79,8 +75,6 @@ function toTargetPayload(t: InpaintTarget): InpaintTargetPayload {
   if (t.kind === "job") return { kind: "job", jid: t.jobId, stage: t.stage, image_rel: t.imageRel };
   if (t.kind === "record")
     return { kind: "record", json_path: t.jsonPath, record_id: t.recordId, result_id: t.resultId };
-  if (t.kind === "suite")
-    return { kind: "suite", suite_id: t.suiteId, room_id: t.roomId, result_id: t.resultId, image_rel: t.imageRel };
   return { kind: "room", room_path: t.roomPath };
 }
 
@@ -95,7 +89,6 @@ function InpaintSession({
   srcUrl,
   target,
   onDone,
-  onSuiteDone,
   onRoomCleaned,
 }: InpaintDialogProps) {
   const [mode, setMode] = useState<MaskMode>("remove");
@@ -770,9 +763,6 @@ function InpaintSession({
       } else if (target.kind === "record") {
         toast.success("修补结果已追加到该记录");
         onDone?.();
-      } else if (target.kind === "suite") {
-        if (r.suite) onSuiteDone?.(r.suite);
-        toast.success("修补结果已追加到该房间候选");
       } else {
         onRoomCleaned?.(r.path || "", r.url || "", r.thumb || r.url || "");
         toast.success("已替换为清理后的房间图");

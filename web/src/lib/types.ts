@@ -142,7 +142,7 @@ export interface JobView {
   ts: string;
   status: JobStatus;
   model_filter: ModelFilter;
-  model_targets: JobSlotKey[];
+  model_targets: GenerationModelKey[];
   model_runs: Partial<Record<JobSlotKey, ModelRunView>>;
   workflow_mode: string;
   delivery_mode?: "perspective" | "direct_cubemap_atlas" | string;
@@ -528,1971 +528,6 @@ export interface DirectPanoramaPaidPreview {
   warning: string;
 }
 
-// ── 户型图解析 / 整屋套图 ──────────────────────────────────────
-export interface NormalizedPoint { x: number; y: number }
-
-export interface FloorplanCamera {
-  id: string;
-  name: string;
-  position: NormalizedPoint;
-  target: NormalizedPoint;
-  height_m: number | null;
-  focal_length_mm: number | null;
-  purpose: "hero" | "wide" | "detail" | "transition" | "custom";
-  source: "ai_suggested" | "ai_edited" | "manual" | "legacy";
-  confirmed: boolean;
-  enabled_for_generation: boolean;
-}
-
-export interface FloorplanOpening {
-  id: string;
-  kind: "door" | "window" | "open_connection";
-  points: [NormalizedPoint, NormalizedPoint];
-  room_ids: string[];
-  confidence: number;
-  source: "ai_suggested" | "manual" | "ai_edited" | "legacy";
-  review_status: "pending" | "accepted" | "rejected";
-}
-
-export interface FloorplanRoom {
-  id: string;
-  label: string;
-  room_type: string;
-  polygon: NormalizedPoint[];
-  adjacent_room_ids: string[];
-  dimensions_text: string;
-  confidence: number;
-  space_kind: "enclosed_room" | "open_zone" | "circulation" | "wet_area" | "balcony" | "other";
-  source: "ai" | "human" | "ai_edited" | "legacy";
-  selected: boolean;
-  apply_floor: boolean;
-  cameras: FloorplanCamera[];
-  primary_camera_id: string;
-  camera?: FloorplanCamera | null;
-}
-
-export interface FloorplanGeometryIssue {
-  code: string;
-  message: string;
-  room_ids?: string[];
-  camera_id?: string;
-  overlap_ratio?: number;
-}
-
-export interface FloorplanGeometryReport {
-  hard_errors: FloorplanGeometryIssue[];
-  warnings: FloorplanGeometryIssue[];
-  checked_at?: number;
-}
-
-export interface FloorplanOperation {
-  type: string;
-  room_id?: string;
-  camera_id?: string;
-  payload?: Record<string, unknown>;
-}
-
-export interface FloorplanSpatialPlanItem {
-  name?: string;
-  item?: string;
-  function?: string;
-  plan_position: NormalizedPoint;
-  frame_position: string;
-  depth: string;
-  required_visible: boolean;
-  orientation?: string;
-  confidence?: number;
-  computed_frame_position?: string;
-  camera_depth?: number;
-  camera_lateral?: number;
-}
-
-export interface FloorplanSpatialPlan {
-  spatial_plan_id: string;
-  analysis_id: string;
-  room_id: string;
-  camera_id: string;
-  annotation_revision: number;
-  status: "draft" | "locked";
-  space_summary: string;
-  camera_view: {
-    direction: string;
-    expected_composition: string;
-    foreground_left: string[];
-    foreground_center: string[];
-    foreground_right: string[];
-    midground_left: string[];
-    midground_center: string[];
-    midground_right: string[];
-    background_left: string[];
-    background_center: string[];
-    background_right: string[];
-    hidden_behind_camera: string[];
-  };
-  architecture: {
-    visible_walls: string[];
-    required_opening_ids: string[];
-    required_openings: string[];
-    open_connections: string[];
-    fixed_boundaries: string[];
-    forbidden_openings: string[];
-  };
-  zones: FloorplanSpatialPlanItem[];
-  furniture: FloorplanSpatialPlanItem[];
-  hard_constraints: string[];
-  must_not_appear: string[];
-  uncertainties: string[];
-  planner_model?: string;
-  overlay_path?: string;
-  overlay_url?: string;
-  camera_math?: { camera?: string; focal_length_mm?: number | null; height_m?: number | null; rule?: string };
-  created_at?: number;
-  updated_at?: number;
-  locked_at?: number | null;
-  locked_by?: string;
-}
-
-export interface FloorplanViewProxy {
-  view_proxy_id: string;
-  status: "confirmed" | "stale";
-  path: string;
-  url?: string;
-  source_hash: string;
-  aspect_ratio: "4:3" | "16:9" | "3:4" | "9:16";
-  render_config: {
-    camera_height_m: number;
-    focal_length_mm: number;
-    wall_height_m: number;
-    room_long_side_m: number;
-    renderer: string;
-  };
-  annotation_revision: number;
-  spatial_plan_id: string;
-  confirmed_at: number;
-  confirmed_by: string;
-}
-
-export interface FloorplanUpload extends Swatch {
-  source_path: string;
-  page: number;
-  page_count: number;
-  pages: Array<Swatch & { page: number }>;
-}
-
-export interface FloorplanAnalysis {
-  analysis_id: string;
-  status: "queued" | "analyzing" | "done" | "confirmed" | "failed";
-  stage: string;
-  error: string;
-  floorplan_path: string;
-  floorplan_url: string;
-  summary: string;
-  orientation: string;
-  entrance: NormalizedPoint | null;
-  warnings: string[];
-  rooms: FloorplanRoom[];
-  openings: FloorplanOpening[];
-  openings_review_status: "pending" | "confirmed";
-  confirmed: boolean;
-  schema_version: number;
-  revision: number;
-  verified_revision: number;
-  annotation_status: "draft" | "verified";
-  training_consent: boolean;
-  training_eligible: boolean;
-  verified_at: number | null;
-  verified_by: string;
-  annotator_id: string;
-  geometry_report: FloorplanGeometryReport;
-  operation_count: number;
-  ai_model: string;
-  spatial_plans: Record<string, FloorplanSpatialPlan>;
-  view_proxies: Record<string, FloorplanViewProxy>;
-  source: { path?: string; sha256?: string; width?: number; height?: number; original_name?: string };
-}
-
-export interface FloorplanEvaluation {
-  status: "done" | "unavailable";
-  layout_fidelity?: number;
-  material_fidelity?: number;
-  camera_match?: number;
-  visual_quality?: number;
-  suite_consistency?: number;
-  total: number | null;
-  warnings: string[];
-  summary: string;
-  eligible_for_recommendation?: boolean;
-  hard_fail?: boolean;
-  verification_incomplete?: boolean;
-  checks?: Array<{
-    constraint_id?: string;
-    constraint: string;
-    status: "pass" | "fail" | "uncertain";
-    severity: "hard" | "soft";
-    evidence: string;
-  }>;
-}
-
-export interface FloorplanCandidate {
-  result_id: string;
-  index: number;
-  model_index?: number;
-  model_key?: "b2" | "pro";
-  status: "queued" | "running" | "done" | "failed";
-  stage: string;
-  error: string;
-  path: string;
-  url: string;
-  thumb: string;
-  model?: string;
-  seconds?: number;
-  structure_path?: string;
-  structure_url?: string;
-  material_path?: string;
-  material_url?: string;
-  final_path?: string;
-  final_url?: string;
-  material_pass_status?: "pending" | "done" | "failed" | "skipped";
-  structure_evaluation?: FloorplanEvaluation;
-  generation_trace?: Array<{ pass: string; provider: string; seconds: number; success: boolean; error: string; continuation_mode?: string }>;
-  auto_color_status?: string;
-  auto_color_error?: string;
-  evaluation: FloorplanEvaluation | null;
-  review_status?: "unreviewed" | "pass" | "backup" | "reject";
-  review_tags?: string[];
-  review_note?: string;
-  best?: boolean;
-  camera_id?: string;
-  annotation_room_id?: string;
-}
-
-export interface FloorplanSuiteRoom extends FloorplanRoom {
-  status: "queued" | "running" | "done" | "partial" | "failed" | "skipped";
-  candidates: FloorplanCandidate[];
-  recommended_result_id: string;
-  annotation_room_id?: string;
-  camera_id?: string;
-  spatial_plan?: FloorplanSpatialPlan;
-  constraint_overlay_path?: string;
-  view_proxy_path?: string;
-  view_proxy_url?: string;
-  view_proxy?: FloorplanViewProxy;
-}
-
-export interface FloorplanSuite {
-  suite_id: string;
-  analysis_id: string;
-  status: "queued" | "running" | "waiting_anchor" | "done" | "partial" | "failed";
-  stage: string;
-  error: string;
-  warnings: string[];
-  floorplan_url: string;
-  floor_url: string;
-  floor_path: string;
-  style_ref_url: string;
-  anchor_room_id: string;
-  anchor_result_id: string;
-  anchor_url: string;
-  generation_mode: "fast" | "consistent";
-  model_key: "b2" | "pro";
-  model_keys?: ("b2" | "pro")[];
-  candidates_per_room: 2 | 3;
-  estimated_images: number;
-  estimated_model_calls?: number;
-  estimated_cost: number;
-  currency: string;
-  rooms: FloorplanSuiteRoom[];
-  annotation_revision: number;
-}
-
-export interface FloorplanSuiteSubmit {
-  analysis_id: string;
-  floor_path: string;
-  style_ref_path?: string | null;
-  prompt: string;
-  style: string;
-  lighting: string;
-  generation_mode: "fast" | "consistent";
-  model_key?: "b2" | "pro";
-  model_keys: ("b2" | "pro")[];
-  candidates_per_room: 2 | 3;
-  aspect_ratio: "4:3" | "16:9" | "3:4" | "9:16";
-  resolution: "2K" | "4K";
-  camera_ids_by_room?: Record<string, string[]>;
-}
-
-export interface FloorplanDatasetSummary {
-  eligible_floorplans: number;
-  eligible_rooms: number;
-  eligible_cameras: number;
-}
-
-// ── Whole-home v2: one metric model, interactive 3D cameras, G-buffer renders ──
-export interface MetricXZ { x: number; z: number }
-export interface MetricXYZ { x: number; y: number; z: number }
-
-export interface CadRuntimeStatus {
-  ready_for_dxf: boolean;
-  ready_for_dwg: boolean;
-  ezdxf_available: boolean;
-  ezdxf_version: string;
-  shapely_available: boolean;
-  shapely_version: string;
-  converter_available: boolean;
-  commercial_use_authorized: boolean;
-  converter_adapter: string;
-  converter_license?: string;
-  acadsharp_available?: boolean;
-  oda_available?: boolean;
-  converter_configuration: {
-    path_env_names: string[];
-    commercial_authorization_env: string;
-  };
-}
-
-export interface CadUpload {
-  path: string;
-  name: string;
-  url: string;
-  format: "dwg" | "dxf";
-  version: string;
-  version_name: string;
-  sha256: string;
-  size_bytes: number;
-  encoding?: "ascii" | "binary" | string;
-}
-
-export interface CadProvenance extends Record<string, unknown> {
-  handle?: string;
-  layer?: string;
-  entity_type?: string;
-  block_name?: string;
-  insert_handle?: string;
-  segment_index?: number;
-}
-
-export interface WholeHomeCadCandidatePlan {
-  candidate_id: string;
-  preview_path: string;
-  preview_url: string;
-  bbox_m: number[];
-  length_m: number;
-  bbox_area_m2: number;
-  closed_region_count: number;
-  score: number;
-  selection_score?: number;
-  context_insert_count?: number;
-  semantic_anchor_count?: number;
-  context_text_count?: number;
-}
-
-export interface WholeHomeCadEntityRoleSummary extends Record<string, unknown> {
-  schema_version?: number;
-  method?: string;
-  input_entity_count?: number;
-  retained_wall_entity_count?: number;
-  opening_evidence_entity_count?: number;
-  context_entity_count?: number;
-  review_entity_count?: number;
-  source_root_count?: number;
-  role_counts?: Record<string, number>;
-  confidence_counts?: Record<string, number>;
-  reason_counts?: Record<string, number>;
-}
-
-export interface WholeHomeCadRawOpeningSummary extends Record<string, unknown> {
-  schema_version?: number;
-  method?: string;
-  candidate_count?: number;
-  accepted_count?: number;
-  review_count?: number;
-  rejected_count?: number;
-  kind_counts?: Record<string, number>;
-  reason_counts?: Record<string, number>;
-}
-
-export interface WholeHomeCadParseReport {
-  schema_version?: number;
-  source_path?: string;
-  source_sha256?: string;
-  report_path?: string;
-  report_url?: string;
-  insunits?: number;
-  unit_scale_to_m?: number;
-  chord_error_m?: number;
-  inventory?: Record<string, number>;
-  layers?: Record<string, number>;
-  blocks?: Record<string, number>;
-  layer_count?: number;
-  block_count?: number;
-  structural_entity_count?: number;
-  selected_structural_entity_count?: number;
-  ignored_nonstructural_count?: number;
-  candidate_plans?: WholeHomeCadCandidatePlan[];
-  selected_candidate_id?: string;
-  selection_explanation?: string;
-  alignment_metrics?: Record<string, unknown>;
-  selected_entity_role_summary?: WholeHomeCadEntityRoleSummary;
-  raw_opening_summary?: WholeHomeCadRawOpeningSummary;
-  global_wall_topology?: WholeHomeGlobalWallTopology;
-  hard_errors?: Array<Record<string, unknown> & { code?: string; message?: string }>;
-  warnings?: Array<Record<string, unknown> & { code?: string; message?: string }>;
-  hard_error_summary?: Array<Record<string, unknown> & { code?: string; message?: string }>;
-  warning_summary?: Array<Record<string, unknown> & { code?: string; message?: string }>;
-  validation?: {
-    hard_errors?: Array<Record<string, unknown> & { code?: string; message?: string }>;
-    warnings?: Array<Record<string, unknown> & { code?: string; message?: string }>;
-    metrics?: Record<string, unknown>;
-  };
-}
-
-export interface WholeHomeCadRawFace extends Record<string, unknown> {
-  id?: string;
-  face_id?: string;
-  polygon?: MetricXZ[];
-  points?: MetricXZ[];
-  layer?: string;
-  source_handles?: string[];
-  disposition?: "physical_space_candidate" | "excluded" | string;
-  manual_eligible?: boolean;
-  filter_reasons?: string[];
-}
-
-export interface WholeHomeCadTextAnchor extends Record<string, unknown> {
-  id?: string;
-  anchor_id?: string;
-  text: string;
-  point?: MetricXZ;
-  position?: MetricXZ;
-  layer?: string;
-}
-
-export interface WholeHomeCadPhysicalSpace extends Record<string, unknown> {
-  id: string;
-  label: string;
-  space_type: string;
-  face_ids: string[];
-  polygon: MetricXZ[];
-  selected: boolean;
-  floor_elevation_m?: number;
-  ceiling_height_m?: number;
-}
-
-export interface WholeHomeCadSemanticZone extends Record<string, unknown> {
-  id: string;
-  physical_space_id: string;
-  label: string;
-  zone_type: string;
-  geometry: {
-    kind: "polygon" | "rectangle" | "split_halfplane" | string;
-    points?: MetricXZ[];
-    polygon?: MetricXZ[];
-    start?: MetricXZ;
-    end?: MetricXZ;
-    side?: "left" | "right";
-    min_x?: number;
-    min_z?: number;
-    max_x?: number;
-    max_z?: number;
-    [key: string]: unknown;
-  };
-}
-
-/** Editable semantic interpretation of immutable CAD faces, with project-revision CAS. */
-export interface WholeHomeCadSpaceDraft {
-  project_id: string;
-  revision: number;
-  state_hash: string;
-  physical_spaces: WholeHomeCadPhysicalSpace[];
-  semantic_zones: WholeHomeCadSemanticZone[];
-  excluded_face_ids: string[];
-  raw_faces: WholeHomeCadRawFace[];
-  text_anchors: WholeHomeCadTextAnchor[];
-  space_confirmation?: WholeHomeCadSpaceConfirmation;
-}
-
-export interface WholeHomeCadSpaceDraftPut {
-  base_revision: number;
-  base_state_hash: string;
-  editor_id: string;
-  physical_spaces: WholeHomeCadPhysicalSpace[];
-  semantic_zones: WholeHomeCadSemanticZone[];
-  excluded_face_ids: string[];
-  operation_id?: string;
-}
-
-export interface WholeHomeCadSpaceDraftPutResponse {
-  project_id: string;
-  revision: number;
-  status: string;
-  space_confirmation?: WholeHomeCadSpaceConfirmation;
-  model_summary?: Record<string, unknown>;
-}
-
-export type WholeHomeCadReparseStatus = "queued" | "running" | "done" | "needs_review" | "failed" | "conflict" | "interrupted";
-
-export interface WholeHomeCadReparseOperation extends Record<string, unknown> {
-  operation_id: string;
-  project_id?: string;
-  status: WholeHomeCadReparseStatus | string;
-  stage?: string;
-  progress?: number;
-  candidate_id?: string;
-  error?: string | (Record<string, unknown> & { code?: string; message?: string });
-  error_code?: string;
-  failure_evidence?: Record<string, unknown>;
-  result_revision?: number;
-  created_at?: number;
-  updated_at?: number;
-}
-
-export interface WholeHomeCadAiAdvisory extends Record<string, unknown> {
-  schema_version: 1;
-  advisory_id: string;
-  project_id: string;
-  base_revision: number;
-  input_hash: string;
-  authority: "advisory_only";
-  geometry_mutated: false;
-  revision_unchanged: true;
-  call_cap: 2;
-  call_count: number;
-  passes: Array<Record<string, unknown>>;
-  proposal: {
-    summary?: string;
-    orientation_assessment?: Record<string, unknown>;
-    room_label_proposals?: Array<Record<string, unknown>>;
-    wall_role_reviews?: Array<Record<string, unknown>>;
-    opening_reviews?: Array<Record<string, unknown>>;
-    risks?: Array<Record<string, unknown>>;
-  };
-  reference_validation: { status: "passed" | "needs_review"; issue_count: number };
-  created_at: number;
-}
-
-export interface WholeHomeCadReparseSummary extends Record<string, unknown> {
-  last_operation_id?: string;
-  last_candidate_id?: string;
-  last_status?: string;
-  status?: string;
-  stage?: string;
-  progress?: number;
-  candidate_id?: string;
-  error_code?: string;
-  error?: string;
-  last_error?: string | (Record<string, unknown> & { code?: string; message?: string });
-  last_failure?: string | (Record<string, unknown> & { code?: string; message?: string });
-  failure_count?: number;
-  updated_at?: number;
-}
-
-export interface WholeHomeCadSpaceConfirmation extends Record<string, unknown> {
-  status?: string;
-  revision?: number;
-  editor_id?: string;
-  physical_space_count?: number;
-  semantic_zone_count?: number;
-  updated_at?: number;
-}
-
-export interface WholeHomeCadSpaceDraftSummary extends Record<string, unknown> {
-  revision?: number;
-  state_hash?: string;
-  status?: string;
-  space_confirmation?: WholeHomeCadSpaceConfirmation;
-  physical_space_count?: number;
-  semantic_zone_count?: number;
-  reason_codes?: string[];
-  physical_facts_hash?: string;
-  semantic_overlay_hash?: string;
-  space_model_schema_version?: number;
-}
-
-export interface WholeHomeModelSummary extends Record<string, unknown> {
-  wall_count?: number;
-  opening_count?: number;
-  physical_space_count?: number;
-  semantic_zone_count?: number;
-  room_count?: number;
-  capture_count?: number;
-  reference_contract_id?: string;
-}
-
-export interface WholeHomeReferenceSlot {
-  slot_id: string;
-  reference_image_id: string;
-  room_profile: string;
-  focal_length_mm: { min: number; max: number };
-  must_show: string[];
-  hard_constraints: string[];
-  subject_safe_frame_overrides?: Record<string, {
-    x_min: number; x_max: number; y_min: number; y_max: number;
-  }>;
-  reference_asset?: {
-    asset_id?: string;
-    filename?: string;
-    url?: string;
-    sha256?: string;
-    hash?: string;
-    resolved?: boolean;
-    status?: "verified" | "unresolved" | "error" | string;
-    width?: number;
-    height?: number;
-    mime?: string;
-  };
-  reference_asset_hash?: string;
-  reference_viewpoint?: {
-    scene_id: string;
-    scene_name?: string;
-    name?: string;
-    point_mapping_status?: "not_available" | string;
-    point_mapping?: {
-      status: "not_available" | string;
-      coordinate_system?: string;
-      evidence?: string[];
-      uncertainty?: string;
-    };
-    evidence?: Record<string, unknown> | string;
-    landing_policy?: {
-      mode: "cad_semantic_relative_region" | string;
-      anchors?: string[];
-      description?: string;
-      source?: string;
-      relative_landing_rule?: string;
-      yaw?: string;
-    };
-  };
-  must_show_text?: string[];
-  anchor_groups?: Array<{
-    subject: string;
-    roles?: string[];
-    opening_kinds?: string[];
-    exact_count?: number;
-  }>;
-  must_validate?: string[];
-}
-
-export interface WholeHomeReferenceContract {
-  schema_version: number;
-  contract_id: string;
-  title: string;
-  reference_role: string;
-  geometry_authority: "cad" | string;
-  output: {
-    mode: "static" | string;
-    aspect_ratio: "4:3" | string;
-    resolution: "4K" | string;
-    panorama: boolean;
-  };
-  camera: {
-    eye_height_m: { min: number; max: number };
-    focal_length_mm: { min: number; max: number };
-    vertical_deviation_deg_max: number;
-    safe_frame: { x_min: number; x_max: number; y_min: number; y_max: number };
-  };
-  global_hard_constraints: string[];
-  style_contract: Record<string, unknown>;
-  slots: WholeHomeReferenceSlot[];
-}
-
-export interface WholeHomeWall {
-  id: string;
-  wall_assembly_id?: string;
-  start: MetricXZ;
-  end: MetricXZ;
-  thickness_m: number;
-  height_m: number;
-  kind: "exterior" | "interior" | "partition";
-  source: "ai" | "human" | "ai_edited" | "imported" | "cad" | "cad_review_evidence";
-  confidence: number;
-  boundary_kind?: string;
-  review_status?: "needs_review" | "accepted" | "rejected";
-  display_mode?: "review_floor_trace";
-  cad_provenance?: CadProvenance;
-}
-
-export interface WholeHomeGlobalWallFootprint {
-  id: string;
-  points: MetricXZ[];
-  interior_rings: MetricXZ[][];
-  floor_elevation_m: number;
-  height_m: number;
-  source: "cad_global_topology" | string;
-  review_status: "needs_review" | "accepted" | "rejected";
-  source_representation: "global_wall_footprint" | string;
-  source_entity_handles?: string[];
-  cad_provenance?: Record<string, unknown>;
-}
-
-export interface WholeHomeGlobalWallTopology {
-  schema_version: number;
-  method: string;
-  status: string;
-  source_segment_count: number;
-  source_entity_count: number;
-  source_length_m: number;
-  source_coverage_ratio: number;
-  wall_close_radius_m: number;
-  inferred_single_run_width_m: number;
-  topology_close_radius_m: number;
-  wall_footprint_count: number;
-  wall_area_m2: number;
-  wall_component_count: number;
-  wall_interior_ring_count: number;
-  space_candidate_count: number;
-  [key: string]: unknown;
-}
-
-export interface WholeHomeOpening {
-  id: string;
-  wall_id: string;
-  wall_assembly_id?: string;
-  kind: "door" | "window" | "open_connection";
-  offset_m: number;
-  width_m: number;
-  height_m: number;
-  sill_height_m: number;
-  source: "ai" | "human" | "ai_edited" | "imported" | "cad";
-  confidence: number;
-  review_status: "pending" | "accepted" | "rejected";
-  width_source?: string;
-  height_source?: string;
-  sill_height_source?: string;
-  reference_anchor_ready?: boolean;
-  reference_anchor_blockers?: string[];
-  rotation_y_deg?: number;
-  insert_scale?: { x: number; y: number };
-  cad_provenance?: CadProvenance;
-  duplicate_of?: string;
-  opening_deduplication?: {
-    method: string;
-    duplicate_of: string;
-    overlap_m: number;
-    action: string;
-    reason: string;
-  };
-  opening_topology_review?: {
-    method: string;
-    status: "manual_review_required" | string;
-    code?: string;
-    room_ids: string[];
-    room_profiles: string[];
-    samples?: Array<{
-      label: string;
-      along_m: number;
-      negative_room_ids: string[];
-      positive_room_ids: string[];
-      point: MetricXZ;
-    }>;
-    reason: string;
-  };
-}
-
-export interface WholeHomeRoom {
-  id: string;
-  label: string;
-  room_type: string;
-  polygon: MetricXZ[];
-  area_m2: number;
-  floor_elevation_m: number;
-  ceiling_height_m: number;
-  selected: boolean;
-  source: "ai" | "human" | "ai_edited" | "imported" | "cad";
-  confidence: number;
-  semantic_profile: "kitchen" | "bathroom" | "bedroom" | "living_room" | "foyer" | "balcony" | "other";
-  semantic_status: "pending" | "complete" | "needs_review";
-  reference_room_profile?: string;
-  cad_provenance?: CadProvenance;
-}
-
-export interface WholeHomeObject {
-  id: string;
-  name: string;
-  kind: string;
-  position: MetricXYZ;
-  size: MetricXYZ;
-  rotation_y_deg: number;
-  room_id: string;
-  source: "ai" | "human" | "ai_edited" | "imported" | "cad";
-  confidence: number;
-  semantic_role: string;
-  purpose: "observed_architecture" | "layout_proxy";
-  observed: boolean;
-  review_status: "pending" | "accepted" | "rejected";
-  blocks_camera: boolean;
-  required_for_camera: boolean;
-  clearance_m: number;
-  semantic_acceptance?: { method: string; status: string; scope: string; accepted_at: number };
-  cad_provenance?: CadProvenance;
-  size_source?: string;
-  height_source?: string;
-  insert_position?: MetricXYZ;
-  insert_scale?: { x: number; y: number };
-  cad_world_bbox_m?: number[];
-  cad_local_bbox_m?: number[];
-  rotation_source?: string;
-  reference_anchor_ready?: boolean;
-  reference_anchor_blockers?: string[];
-  room_match_ids?: string[];
-}
-
-export interface WholeHomeCamera {
-  id: string;
-  name: string;
-  position: MetricXYZ;
-  target: MetricXYZ;
-  focal_length_mm: number;
-  /** 透视相机缺省;球面热点 capture 时后端按 projection 区分渲染路径。 */
-  projection?: "equirectangular" | "perspective";
-  room_id: string;
-  enabled: boolean;
-  source: "human_3d" | "imported" | "manual" | "auto_geometry" | "ai_selected";
-  auto_plan_id?: string;
-  candidate_id?: string;
-  local_score?: number;
-  selection_score?: number;
-  selection_reason?: string;
-  pool_rank?: 1 | 2 | 3;
-  is_primary?: boolean;
-  origin_scope?: "inside_room" | "adjacent_portal" | "doorway_inside" | "cad_semantic_adjacent_free_space";
-  portal_opening_id?: string;
-  entry_opening_id?: string;
-  reference_slot_id?: string;
-  reference_proposal_id?: string;
-  reference_proposal_hash?: string;
-  scene_recipe_id?: string;
-  scene_hash?: string;
-  reference_contract_validation?: {
-    version: number;
-    slot_id: string;
-    scene_id: string;
-    room_id: string;
-    landing_policy_mode: string;
-    landing_source?: string;
-    yaw_source: string;
-    cad_position_pass: boolean;
-    collision_pass: boolean;
-    visibility_pass: boolean;
-    projection_method: string;
-    width: number;
-    height: number;
-    pixel_origin: "top-left" | string;
-    buffer_sha: string;
-    pixel_gate_version?: string;
-    safe_frame_status: "pending_browser" | "pass" | "blocked" | string;
-    safe_frame_pass: boolean | null;
-    proposal_id?: string;
-    proposal_hash?: string;
-    must_show_subjects: Array<{
-      subject: string;
-      anchor_id: string;
-      anchor_kind: "fixed_object" | "opening" | string;
-      role: string;
-      position?: { x: number; z: number };
-    }>;
-    must_validate: Record<string, boolean>;
-    must_show_bounds: Array<{
-      subject: string;
-      anchor_id?: string;
-      pixel_count?: number;
-      x_min: number;
-      x_max: number;
-      y_min: number;
-      y_max: number;
-    }>;
-  };
-  origin_room_ids?: string[];
-  render_gate?: {
-    version: string;
-    pass: boolean;
-    status: "pass" | "blocked";
-    profile: "kitchen" | "bathroom" | "bedroom" | "living_room" | "foyer" | "balcony" | "other";
-    floor_fraction: number;
-    wall_fraction: number;
-    peak_semantic_role: string;
-    peak_semantic_role_fraction: number;
-    semantic_role_fractions: Record<string, number>;
-    required_groups: Array<{
-      key: string;
-      passed: boolean;
-      roles: string[];
-      minimum_fraction?: number;
-      minimum_count?: number;
-      passing_roles: string[];
-    }>;
-    reasons: string[];
-    denominator_pixels: number;
-    matched_pixels: number;
-    unmatched_pixels: number;
-  };
-}
-
-export interface WholeHomeSubjectIdLegendEntry {
-  subject: string;
-  anchor_id: string;
-  anchor_kind: "fixed_object" | "opening" | string;
-  role: string;
-  color: [number, number, number];
-}
-
-export interface WholeHomeSubjectIdLegend {
-  version: "whole-home-subject-id-v1" | string;
-  pixel_origin: "top-left";
-  subjects: WholeHomeSubjectIdLegendEntry[];
-}
-
-export type WholeHomeCameraRejectionSummary = Record<string, unknown>;
-
-export interface WholeHomeCameraCandidate {
-  candidate_id: string;
-  room_id: string;
-  room_label: string;
-  local_score: number;
-  origin_scope: "inside_room" | "adjacent_portal" | "doorway_inside" | "cad_semantic_adjacent_free_space";
-  portal_opening_id?: string;
-  entry_opening_id?: string;
-  origin_room_ids?: string[];
-  metrics: Record<string, unknown> & { render_gate?: WholeHomeCamera["render_gate"] };
-  camera: WholeHomeCamera;
-  preview_data_url?: string;
-  preview_path?: string;
-  preview_url?: string;
-  slot_id?: string;
-  reference_slot_id?: string;
-  pool_scope?: "reference_slot" | string;
-  proposal_id?: string;
-  proposal_hash?: string;
-  reference_contract_validation?: WholeHomeCamera["reference_contract_validation"];
-}
-
-export interface WholeHomeAutoCameraSelection {
-  candidate_id: string;
-  room_id: string;
-  rank: number;
-  visual_score: number;
-  reason: string;
-  strengths: string[];
-  risks: string[];
-  selection_source: "gemini" | "local_fallback";
-}
-
-export interface WholeHomeAutoCameraPlan {
-  plan_id: string;
-  project_id: string;
-  status: "done";
-  aspect_ratio: "4:3" | "16:9" | "3:4" | "9:16";
-  shots_per_room: 1 | 2;
-  summary: string;
-  ai_model: string;
-  ai_error: string;
-  candidates: WholeHomeCameraCandidate[];
-  contact_sheets: Array<{ room_id: string; room_label: string; path: string; url: string; candidate_ids: string[] }>;
-  selections: WholeHomeAutoCameraSelection[];
-  selected_cameras: WholeHomeCamera[];
-  room_pools: WholeHomeCameraRoomPool[];
-  created_at: number;
-}
-
-export interface WholeHomeCameraRoomPool {
-  room_id: string;
-  room_label: string;
-  status: "ready" | "blocked";
-  reasons: string[];
-  candidate_ids: string[];
-  primary_candidate_id?: string;
-  rejection_summary?: WholeHomeCameraRejectionSummary;
-  slot_id?: string;
-  pool_scope?: "reference_slot" | string;
-  candidates?: WholeHomeCameraCandidate[];
-  hard_errors?: Array<Record<string, unknown> & { code?: string; message?: string }>;
-  focal_samples_mm?: number[];
-  inset_m?: number;
-}
-
-export interface WholeHomeCameraCandidateProposal {
-  status: "ready" | "partial" | "blocked";
-  aspect_ratio: "4:3" | "16:9" | "3:4" | "9:16";
-  candidates: WholeHomeCameraCandidate[];
-  room_pools: WholeHomeCameraRoomPool[];
-  blocked_rooms: WholeHomeCameraRoomPool[];
-  rejection_summary: Record<string, WholeHomeCameraRejectionSummary>;
-  mode?: "room" | "reference";
-  pool_scope?: "reference_slot";
-  contract_id?: string;
-  proposal_id?: string;
-  proposal_hash?: string;
-  project_revision?: number;
-  cad_facts_hash?: string;
-  model_facts_hash?: string;
-  slot_pools?: WholeHomeCameraRoomPool[];
-  hard_errors?: Array<Record<string, unknown> & { code?: string; message?: string }>;
-}
-
-export interface WholeHomeReferenceCaptureBatch {
-  batch_id: string;
-  proposal_id: string;
-  proposal_hash: string;
-  renderer: "numpy_zbuffer_v1" | string;
-  width: number;
-  height: number;
-  saved: Array<{ slot_id: string; candidate_id: string; capture_id: string }>;
-  skipped: Array<{ slot_id: string; reason: string }>;
-  blocked: Array<{
-    slot_id: string;
-    reason: string;
-    attempts: Array<Record<string, unknown> & { candidate_id?: string; pass?: boolean }>;
-  }>;
-  status: "ready" | "partial" | "blocked";
-  paid_calls: 0;
-  created_at: number;
-}
-
-export interface WholeHomeReferenceCaptureBatchResponse {
-  batch: WholeHomeReferenceCaptureBatch;
-  project: WholeHomeProject;
-}
-
-export interface WholeHomeGeometryIssue {
-  code: string;
-  message: string;
-  wall_id?: string;
-  opening_id?: string;
-  room_id?: string;
-  point?: MetricXZ;
-  start?: MetricXZ;
-  end?: MetricXZ;
-  length_m?: number;
-}
-
-export interface WholeHomeGeometryMeshPart {
-  id: string;
-  indices: number[];
-  entity_id?: string;
-  semantic_kind?: string;
-  render_role?: string;
-  source_kind?: string;
-  [key: string]: unknown;
-}
-
-export interface WholeHomeGeometryManifest {
-  version: 1;
-  project_id: string;
-  model_revision: number;
-  model_facts_hash: string;
-  registration_hash: string;
-  geometry_kernel_version: string;
-  units: "meter";
-  coordinate_system: string;
-  vertices: [number, number, number][];
-  wall_parts: WholeHomeGeometryMeshPart[];
-  floor_parts: WholeHomeGeometryMeshPart[];
-  ceiling_parts?: WholeHomeGeometryMeshPart[];
-  object_parts?: WholeHomeGeometryMeshPart[];
-  opening_voids: Array<Record<string, unknown> & { id: string }>;
-  manifest_hash: string;
-}
-
-export interface WholeHomeGeometryContract {
-  required: boolean;
-  input_grade: "vector_authoritative" | "raster_draft" | "raster_human_locked" | "legacy_unproven";
-  registration: Record<string, unknown> & { registration_hash?: string; source_hash?: string };
-  raster_alignment_metrics?: {
-    wall_axis_count?: number;
-    wall_sample_count?: number;
-    wall_ink_support_ratio?: number;
-    wall_centerline_p95_px?: number;
-    wall_centerline_p95_m?: number;
-  };
-  manifest: {
-    manifest_hash: string;
-    model_facts_hash: string;
-    geometry_kernel_version: string;
-    vertex_count: number;
-    wall_part_count: number;
-    floor_part_count: number;
-    opening_void_count: number;
-  };
-  acceptance: Record<string, unknown> & {
-    report_id?: string;
-    report_hash?: string;
-    status?: "passed" | "needs_human_review" | "blocked" | "stale";
-    issues?: Array<Record<string, unknown> & { code: string; message: string; severity: string }>;
-  };
-  production_readiness: {
-    ready: boolean;
-    code: string;
-    input_grade: string;
-    report_status: string;
-    reasons: Array<Record<string, unknown> & { code: string; message: string; severity: string }>;
-  };
-}
-
-export interface WholeHomeModel {
-  schema_version: 2;
-  model_id: string;
-  coordinate_system: "metres-y-up" | "right-handed-y-up-x-east-z-south-v2";
-  coordinate_contract_version?: 2;
-  width_m: number;
-  depth_m: number;
-  wall_height_m: number;
-  wall_thickness_m: number;
-  scale: { status: string; method: string; reference_length_m?: number; evidence?: string };
-  walls: WholeHomeWall[];
-  openings: WholeHomeOpening[];
-  rooms: WholeHomeRoom[];
-  physical_spaces?: WholeHomeCadPhysicalSpace[];
-  semantic_zones?: WholeHomeCadSemanticZone[];
-  fixed_objects: WholeHomeObject[];
-  cameras: WholeHomeCamera[];
-  uncertainties: string[];
-  room_contracts: Array<{
-    room_id: string;
-    profile: string;
-    required_role_groups: string[][];
-    preferred_roles: string[];
-    min_visible_groups: number;
-    source: string;
-    status: "pending" | "complete" | "needs_review" | "blocked";
-    assumptions?: string[];
-    reference_room_profile?: string;
-    missing_role_groups?: string[][];
-  }>;
-  semantic_report: {
-    status: "complete" | "needs_review";
-    hard_errors: Array<{ code: string; message: string; room_id?: string; object_id?: string; opening_id?: string; role_group?: string[] }>;
-    warnings: Array<{ code: string; message: string; room_id?: string; object_id?: string }>;
-    checked_at?: number;
-    audit_passes?: number;
-  };
-  geometry_report: { hard_errors: WholeHomeGeometryIssue[]; warnings: WholeHomeGeometryIssue[]; checked_at?: number; image_alignment_score?: number; audit_passes?: number };
-  cad_facts_hash?: string;
-  cad_to_model?: Record<string, unknown>;
-  model_to_cad?: Record<string, unknown>;
-  reference_anchor_report?: {
-    status: "ready" | "blocked" | string;
-    hard_errors: Array<Record<string, unknown> & { code?: string; message?: string }>;
-    source?: string;
-  };
-  geometry_schema_version?: 3;
-  input_grade?: WholeHomeGeometryContract["input_grade"];
-  model_facts_hash?: string;
-  geometry_manifest?: WholeHomeGeometryManifest;
-  source_registration?: Record<string, unknown>;
-  wall_assemblies?: Array<Record<string, unknown> & { id: string }>;
-  global_wall_footprints?: WholeHomeGlobalWallFootprint[];
-  global_wall_topology?: WholeHomeGlobalWallTopology;
-}
-
-export interface WholeHomeCapture {
-  capture_id: string;
-  camera_id: string;
-  camera: WholeHomeCamera;
-  aspect_ratio: "4:3" | "16:9" | "3:4" | "9:16";
-  rgb_path: string;
-  rgb_url: string;
-  depth_path: string;
-  depth_url: string;
-  normal_path: string;
-  normal_url: string;
-  edge_path: string;
-  edge_url: string;
-  semantic_path: string;
-  semantic_url: string;
-  semantic_legend: Record<string, string>;
-  subject_id_path?: string;
-  subject_id_url?: string;
-  subject_id_legend?: WholeHomeSubjectIdLegend;
-  plan_overlay_path: string;
-  plan_overlay_url: string;
-  room_id: string;
-  plan_id: string;
-  candidate_id: string;
-  reference_slot_id?: string;
-  reference_proposal_id?: string;
-  reference_proposal_hash?: string;
-  scene_recipe_id?: string;
-  scene_hash?: string;
-  pool_rank: 1 | 2 | 3;
-  is_primary: boolean;
-  source_hash: string;
-  status: "confirmed" | "stale";
-  created_at: number;
-}
-
-// ── 定点球面全景(equirectangular / cubemap,文档 §10 数据合同)──────────
-export type PanoProjection = "equirectangular";
-export type PanoCubeFaceOrder = ["+X", "-X", "+Y", "-Y", "+Z", "-Z"];
-
-export interface WholeHomePanoHotspot {
-  pano_id: string;
-  camera: WholeHomeCamera;
-  camera_center_m: MetricXYZ;
-  projection: PanoProjection;
-  canonical_forward: string;
-  heading_deg: number;
-  pitch_deg: number;
-  roll_deg: number;
-  room_id: string;
-  status: "confirmed" | "stale";
-}
-
-export interface WholeHomePanoChannelFiles {
-  rgb_erp?: string;
-  depth_erp?: string;
-  normal_erp?: string;
-  edge_erp?: string;
-  semantic_erp?: string;
-  subject_id_erp?: string;
-  [channel: string]: string | undefined;
-}
-
-export interface WholeHomePanoManifest {
-  schema_version: number;
-  capture_id: string;
-  capture_revision: number;
-  pano_id: string;
-  projection: PanoProjection;
-  coordinate_system: "right-handed-y-up";
-  camera_center_m: MetricXYZ;
-  canonical_forward: string;
-  heading_deg: number;
-  pitch_deg: number;
-  roll_deg: number;
-  horizontal_fov_deg: number;
-  vertical_fov_deg: number;
-  erp_width: number;
-  erp_height: number;
-  cube_face_size: number;
-  cube_face_order: PanoCubeFaceOrder;
-  near_m: number;
-  far_m: number;
-  depth_encoding: "linear_metric_global_range";
-  normal_encoding: "world_space_xyz_to_rgb";
-  model_facts_hash: string;
-  material_graph_hash: string;
-  lighting_hash: string;
-  render_contract: Record<string, unknown>;
-  channels: WholeHomePanoChannelFiles;
-  channel_hashes: Record<string, string>;
-  source_hash: string;
-  scene_recipe_id?: string;
-  scene_hash?: string;
-}
-
-export interface WholeHomePanoCapture {
-  capture_id?: string;
-  capture_revision?: number;
-  active?: boolean;
-  pano_id: string;
-  scene_recipe_id?: string;
-  scene_hash?: string;
-  manifest: WholeHomePanoManifest;
-  rgb_url: string;
-  depth_url: string;
-  normal_url: string;
-  edge_url: string;
-  semantic_url: string;
-  subject_id_url?: string;
-  channel_urls?: Record<string, string>;
-  edited_rgb_url?: string;
-  repaired_rgb_url?: string;
-  edit_engine?: "gpt-image-2" | "flux-canny" | string;
-  status: "confirmed" | "stale" | "superseded" | "editing" | "edited" | "repaired" | "gated" | "gate_failed" | "accepted" | "review_failed";
-  gate?: Record<string, unknown>;
-  edited_at?: number;
-  repaired_at?: number;
-  gated_at?: number;
-  created_at: number;
-}
-
-export interface WholeHomePanoPaidPreview {
-  policy: "pano_paid_preview_v1" | string;
-  preview_id: string;
-  preview_sha256: string;
-  confirmation_phrase: string;
-  project_id: string;
-  pano_id: string;
-  source_hash: string;
-  provider: "fal" | "openai";
-  engine: "gpt-image-2" | "flux-canny" | string;
-  endpoint: string;
-  model_id: string;
-  snapshot_locked: boolean;
-  output_size: string;
-  edit_prompt_sha256: string;
-  repair_band_deg: number;
-  created_at: number;
-  expires_at: number;
-  generation_params?: Record<string, number | string | boolean>;
-  resume_only?: boolean;
-  resume_request_id?: string;
-  caps: { edit_calls: number; repair_calls: number };
-}
-
-export interface WholeHomePanoGate {
-  gate_pass: boolean;
-  full_contract_pass: boolean;
-  gate_level: "p0_rgb_structural" | string;
-  not_evaluable: string[];
-  version: string;
-  hard_fail: boolean;
-  summary: string;
-  failures: string[];
-  checks: Array<Record<string, unknown> & { check_id: string; status: "pass" | "fail" | "skipped" }>;
-}
-
-export interface WholeHomeProfessionalCapabilities {
-  version: 1;
-  product_mode: "raster_first_renovation_sales_proposal";
-  primary_inputs: string[];
-  advanced_inputs: string[];
-  delivery_scope: "marketing_concept_only";
-  human_review_target_minutes: { median: number; p90: number };
-  scene_variants: 3;
-  panorama_target: { minimum: number; maximum: number; width: number; height: number };
-  output_grades: Array<"certified_master" | "ai_enhanced_derivative">;
-  cost_budget_cny: { minimum: number; maximum: number };
-  construction_or_pricing_authority: false;
-  style_packs: Array<Record<string, unknown> & { style_pack_id: string; title: string }>;
-}
-
-export interface WholeHomeFloorplanGraph {
-  version: "floorplan-graph-v1";
-  project_id: string;
-  project_revision: number;
-  coordinate_system: "metres-y-up";
-  plan_plane: "x-z";
-  topdown_camera_contract: { position_axis: "+Y"; view_direction: "-Y"; screen_up: "-Z" };
-  source: { source_type: string; input_grade: string; registration_hash: string; source_hash: string; model_facts_hash: string };
-  extent_m: { width: number; depth: number };
-  walls: Array<{ id: string; start: MetricXZ; end: MetricXZ; thickness_m: number; height_m: number; kind: string }>;
-  rooms: Array<{ id: string; label: string; room_type: string; polygon: MetricXZ[]; area_m2: number; selected: boolean }>;
-  openings: Array<{ id: string; wall_id: string; kind: string; offset_m: number; width_m: number }>;
-  review: { status: "draft" | "reviewed" | "locked"; scale_locked: boolean; geometry_verified: boolean; unresolved_ids: string[]; uncertainties: string[] };
-  graph_hash: string;
-}
-
-export interface WholeHomeConstructionProfile {
-  version: "construction-profile-v1";
-  project_id: string;
-  project_revision: number;
-  status: "assumptions_pending" | "confirmed";
-  fields: Record<string, { value: number; source: string; confirmed: boolean }>;
-  reviewer: string;
-  confirmed_at: number | null;
-  profile_hash: string;
-}
-
-export interface WholeHomeSceneInstance {
-  instance_id: string;
-  asset_id: string;
-  room_id: string;
-  semantic_role: string;
-  transform: {
-    position_m: MetricXYZ;
-    rotation_y_deg: number;
-    scale: [number, number, number];
-  };
-  size_m: { width: number; depth: number; height: number };
-  footprint_m: { width: number; depth: number };
-  placement_source: string;
-}
-
-export interface WholeHomeSceneRecipe {
-  version: "scene-recipe-v1";
-  recipe_id: string;
-  recipe_hash: string;
-  scene_hash: string;
-  project_id: string;
-  project_revision: number;
-  floorplan_graph_hash: string;
-  construction_profile_hash: string;
-  style_pack_id: "modern_warm_natural_v1";
-  variant_index: 1 | 2 | 3;
-  status: "draft" | "reviewed" | "locked" | "superseded";
-  delivery_scope: "marketing_concept_only";
-  instances: WholeHomeSceneInstance[];
-  rooms: Array<{ room_id: string; room_type: string; instance_count: number; blocking_issue_count: number }>;
-  materials: Record<string, string>;
-  lighting: Record<string, string | number>;
-  quality: {
-    status: "passed" | "needs_review";
-    score: number;
-    blocking_issues: Array<Record<string, unknown> & { code: string }>;
-    warnings: Array<Record<string, unknown> & { code: string }>;
-    instance_count: number;
-  };
-  created_at: number;
-  review: { reviewer: string; note: string; reviewed_at: number | null };
-}
-
-export interface WholeHomeMarketingProposal {
-  version: "marketing-proposal-v1";
-  project_id: string;
-  project_revision: number;
-  scene_recipe_id: string;
-  scene_hash: string;
-  status: "draft" | "ready";
-  audience: "renovation_sales_lead";
-  deliverables: {
-    certified_master_panoramas: string[];
-    ai_enhanced_derivatives: string[];
-    required_panorama_count: { minimum: number; maximum: number };
-    hero_stills: string[];
-    tour_manifest: string | null;
-    share_link: string | null;
-    qr_code: string | null;
-  };
-  blockers: string[];
-  disclaimers: string[];
-  proposal_hash: string;
-}
-
-export interface WholeHomeProject {
-  project_id: string;
-  source_type?: "floorplan" | "import" | "cad";
-  status: "queued" | "analyzing" | "parsing_cad" | "needs_review" | "done" | "geometry_accepted" | "verified" | "failed" | "history_restored" | "history_revalidation_required";
-  stage: string;
-  error: string;
-  summary: string;
-  floorplan_path: string;
-  floorplan_url: string;
-  source_analysis_id: string;
-  pano_captures?: WholeHomePanoCapture[];
-  pano_hotspots?: WholeHomePanoHotspot[];
-  cad_path?: string;
-  cad_geometry_read_only?: boolean;
-  cad_source?: {
-    path?: string;
-    name?: string;
-    sha256: string;
-    format: string;
-    version: string;
-    size_bytes?: number;
-    converted_dxf_path?: string;
-  };
-  cad_import?: {
-    schema_version: number;
-    cad_facts_hash: string;
-    cad_to_model: Record<string, unknown>;
-    model_to_cad: Record<string, unknown>;
-    provenance_required: boolean;
-    derivation_coverage_required: number;
-  };
-  cad_ai_advisories?: WholeHomeCadAiAdvisory[];
-  cad_error?: Record<string, unknown> & { code?: string; message?: string };
-  cad_reparse_summary?: WholeHomeCadReparseSummary;
-  cad_space_confirmation?: WholeHomeCadSpaceConfirmation;
-  cad_space_draft?: WholeHomeCadSpaceDraftSummary;
-  model_summary?: WholeHomeModelSummary;
-  cad_candidate_model?: WholeHomeModel;
-  parse_report?: WholeHomeCadParseReport;
-  reference_url?: string;
-  reference_contract?: WholeHomeReferenceContract;
-  model: WholeHomeModel;
-  revision: number;
-  verified: boolean;
-  verified_revision: number;
-  geometry_contract?: WholeHomeGeometryContract;
-  captures: WholeHomeCapture[];
-  auto_camera_plans?: WholeHomeAutoCameraPlan[];
-  reference_camera_proposals?: WholeHomeCameraCandidateProposal[];
-  reference_software_capture_batches?: WholeHomeReferenceCaptureBatch[];
-  learning?: WholeHomeProjectLearning;
-  ai_model: string;
-  created_at: number;
-  updated_at: number;
-  history_read_only?: boolean;
-  history_snapshot_id?: string;
-  lineage?: WholeHomeProjectLineage;
-  generation_draft?: WholeHomeGenerationDraft;
-  construction_profile?: WholeHomeConstructionProfile;
-  scene_recipes?: WholeHomeSceneRecipe[];
-  active_scene_recipe_id?: string;
-  professional_revision?: number;
-  professional?: {
-    product_mode: "raster_first_renovation_sales_proposal";
-    professional_revision: number;
-    construction_profile_status: string;
-    scene_recipe_count: number;
-    active_scene_recipe_id: string;
-    active_scene_status: string;
-    marketing_proposal_status: string;
-  };
-}
-
-export interface WholeHomeProjectLineage {
-  root_project_id: string;
-  parent_project_id: string;
-  source_project_id: string;
-  source_run_id: string;
-  source_snapshot_id: string;
-  source_revision: number;
-  source_model_hash: string;
-  branch_kind: "history_fork";
-  branch_name: string;
-  created_at: number;
-}
-
-export interface WholeHomeGenerationDraft {
-  draft_version: number;
-  source_run_id: string;
-  variant_label: string;
-  style: string;
-  lighting: string;
-  prompt: string;
-  material_mode: "floor_sample";
-  floor_path: string;
-  floor_url?: string;
-  style_ref_path: string;
-  style_ref_url?: string;
-  model_keys: ("b2" | "pro")[];
-  selected_artifact_ids: string[];
-  aspect_ratio: "4:3" | "16:9" | "3:4" | "9:16";
-  resolution: "2K";
-  updated_at: number;
-  last_committed_batch_id: string;
-}
-
-export type WholeHomeHumanReviewStatus = "unreviewed" | "pass" | "backup" | "reject";
-export type WholeHomeRoundStatus = "working" | "awaiting_human_review" | "review_complete" | "review_not_required";
-
-export interface WholeHomeHumanReviewEvent {
-  event_id: string;
-  seq: number;
-  at: number;
-  run_id: string;
-  project_id: string;
-  result_id: string;
-  artifact_id: string;
-  review_status: WholeHomeHumanReviewStatus;
-  review_tags: string[];
-  review_note: string;
-  reviewer_id: string;
-  recipe_path?: string;
-}
-
-export interface WholeHomeReviewableArtifact {
-  artifact_id: string;
-  result_id: string;
-  room_id: string;
-  model_key: "b2" | "pro" | string;
-  attempt_id: string;
-  material_attempt_id: string;
-  path: string;
-  url: string;
-  thumb: string;
-  auto_outcome: string;
-  auto_deliverable: boolean;
-  material_status: string;
-  review_status: WholeHomeHumanReviewStatus;
-  human_review: WholeHomeHumanReviewEvent | null;
-}
-
-export interface WholeHomeReviewState {
-  run_id: string;
-  project_id: string;
-  run_status: string;
-  round_status: WholeHomeRoundStatus;
-  requires_human_review: boolean;
-  reviewable_count: number;
-  pending_count: number;
-  pending_artifact_ids: string[];
-  can_complete: boolean;
-  completed_at: number | null;
-  completion_event_id: string;
-  review_version: number;
-  counts: Record<WholeHomeHumanReviewStatus, number>;
-  reviewables: WholeHomeReviewableArtifact[];
-  event_count: number;
-}
-
-export interface WholeHomeTrainingConsent {
-  schema_version: number;
-  project_id: string;
-  allowed: boolean;
-  updated_at: number | null;
-  updated_by: string;
-  events?: Array<Record<string, unknown>>;
-}
-
-export interface WholeHomeProjectLearning {
-  training_consent: WholeHomeTrainingConsent;
-  counts: Record<WholeHomeHumanReviewStatus, number>;
-  covered_room_ids: string[];
-  uncovered_room_ids: string[];
-  covered_room_count: number;
-  selected_room_count: number;
-}
-
-export interface WholeHomeLearningSummary extends WholeHomeProjectLearning {
-  project_id: string | null;
-  strong_label_count: number;
-  weak_unreviewed_result_count: number;
-  auto_signals: Record<string, number>;
-  by_room: Record<string, Record<WholeHomeHumanReviewStatus, number>>;
-  by_model: Record<string, Record<WholeHomeHumanReviewStatus, number>>;
-  selected_room_ids: string[];
-  run_count: number;
-  workflow_summaries: Array<{
-    workflow_id: string;
-    generation_spec_hash: string;
-    covered_room_ids: string[];
-    covered_room_count: number;
-    latest_created_at: number;
-  }>;
-  active_workflow_id: string | null;
-  active_generation_spec_hash: string | null;
-}
-
-export interface WholeHomeReviewMutationResponse {
-  event: WholeHomeHumanReviewEvent;
-  review_state: WholeHomeReviewState;
-}
-
-export interface WholeHomeEvaluation {
-  status: "done" | "unavailable";
-  phase?: "structure" | "final";
-  geometry_score?: number;
-  camera_score?: number;
-  opening_score?: number;
-  material_score?: number;
-  room_identity_score?: number;
-  fixed_object_score?: number;
-  total: number | null;
-  hard_fail: boolean;
-  verification_incomplete?: boolean;
-  gate_pass?: boolean;
-  eligible_for_recommendation?: boolean;
-  summary: string;
-  checks: Array<{ constraint_id?: string; category?: string; constraint: string; status: "pass" | "fail" | "uncertain"; severity: "hard" | "soft"; evidence: string }>;
-}
-
-export interface WholeHomeQaAttempt {
-  attempt: number;
-  at: number;
-  seconds: number;
-  status: string;
-  error: string;
-}
-
-export interface WholeHomeQaHistoryEntry {
-  batch_id: string;
-  at: number;
-  previous_evaluation?: WholeHomeEvaluation | null;
-  previous_error?: string;
-  attempts?: WholeHomeQaAttempt[];
-}
-
-export interface WholeHomeGenerationTrace {
-  call_id?: string;
-  pass: "structure" | "material" | string;
-  attempt_id?: string;
-  provider: string;
-  model_id?: string;
-  resolution?: string;
-  prompt_sha256?: string;
-  seconds: number;
-  success: boolean;
-  error: string;
-}
-
-export interface WholeHomeLocalGate {
-  version: string;
-  phase: "structure" | "final";
-  status: "done" | "unavailable" | string;
-  verdict: "pass" | "fail";
-  gate_pass: boolean;
-  summary: string;
-  thresholds: Record<string, number>;
-  missing_buffers: string[];
-  invalid_buffers: string[];
-  overlay_path: string;
-  overlay_url?: string;
-  normal_coverage_12?: number | null;
-  normal_mean_distance?: number | null;
-  semantic_coverage_12?: number | null;
-  semantic_mean_distance?: number | null;
-  structure_coverage_12?: number | null;
-  structure_mean_distance?: number | null;
-}
-
-export interface WholeHomeMaterialAttempt {
-  material_attempt_id: string;
-  attempt_index: number;
-  trigger: string;
-  status: string;
-  api_original_path: string;
-  api_original_url?: string;
-  material_path: string;
-  material_url?: string;
-  corrected_path: string;
-  corrected_url?: string;
-  final_path: string;
-  final_url?: string;
-  final_local_gate?: WholeHomeLocalGate | null;
-  evaluation: WholeHomeEvaluation | null;
-  evaluation_error?: string;
-  qa_attempts?: WholeHomeQaAttempt[];
-  trace: WholeHomeGenerationTrace[];
-}
-
-export interface WholeHomeGenerationAttempt {
-  attempt_id: string;
-  attempt_index: number;
-  trigger: "primary" | "primary_repair" | "backup_1" | "backup_2" | string;
-  capture_id: string;
-  camera_id: string;
-  camera_name: string;
-  status: string;
-  structure_path: string;
-  structure_url?: string;
-  structure_local_gate?: WholeHomeLocalGate | null;
-  structure_evaluation: WholeHomeEvaluation | null;
-  structure_evaluation_error?: string;
-  structure_qa_attempts?: WholeHomeQaAttempt[];
-  material_attempts: WholeHomeMaterialAttempt[];
-  trace: WholeHomeGenerationTrace[];
-}
-
-export interface WholeHomeResult {
-  result_id: string;
-  room_id?: string;
-  capture_ids?: string[];
-  capture_id: string;
-  camera_id: string;
-  camera_name: string;
-  model_key: "b2" | "pro";
-  candidate_index: number;
-  status: "queued" | "running" | "done" | "failed";
-  outcome?: "queued" | "structure_running" | "material_running" | "accepted" | "structure_rejected" | "material_rejected" | "qa_unavailable" | "cancelled" | "failed" | string;
-  deliverable?: boolean;
-  selected_attempt_id?: string;
-  stage: string;
-  error: string;
-  path: string;
-  url: string;
-  thumb: string;
-  structure_path: string;
-  structure_url: string;
-  api_original_path?: string;
-  api_original_url?: string;
-  material_path?: string;
-  material_url?: string;
-  corrected_path?: string;
-  corrected_url?: string;
-  final_path: string;
-  final_url: string;
-  evaluation: WholeHomeEvaluation | null;
-  evaluation_error?: string;
-  qa_attempts?: WholeHomeQaAttempt[];
-  qa_history?: WholeHomeQaHistoryEntry[];
-  attempts?: WholeHomeGenerationAttempt[];
-  trace?: WholeHomeGenerationTrace[];
-  seconds?: number;
-}
-
-export interface WholeHomeCaptureGroup {
-  room_id: string;
-  slot_id?: string;
-  primary_capture_id: string;
-  fallback_capture_ids: string[];
-}
-
-export interface WholeHomeRun {
-  run_id: string;
-  project_id: string;
-  status: "queued" | "running" | "done" | "partial" | "failed";
-  stage: string;
-  error: string;
-  floorplan_url: string;
-  floor_url: string;
-  floor_path: string;
-  material_mode?: "floor_sample" | "reference" | "style_pack";
-  scene_recipe_id?: string;
-  scene_hash?: string;
-  scene_recipe_snapshot?: WholeHomeSceneRecipe;
-  reference_contract_id?: string;
-  reference_contract_snapshot?: WholeHomeReferenceContract;
-  benchmark_batch_id?: string;
-  style_ref_url: string;
-  style_ref_path?: string;
-  prompt: string;
-  style: string;
-  lighting: string;
-  model_keys: ("b2" | "pro")[];
-  candidates_per_camera: 1 | 2;
-  capture_groups?: WholeHomeCaptureGroup[];
-  aspect_ratio: "4:3" | "16:9" | "3:4" | "9:16";
-  resolution: "2K" | "4K";
-  estimated_model_calls: number;
-  estimated_minimum_model_calls?: number;
-  estimated_qa_calls?: number;
-  actual_generation_calls?: number;
-  actual_qa_calls?: number;
-  actual_local_gate_calls?: number;
-  successful_generation_calls?: number;
-  review_manifest_path?: string;
-  workflow_id?: string;
-  parent_run_id?: string;
-  variant_group_id?: string;
-  variant_of_run_id?: string;
-  variant_batch_id?: string;
-  variant_label?: string;
-  variant_index?: number;
-  replay_snapshot_ref?: { schema_version: number; snapshot_id: string; snapshot_hash: string };
-  model_revision?: number;
-  model_hash?: string;
-  round_index?: number;
-  human_review?: WholeHomeReviewState;
-  summary_counts?: { processed: number; deliverable: number; rejected: number; failed: number };
-  results: WholeHomeResult[];
-  created_at: number;
-  updated_at: number;
-}
-
-export interface WholeHomeReplayCapability {
-  status: "exact_ready" | "exact_requires_rebind" | "exact_requires_human_revalidation" | "read_only_only";
-  can_view: boolean;
-  can_fork: boolean;
-  blockers: Array<{ code: string; message?: string; role?: string }>;
-}
-
-export interface WholeHomeRunReplay {
-  run: WholeHomeRun;
-  snapshot: {
-    schema_version: number;
-    snapshot_id: string;
-    snapshot_hash: string;
-    source_project_id: string;
-    source_revision: number;
-    source_model_hash: string;
-    source_run_id: string;
-    captured_at: number;
-    asset_manifest: Array<{ role: string; managed_relative_path: string; sha256: string; byte_length: number; available: boolean }>;
-  };
-  history_project: WholeHomeProject;
-  replay_capability: WholeHomeReplayCapability;
-}
-
-export interface WholeHomeHistoryEvent {
-  event_id: string;
-  type: string;
-  occurred_at: number;
-  project_id: string;
-  root_project_id: string;
-  run_id?: string;
-  variant_batch_id?: string;
-  title: string;
-  status: string;
-  summary: string;
-  thumbnail_urls?: string[];
-  model_revision?: number;
-  model_hash?: string;
-  style?: string;
-  lighting?: string;
-  prompt?: string;
-  counts?: Record<string, number>;
-  variant_of_run_id?: string;
-}
-
-export interface WholeHomeProjectHistory {
-  root_project_id: string;
-  selected_project_id: string;
-  branches: Array<{
-    project_id: string;
-    summary: string;
-    status: string;
-    revision: number;
-    verified: boolean;
-    updated_at: number;
-    lineage?: WholeHomeProjectLineage;
-  }>;
-  events: WholeHomeHistoryEvent[];
-  next_cursor: string;
-}
-
-export interface WholeHomeVariantBatchItem {
-  item_id: string;
-  source_artifact_id: string;
-  capture_id: string;
-  camera_name: string;
-  room_id: string;
-  model_key: "b2" | "pro";
-  status: "pending" | "claimed" | "running" | "done" | "failed" | "cancelled" | "needs_reconcile";
-  child_run_id: string;
-  error: string;
-}
-
-export interface WholeHomeVariantBatch {
-  schema_version: number;
-  variant_batch_id: string;
-  project_id: string;
-  source_run_id: string;
-  status: "previewed" | "expired" | "queued" | "running" | "done" | "partial" | "failed" | "cancelled";
-  preview_hash: string;
-  confirmation_phrase?: string;
-  style_spec: {
-    style: string;
-    lighting: string;
-    prompt: string;
-    floor_path: string;
-    style_ref_path: string;
-    aspect_ratio: "4:3" | "16:9" | "3:4" | "9:16";
-    resolution: "2K";
-  };
-  aggregate_caps: { image_calls: number; qa_calls: number; items: number; concurrency: 1 };
-  items: WholeHomeVariantBatchItem[];
-  child_run_ids: string[];
-  counts: Record<string, number>;
-  created_at: number;
-  updated_at: number;
-  expires_at: number;
-  error: string;
-}
-
-export interface WholeHomeManualCapabilities {
-  schema_version: number;
-  mode: string;
-  manual_safe: boolean;
-  manual_paid: boolean;
-  feature_flags: Record<string, boolean>;
-  startup: {
-    authoritative_migration: boolean;
-    interruption_recovery: boolean;
-    autopilot_reconciliation: boolean;
-    single_data_root_owner: boolean;
-  };
-  manual_run_contract: {
-    material_modes: Array<"floor_sample" | "style_pack">;
-    capture_count: 1;
-    fallback_capture_count: 0;
-    model_count: 1;
-    candidates_per_camera: 1;
-    resolution: "2K";
-    image_call_cap: number;
-    qa_call_cap: number;
-    requires_preview: boolean;
-    requires_dynamic_confirmation: boolean;
-  };
-}
-
-export interface WholeHomeManualRunPreview {
-  schema_version: number;
-  preview_id: string;
-  preview_sha256: string;
-  confirmation_phrase: string;
-  expires_at: number;
-  request: Record<string, unknown>;
-  input_manifest: Array<{
-    label: string;
-    path: string;
-    sha256: string;
-    byte_length: number;
-  }>;
-  caps: { image_calls: number; qa_calls: number };
-  paid_enabled: boolean;
-}
 
 export interface Swatch {
   path: string;
@@ -2671,7 +706,7 @@ export interface GenContext {
   ref_path?: string;
   room_url?: string;       // 后端 load 时由 room_path 换算，供前后对比直接用
   image_url?: string;      // 后端 load 时由 image_path 换算，供手动校色参照展示
-  floor_path?: string;     // 球面效果图路线的地板小样字段
+  floor_path?: string;     // 旧记录兼容：生成任务绑定的地板小样
   floor_url?: string;      // 后端 load 时由 floor_path 换算
   model_filter?: ModelFilter;
   model_targets?: ModelKey[];
@@ -2691,96 +726,13 @@ export interface PanoAuditRecordMetadata {
   capture_id?: string;
   source_hash?: string;
   candidate_sha256?: string;
-  projection?: PanoProjection;
+  projection?: "equirectangular";
   erp_width?: number;
   erp_height?: number;
   canonical_forward?: string;
   heading_deg?: number;
-  gate?: WholeHomePanoGate;
+  gate?: Record<string, unknown> & { gate_pass?: boolean; failures?: string[] };
   provider_call?: Record<string, unknown>;
-}
-
-export interface GeometryAuditMetric {
-  metric_id: string;
-  field: string;
-  label: string;
-  actual: number;
-  actual_display: string;
-  operator: ">=" | "<=";
-  threshold: number;
-  threshold_display: string;
-  unit: string;
-  status: "passed" | "failed" | "pending";
-}
-
-export interface GeometryAuditArtifact {
-  artifact_id: string;
-  label: string;
-  file_name: string;
-  media_type: string;
-  size_bytes: number;
-  sha256: string;
-  expected_sha256: string;
-  integrity_status: "passed" | "failed";
-  integrity_problems: string[];
-  available?: boolean;
-  relative_path?: string;
-}
-
-export interface GeometryAuditChannel {
-  channel_id: "cad" | "raster" | string;
-  label: string;
-  status: "passed" | "failed" | "blocked" | "pending";
-  metrics: GeometryAuditMetric[];
-  source_sha256?: string;
-  derived_source_sha256?: string;
-  model_facts_hash?: string;
-  registration_hash?: string;
-  evidence_hash?: string;
-  hard_errors?: unknown[];
-  warning_count?: number;
-}
-
-export interface GeometryAuditMetadata {
-  schema_version: number;
-  publisher_version: string;
-  audit_kind: "plan_to_3d_geometry_gold" | "dwg_live_geometry";
-  level: "L1" | "L2" | "L3" | "L4" | "L5";
-  case_id: string;
-  title: string;
-  status: "passed" | "failed" | "blocked" | "invalidated" | "pending";
-  archived_status?: string;
-  invalidation?: { code: string; message: string; required_schema?: string };
-  executed_at: string;
-  runner_version: string;
-  audit_hash: string;
-  source: {
-    dataset?: string;
-    license?: string;
-    file_name?: string;
-    source_sha256: string;
-    ifcopenshell_version?: string;
-    storey?: { ifc_id?: number; name?: string; elevation_m?: number };
-    counts?: Record<string, number>;
-    coordinate_contract?: Record<string, string>;
-    metadata_unit_scale_to_m?: number;
-    extraction_warnings?: Array<Record<string, unknown>>;
-    raster_variants?: Record<string, Record<string, unknown>>;
-  };
-  channels: GeometryAuditChannel[];
-  artifacts: GeometryAuditArtifact[];
-  integrity: {
-    status: "passed" | "failed";
-    checked_count: number;
-    failures: Array<{ artifact_id: string; problems: string[] }>;
-  };
-  issues: unknown[];
-  review: {
-    checked_metric_ids: string[];
-    reviewer: string;
-    note: string;
-    reviewed_at: string;
-  };
 }
 
 export interface RecordEntry {
@@ -2790,7 +742,6 @@ export interface RecordEntry {
   user_prompt?: string;
   immutable_audit?: boolean;
   pano_audit?: PanoAuditRecordMetadata;
-  geometry_audit?: GeometryAuditMetadata;
   results?: RecordResult[];
   gen_context?: GenContext;
   color_match_ref_url?: string;  // 后端从记录同目录优化图/历史小样解析
@@ -2981,11 +932,6 @@ export interface ColorMatchPreviewView {
 export interface JobColorMatchRequest extends ColorMatchPreviewRequest {
   stage: ModelKey;
 }
-export interface SuiteColorMatchRequest extends ColorMatchPreviewRequest {
-  suite_id: string;
-  room_id: string;
-  result_id: string;
-}
 export interface RecordColorMatchRequest {
   json_path: string;
   record_id: string;
@@ -3042,7 +988,7 @@ export interface InpaintPayload {
   n?: number; // 候选数 1-3（Lightroom 式抽卡；n 张记 n 次费用）
 }
 export interface InpaintTargetPayload {
-  kind: "job" | "record" | "room" | "suite";
+  kind: "job" | "record" | "room";
   jid?: string;
   stage?: ModelKey;
   image_rel?: string;
@@ -3050,8 +996,6 @@ export interface InpaintTargetPayload {
   record_id?: string;
   result_id?: string;
   room_path?: string;
-  suite_id?: string;
-  room_id?: string;
 }
 export interface GenericInpaintRequest extends InpaintPayload {
   target: InpaintTargetPayload;
@@ -3104,7 +1048,6 @@ export interface InpaintApplyResponse {
   path?: string; // target=room：新上传文件
   url?: string;
   thumb?: string;
-  suite?: FloorplanSuite; // target=suite：追加修补候选后的套图快照
 }
 export interface ComfyUIPingView {
   ok: boolean;
@@ -3162,4 +1105,170 @@ export interface FloorVisualizeApplyResponse {
   thumb?: string;
   warnings: string[];
   metadata: Record<string, unknown>;
+}
+
+// ── 全屋设计：户型图 → 正俯视 2.5D 概念图 → Blender Agent 任务包 ──
+export type WholeHomeDesignStatus =
+  | "analyzing_plan"
+  | "needs_plan_review"
+  | "needs_brief"
+  | "ready"
+  | "draft_previewed"
+  | "generating_drafts"
+  | "needs_draft_selection"
+  | "refine_previewed"
+  | "refining"
+  | "needs_structure_review"
+  | "locked"
+  | "interrupted"
+  | "failed"
+  | "cancelled";
+
+export interface DesignPlanRoom {
+  id: string;
+  label: string;
+  room_type: string;
+  coarse_location: string;
+  adjacent_room_ids: string[];
+}
+
+export interface DesignPlanSummary {
+  version: "plan-summary-v1";
+  room_count: number;
+  rooms: DesignPlanRoom[];
+  entrances: string[];
+  openings_summary: string[];
+  wet_zones: string[];
+  balconies: string[];
+  dimension_evidence: string[];
+  must_preserve: string[];
+  uncertainties: string[];
+  source: "gemini" | "human";
+  prompt_version: string;
+}
+
+export interface DesignStructureCheck {
+  check_id: string;
+  status: "pass" | "fail" | "uncertain";
+  evidence: string;
+}
+
+export interface DesignStructureQa {
+  version?: string;
+  status: "not_run" | "manual_required" | "passed" | "failed";
+  hard_fail: boolean;
+  summary?: string;
+  checks: DesignStructureCheck[];
+  provider?: string;
+}
+
+export interface WholeHomeDesignCandidate {
+  candidate_id: string;
+  phase: "draft" | "final";
+  direction_index: number;
+  parent_candidate_id: string;
+  status: "queued" | "running" | "qa_running" | "interrupted" | "done" | "failed" | "cancelled";
+  stage: string;
+  error: string;
+  url: string;
+  thumb: string;
+  provider: "google" | "fal";
+  model_label: string;
+  model_id: string;
+  endpoint: string;
+  resolution: "2K" | "4K";
+  aspect_ratio: string;
+  result_hash: string;
+  image_size: number[];
+  structure_qa: DesignStructureQa;
+  human_review: {
+    status: "pending" | "passed";
+    checks: Record<string, boolean>;
+    reviewer: string;
+    note: string;
+    reviewed_at?: number;
+  };
+  stale: boolean;
+  stale_reason?: string;
+  locked_at?: number;
+  created_at: number;
+}
+
+export interface WholeHomeDesignBundle {
+  bundle_id: string;
+  sha256: string;
+  candidate_id: string;
+  project_revision: number;
+  stale: boolean;
+  stale_reason?: string;
+  created_at: number;
+  download_url: string;
+}
+
+export interface WholeHomeDesignProject {
+  schema_version: "whole-home-design-project-v1";
+  project_id: string;
+  revision: number;
+  status: WholeHomeDesignStatus;
+  stage: string;
+  error: string;
+  source_name: string;
+  source_hash: string;
+  source_url: string;
+  normalized_url: string;
+  normalization: {
+    original_size: number[];
+    cropped_box: number[];
+    content_size: number[];
+    canvas_size: number[];
+    offset: number[];
+    aspect_ratio: string;
+  };
+  plan_summary: DesignPlanSummary;
+  plan_summary_confirmed: boolean;
+  brief: {
+    requirements_text: string;
+    reference_paths: string[];
+    reference_hashes: string[];
+  };
+  brief_hash: string;
+  candidates: WholeHomeDesignCandidate[];
+  bundles: WholeHomeDesignBundle[];
+  locked_candidate_id: string;
+  cancel_requested: boolean;
+  created_at: number;
+  updated_at: number;
+}
+
+export interface WholeHomeDesignPaidPreview {
+  preview_id: string;
+  preview_hash: string;
+  kind: "drafts" | "refine";
+  project_revision: number;
+  provider: "google" | "fal";
+  model_label: string;
+  model_id: string;
+  call_count: number;
+  resolution: "2K" | "4K";
+  aspect_ratio: string;
+  estimated_cost: number | null;
+  confirmation_phrase: string;
+  expires_at: number;
+}
+
+export interface DesignFloorplanUpload {
+  kind: "image" | "pdf";
+  name: string;
+  path: string;
+  url?: string;
+  thumb?: string;
+  pages: Array<{ page: number; path: string; url: string; thumb: string; width: number; height: number }>;
+}
+
+export interface DesignReferenceUpload {
+  name: string;
+  path: string;
+  url: string;
+  thumb: string;
+  sha256: string;
 }

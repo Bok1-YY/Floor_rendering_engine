@@ -5,7 +5,6 @@ import {
   Bookmark,
   Check,
   Columns2,
-  Globe2,
   LoaderCircle,
   Maximize2,
   Paintbrush,
@@ -20,16 +19,7 @@ import {
 import { api } from "@/lib/api";
 import { useJobStream } from "@/hooks/useJobStream";
 import { notifyJobEnd } from "@/lib/notify";
-import type {
-  CandidateGenerationMetadata,
-  JobSlotKey,
-  JobView,
-  ModelKey,
-  ModelRunView,
-  PureRenderPanoramaMeta,
-  RecordResult,
-  ReviewStatus,
-} from "@/lib/types";
+import type { JobView, ModelKey, ModelRunView, RecordResult, ReviewStatus } from "@/lib/types";
 import { toast } from "sonner";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -38,13 +28,6 @@ import { CompareSlider } from "@/components/CompareSlider";
 import { ColorMatchDialog } from "@/components/ColorMatchDialog";
 import { InpaintDialog } from "@/components/InpaintDialog";
 import { FloorVisualizeDialog } from "@/components/FloorVisualizeDialog";
-import PanoramaFloorDialog from "@/components/PanoramaFloorDialog";
-import {
-  PanoramaPaidDialog,
-  PureRenderPanoramaViewerDialog,
-  type PanoramaPaidRequest,
-} from "@/components/PureRenderPanoramaDialogs";
-import { panoramaGateLabel, panoramaGateTone } from "@/lib/pureRenderPano";
 import { cn } from "@/lib/utils";
 
 const BADGE: Record<string, { label: string; color: string; bg: string }> = {
@@ -61,15 +44,7 @@ const actBtn =
 const imageToolBtn =
   "inline-flex h-[30px] items-center justify-center gap-1.5 rounded-lg border border-border bg-card px-2.5 text-[11.5px] font-semibold text-secondary-foreground transition-colors hover:border-primary/35 hover:bg-primary-soft hover:text-accent-foreground";
 
-type SlotView = {
-  idx: number;
-  url: string;
-  thumb: string;
-  metadata?: CandidateGenerationMetadata;
-};
-
-const isGenerationModel = (key: JobSlotKey | undefined): key is ModelKey =>
-  key === "b2" || key === "pro" || key === "sd35";
+type SlotView = { idx: number; url: string; thumb: string };
 
 const resultFileName = (value?: string) => {
   if (!value) return "";
@@ -111,23 +86,12 @@ export function JobCard({
     imageRel: string;
   } | null>(null);
   const [regenN, setRegenN] = useState(1);
-  const [activeModel, setActiveModel] = useState<JobSlotKey>(initial.model_targets?.[0] || "b2");
-  const [candidateCache, setCandidateCache] = useState<Partial<Record<JobSlotKey, SlotView[]>>>({});
+  const [activeModel, setActiveModel] = useState<ModelKey>(initial.model_targets?.[0] || "b2");
+  const [candidateCache, setCandidateCache] = useState<Partial<Record<ModelKey, SlotView[]>>>({});
   const [reviewByUrl, setReviewByUrl] = useState<Record<string, { status: ReviewStatus; favorite: boolean; best: boolean }>>({});
   const [reviewBusy, setReviewBusy] = useState(false);
   // 候选切换的本地覆盖（不影响后端"当前下标"，仅前端浏览）
-  const [view, setView] = useState<Partial<Record<JobSlotKey, SlotView>>>({});
-  const [panoramaPaidRequest, setPanoramaPaidRequest] = useState<PanoramaPaidRequest | null>(null);
-  const [panoramaView, setPanoramaView] = useState<{
-    index: number;
-    url: string;
-    metadata: PureRenderPanoramaMeta;
-  } | null>(null);
-  const [panoramaFloor, setPanoramaFloor] = useState<{
-    index: number;
-    url: string;
-  } | null>(null);
-  const [panoramaResuming, setPanoramaResuming] = useState(false);
+  const [view, setView] = useState<Partial<Record<ModelKey, SlotView>>>({});
 
   const prevStatus = useRef(initial.status);
   const prevOperationStatus = useRef(initial.operation_status);
@@ -162,7 +126,6 @@ export function JobCard({
     }
     prevStatus.current = j.status;
     prevOperationStatus.current = j.operation_status;
-    const previousTotals = JSON.parse(totalsRef.current) as Record<string, number>;
     const totals = JSON.stringify(
       Object.fromEntries(
         Object.entries(j.model_runs || {}).map(([key, run]) => [key, run?.total || 0]),
@@ -171,9 +134,6 @@ export function JobCard({
     if (totals !== totalsRef.current) {
       totalsRef.current = totals;
       setView({});
-      if ((j.model_runs.vr360?.total || 0) > (previousTotals.vr360 || 0)) {
-        setActiveModel("vr360");
-      }
     }
     setJob(j);
   }, []);
@@ -206,29 +166,6 @@ export function JobCard({
     }
   }
 
-  async function resumePanoramaResult() {
-    const recovery = job.panorama_resume;
-    if (!recovery || panoramaResuming) return;
-    setPanoramaResuming(true);
-    try {
-      const restored = recovery.route === "direct_cubemap_atlas"
-        ? await api.commitDirectPanorama({
-            preview_id: recovery.preview_id,
-            preview_hash: recovery.preview_hash,
-          })
-        : await api.commitJobPanorama(job.job_id, {
-            preview_id: recovery.preview_id,
-            preview_hash: recovery.preview_hash,
-          });
-      applySnapshot(restored);
-      toast.success("正在恢复已有 Fal 结果，不会重新提交生图");
-    } catch (error) {
-      toast.error((error as Error).message);
-    } finally {
-      setPanoramaResuming(false);
-    }
-  }
-
   async function remove() {
     try {
       await api.deleteJob(job.job_id);
@@ -238,19 +175,33 @@ export function JobCard({
     }
   }
 
+  async function nav(model: ModelKey, delta: number) {
+    const run = job.model_runs?.[model];
+    const total = run?.total || 0;
+    if (total <= 1) return;
+    const cur = view[model]?.idx ?? run?.idx ?? 0;
+    const next = Math.max(0, Math.min(cur + delta, total - 1));
+    if (next === cur && view[model]) return;
+    try {
+      const r = await api.jobResult(job.job_id, model, next);
+      setView((v) => ({ ...v, [model]: { idx: r.idx, url: r.url, thumb: r.thumb } }));
+    } catch (e) {
+      toast.error((e as Error).message);
+    }
+  }
+
   const b = BADGE[job.status] ?? BADGE.queued;
 
   const slots: {
-    key: JobSlotKey;
+    key: ModelKey;
     name: string;
     url: string;
     thumb: string;
     idx: number;
     total: number;
     run: ModelRunView;
-    metadata?: CandidateGenerationMetadata;
   }[] = [];
-  for (const key of job.model_targets || (["b2", "pro"] as JobSlotKey[])) {
+  for (const key of job.model_targets || (["b2", "pro"] as ModelKey[])) {
     const run = job.model_runs?.[key];
     if (!run?.url) continue;
     const ov = view[key];
@@ -262,7 +213,6 @@ export function JobCard({
       idx: ov?.idx ?? run.idx,
       total: run.total,
       run,
-      metadata: ov?.metadata ?? run.candidates?.find((candidate) => candidate.idx === (ov?.idx ?? run.idx))?.metadata,
     });
   }
 
@@ -280,7 +230,6 @@ export function JobCard({
           idx: result.idx,
           url: result.url,
           thumb: result.thumb,
-          metadata: result.metadata,
         })),
       ),
     ).then((items) => {
@@ -369,14 +318,6 @@ export function JobCard({
     !active &&
     (job.status === "done" || job.status === "partial" || job.status === "failed");
   const isFree = job.workflow_mode.includes("自由创作");
-  const isPureRender = job.workflow_mode.includes("纯效果图");
-  const activePanorama = activeSlot?.metadata?.panorama;
-  const activeEngineLabel = activePanorama?.engine_label
-    ? String(activePanorama.engine_label)
-    : activeSlot?.metadata?.engine_label
-      ? String(activeSlot.metadata.engine_label)
-      : "";
-  const activeGenerationKey = isGenerationModel(activeSlot?.key) ? activeSlot.key : null;
 
   // 前后对比：仅替换类工作流有房间原图（room_url）；效果图优先取当前浏览中的 Pro 候选，无 Pro 用 B2
   const compareAfter =
@@ -385,15 +326,6 @@ export function JobCard({
     ? reviewByUrl[activeUrl] || { status: "unreviewed" as ReviewStatus, favorite: false, best: false }
     : { status: "unreviewed" as ReviewStatus, favorite: false, best: false };
   const activeCandidates = activeKey ? candidateCache[activeKey] || [] : [];
-
-  function openActivePanorama() {
-    if (!activeSlot || activeSlot.key !== "vr360" || !activePanorama) return;
-    setPanoramaView({
-      index: activeSlot.idx,
-      url: activeSlot.url,
-      metadata: activePanorama,
-    });
-  }
 
   return (
     <div className="animate-scfade rounded-[16px] border border-border bg-card p-[15px] shadow-[0_6px_22px_rgba(120,90,60,.07)] dark:shadow-[0_6px_22px_rgba(0,0,0,.3)]">
@@ -447,25 +379,6 @@ export function JobCard({
         </div>
       )}
 
-      {!active && job.panorama_resume && (
-        <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2 rounded-[9px] border border-amber-200 bg-amber-50 px-[11px] py-[9px] text-[11.5px] text-amber-950">
-          <span>
-            {(job.model_runs.vr360?.total || 0) > 0
-              ? "另有一个已付费 Fal 结果可以恢复；恢复不会创建新的生图请求。"
-              : "Fal 已有请求句柄，可重新下载并继续本地全景处理；不会创建新的付费生成。"}
-          </span>
-          <button
-            type="button"
-            disabled={panoramaResuming}
-            onClick={() => void resumePanoramaResult()}
-            className="inline-flex h-8 flex-none items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 font-bold text-amber-950 hover:bg-amber-100 disabled:opacity-60"
-          >
-            {panoramaResuming ? <LoaderCircle size={13} className="animate-dc-spin" /> : <RefreshCw size={13} />}
-            {(job.model_runs.vr360?.total || 0) > 0 ? "恢复另一个 Fal 结果" : "恢复已有 Fal 结果"}
-          </button>
-        </div>
-      )}
-
       {active && slots.length === 0 && (
         <div className="mt-[11px] grid grid-cols-2 gap-2.5">
           {(job.model_targets || ["b2", "pro"]).map((key) => {
@@ -502,16 +415,11 @@ export function JobCard({
             ))}
           </div>
 
-          <div className={cn(
-            "relative mt-2.5 cursor-zoom-in overflow-hidden rounded-[11px] border border-border bg-muted",
-            activeSlot.key === "vr360" ? "aspect-[2/1]" : "aspect-[4/3]",
-          )}>
+          <div className="relative mt-2.5 aspect-[4/3] cursor-zoom-in overflow-hidden rounded-[11px] border border-border bg-muted">
             <img
               src={api.imgUrl(activeSlot.thumb)}
               alt={activeSlot.name}
-              onClick={() => activeSlot.key === "vr360"
-                ? openActivePanorama()
-                : setZoom(api.imgUrl(activeSlot.url))}
+              onClick={() => setZoom(api.imgUrl(activeSlot.url))}
               className="absolute inset-0 h-full w-full object-cover"
             />
             {activeSlot.run.auto_color_status === "done" && (
@@ -529,30 +437,13 @@ export function JobCard({
                 {activeReview.status === "pass" ? "通过" : activeReview.status === "backup" ? "备选" : "淘汰"}
               </span>
             )}
-            {activeSlot.key === "vr360" && activePanorama && (
-              <span className={cn(
-                "absolute bottom-2 right-2 rounded-full px-2.5 py-1 text-[10.5px] font-bold",
-                panoramaGateTone(activePanorama.gate?.status),
-              )}>
-                {panoramaGateLabel(activePanorama.gate?.status)}
-              </span>
-            )}
           </div>
 
           <div className="mt-2 flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
-            <span>
-              {activeSlot.idx + 1} / {activeSlot.total}
-              {activeEngineLabel ? ` · ${activeEngineLabel}` : ""}
-            </span>
-            {activeSlot.key === "vr360" ? (
-              <button type="button" onClick={openActivePanorama} className="inline-flex items-center gap-1 font-semibold hover:text-foreground">
-                <Globe2 size={12} />360°查看
-              </button>
-            ) : (
-              <a href={api.imgUrl(activeSlot.url)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold hover:text-foreground">
-                <Maximize2 size={12} />大图
-              </a>
-            )}
+            <span>{activeSlot.idx + 1} / {activeSlot.total}</span>
+            <a href={api.imgUrl(activeSlot.url)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-semibold hover:text-foreground">
+              <Maximize2 size={12} />大图
+            </a>
           </div>
 
           {activeCandidates.length > 1 && (
@@ -562,9 +453,6 @@ export function JobCard({
                   key={`${activeSlot.key}-${candidate.idx}`}
                   type="button"
                   onClick={() => setView((state) => ({ ...state, [activeSlot.key]: candidate }))}
-                  title={candidate.metadata?.engine_label
-                    ? String(candidate.metadata.engine_label)
-                    : `${activeSlot.name} 候选 ${candidate.idx + 1}`}
                   className={cn(
                     "relative size-[52px] flex-none overflow-hidden rounded-lg border-2",
                     candidate.idx === activeSlot.idx ? "border-primary" : "border-transparent opacity-75 hover:opacity-100",
@@ -576,7 +464,7 @@ export function JobCard({
             </div>
           )}
 
-          {terminal && activeSlot.key !== "vr360" && (
+          {terminal && (
             <div className="mt-2.5 grid grid-cols-4 gap-1.5 border-t border-border/70 pt-2.5">
               {([
                 ["pass", "通过", Check],
@@ -619,50 +507,158 @@ export function JobCard({
           )}
 
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {terminal && activeGenerationKey && job.floor_path && activeSlot.url.startsWith("/outputs/") && (
-              <button className={imageToolBtn} onClick={() => setFloorVisualize({ stage: activeGenerationKey, srcUrl: activeSlot.url, imageRel: activeSlot.url.slice("/outputs/".length) })}>
+            {terminal && job.floor_path && activeSlot.url.startsWith("/outputs/") && (
+              <button className={imageToolBtn} onClick={() => setFloorVisualize({ stage: activeSlot.key, srcUrl: activeSlot.url, imageRel: activeSlot.url.slice("/outputs/".length) })}>
                 <Columns2 size={13} />贴地板
               </button>
             )}
-            {terminal && activeGenerationKey && activeSlot.url.startsWith("/outputs/") && (
-              <button className={imageToolBtn} onClick={() => setInpaint({ stage: activeGenerationKey, srcUrl: activeSlot.url, imageRel: activeSlot.url.slice("/outputs/".length) })}>
+            {terminal && activeSlot.url.startsWith("/outputs/") && (
+              <button className={imageToolBtn} onClick={() => setInpaint({ stage: activeSlot.key, srcUrl: activeSlot.url, imageRel: activeSlot.url.slice("/outputs/".length) })}>
                 <Paintbrush size={13} />修补
               </button>
             )}
-            {terminal && activeGenerationKey && job.floor_url && activeSlot.url.startsWith("/outputs/") && (
-              <button className={imageToolBtn} onClick={() => setColorMatch({ stage: activeGenerationKey, srcUrl: activeSlot.url, imageRel: activeSlot.url.slice("/outputs/".length) })}>
+            {terminal && job.floor_url && activeSlot.url.startsWith("/outputs/") && (
+              <button className={imageToolBtn} onClick={() => setColorMatch({ stage: activeSlot.key, srcUrl: activeSlot.url, imageRel: activeSlot.url.slice("/outputs/".length) })}>
                 <Palette size={13} />校色
               </button>
             )}
-            {terminal && isPureRender && activeGenerationKey && activeSlot.url.startsWith("/outputs/") && (
-              <button
-                className={imageToolBtn}
-                onClick={() => setPanoramaPaidRequest({
-                  action: "generate",
-                  source_model: activeGenerationKey,
-                  source_index: activeSlot.idx,
-                })}
-              >
-                <Globe2 size={13} />生成 360° VR
-              </button>
-            )}
-            {terminal && activeSlot.key === "vr360" && activePanorama && (
-              <>
-                <button className={imageToolBtn} onClick={openActivePanorama}>
-                  <Globe2 size={13} />360°查看
-                </button>
-                {job.floor_path && job.floor_url && (
-                  <button className={imageToolBtn}
-                    onClick={() => setPanoramaFloor({ index: activeSlot.idx, url: activeSlot.url })}>
-                    <Columns2 size={13} />本地几何/地板校准
-                  </button>
-                )}
-                <a href={api.imgUrl(activeSlot.url)} target="_blank" rel="noreferrer" className={imageToolBtn}>
-                  <Maximize2 size={13} />原始 2:1
-                </a>
-              </>
-            )}
           </div>
+        </div>
+      )}
+
+      {false && slots.length > 0 && (
+        <div className="mt-[11px] grid grid-cols-1 gap-[9px]">
+          {slots.map((m) => (
+            <div key={m.key}>
+              <div className="relative aspect-[4/3] cursor-zoom-in overflow-hidden rounded-[10px] border border-border">
+                <img
+                  src={api.imgUrl(m.thumb)}
+                  alt={m.name}
+                  onClick={() => setZoom(api.imgUrl(m.url))}
+                  className="absolute inset-0 h-full w-full object-cover"
+                />
+                <span className="absolute left-[7px] top-[7px] rounded-md bg-[rgba(26,24,21,.55)] px-[7px] py-[2px] text-[10px] font-bold text-white backdrop-blur-[2px]">
+                  {m.name}
+                </span>
+              </div>
+              <div className="mt-2 flex items-center justify-between text-[11.5px] text-muted-foreground">
+                <span className="flex items-center gap-1">
+                  {m.name}
+                  {m.total > 1 && (
+                    <>
+                      <button
+                        onClick={() => nav(m.key, -1)}
+                        disabled={m.idx <= 0}
+                        className="rounded px-1 hover:bg-accent disabled:opacity-30"
+                      >
+                        ‹
+                      </button>
+                      <span>
+                        {m.idx + 1}/{m.total}
+                      </span>
+                      <button
+                        onClick={() => nav(m.key, 1)}
+                        disabled={m.idx >= m.total - 1}
+                        className="rounded px-1 hover:bg-accent disabled:opacity-30"
+                      >
+                        ›
+                      </button>
+                    </>
+                  )}
+                </span>
+                <a
+                  href={api.imgUrl(m.url)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-semibold hover:text-foreground"
+                >
+                  查看大图 ↗
+                </a>
+              </div>
+              <div className="mt-2 flex flex-wrap items-center gap-1.5 border-t border-border/70 pt-2">
+                  {terminal && job.floor_path && m.url.startsWith("/outputs/") && (
+                    <button
+                      title={`把原始地板小样确定性投影到这张 ${m.name} 图`}
+                      onClick={() =>
+                        setFloorVisualize({
+                          stage: m.key,
+                          srcUrl: m.url,
+                          imageRel: m.url.slice("/outputs/".length),
+                        })
+                      }
+                      className={imageToolBtn}
+                    >
+                      <Columns2 size={13} /> 贴地板
+                    </button>
+                  )}
+                  {terminal && m.url.startsWith("/outputs/") && (
+                    <button
+                      title={`对这张 ${m.name} 图做生成式修补（画笔涂抹移除/添加物体）`}
+                      onClick={() =>
+                        setInpaint({
+                          stage: m.key,
+                          srcUrl: m.url,
+                          imageRel: m.url.slice("/outputs/".length),
+                        })
+                      }
+                      className={imageToolBtn}
+                    >
+                      <Paintbrush size={13} /> 智能修补
+                    </button>
+                  )}
+                  {terminal && job.floor_url && m.url.startsWith("/outputs/") && (
+                    <button
+                      title={`对这张 ${m.name} 图做手动校色（以地板小样为参照）`}
+                      onClick={() =>
+                        setColorMatch({
+                          stage: m.key,
+                          srcUrl: m.url,
+                          imageRel: m.url.slice("/outputs/".length),
+                        })
+                      }
+                      className={imageToolBtn}
+                    >
+                      <Palette size={13} /> 校色
+                    </button>
+                  )}
+                  {m.run.api_original_url && (
+                    <a
+                      href={api.imgUrl(m.run.api_original_url)}
+                      target="_blank"
+                      rel="noreferrer"
+                      title="未经本地自动校色的 API 返回原图"
+                      className={imageToolBtn}
+                    >
+                      API 原图 ↗
+                    </a>
+                  )}
+              </div>
+              {m.run.auto_color_status === "done" && (
+                <div className="mt-2 rounded-lg bg-primary-soft px-2.5 py-1.5 text-[11px] font-semibold text-success">
+                  已自动校色 · API 原图已保留为候选
+                </div>
+              )}
+              {m.run.auto_color_status === "failed" && (
+                <div
+                  className="mt-2 rounded-lg bg-warn-soft px-2.5 py-1.5 text-[11px] font-semibold text-warn"
+                  title={m.run.auto_color_error}
+                >
+                  自动校色未完成，当前保留 API 原图
+                </div>
+              )}
+              {m.key === "sd35" && (
+                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[10.5px] text-muted-foreground">
+                  {m.run.seed != null && <span>Seed {m.run.seed}</span>}
+                  {m.run.delivery_status && <span>交付：{m.run.delivery_status}</span>}
+                  {m.run.base_url && m.run.base_url !== m.url && (
+                    <a href={api.imgUrl(m.run.base_url)} target="_blank" rel="noreferrer" className="hover:text-foreground">
+                      ↗ 1MP 基础图
+                    </a>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
 
@@ -759,68 +755,6 @@ export function JobCard({
           </button>
         )}
       </div>
-
-      {panoramaPaidRequest && (
-        <PanoramaPaidDialog
-          open
-          onOpenChange={(open) => !open && setPanoramaPaidRequest(null)}
-          jobId={job.job_id}
-          request={panoramaPaidRequest}
-          onCommitted={(snapshot) => {
-            applySnapshot(snapshot);
-            setView({});
-          }}
-        />
-      )}
-
-      {panoramaView && (
-        <PureRenderPanoramaViewerDialog
-          open={!!panoramaView}
-          onOpenChange={(open) => !open && setPanoramaView(null)}
-          jobId={job.job_id}
-          panoramaIndex={panoramaView.index}
-          erpUrl={panoramaView.url}
-          metadata={panoramaView.metadata}
-          onSnapshot={(snapshot) => {
-            applySnapshot(snapshot);
-            const candidate = snapshot.model_runs.vr360?.candidates?.find(
-              (item) => item.idx === panoramaView.index,
-            );
-            if (candidate?.metadata?.panorama) {
-              setPanoramaView({
-                index: candidate.idx,
-                url: candidate.url,
-                metadata: candidate.metadata.panorama,
-              });
-            }
-          }}
-          onRequestRepair={(panoramaIndex) => {
-            setPanoramaView(null);
-            setPanoramaPaidRequest({ action: "repair", panorama_index: panoramaIndex });
-          }}
-          onRequestFloorCorrection={(panoramaIndex) => {
-            setPanoramaView(null);
-            setPanoramaFloor({ index: panoramaIndex, url: panoramaView.url });
-          }}
-        />
-      )}
-
-      {panoramaFloor && (
-        <PanoramaFloorDialog
-          open
-          onOpenChange={(next) => !next && setPanoramaFloor(null)}
-          jobId={job.job_id}
-          panoramaIndex={panoramaFloor.index}
-          erpUrl={panoramaFloor.url}
-          textureUrl={job.floor_url}
-          onDone={(snapshot) => {
-            if (snapshot) {
-              applySnapshot(snapshot);
-              setView({});
-            }
-          }}
-        />
-      )}
 
       <ImageZoom url={zoom} onClose={() => setZoom(null)} />
 

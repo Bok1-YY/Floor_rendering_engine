@@ -23,7 +23,6 @@ import { OutputForm } from "@/components/OutputForm";
 import { GenerateStepCard } from "@/components/GenerateStepCard";
 import { JobCard } from "@/components/JobCard";
 import { ImageZoom } from "@/components/ImageZoom";
-import { DirectPanoramaPaidDialog } from "@/components/PureRenderPanoramaDialogs";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { SectionHeader, Segmented, Pill } from "@/components/dc-ui";
 import { loadDraft, saveDraft, takeReuseRequest } from "@/lib/draft";
@@ -130,7 +129,6 @@ export default function GeneratePage() {
   const [jobsLoaded, setJobsLoaded] = useState(false);
   const [openStep, setOpenStep] = useState<0 | 1 | 2 | 3>(2);
   const [submitting, setSubmitting] = useState(false);
-  const [directPaidOpen, setDirectPaidOpen] = useState(false);
   const [batchOpen, setBatchOpen] = useState(false);
   const [batchTab, setBatchTab] = useState<"rooms" | "floors">("rooms");
   const [batchRooms, setBatchRooms] = useState<string[]>([]);
@@ -335,7 +333,6 @@ export default function GeneratePage() {
   async function generate() {
     if (submitLock.current) return;
     const isFree = params.workflow_mode.includes("自由创作");
-    const isSphere = params.workflow_mode.includes("球面效果图");
     if (isFree && !freePrompt.trim()) {
       toast.warning("请先输入自由指令词");
       return;
@@ -348,7 +345,7 @@ export default function GeneratePage() {
       toast.warning("请先上传地板图");
       return;
     }
-    if (!isSphere && modelTargets.length === 0) {
+    if (modelTargets.length === 0) {
       toast.warning("请至少选择一个生图模型");
       return;
     }
@@ -356,7 +353,7 @@ export default function GeneratePage() {
       toast.warning("自由创作请至少选择 B2 或 Pro");
       return;
     }
-    if (!isSphere && modelTargets.includes("sd35") && !params.workflow_mode.includes("纯效果图")) {
+    if (modelTargets.includes("sd35") && !params.workflow_mode.includes("纯效果图")) {
       toast.warning("SD 3.5 当前仅支持纯效果图工作流");
       return;
     }
@@ -376,11 +373,6 @@ export default function GeneratePage() {
       const sub = params.panel_submode || "再设计";
       if (sub.includes("替换") && !roomImg) { toast.warning("墙板替换需上传原墙板场景图"); return; }
       if (sub.includes("再设计") && !refImg) { toast.warning("墙板再设计需上传场景参照图"); return; }
-    }
-    if (isSphere) {
-      requestNotifyPermission();
-      setDirectPaidOpen(true);
-      return;
     }
     submitLock.current = true;
     requestNotifyPermission();
@@ -655,7 +647,6 @@ export default function GeneratePage() {
 
   const total = jobs.length;
   const isFreeMode = params.workflow_mode.includes("自由创作");
-  const isSphereMode = params.workflow_mode.includes("球面效果图");
   const activeCount = jobs.filter(
     (j) =>
       j.status === "queued" ||
@@ -672,11 +663,9 @@ export default function GeneratePage() {
       : options.room_types
     : [];
 
-  const outputLabel = isSphereMode
-    ? "B2 + GPT Image 2"
-    : modelTargets
-        .map((key) => ({ b2: "B2", pro: "Pro", sd35: "SD 3.5" })[key])
-        .join(" + ");
+  const outputLabel = modelTargets
+    .map((key) => ({ b2: "B2", pro: "Pro", sd35: "SD 3.5" })[key])
+    .join(" + ");
 
   return (
     <div className="flex h-full min-w-0 overflow-hidden">
@@ -810,7 +799,7 @@ export default function GeneratePage() {
                   isFreeMode ? `${freeImages.length} 张素材` : params.cn_mode ? params.cn_room_type : params.room_type,
                   params.style_type,
                   params.lighting,
-                  isSphereMode ? "同球心六面" : params.angle,
+                  params.angle,
                 ].filter(Boolean).map((value) => cleanLabel(String(value).split(" (")[0])).join(" · ")}
                 open={openStep === 2}
                 complete={isFreeMode ? !!freePrompt.trim() && freeImages.length > 0 : true}
@@ -833,11 +822,9 @@ export default function GeneratePage() {
               <GenerateStepCard
                 step={3}
                 title="输出"
-                summary={isSphereMode
-                  ? "B2 + GPT Image 2 · 3×2 六面图集 · 3840×1920 ERP"
-                  : `${outputLabel || "未选择模型"} · ${params.resolution || options.resolutions[0]} · ${(params.aspect_ratio || options.aspect_ratios[0]).split(" (")[0]}`}
+                summary={`${outputLabel || "未选择模型"} · ${params.resolution || options.resolutions[0]} · ${(params.aspect_ratio || options.aspect_ratios[0]).split(" (")[0]}`}
                 open={openStep === 3}
-                complete={isSphereMode || modelTargets.length > 0}
+                complete={modelTargets.length > 0}
                 onToggle={() => setOpenStep((step) => step === 3 ? 0 : 3)}
               >
                 <OutputForm
@@ -869,9 +856,9 @@ export default function GeneratePage() {
             className="flex h-[46px] flex-1 items-center justify-center gap-2 rounded-xl bg-primary text-[14.5px] font-bold text-primary-foreground shadow-[0_6px_16px_rgba(193,95,60,.32)] transition hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
           >
             <Sparkles size={18} strokeWidth={2.2} />
-            {submitting ? "提交中…" : isFreeMode ? "生成图片" : isSphereMode ? "生成球面 VR" : "生成效果图"}
+            {submitting ? "提交中…" : isFreeMode ? "生成图片" : "生成效果图"}
           </button>
-          {!isFreeMode && !isSphereMode && (<>
+          {!isFreeMode && (<>
           <button
             onClick={runPreview}
             disabled={!floor || previewOpen}
@@ -897,11 +884,9 @@ export default function GeneratePage() {
           </>)}
           </div>
           <div className="truncate text-center text-[11px] text-muted-foreground">
-            {isSphereMode
-              ? "先确认 B2 + GPT Image 2 两次付费调用，再自动拆六面并合成 360° VR"
-              : params.workflow_mode.includes("Omakase")
-                ? "Omakase 可按同一场景批量替换多块地板"
-                : `${outputLabel || "选择模型"} 并行 · 正式出图速度取决于所选 API · 1K 预览通常更快`}
+            {params.workflow_mode.includes("Omakase")
+              ? "Omakase 可按同一场景批量替换多块地板"
+              : `${outputLabel || "选择模型"} 并行 · 正式出图速度取决于所选 API · 1K 预览通常更快`}
           </div>
         </div>
       </section>
@@ -1170,20 +1155,6 @@ export default function GeneratePage() {
           </div>
         </DialogContent>
       </Dialog>
-
-      {directPaidOpen && floor && (
-        <DirectPanoramaPaidDialog
-          open
-          onOpenChange={setDirectPaidOpen}
-          imagePath={floor.path}
-          roomReferencePath={roomImg?.path || ""}
-          params={params}
-          onCommitted={(job) => {
-            setJobs((current) => [job, ...current.filter((row) => row.job_id !== job.job_id)]);
-            setDirectPaidOpen(false);
-          }}
-        />
-      )}
 
       {/* 快速预览（NB2 Lite · 1K） */}
       <Dialog open={previewOpen} onOpenChange={closePreview}>
