@@ -104,10 +104,19 @@ export const api = {
     jget<WholeHomeDesignProject>(`/api/whole-home-design/projects/${encodeURIComponent(id)}`),
   saveWholeHomeDesignPlanSummary: (id: string, body: {
     base_revision: number; room_count: number; rooms: import("./types").DesignPlanRoom[];
+    declared_layout: import("./types").DesignPlanSummary["declared_layout"];
+    declared_area_m2: number;
+    overall_dimensions_mm: import("./types").DesignPlanSummary["overall_dimensions_mm"];
+    summary_confidence: number;
+    review_items: import("./types").DesignPlanSummary["review_items"];
+    annotation_boxes: import("./types").DesignPlanSummary["annotation_boxes"];
     entrances: string[]; openings_summary: string[]; wet_zones: string[]; balconies: string[];
     dimension_evidence: string[]; must_preserve: string[]; uncertainties: string[]; confirmed: boolean;
   }) => jsend<WholeHomeDesignProject>(
     `/api/whole-home-design/projects/${encodeURIComponent(id)}/plan-summary`, "PUT", body),
+  analyzeWholeHomeDesignPlan: (id: string, base_revision: number) =>
+    jsend<WholeHomeDesignProject>(
+      `/api/whole-home-design/projects/${encodeURIComponent(id)}/analyze-plan`, "POST", { base_revision }),
   saveWholeHomeDesignBrief: (id: string, body: {
     base_revision: number; requirements_text: string; reference_paths: string[];
   }) => jsend<WholeHomeDesignProject>(
@@ -130,7 +139,7 @@ export const api = {
     `/api/whole-home-design/projects/${encodeURIComponent(id)}/candidates/${encodeURIComponent(candidateId)}/refine/commit`,
     "POST", body),
   reviewWholeHomeDesignStructure: (id: string, candidateId: string, body: {
-    base_revision: number; checks: Record<string, boolean>; reviewer: string; note: string;
+    base_revision: number; checks: Record<string, boolean>; decision: "pass" | "fail"; reviewer: string; note: string;
   }) => jsend<WholeHomeDesignProject>(
     `/api/whole-home-design/projects/${encodeURIComponent(id)}/candidates/${encodeURIComponent(candidateId)}/structure-review`,
     "PUT", body),

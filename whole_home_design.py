@@ -23,7 +23,9 @@ from copy import deepcopy
 from typing import Any, Callable, Iterable, Optional
 
 import requests
-from PIL import Image, ImageChops, ImageOps
+import cv2
+import numpy as np
+from PIL import Image, ImageChops, ImageDraw, ImageOps
 
 from .api import (
     _call_fal_queue_json,
@@ -151,15 +153,15 @@ def _brief_hash(project: dict) -> str:
         "reference_hashes": brief.get("reference_hashes") or [],
         "plan_summary": project.get("plan_summary") or {},
         "source_hash": project.get("source_hash") or "",
+        "generation_hash": project.get("generation_hash") or "",
         "prompt_version": PROMPT_VERSION,
     })
 
 
 def mark_candidates_stale(project: dict, reason: str) -> None:
     for candidate in project.get("candidates") or []:
-        if candidate.get("status") not in ("failed", "cancelled"):
-            candidate["stale"] = True
-            candidate["stale_reason"] = reason
+        candidate["stale"] = True
+        candidate["stale_reason"] = reason
     for bundle in project.get("bundles") or []:
         bundle["stale"] = True
         bundle["stale_reason"] = reason
@@ -170,6 +172,8 @@ def create_project(source_path: str, original_name: str = "") -> dict:
     source_hash = file_sha256(source_path)
     project_id = new_id("design")
     normalized_path, normalization = normalize_floorplan(source_path, project_id)
+    generation_path, generation_crop = extract_generation_plan(source_path, project_id)
+    generation_hash = file_sha256(generation_path)
     now = time.time()
     project = {
         "schema_version": SCHEMA_VERSION,
@@ -183,6 +187,11 @@ def create_project(source_path: str, original_name: str = "") -> dict:
         "source_hash": source_hash,
         "normalized_path": normalized_path,
         "normalization": normalization,
+        "generation_path": generation_path,
+        "generation_raw_path": generation_path,
+        "generation_crop": generation_crop,
+        "generation_cleanup": {"version": "annotation-cleanup-v1", "applied_count": 0, "boxes": []},
+        "generation_hash": generation_hash,
         "plan_summary": empty_plan_summary("human"),
         "plan_summary_confirmed": False,
         "brief": {"requirements_text": "", "reference_paths": [], "reference_hashes": []},
@@ -204,6 +213,17 @@ def empty_plan_summary(source: str = "human") -> dict:
         "version": "plan-summary-v1",
         "room_count": 0,
         "rooms": [],
+        "declared_layout": {
+            "bedrooms": 0, "halls": 0, "bathrooms": 0,
+            "source_text": "", "confidence": 0.0,
+        },
+        "declared_area_m2": 0.0,
+        "overall_dimensions_mm": {
+            "width": 0, "depth": 0, "evidence": [], "confidence": 0.0,
+        },
+        "summary_confidence": 0.0,
+        "review_items": [],
+        "annotation_boxes": [],
         "entrances": [],
         "openings_summary": [],
         "wet_zones": [],
@@ -263,6 +283,137 @@ def normalize_floorplan(source_path: str, project_id: str) -> tuple[str, dict]:
     }
 
 
+def extract_generation_plan(source_path: str, project_id: str) -> tuple[str, dict]:
+    """Extract the main architectural plan while excluding detached details.
+
+    Evidence/OCR continues to use the normalized full sheet. Image generation
+    receives this structural crop so cabinet details, captions and dimensions do
+    not become invented rooms. Thick horizontal/vertical ink is used as the
+    signal; thin dimension lines and text are intentionally ignored.
+    """
+    with Image.open(source_path) as opened:
+        image = ImageOps.exif_transpose(opened).convert("RGB")
+    gray = cv2.cvtColor(np.asarray(image), cv2.COLOR_RGB2GRAY)
+    binary = (gray < 80).astype(np.uint8) * 255
+    short = min(image.width, image.height)
+    long_kernel = max(25, int(round(short * 0.018)))
+    thick_kernel = max(3, int(round(short * 0.0025)))
+    dilate_kernel = max(9, int(round(short * 0.0075)))
+    horizontal = cv2.morphologyEx(
+        binary, cv2.MORPH_OPEN,
+        cv2.getStructuringElement(cv2.MORPH_RECT, (long_kernel, thick_kernel)))
+    vertical = cv2.morphologyEx(
+        binary, cv2.MORPH_OPEN,
+        cv2.getStructuringElement(cv2.MORPH_RECT, (thick_kernel, long_kernel)))
+    structure = cv2.bitwise_or(horizontal, vertical)
+    structure = cv2.dilate(
+        structure, cv2.getStructuringElement(cv2.MORPH_RECT, (dilate_kernel, dilate_kernel)),
+        iterations=1)
+    count, _, stats, _ = cv2.connectedComponentsWithStats(structure)
+    minimum_area = max(500, int(image.width * image.height * 0.0006))
+    minimum_side = max(35, int(short * 0.02))
+    components: list[tuple[int, int, int, int, int]] = []
+    for index in range(1, count):
+        x, y, width, height, area = (int(value) for value in stats[index])
+        if area >= minimum_area and width >= minimum_side and height >= minimum_side:
+            components.append((x, y, width, height, area))
+    fallback_reason = ""
+    if components:
+        left = min(row[0] for row in components)
+        top = min(row[1] for row in components)
+        right = max(row[0] + row[2] for row in components)
+        bottom = max(row[1] + row[3] for row in components)
+        width, height = right - left, bottom - top
+        if width < image.width * 0.35 or height < image.height * 0.35:
+            fallback_reason = "structural_bbox_too_small"
+    else:
+        left, top, right, bottom = 0, 0, image.width, image.height
+        fallback_reason = "no_structural_components"
+    if fallback_reason:
+        left, top, right, bottom = 0, 0, image.width, image.height
+    else:
+        # Thick-wall detection intentionally ignores fine balcony/window lines.
+        # Keep generous context around the structural cluster so the crop never
+        # clips those valid edges while still excluding distant detail diagrams.
+        pad_x = max(24, int((right - left) * 0.07))
+        pad_y = max(24, int((bottom - top) * 0.07))
+        left, top = max(0, left - pad_x), max(0, top - pad_y)
+        right, bottom = min(image.width, right + pad_x), min(image.height, bottom + pad_y)
+    crop = image.crop((left, top, right, bottom))
+    source_ratio = crop.width / max(1, crop.height)
+    ratio_label, target_ratio = min(SUPPORTED_RATIOS, key=lambda item: abs(item[1] - source_ratio))
+    if source_ratio < target_ratio:
+        canvas_size = (int(round(crop.height * target_ratio)), crop.height)
+    else:
+        canvas_size = (crop.width, int(round(crop.width / target_ratio)))
+    canvas = Image.new("RGB", canvas_size, (248, 248, 246))
+    offset = ((canvas.width - crop.width) // 2, (canvas.height - crop.height) // 2)
+    canvas.paste(crop, offset)
+    folder = os.path.join(ASSET_ROOT, os.path.basename(project_id))
+    os.makedirs(folder, exist_ok=True)
+    destination = os.path.join(folder, "floorplan-generation.png")
+    temporary = destination + ".tmp"
+    canvas.save(temporary, "PNG", optimize=True)
+    os.replace(temporary, destination)
+    return destination, {
+        "version": "generation-plan-crop-v1",
+        "source_size": [image.width, image.height],
+        "crop_box": [left, top, right, bottom],
+        "content_size": [crop.width, crop.height],
+        "canvas_size": [canvas.width, canvas.height],
+        "offset": list(offset),
+        "aspect_ratio": ratio_label,
+        "structural_component_count": len(components),
+        "fallback_reason": fallback_reason,
+    }
+
+
+def clean_generation_annotations(raw_path: str, project_id: str,
+                                 boxes: list[dict]) -> tuple[str, dict]:
+    """Erase model-located non-structural text from a black-on-white plan crop."""
+    with Image.open(raw_path) as opened:
+        image = opened.convert("RGB")
+    applied: list[dict] = []
+    for row in boxes[:200]:
+        if not isinstance(row, dict) or not row.get("safe_to_erase"):
+            continue
+        confidence = max(0.0, min(1.0, float(row.get("confidence") or 0.0)))
+        coords = list(row.get("box_2d") or [])
+        if confidence < 0.5 or len(coords) != 4:
+            continue
+        try:
+            y0, x0, y1, x1 = [max(0, min(1000, int(value))) for value in coords]
+        except (TypeError, ValueError):
+            continue
+        if x1 <= x0 or y1 <= y0:
+            continue
+        pad_x = max(3, int(image.width * 0.004))
+        pad_y = max(3, int(image.height * 0.004))
+        left = max(0, int(x0 / 1000 * image.width) - pad_x)
+        top = max(0, int(y0 / 1000 * image.height) - pad_y)
+        right = min(image.width, int((x1 / 1000) * image.width) + pad_x)
+        bottom = min(image.height, int((y1 / 1000) * image.height) + pad_y)
+        ImageDraw.Draw(image).rectangle((left, top, right, bottom), fill="white")
+        applied.append({
+            "label": str(row.get("label") or ""), "kind": str(row.get("kind") or "text"),
+            "confidence": confidence, "box_2d": [y0, x0, y1, x1],
+            "pixel_box": [left, top, right, bottom],
+        })
+    folder = os.path.join(ASSET_ROOT, os.path.basename(project_id))
+    os.makedirs(folder, exist_ok=True)
+    destination = os.path.join(folder, "floorplan-generation-clean.png")
+    temporary = destination + ".tmp"
+    image.save(temporary, "PNG", optimize=True)
+    os.replace(temporary, destination)
+    return destination, {
+        "version": "annotation-cleanup-v1",
+        "applied_count": len(applied),
+        "boxes": applied,
+        "source_hash": file_sha256(raw_path),
+        "clean_hash": file_sha256(destination),
+    }
+
+
 def _image_part(path: str) -> dict:
     with open(path, "rb") as handle:
         encoded = base64.b64encode(handle.read()).decode("ascii")
@@ -318,7 +469,32 @@ _PLAN_SCHEMA = {
             "id": {"type": "STRING"}, "label": {"type": "STRING"},
             "room_type": {"type": "STRING"}, "coarse_location": {"type": "STRING"},
             "adjacent_room_ids": {"type": "ARRAY", "items": {"type": "STRING"}},
-        }, "required": ["id", "label", "room_type", "coarse_location", "adjacent_room_ids"]}},
+            "confidence": {"type": "NUMBER"}, "evidence": {"type": "STRING"},
+            "needs_confirmation": {"type": "BOOLEAN"},
+        }, "required": ["id", "label", "room_type", "coarse_location", "adjacent_room_ids",
+                         "confidence", "evidence", "needs_confirmation"]}},
+        "declared_layout": {"type": "OBJECT", "properties": {
+            "bedrooms": {"type": "INTEGER"}, "halls": {"type": "INTEGER"},
+            "bathrooms": {"type": "INTEGER"}, "source_text": {"type": "STRING"},
+            "confidence": {"type": "NUMBER"},
+        }, "required": ["bedrooms", "halls", "bathrooms", "source_text", "confidence"]},
+        "declared_area_m2": {"type": "NUMBER"},
+        "overall_dimensions_mm": {"type": "OBJECT", "properties": {
+            "width": {"type": "INTEGER"}, "depth": {"type": "INTEGER"},
+            "evidence": {"type": "ARRAY", "items": {"type": "STRING"}},
+            "confidence": {"type": "NUMBER"},
+        }, "required": ["width", "depth", "evidence", "confidence"]},
+        "summary_confidence": {"type": "NUMBER"},
+        "review_items": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {
+            "id": {"type": "STRING"}, "kind": {"type": "STRING"},
+            "label": {"type": "STRING"}, "evidence": {"type": "STRING"},
+            "confidence": {"type": "NUMBER"}, "status": {"type": "STRING"},
+        }, "required": ["id", "kind", "label", "evidence", "confidence", "status"]}},
+        "annotation_boxes": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {
+            "label": {"type": "STRING"}, "kind": {"type": "STRING"},
+            "box_2d": {"type": "ARRAY", "items": {"type": "INTEGER"}},
+            "confidence": {"type": "NUMBER"}, "safe_to_erase": {"type": "BOOLEAN"},
+        }, "required": ["label", "kind", "box_2d", "confidence", "safe_to_erase"]}},
         "entrances": {"type": "ARRAY", "items": {"type": "STRING"}},
         "openings_summary": {"type": "ARRAY", "items": {"type": "STRING"}},
         "wet_zones": {"type": "ARRAY", "items": {"type": "STRING"}},
@@ -327,9 +503,74 @@ _PLAN_SCHEMA = {
         "must_preserve": {"type": "ARRAY", "items": {"type": "STRING"}},
         "uncertainties": {"type": "ARRAY", "items": {"type": "STRING"}},
     },
-    "required": ["room_count", "rooms", "entrances", "openings_summary", "wet_zones",
-                 "balconies", "dimension_evidence", "must_preserve", "uncertainties"],
+    "required": ["room_count", "rooms", "declared_layout", "declared_area_m2",
+                 "overall_dimensions_mm", "summary_confidence", "review_items", "annotation_boxes", "entrances",
+                 "openings_summary", "wet_zones", "balconies", "dimension_evidence",
+                 "must_preserve", "uncertainties"],
 }
+
+
+_ROOM_LABELS = {
+    "hallway": ("过道", "hallway"),
+    "corridor": ("走廊", "hallway"),
+    "entry": ("玄关", "entry"),
+    "foyer": ("玄关", "entry"),
+    "living_room": ("客厅", "living_room"),
+    "dining_room": ("餐厅", "dining_room"),
+}
+
+
+def normalize_plan_rooms(raw_rooms: list[dict]) -> list[dict]:
+    """Make AI room rows and adjacency internally consistent without guessing geometry."""
+    rooms: list[dict] = []
+    id_map: dict[str, str] = {}
+    used: set[str] = set()
+    for index, raw in enumerate(raw_rooms[:80], 1):
+        row = dict(raw or {})
+        original = str(row.get("id") or f"room_{index}").strip()
+        safe = re.sub(r"[^a-z0-9_-]+", "_", original.lower()).strip("_-") or f"room_{index}"
+        base = safe
+        suffix = 2
+        while safe in used:
+            safe = f"{base}_{suffix}"
+            suffix += 1
+        used.add(safe)
+        id_map.setdefault(original, safe)
+        id_map.setdefault(original.lower(), safe)
+        row["id"] = safe
+        rooms.append(row)
+    known = {row["id"] for row in rooms}
+    missing_referrers: dict[str, set[str]] = {}
+    for room in rooms:
+        mapped: list[str] = []
+        for raw_adjacent in room.get("adjacent_room_ids") or []:
+            original = str(raw_adjacent or "").strip()
+            adjacent = id_map.get(original) or id_map.get(original.lower())
+            if not adjacent:
+                adjacent = re.sub(r"[^a-z0-9_-]+", "_", original.lower()).strip("_-")
+            if not adjacent or adjacent == room["id"]:
+                continue
+            if adjacent not in mapped:
+                mapped.append(adjacent)
+            if adjacent not in known:
+                missing_referrers.setdefault(adjacent, set()).add(room["id"])
+        room["adjacent_room_ids"] = mapped
+    for missing_id, referrers in sorted(missing_referrers.items()):
+        label, room_type = _ROOM_LABELS.get(missing_id, (f"待确认：{missing_id}", "unknown"))
+        rooms.append({
+            "id": missing_id, "label": label, "room_type": room_type,
+            "coarse_location": "unknown", "adjacent_room_ids": sorted(referrers),
+            "confidence": 0.0,
+            "evidence": f"被 {', '.join(sorted(referrers))} 的邻接关系引用，但模型漏掉了空间行",
+            "needs_confirmation": True,
+        })
+    by_id = {room["id"]: room for room in rooms}
+    for room in rooms:
+        for adjacent in list(room.get("adjacent_room_ids") or []):
+            target = by_id.get(adjacent)
+            if target is not None and room["id"] not in (target.get("adjacent_room_ids") or []):
+                target.setdefault("adjacent_room_ids", []).append(room["id"])
+    return rooms[:80]
 
 
 def analyze_plan(project_id: str) -> dict:
@@ -340,12 +581,34 @@ def analyze_plan(project_id: str) -> dict:
         project.update(stage="Gemini 正在生成轻量户型摘要", error="")
         save_project(project)
         normalized = project["normalized_path"]
-    prompt = """You are a conservative residential floor-plan reader.
-Read the attached plan without redesigning it. Return only a lightweight summary for a human to confirm.
-Do not invent metric geometry. Identify rooms, coarse page locations, adjacency, entrance, balconies,
-kitchen/bath wet zones, visible dimension evidence, major doors/windows and uncertainties.
-The original plan remains the sole structural authority."""
-    payload, error = call_gemini_json(prompt, [normalized], _PLAN_SCHEMA)
+        generation_raw = project.get("generation_raw_path") or project.get("generation_path") or normalized
+    prompt = """You are a conservative residential floor-plan evidence reader.
+Image 1 is the complete evidence sheet. Image 2 is the automatically cropped main plan used for generation.
+Read the Chinese or international residential plan without redesigning it. The user must receive
+an already-filled summary and should only need to correct mistakes—not compose a plan description from zero.
+
+Evidence priority:
+1. Read the title/caption first for declared layout and area (for example 3房2厅2卫, 121㎡).
+2. Read visible overall and chained dimensions exactly; use 0 rather than guessing an unreadable value.
+3. Use walls, door swings, windows, bay windows, AC boxes, gas meter, plumbing fixtures and sunken-slab
+   annotations to propose room roles and adjacency.
+4. Include circulation/hall, kitchen, bathrooms and balcony/service spaces as separate room rows when visible.
+5. A room role inferred only from symbols must have lower confidence and needs_confirmation=true.
+6. Never invent metric polygons, coordinates, doors or room labels that are not supported by pixels.
+
+Return stable ASCII snake_case room IDs. For every room include a short visual evidence sentence, confidence
+0..1 and needs_confirmation. Put every ambiguous entrance, room role, opening or balcony in review_items and
+uncertainties. Put all non-negotiable outline features, curved/bay windows, wet zones and level differences in
+must_preserve. All user-visible labels, evidence, review labels, summaries and uncertainty text must be in
+Simplified Chinese; only IDs, canonical room_type and coarse_location remain ASCII. The original plan remains
+the sole structural authority.
+
+For Image 2 only, return annotation_boxes for non-structural text that a local white-fill cleanup may safely
+erase: room names, H/W notes, dimension numbers, +elevation text, 下沉 text, 煤气表 text and A/C letters.
+Use box_2d=[y_min,x_min,y_max,x_max] normalized to 0..1000 against Image 2. Set safe_to_erase=false if a box
+would touch a wall, door swing, window/frame, column, fixture outline or any uncertain geometry. Do not box
+architectural lines themselves."""
+    payload, error = call_gemini_json(prompt, [normalized, generation_raw], _PLAN_SCHEMA)
     with _project_lock(project_id):
         project = load_project(project_id) or {}
         if payload:
@@ -354,7 +617,49 @@ The original plan remains the sole structural authority."""
                 if key in payload:
                     summary[key] = payload[key]
             summary["room_count"] = max(0, min(80, int(summary.get("room_count") or 0)))
-            summary["rooms"] = list(summary.get("rooms") or [])[:80]
+            summary["rooms"] = normalize_plan_rooms(list(summary.get("rooms") or []))
+            summary["room_count"] = len(summary["rooms"])
+            summary["summary_confidence"] = max(
+                0.0, min(1.0, float(summary.get("summary_confidence") or 0.0)))
+            for room in summary["rooms"]:
+                room["confidence"] = max(0.0, min(1.0, float(room.get("confidence") or 0.0)))
+                room["needs_confirmation"] = bool(room.get("needs_confirmation"))
+            review_items = list(summary.get("review_items") or [])[:100]
+            reviewed_room_ids = {
+                str(item.get("room_id") or "") for item in review_items if isinstance(item, dict)
+            }
+            for room in summary["rooms"]:
+                room_id = str(room.get("id") or "")
+                if room.get("needs_confirmation") and room_id not in reviewed_room_ids:
+                    review_items.append({
+                        "id": f"room_{room_id}", "kind": "room_role",
+                        "room_id": room_id,
+                        "label": f"确认空间角色：{room.get('label') or room_id}",
+                        "evidence": str(room.get("evidence") or "模型将该空间标记为待确认"),
+                        "confidence": room.get("confidence") or 0.0,
+                        "status": "needs_confirmation",
+                    })
+            summary["review_items"] = review_items[:100]
+            summary["annotation_boxes"] = list(summary.get("annotation_boxes") or [])[:200]
+            previous_generation_hash = str(project.get("generation_hash") or "")
+            try:
+                clean_path, cleanup = clean_generation_annotations(
+                    generation_raw, project_id, summary["annotation_boxes"])
+                project["generation_raw_path"] = generation_raw
+                project["generation_path"] = clean_path
+                project["generation_cleanup"] = cleanup
+                project["generation_hash"] = cleanup["clean_hash"]
+                if previous_generation_hash and previous_generation_hash != project["generation_hash"]:
+                    mark_candidates_stale(project, "生成结构图文字清理结果已更新")
+            except Exception as exc:
+                logger.warning("[全屋设计] 结构图文字清理失败 project=%s: %s", project_id, exc)
+                project["generation_path"] = generation_raw
+                project["generation_hash"] = file_sha256(generation_raw)
+                project["generation_cleanup"] = {
+                    "version": "annotation-cleanup-v1", "applied_count": 0,
+                    "boxes": [], "error": type(exc).__name__,
+                }
+            project["brief_hash"] = _brief_hash(project)
             project["plan_summary"] = summary
             project["stage"] = "请确认轻量户型摘要"
             project["status"] = "needs_plan_review"
@@ -395,6 +700,9 @@ OUTPUT CONTRACT:
 - This is a marketing concept image, not a new floor plan and not a construction drawing.
 
 CONFIRMED LIGHTWEIGHT PLAN SUMMARY:
+declared_layout={plan.get('declared_layout') or {}}
+declared_area_m2={plan.get('declared_area_m2') or 0}
+overall_dimensions_mm={plan.get('overall_dimensions_mm') or {}}
 room_count={plan.get('room_count') or 0}
 rooms:
 {chr(10).join(room_lines) or '- Refer to Image 1; human summary contains no room rows.'}
@@ -524,7 +832,8 @@ Mark fail for any changed orientation/crop, exterior footprint, room count/locat
 entrance/balcony/major opening, kitchen/bath wet-zone location, added/missing space, non-orthographic view,
 or generated labels/dimensions/watermarks. Uncertainty in any architectural check is a hard failure.
 A beautiful image with altered structure must fail."""
-    payload, error = call_gemini_json(prompt, [project["normalized_path"], candidate_path], _QA_SCHEMA)
+    structure_source = project.get("generation_path") or project["normalized_path"]
+    payload, error = call_gemini_json(prompt, [structure_source, candidate_path], _QA_SCHEMA)
     if not payload:
         return {
             "version": QA_PROMPT_VERSION,
@@ -559,6 +868,7 @@ def public_project(project: dict, *, list_mode: bool = False) -> dict:
     row = deepcopy(project)
     row["source_url"] = to_url(project.get("source_path"))
     row["normalized_url"] = to_url(project.get("normalized_path"))
+    row["generation_url"] = to_url(project.get("generation_path"))
     for candidate in row.get("candidates") or []:
         candidate["url"] = to_url(candidate.get("path"))
         candidate["thumb"] = result_thumb_url(candidate.get("path")) if candidate.get("path") else ""
@@ -579,6 +889,8 @@ def public_project(project: dict, *, list_mode: bool = False) -> dict:
         row["candidates"] = [candidate for candidate in row.get("candidates") or [] if candidate.get("path")]
     row.pop("source_path", None)
     row.pop("normalized_path", None)
+    row.pop("generation_path", None)
+    row.pop("generation_raw_path", None)
     return row
 
 
@@ -630,6 +942,7 @@ def build_modeling_bundle(project: dict, candidate: dict) -> dict:
         "project_id": project["project_id"],
         "project_revision": project["revision"],
         "source_hash": project["source_hash"],
+        "generation_hash": project.get("generation_hash") or "",
         "brief_hash": project["brief_hash"],
         "locked_candidate_id": candidate["candidate_id"],
         "candidate_hash": candidate["result_hash"],
@@ -684,6 +997,8 @@ Use `source/floorplan-original{os.path.splitext(project['source_path'])[1].lower
     file_rows: list[tuple[str, str]] = [
         (f"source/floorplan-original{os.path.splitext(project['source_path'])[1].lower()}", project["source_path"]),
         ("source/floorplan-normalized.png", project["normalized_path"]),
+        ("source/floorplan-generation-raw.png", project.get("generation_raw_path") or project.get("generation_path") or project["normalized_path"]),
+        ("source/floorplan-generation.png", project.get("generation_path") or project["normalized_path"]),
         ("design/final-locked.png", candidate["path"]),
     ]
     parent = next((row for row in project.get("candidates") or []

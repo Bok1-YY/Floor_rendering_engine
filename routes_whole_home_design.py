@@ -58,6 +58,12 @@ class PlanSummaryPutRequest(BaseModel):
     base_revision: int = Field(ge=1)
     room_count: int = Field(ge=0, le=80)
     rooms: list[dict] = Field(default_factory=list, max_length=80)
+    declared_layout: dict = Field(default_factory=dict)
+    declared_area_m2: float = Field(default=0.0, ge=0.0, le=10000.0)
+    overall_dimensions_mm: dict = Field(default_factory=dict)
+    summary_confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    review_items: list[dict] = Field(default_factory=list, max_length=100)
+    annotation_boxes: list[dict] = Field(default_factory=list, max_length=200)
     entrances: list[str] = Field(default_factory=list, max_length=20)
     openings_summary: list[str] = Field(default_factory=list, max_length=120)
     wet_zones: list[str] = Field(default_factory=list, max_length=40)
@@ -101,6 +107,7 @@ class RefinePreviewRequest(PreviewRequest):
 class StructureReviewRequest(BaseModel):
     base_revision: int = Field(ge=1)
     checks: dict[str, bool]
+    decision: Literal["pass", "fail"] = "pass"
     reviewer: str = Field(default="local-user", min_length=1, max_length=100)
     note: str = Field(default="", max_length=2000)
 
@@ -124,6 +131,39 @@ def _assert_revision(project: dict, revision: int) -> None:
             "message": "项目已在其他页面更新，请刷新后重试",
             "current_revision": current,
         })
+
+
+def _validate_plan_summary_payload(summary: dict, confirmed: bool) -> None:
+    if not confirmed:
+        return
+    rooms = list(summary.get("rooms") or [])
+    room_count = int(summary.get("room_count") or 0)
+    if room_count < 1 or not rooms:
+        raise HTTPException(422, {
+            "code": "empty_plan_summary",
+            "message": "不能确认空户型摘要；请先自动识别或至少添加一个空间",
+        })
+    if room_count != len(rooms):
+        raise HTTPException(422, {
+            "code": "room_count_mismatch", "room_count": room_count, "room_rows": len(rooms),
+        })
+    identifiers: list[str] = []
+    for index, room in enumerate(rooms):
+        room_id = str(room.get("id") or "").strip()
+        if not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", room_id):
+            raise HTTPException(422, {"code": "invalid_room_id", "index": index, "room_id": room_id})
+        if not str(room.get("label") or "").strip() or not str(room.get("room_type") or "").strip():
+            raise HTTPException(422, {"code": "incomplete_room", "room_id": room_id})
+        identifiers.append(room_id)
+    if len(set(identifiers)) != len(identifiers):
+        raise HTTPException(422, {"code": "duplicate_room_id"})
+    known = set(identifiers)
+    unknown = sorted({
+        str(adjacent) for room in rooms for adjacent in (room.get("adjacent_room_ids") or [])
+        if str(adjacent) not in known
+    })
+    if unknown:
+        raise HTTPException(422, {"code": "unknown_adjacent_room_ids", "unknown": unknown})
 
 
 def _candidate(project: dict, candidate_id: str) -> dict:
@@ -228,13 +268,41 @@ def get_design_project(project_id: str):
     return public_project(_project_or_404(project_id))
 
 
+@router.post("/api/whole-home-design/projects/{project_id}/analyze-plan")
+async def retry_design_plan_analysis(project_id: str, req: PreviewRequest):
+    if not str(load_config().get("gemini_api_key") or "").strip():
+        raise HTTPException(409, {
+            "code": "gemini_key_required",
+            "message": "自动户型摘要需要先在设置页配置 Gemini API Key",
+        })
+    with _project_lock(project_id):
+        project = _project_or_404(project_id)
+        _assert_revision(project, req.base_revision)
+        project["revision"] += 1
+        project["plan_summary_confirmed"] = False
+        mark_candidates_stale(project, "重新自动识别户型摘要")
+        project["status"] = "analyzing_plan"
+        project["stage"] = "Gemini 正在重新生成户型摘要"
+        project["error"] = ""
+        save_project(project)
+        revision = project["revision"]
+    _track(asyncio.to_thread(analyze_plan, project_id))
+    response = public_project(project)
+    response["analysis_revision"] = revision
+    return response
+
+
 @router.put("/api/whole-home-design/projects/{project_id}/plan-summary")
 def save_plan_summary(project_id: str, req: PlanSummaryPutRequest):
     with _project_lock(project_id):
         project = _project_or_404(project_id)
         _assert_revision(project, req.base_revision)
         summary = req.model_dump(exclude={"base_revision", "confirmed"})
-        summary.update(version="plan-summary-v1", source="human", prompt_version="whole-home-plan-summary-v1")
+        _validate_plan_summary_payload(summary, req.confirmed)
+        previous_source = str((project.get("plan_summary") or {}).get("source") or "human")
+        source = "human_confirmed_ai" if previous_source == "gemini" else "human"
+        summary.update(version="plan-summary-v1", source=source,
+                       prompt_version="whole-home-plan-summary-v1")
         project["plan_summary"] = summary
         project["plan_summary_confirmed"] = bool(req.confirmed)
         project["revision"] += 1
@@ -292,6 +360,7 @@ def _create_preview(project: dict, *, kind: str, candidate_id: str = "",
         "project_id": project["project_id"],
         "project_revision": project["revision"],
         "source_hash": project["source_hash"],
+        "generation_hash": project.get("generation_hash") or "",
         "brief_hash": project["brief_hash"],
         "candidate_id": candidate_id,
         "refinement_text": refinement_text.strip(),
@@ -340,6 +409,7 @@ def _validate_commit(project: dict, req: CommitRequest, kind: str) -> dict:
         raise HTTPException(409, "付费预览已过期，请重新预览")
     if (preview.get("project_revision") != project.get("revision")
             or preview.get("source_hash") != project.get("source_hash")
+            or preview.get("generation_hash") != project.get("generation_hash")
             or preview.get("brief_hash") != project.get("brief_hash")):
         raise HTTPException(409, "项目输入已变化，请重新生成付费预览")
     if preview.get("status") == "committed":
@@ -371,6 +441,7 @@ def _new_candidate(project: dict, preview: dict, *, phase: Literal["draft", "fin
         "resolution": preview["resolution"],
         "aspect_ratio": preview["aspect_ratio"],
         "source_hash": project["source_hash"],
+        "generation_hash": project.get("generation_hash") or "",
         "brief_hash": project["brief_hash"],
         "project_revision": project["revision"],
         "prompt_version": "whole-home-birdseye-v1",
@@ -385,20 +456,27 @@ def _new_candidate(project: dict, preview: dict, *, phase: Literal["draft", "fin
 
 
 @router.post("/api/whole-home-design/projects/{project_id}/drafts/commit")
-def commit_design_drafts(project_id: str, req: CommitRequest):
+async def commit_design_drafts(project_id: str, req: CommitRequest):
+    should_start = False
     with _project_lock(project_id):
         project = _project_or_404(project_id)
         preview = _validate_commit(project, req, "drafts")
         existing_ids = list(preview.get("candidate_ids") or [])
-        if existing_ids:
-            return public_project(project)
-        rows = [_new_candidate(project, preview, phase="draft", direction_index=index)
-                for index in (1, 2)]
-        project.setdefault("candidates", []).extend(rows)
-        preview["candidate_ids"] = [row["candidate_id"] for row in rows]
+        if not existing_ids:
+            rows = [_new_candidate(project, preview, phase="draft", direction_index=index)
+                    for index in (1, 2)]
+            project.setdefault("candidates", []).extend(rows)
+            existing_ids = [row["candidate_id"] for row in rows]
+            preview["candidate_ids"] = existing_ids
+        queued = [row for row in project.get("candidates") or []
+                  if row.get("candidate_id") in existing_ids and row.get("status") == "queued"]
+        if queued and not preview.get("background_started_at"):
+            preview["background_started_at"] = time.time()
+            should_start = True
         project.update(status="generating_drafts", stage="正在生成两张 2K 全屋设计草稿", error="")
         save_project(project)
-    _track(_run_candidate_batch(project_id, [row["candidate_id"] for row in rows], preview))
+    if should_start:
+        _track(_run_candidate_batch(project_id, existing_ids, preview))
     return public_project(project)
 
 
@@ -419,21 +497,28 @@ def preview_design_refine(project_id: str, candidate_id: str, req: RefinePreview
 
 
 @router.post("/api/whole-home-design/projects/{project_id}/candidates/{candidate_id}/refine/commit")
-def commit_design_refine(project_id: str, candidate_id: str, req: CommitRequest):
+async def commit_design_refine(project_id: str, candidate_id: str, req: CommitRequest):
+    should_start = False
     with _project_lock(project_id):
         project = _project_or_404(project_id)
         preview = _validate_commit(project, req, "refine")
         if preview.get("candidate_id") != candidate_id:
             raise HTTPException(409, "精修预览与草稿不匹配")
         existing_ids = list(preview.get("candidate_ids") or [])
-        if existing_ids:
-            return public_project(project)
-        row = _new_candidate(project, preview, phase="final", parent_id=candidate_id)
-        project.setdefault("candidates", []).append(row)
-        preview["candidate_ids"] = [row["candidate_id"]]
+        if not existing_ids:
+            row = _new_candidate(project, preview, phase="final", parent_id=candidate_id)
+            project.setdefault("candidates", []).append(row)
+            existing_ids = [row["candidate_id"]]
+            preview["candidate_ids"] = existing_ids
+        queued = [row for row in project.get("candidates") or []
+                  if row.get("candidate_id") in existing_ids and row.get("status") == "queued"]
+        if queued and not preview.get("background_started_at"):
+            preview["background_started_at"] = time.time()
+            should_start = True
         project.update(status="refining", stage="正在精修 4K 全屋设计成稿", error="")
         save_project(project)
-    _track(_run_candidate_batch(project_id, [row["candidate_id"]], preview))
+    if should_start:
+        _track(_run_candidate_batch(project_id, existing_ids, preview))
     return public_project(project)
 
 
@@ -473,7 +558,7 @@ def _generate_one_candidate(project_id: str, candidate_id: str, preview: dict,
             project, phase=phase, direction_index=int(row.get("direction_index") or 1),
             refinement_text=str(preview.get("refinement_text") or ""),
         )
-        image_paths = [project["normalized_path"]]
+        image_paths = [project.get("generation_path") or project["normalized_path"]]
         if parent and parent.get("path"):
             image_paths.append(parent["path"])
         image_paths.extend(project.get("brief", {}).get("reference_paths") or [])
@@ -561,6 +646,22 @@ def review_candidate_structure(project_id: str, candidate_id: str, req: Structur
                 "message": "自动结构 QA 已发现硬错误；不能人工覆写，请重新生成",
                 "qa": row.get("structure_qa"),
             })
+        if req.decision == "fail":
+            if not req.note.strip():
+                raise HTTPException(422, {"code": "structure_failure_note_required"})
+            row["human_review"] = {
+                "status": "failed", "checks": dict(req.checks),
+                "reviewer": req.reviewer.strip(), "note": req.note.strip(),
+                "reviewed_at": time.time(),
+            }
+            row["structure_qa"] = {
+                **(row.get("structure_qa") or {}),
+                "status": "failed", "hard_fail": True, "provider": "human",
+                "summary": req.note.strip(),
+            }
+            row["stage"] = "人工结构核对失败"
+            save_project(project)
+            return public_project(project)
         if missing:
             raise HTTPException(409, {"code": "structure_review_incomplete", "missing": missing})
         row["human_review"] = {
@@ -587,7 +688,9 @@ def lock_design_candidate(project_id: str, candidate_id: str, req: CandidateActi
         human = row.get("human_review") or {}
         if row.get("phase") != "final" or row.get("status") != "done" or row.get("stale"):
             raise HTTPException(409, "只能锁定当前版本已完成的 4K 成稿")
-        if row.get("source_hash") != project.get("source_hash") or row.get("brief_hash") != project.get("brief_hash"):
+        if (row.get("source_hash") != project.get("source_hash")
+                or row.get("generation_hash") != project.get("generation_hash")
+                or row.get("brief_hash") != project.get("brief_hash")):
             raise HTTPException(409, "成稿输入哈希已过期")
         if qa.get("status") != "passed" or qa.get("hard_fail") or human.get("status") != "passed":
             raise HTTPException(409, "自动/人工结构核对尚未全部通过")

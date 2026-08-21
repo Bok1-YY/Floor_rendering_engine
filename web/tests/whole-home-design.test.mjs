@@ -17,8 +17,11 @@ test("design page exposes two drafts, 4K refine and strict structure review", ()
   assert.match(page, /两张 2K 设计草稿/);
   assert.match(page, /4K 精修/);
   assert.match(page, /必须逐项核对并确认全部结构硬项/);
-  assert.match(page, /自动 QA 已发现结构硬错误，人工不能覆写/);
+  assert.match(page, /自动\/人工 QA 已发现结构硬错误，不能覆写/);
   assert.match(page, /Blender Agent 建模任务包/);
+  assert.match(page, /自动识别\/重新识别/);
+  assert.match(page, /不能确认空摘要/);
+  assert.match(page, /AI 标出的待确认项/);
 });
 
 test("paid calls use separate preview and commit endpoints", () => {

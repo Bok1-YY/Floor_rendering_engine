@@ -84,6 +84,7 @@ EXPECTED_ROUTES = [
     ("/api/whole-home-design/projects", "GET"),
     ("/api/whole-home-design/projects", "POST"),
     ("/api/whole-home-design/projects/{project_id}", "GET"),
+    ("/api/whole-home-design/projects/{project_id}/analyze-plan", "POST"),
     ("/api/whole-home-design/projects/{project_id}/brief", "PUT"),
     ("/api/whole-home-design/projects/{project_id}/bundles/{bundle_id}", "GET"),
     ("/api/whole-home-design/projects/{project_id}/cancel", "POST"),
@@ -132,7 +133,7 @@ def test_route_contract_unchanged():
 
 
 def test_route_count():
-    assert len(_actual_routes()) == 87
+    assert len(_actual_routes()) == 88
 
 
 def test_retired_3d_and_panorama_write_routes_are_absent():

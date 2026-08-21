@@ -4,7 +4,7 @@
 ![License](https://img.shields.io/badge/license-AGPL--3.0--only-blue)
 ![Python](https://img.shields.io/badge/python-3.10%2B-3776AB)
 ![Node](https://img.shields.io/badge/node-20%2B-339933)
-![Tests](https://img.shields.io/badge/tests-244%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-252%20passed-brightgreen)
 
 Turn a real flooring swatch into spatial content that can be batch-generated, color-locked, locally repaired, reviewed, and delivered.
 
@@ -18,7 +18,7 @@ This is not a “home interior” prompt preset. It asks whether the product col
 
 ## What's New in 2026.08
 
-- **Whole-home design replaces automatic whole-home 3D / 360° VR:** Upload a floor-plan image or PDF, confirm a lightweight room/entrance/wet-zone summary, generate two 2K vertical overhead 2.5D drafts from a free-form brief, then refine one structure-safe draft to a 4K final. Automated structural hard failures cannot be overridden. A locked concept can be exported as a Blender Agent task bundle containing the authoritative source plan, final design, prompt snapshots, QA evidence, hashes, and an acceptance contract. The output is explicitly a marketing concept—not CAD, BIM, or construction documentation.
+- **Experimental whole-home design replaces automatic whole-home 3D / 360° VR:** Gemini prefills title, area, dimensions, room candidates, confidence and review items from a floor-plan image/PDF before two 2K bird's-eye drafts are generated. Structural hard failures cannot be overridden; only a passing draft may be refined to 4K or exported as a Blender Agent task bundle. In the first real 121㎡ validation, the summary and source cleanup worked, but all four drafts were blocked by the strict gate, so the feature remains experimental. See the [real validation report](./docs/WHOLE_HOME_DESIGN_REAL_VALIDATION_20260821.md).
 - **A redesigned production workspace:** Product → Scene → Output replaces the long parameter column. Core room, style, lighting, and camera controls stay close at hand, while B2 / Pro tabs, candidate thumbnails, and pass / alternative / reject / favorite actions now live directly on result cards.
 - **Color matching 2.0 + a standalone utility:** Match a newly photographed large sample to an older small swatch without starting Floor Engine or calling an AI service. Beyond classic LAB statistics, it now offers reliable-pixel filtering, detailed distribution transfer, optional spatial illumination correction, and a 0–100 confidence report with a four-color diagnostic overlay. Floor Engine previews default to Detailed 2.0 and always show both the selected engine and the version actually applied to the canvas; the standalone tool and legacy API retain Classic 1.0 defaults for compatibility.
 
@@ -152,7 +152,7 @@ FastAPI / task orchestration / queue recovery
 
 - B2, Pro, and SD use independent concurrency slots. The service binds to `127.0.0.1` by default.
 - Configuration, outputs, logs, and queue recovery state remain in the local data directory.
-- Regression coverage includes prompt snapshots, route contracts, path security, queue recovery, cinematic planning, whole-home design revisions/structural locks/Blender bundles, floor coverage, color matching, standalone sample matching, smart selection, and record lineage. This release is verified at **244 tests passed, 1 skipped**.
+- Regression coverage includes prompt snapshots, route contracts, path security, queue recovery, cinematic planning, whole-home automatic summaries/plan cropping/text cleanup/revisions/structural locks/Blender bundles, floor coverage, color matching, standalone sample matching, smart selection, and record lineage. This release is verified at **252 tests passed, 1 skipped**.
 
 ## My Role
 

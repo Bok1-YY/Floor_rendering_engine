@@ -1130,12 +1130,46 @@ export interface DesignPlanRoom {
   room_type: string;
   coarse_location: string;
   adjacent_room_ids: string[];
+  confidence?: number;
+  evidence?: string;
+  needs_confirmation?: boolean;
 }
 
 export interface DesignPlanSummary {
   version: "plan-summary-v1";
   room_count: number;
   rooms: DesignPlanRoom[];
+  declared_layout: {
+    bedrooms: number;
+    halls: number;
+    bathrooms: number;
+    source_text: string;
+    confidence: number;
+  };
+  declared_area_m2: number;
+  overall_dimensions_mm: {
+    width: number;
+    depth: number;
+    evidence: string[];
+    confidence: number;
+  };
+  summary_confidence: number;
+  review_items: Array<{
+    id: string;
+    room_id?: string;
+    kind: string;
+    label: string;
+    evidence: string;
+    confidence: number;
+    status: string;
+  }>;
+  annotation_boxes: Array<{
+    label: string;
+    kind: string;
+    box_2d: number[];
+    confidence: number;
+    safe_to_erase: boolean;
+  }>;
   entrances: string[];
   openings_summary: string[];
   wet_zones: string[];
@@ -1143,7 +1177,7 @@ export interface DesignPlanSummary {
   dimension_evidence: string[];
   must_preserve: string[];
   uncertainties: string[];
-  source: "gemini" | "human";
+  source: "gemini" | "human" | "human_confirmed_ai";
   prompt_version: string;
 }
 
@@ -1182,7 +1216,7 @@ export interface WholeHomeDesignCandidate {
   image_size: number[];
   structure_qa: DesignStructureQa;
   human_review: {
-    status: "pending" | "passed";
+    status: "pending" | "passed" | "failed";
     checks: Record<string, boolean>;
     reviewer: string;
     note: string;
@@ -1214,8 +1248,10 @@ export interface WholeHomeDesignProject {
   error: string;
   source_name: string;
   source_hash: string;
+  generation_hash: string;
   source_url: string;
   normalized_url: string;
+  generation_url: string;
   normalization: {
     original_size: number[];
     cropped_box: number[];
@@ -1223,6 +1259,25 @@ export interface WholeHomeDesignProject {
     canvas_size: number[];
     offset: number[];
     aspect_ratio: string;
+  };
+  generation_crop?: {
+    version: string;
+    source_size: number[];
+    crop_box: number[];
+    content_size: number[];
+    canvas_size: number[];
+    offset: number[];
+    aspect_ratio: string;
+    structural_component_count: number;
+    fallback_reason: string;
+  };
+  generation_cleanup?: {
+    version: string;
+    applied_count: number;
+    boxes: Array<Record<string, unknown>>;
+    source_hash?: string;
+    clean_hash?: string;
+    error?: string;
   };
   plan_summary: DesignPlanSummary;
   plan_summary_confirmed: boolean;
