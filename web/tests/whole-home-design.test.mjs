@@ -32,6 +32,25 @@ test("paid calls use separate preview and commit endpoints", () => {
   assert.match(page, /失败或结构不通过不会自动重新付费/);
 });
 
+test("project list hydrates the selected project before rendering plan summary fields", () => {
+  assert.match(page, /api\.getWholeHomeDesignProject\(items\[0\]\.project_id\)/);
+  assert.doesNotMatch(page, /if \(items\[0\]\) setProject\(items\[0\]\)/);
+});
+
+test("whole-home design owns a bounded vertical scroll container", () => {
+  assert.match(page, /data-testid="whole-home-design-scroll"/);
+  assert.match(page, /className="[^"]*h-full[^"]*min-h-0[^"]*overflow-y-auto[^"]*"/);
+  assert.doesNotMatch(page, /grid min-h-full grid-cols-\[260px_minmax\(0,1fr\)\]/);
+});
+
+test("draft inputs are isolated by candidate and 2K images open the zoom viewer", () => {
+  assert.match(page, /refinementTextByCandidate\[candidate\.candidate_id\]/);
+  assert.match(page, /\[candidate\.candidate_id\]: value/);
+  assert.doesNotMatch(page, /const \[refinementText, setRefinementText\]/);
+  assert.match(page, /aria-label=\{`放大预览 2K 方案方向/);
+  assert.match(page, /<ImageZoom url=\{zoomUrl\}/);
+});
+
 test("historical panorama viewer is explicitly read only", () => {
   assert.match(viewer, /Historical ERP viewer only/);
   assert.match(viewer, /历史 360° 只读查看/);
