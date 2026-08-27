@@ -1,0 +1,74 @@
+{
+  "schema": "floor-engine-runnable-baseline-v1",
+  "created_at": "2026-08-27T14:51:24+08:00",
+  "location": "C:\\Users\\1_1\\Desktop\\Floor_engine_Runnable_433c16e_20260827",
+  "git": {
+    "selected_base_commit": "433c16e2dab99c32c1f2b89c187f5b36481889a0",
+    "selected_base_subject": "fix(design): harden real floorplan validation workflow",
+    "local_usability_hotfix_commit": "c01dd43874f1b3a703f91f6422fe5e15854c87df",
+    "pushed": false,
+    "origin": "git@github.com:Bok1-YY/Floor_rendering_engine.git",
+    "object_alternates": false
+  },
+  "runtime_copy": {
+    "mode": "physical-independent-copy",
+    "reparse_point_count": 0,
+    "roots": [
+      {"path": ".venv", "files": 10157, "bytes": 517524107},
+      {"path": ".tools", "files": 5187, "bytes": 819878997},
+      {"path": "HANDOFF_ASSETS", "files": 11, "bytes": 130145678},
+      {"path": "web/node_modules", "files": 37247, "bytes": 550540721},
+      {"path": "data", "files_at_copy": 429, "bytes_at_copy": 1943974517},
+      {"path": "assets/clipseg", "files": 5, "bytes": 141341737},
+      {"path": "assets/depth_anything_v2", "files": 3, "bytes": 99062108}
+    ]
+  },
+  "data_path_migration": {
+    "files": 5,
+    "absolute_path_replacements": 49,
+    "backup": "data/_runnable_path_migration_backup_20260827",
+    "active_old_root_references": 0,
+    "project_paths_checked": 13,
+    "missing_project_paths": 0
+  },
+  "verification": {
+    "backend_pytest": {"passed": 19, "failed": 0},
+    "frontend_node_tests": {"passed": 7, "failed": 0},
+    "next_production_build": {"passed": true, "static_routes": 7},
+    "http": {
+      "healthz": 200,
+      "projects": 200,
+      "root": 200,
+      "design": 200
+    },
+    "edge_ui": {
+      "passed": true,
+      "url": "http://127.0.0.1:7870/design/",
+      "project_detail_hydrated": true,
+      "scroll_container": {"client_height": 839, "scroll_height": 4105, "observed_scroll_top": 775.3333129882812},
+      "independent_candidate_inputs": ["左侧方案独立备注", "右侧方案独立备注"],
+      "zoomable_2k_candidates": 2,
+      "zoom_overlay_opened": true,
+      "new_project_entry_opened": true,
+      "paid_external_calls": 0
+    },
+    "computer_use_native_helper": {
+      "available": false,
+      "recovery_attempts": 3,
+      "fallback": "connected Edge browser extension",
+      "note": "The Windows native pipe was absent; Edge UI verification completed through the connected browser control extension."
+    }
+  },
+  "scope": {
+    "includes_goal0_anchor_work": false,
+    "legacy_4k_refine_from_selected_base": true,
+    "usability_hotfixes": [
+      "hydrate project detail before rendering list-only records",
+      "bounded vertical scrolling",
+      "per-candidate refinement input state",
+      "2K candidate image zoom",
+      "copied-data absolute path migration"
+    ]
+  }
+}
+
