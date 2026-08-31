@@ -1,0 +1,51 @@
+{
+  "schema": "goal-loop-v2-checkpoint-v1",
+  "checkpoint_id": "0004-1308-partial-reference-freeze",
+  "stage": "reference_freeze",
+  "status": "accepted_partial_reference_freeze_not_build_ready",
+  "accepted_at": "2026-09-01T06:41:46.2194867+08:00",
+  "baseline_commit": "334cf86f6d02e2349cb81d960877b0f376e54c0c",
+  "accepted_commit": "54c516f4153bae5e9a05b8441600b45e472db588",
+  "independent_verdict": "accept_1308_reference_freeze_application_v2",
+  "runtime_artifacts": {
+    "independent_reference_freeze_verdict_v2_sha256": "8a0b957303d59cec72d84161fb28dbf3ac9a852e77cd1c856140b06dffce5960",
+    "runtime_reference_freeze_verdict_v2_sha256": "6fa519472a73d5e37ed347fbb5706453905522f7899c8baec9f6830efedeaaf1",
+    "runtime_verdict_semantically_equals_independent": true,
+    "reference_frozen_v2_sha256": "888e1e612bd23d904f71c12cdccc09c8f467ec010fbf97e746ac137e6c9fb188",
+    "reference_frozen_readiness_v2_sha256": "7f6e6ebedb04447d71d1b210b9074c760a56826580f01def410dc86f6b6953c3",
+    "frozen_structure_hash": "18b67d7d8c3a62e1a71a5c79c7309c965d7b571eeb6a0f59ec3f2724e7e25142"
+  },
+  "reference_state": {
+    "stable_blockers_before": 12,
+    "stable_blockers_after": 4,
+    "ready": false,
+    "build_opening_ids": [],
+    "build_authorized": false
+  },
+  "frozen_blockers": [
+    "B1308-ORIENTATION-FREEZE",
+    "B1308-NORM-SPACE-SCHEMA",
+    "B1308-OUTER-BOUNDARY",
+    "B1308-UNSPLIT-X",
+    "B1308-OP005-NOMINAL-EFFECTIVE",
+    "B1308-OPENING-GAP",
+    "B1308-OP011-KIND",
+    "B1308-Z-ASSUMPTIONS"
+  ],
+  "remaining_1308_blockers": [
+    "B1308-JUNCTION-ENDPOINTS",
+    "B1308-CROSSING-JAMB",
+    "B1308-OP001-RETURN",
+    "B1308-SEMANTIC-ADJACENCY"
+  ],
+  "tests": {
+    "v2_reference_and_freeze_focused": {"passed": 14, "failed": 0},
+    "backend": {"passed": 362, "skipped": 1, "failed": 0},
+    "adversarial_unresolved_status_promotion": "rejected",
+    "diff_check": "passed"
+  },
+  "stage_boundary": "The independent freeze resolves eight source-supported reference decisions and preserves exactly four unresolved source blockers. It does not authorize Blender/IFC, create any build opening, confirm semantic adjacency, or claim a fully frozen 1308 reference.",
+  "budget_spent_usd": 0,
+  "budget_remaining_usd": 20,
+  "next_action": "Resolve the four remaining source blockers with mechanical evidence plus independent Gemini composite review before promoting any geometry to build-ready."
+}

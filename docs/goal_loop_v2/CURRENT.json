@@ -4,33 +4,25 @@
   "active_sample": "1308",
   "stage": "reference_freeze",
   "iteration": 0,
-  "method_id": "reference-freeze-v2",
+  "method_id": "reference-repair-v2",
   "sample_status": {
     "1308": "running",
     "121m2": "pending"
   },
-  "last_accepted_commit": "c4238393db6a1296954714e97dd1966ba7970c08",
+  "last_accepted_commit": "54c516f4153bae5e9a05b8441600b45e472db588",
   "last_run_id": "",
   "last_score": 0,
   "score_history": [],
   "failure_class": null,
-  "next_action": "Independently review the 1308 v2 evidence document and truth candidates; freeze only source-supported orientation, outer scope and disclosed research assumptions, while preserving OP001 and semantic adjacency as unresolved until evidence resolves them.",
+  "next_action": "Resolve the four remaining 1308 source blockers with independent evidence: dangling wall endpoints, crossing-jamb continuity, the OP001 return-wall face, and semantic adjacency. Re-freeze only after mechanical checks and Gemini composite review agree; keep Blender/IFC disabled until readiness passes.",
   "budget_spent_usd": 0,
   "budget_remaining_usd": 20,
   "blockers": [
-    "B1308-ORIENTATION-FREEZE",
-    "B1308-NORM-SPACE-SCHEMA",
-    "B1308-OUTER-BOUNDARY",
     "B1308-JUNCTION-ENDPOINTS",
-    "B1308-UNSPLIT-X",
-    "B1308-OP005-NOMINAL-EFFECTIVE",
     "B1308-CROSSING-JAMB",
-    "B1308-OPENING-GAP",
     "B1308-OP001-RETURN",
-    "B1308-OP011-KIND",
-    "B1308-SEMANTIC-ADJACENCY",
-    "B1308-Z-ASSUMPTIONS"
+    "B1308-SEMANTIC-ADJACENCY"
   ],
   "final_human_accepted": false,
-  "updated_at": "2026-09-01T06:02:26.6617238+08:00"
+  "updated_at": "2026-09-01T06:41:46.2194867+08:00"
 }
