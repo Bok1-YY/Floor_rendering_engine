@@ -22,7 +22,7 @@ def _request(document, proposal, bindings):
 
 
 def test_wall_face_endpoint_adjudication_fails_closed_on_gap_or_dangling():
-    proposal = {"wall_graph": {"endpoint_diagnostics": [
+    proposal = {"wall_graph": {"walls": [_wall("A", [0, 0], [1, 0]), _wall("B", [0, 0], [0, 1])], "endpoint_diagnostics": [
         {"wall_id": "A", "endpoint_index": 0, "status": "wall_face_termination_candidate", "junction_ids": [], "wall_face_support_candidates": [{"wall_id": "B", "continuous_at_1mm": True, "wall_face_distance_m": 0.0}]},
         {"wall_id": "A", "endpoint_index": 1, "status": "dangling_unresolved", "junction_ids": [], "wall_face_support_candidates": []},
     ]}}
@@ -62,9 +62,9 @@ def test_crossing_jamb_requires_real_junction_face_and_host_scoped_void():
 
 
 def test_return_wall_face_preserves_unresolved_gap_and_accepts_continuous_solid():
-    proposal = {"wall_graph": {"walls": [_wall("RETURN", [0, 0], [0, 2])]}, "openings": [{"id": "O", "jamb_before_support": {}, "jamb_after_support": {"mode": "return_or_cross_wall_face_candidate", "preferred_candidate_wall_id": "RETURN", "candidates": [{"wall_id": "RETURN", "continuous_at_1mm": False, "wall_face_distance_m": 0.024}]}}]}
+    proposal = {"wall_graph": {"walls": [_wall("RETURN", [0, -1], [0, 2])]}, "openings": [{"id": "O", "owning_wall_id_candidate": "HOST", "source_segment_m": [[-1, 0], [-0.084, 0]], "sill_m": 0.0, "height_m": 2.1, "jamb_before_support": {}, "jamb_after_support": {"mode": "return_or_cross_wall_face_candidate", "preferred_candidate_wall_id": "RETURN", "candidates": [{"wall_id": "RETURN", "continuous_at_1mm": False, "wall_face_distance_m": 0.024}]}}]}
     assert assess_return_wall_faces(proposal)[0]["outcome"] == "unresolved"
-    proposal["openings"][0]["jamb_after_support"]["candidates"][0].update(continuous_at_1mm=True, wall_face_distance_m=0.0)
+    proposal["openings"][0]["source_segment_m"][1] = [-0.06, 0]
     assert assess_return_wall_faces(proposal)[0]["outcome"] == "resolved"
 
 
@@ -117,3 +117,7 @@ def test_decisions_require_hash_bound_explicit_identity_not_issue_category():
     semantic_request = _request(semantic, proposal, [{"issue_id": "ISSUE-BOUND", "check": "crossing_wall_jamb", "opening_id": "O", "jamb_side": "jamb_after_support", "owner_wall_id": "HOST", "supporting_wall_id": "CROSS"}])
     with pytest.raises(ValueError, match="incompatible"):
         adjudicate_geometry(semantic, proposal, semantic_request)
+    pending = deepcopy(request)
+    pending.update(schema="geometry-adjudication-request-candidate-v1", adjudication_authority="pending_independent_reference_reviewer", verdict="pending")
+    with pytest.raises(ValueError, match="invalid geometry adjudication request"):
+        adjudicate_geometry(document, proposal, pending)

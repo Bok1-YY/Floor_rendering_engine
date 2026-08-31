@@ -67,6 +67,20 @@ def _wall_index(proposal: Mapping[str, Any]) -> dict[str, Mapping[str, Any]]:
     return {str(row["id"]): row for row in proposal["wall_graph"]["walls"]}
 
 
+def _point_rectangle_face_error(point, wall: Mapping[str, Any]) -> float:
+    p, a, b = _point(point), _point(wall["proposed_centerline_m"][0]), _point(wall["proposed_centerline_m"][1])
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    length = math.hypot(dx, dy)
+    tx, ty = dx / length, dy / length
+    nx, ny = -ty, tx
+    along = (p[0] - a[0]) * tx + (p[1] - a[1]) * ty
+    normal = (p[0] - a[0]) * nx + (p[1] - a[1]) * ny
+    half = float(wall.get("nominal_thickness_m") or 0.0) * 0.5
+    if along < -TOLERANCE_M or along > length + TOLERANCE_M or abs(normal) > half + TOLERANCE_M:
+        return math.inf
+    return min(abs(along), abs(length - along), abs(half - abs(normal)))
+
+
 def proposal_content_hash(proposal: Mapping[str, Any]) -> str:
     return hashlib.sha256(canonical_json(proposal)).hexdigest()
 
@@ -124,6 +138,7 @@ def _distance_point_to_segment(point, first, second) -> float:
 
 def assess_wall_face_terminations(proposal: Mapping[str, Any]) -> dict[str, Any]:
     diagnostics = list((proposal.get("wall_graph") or {}).get("endpoint_diagnostics") or [])
+    walls = _wall_index(proposal)
     unresolved: list[dict[str, Any]] = []
     passed = 0
     for row in diagnostics:
@@ -131,15 +146,19 @@ def assess_wall_face_terminations(proposal: Mapping[str, Any]) -> dict[str, Any]
             passed += 1
             continue
         candidates = list(row.get("wall_face_support_candidates") or [])
-        valid = [candidate for candidate in candidates if candidate.get("continuous_at_1mm") is True and float(candidate.get("wall_face_distance_m", math.inf)) <= TOLERANCE_M]
-        if row.get("status") == "wall_face_termination_candidate" and len(valid) == 1:
+        wall = walls.get(str(row.get("wall_id")))
+        endpoint_index = int(row.get("endpoint_index"))
+        endpoint = wall["proposed_centerline_m"][endpoint_index] if wall and endpoint_index in (0, 1) else None
+        measured = [(candidate, _point_rectangle_face_error(endpoint, walls[candidate["wall_id"]])) for candidate in candidates if endpoint is not None and candidate.get("wall_id") in walls]
+        valid = [candidate for candidate, error in measured if error <= TOLERANCE_M]
+        if row.get("status") in {"wall_face_termination_candidate", "wall_face_termination_repaired", "wall_face_termination_repair_candidate_pending_independent_review"} and len(valid) == 1:
             passed += 1
         else:
             unresolved.append({
                 "wall_id": row.get("wall_id"), "endpoint_index": row.get("endpoint_index"),
                 "status": row.get("status"),
                 "candidate_count": len(candidates),
-                "best_face_distance_m": min((float(item.get("wall_face_distance_m", math.inf)) for item in candidates), default=None),
+                "best_face_distance_m": min((error for _, error in measured), default=None),
             })
     return {
         "check": "wall_face_termination_completeness",
@@ -232,21 +251,62 @@ def assess_return_wall_faces(proposal: Mapping[str, Any]) -> list[dict[str, Any]
             candidates = list(support.get("candidates") or [])
             if not candidates and preferred:
                 candidates = [{"wall_id": preferred, "wall_face_distance_m": math.inf, "continuous_at_1mm": False}]
-            valid = []
-            for candidate in candidates:
-                wall = walls.get(candidate.get("wall_id"))
-                if wall and candidate.get("continuous_at_1mm") is True and float(candidate.get("wall_face_distance_m", math.inf)) <= TOLERANCE_M and float(wall.get("nominal_thickness_m") or 0) >= MINIMUM_SUPPORT_M:
-                    valid.append(candidate)
+            support_id = preferred or (candidates[0].get("wall_id") if len(candidates) == 1 else None)
+            wall = walls.get(support_id)
+            segment = opening.get("source_segment_m") or []
+            reasons: list[str] = []
+            face_error, continuous_support_m = math.inf, 0.0
+            selected_endpoint = None
+            cutters: list[str] = []
+            if not wall or len(segment) != 2:
+                reasons.append("missing source segment or supporting wall")
+            else:
+                endpoint_index = 0 if side_name == "jamb_before_support" else 1
+                selected_endpoint = _point(segment[endpoint_index])
+                first, second = _point(segment[0]), _point(segment[1])
+                vector = (second[0] - first[0], second[1] - first[1])
+                vector_length = math.hypot(*vector)
+                direction = (vector[0] / vector_length, vector[1] / vector_length) if vector_length > 1e-12 else (0.0, 0.0)
+                interval = _line_wall_solid_interval(selected_endpoint, direction, wall) if vector_length > 1e-12 else None
+                if interval is not None:
+                    face_error = min(abs(interval[0]), abs(interval[1]))
+                    continuous_support_m = max(0.0, interval[1] - interval[0])
+                if face_error > TOLERANCE_M:
+                    reasons.append("declared jamb endpoint is not on return-wall solid face")
+                if continuous_support_m < MINIMUM_SUPPORT_M - 1e-9:
+                    reasons.append("continuous return-wall support is below 50mm")
+                sill = float(opening.get("sill_m") or 0.0)
+                head = sill + float(opening.get("height_m") or 0.0)
+                base = float(wall.get("base_m") or 0.0)
+                top = base + float(wall.get("height_m") or 0.0)
+                if base > sill + TOLERANCE_M or top < head - TOLERANCE_M:
+                    reasons.append("return wall does not cover opening sill/head")
+                nearest = _nearest_on_wall_axis(selected_endpoint, wall)
+                cutters = _support_is_cut(proposal, str(opening.get("id")), str(support_id), nearest, sill, head)
+                if cutters:
+                    reasons.append("return-wall protected region is cut by another opening")
             results.append({
                 "check": "return_wall_face", "opening_id": opening.get("id"), "side": side_name,
                 "owner_wall_id": opening.get("owning_wall_id_candidate"),
-                "supporting_wall_id": valid[0].get("wall_id") if len(valid) == 1 else preferred,
-                "outcome": "resolved" if len(valid) == 1 else "unresolved",
-                "candidate_count": len(candidates), "valid_candidate_count": len(valid),
-                "best_face_distance_m": min((float(item.get("wall_face_distance_m", math.inf)) for item in candidates), default=None),
+                "supporting_wall_id": support_id,
+                "outcome": "resolved" if not reasons else "unresolved",
+                "candidate_count": len(candidates), "selected_endpoint_m": list(selected_endpoint) if selected_endpoint else None,
+                "face_error_m": face_error if math.isfinite(face_error) else None,
+                "continuous_support_m": continuous_support_m,
+                "support_cut_by_opening_ids": cutters, "reasons": reasons,
                 "tolerance_m": TOLERANCE_M, "minimum_support_m": MINIMUM_SUPPORT_M,
             })
     return results
+
+
+def _nearest_on_wall_axis(point, wall: Mapping[str, Any]) -> tuple[float, float]:
+    p, a, b = _point(point), _point(wall["proposed_centerline_m"][0]), _point(wall["proposed_centerline_m"][1])
+    dx, dy = b[0] - a[0], b[1] - a[1]
+    denominator = dx * dx + dy * dy
+    if denominator <= 1e-18:
+        return a
+    t = max(0.0, min(1.0, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / denominator))
+    return a[0] + t * dx, a[1] + t * dy
 
 
 def adjudicate_geometry(document: Mapping[str, Any], proposal: Mapping[str, Any], request: Mapping[str, Any]) -> dict[str, Any]:
