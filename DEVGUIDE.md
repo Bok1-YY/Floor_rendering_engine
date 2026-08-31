@@ -27,14 +27,14 @@ Windows 开发脚本会：
 关掉某个终端窗口 = 停掉对应服务。Windows 一体运行只保留一个后端窗口，前端由 FastAPI 静态托管。
 
 ### 0.2 手动启动（开发时常用）
-路径以仓库上一级的 `test/` 目录为基准（下面 `<项目根>` 代表你本地放 `test/` 的位置）。
+当前 runnable 可直接从仓库根目录启动；不要求外层目录名必须是 `test/`。
 ```bash
-# 后端（务必在 test/ 目录下运行，单 worker）
-cd  <项目根>/test
-python -m Floor_engine_server.server_api          # → http://127.0.0.1:7870
+# 一体化生产前端 + 后端（单 worker）
+cd <runnable目录>
+python serve.py                                    # → http://127.0.0.1:7870
 
 # 前端（另开一个终端）
-cd  <项目根>/test/Floor_engine_server/web
+cd <runnable目录>/web
 npm run dev                                        # → http://localhost:3000
 ```
 浏览器开 **http://localhost:3000**。后端健康检查：`GET http://127.0.0.1:7870/api/healthz` → `{"ok":true}`。
@@ -49,7 +49,7 @@ pip install -r Floor_engine_server/requirements-dev.txt
 # 前端 Node 依赖（需 Node 20.9+）
 cd Floor_engine_server/web && npm install
 ```
-然后在前端「**设置**」页填 Gemini API Key（或直接写 `test/engine_config.json`）。没有 key 也能开界面，但出图会失败。
+然后在前端「**设置**」页填写 Gemini/Fal API Key。密钥进入当前用户的系统密钥环，不写入 `engine_config.json`；没有 Key 仍可打开界面和使用本地功能，但外部生图与 Gemini 审查不可用。
 
 独立样品对色不需要上述前后端依赖或 API Key。Windows 双击 `standalone_color_calibrator/启动校色工具.bat`；独立复制该目录后只需执行 `pip install -r requirements.txt`。
 
@@ -58,7 +58,7 @@ cd Floor_engine_server/web && npm install
 | 进程 | 端口 | 启动命令 | 说明 |
 |---|---|---|---|
 | **前端** Next.js dev | **3000** | `npm run dev`（在 `web/`） | 浏览器入口，开发用 |
-| **后端** FastAPI（无头） | **7870** | `python -m Floor_engine_server.server_api`（在 `test/`） | 主线 API + SSE + 静态图 |
+| **后端** FastAPI（无头） | **7870** | `python serve.py`（在 runnable 根目录） | 主线 API + SSE + 静态图 |
 | 旧版 NiceGUI（过渡 fallback） | 7869 | 见 §八 | 老界面，**不加新功能**，留作兜底 |
 
 ### 0.5 启动逻辑（一键启动脚本到底做了什么）
@@ -208,7 +208,7 @@ POST /api/jobs ──秒回 job_id──▶ 后台 asyncio task(routes_jobs._run
 
 进程内状态全部在 `server_state.py`：`JOBS`/`PREVIEWS`/`INPAINTS` 三个 `TaskRegistry` 实例（成员管理内部加锁；单任务取消集合 + 全局取消代次是 JOBS 的方法）、`model_semaphores`(b2/pro/sd35/inpaint 各一把，lifespan 里 `init_runtime()` 建)。新任务以 `model_targets` + `model_runs` 为真源，旧 `model_filter`/B2/Pro 固定字段仅作兼容；终态由 `compute_runs_final_status` 汇总。
 
-### 4.3 端点目录（50+ API 路由）
+### 4.3 端点目录（当前契约共 99 条 API 路由）
 - **作业** `/api/jobs`：`POST`建（`model_targets` 可多选 b2/pro/sd35）· `POST /free` 建自由多图任务 · `GET`列 · `GET {id}` · `GET {id}/stream`(SSE) · `POST {id}/cancel` · `POST cancel-all` · `POST clear-completed`(只清任务卡，保留图片/记录) · `POST {id}/delete`(删单条任务卡) · `POST {id}/retry`（ambiguous 必须 `confirm_possible_duplicate_charge=true`）· `POST {id}/sd-upscale` · `GET {id}/result?model=&idx=` · `POST {id}/polish` · `POST {id}/edit` · `POST {id}/regen?n=`。
 - **预览** `/api/preview`：`POST` 创建轻量预览 · `GET {pid}` 查询 · `POST {pid}/cancel` 取消。
 - **记录** `/api/records`：`GET`列文件 · `GET load`（只读）· `POST reveal`(解密) · `POST edit`(记录内二改) · `POST result/delete`（无共享引用才物理删图）· `POST result/favorite` · `POST result/review`(人工评审：通过/备选/淘汰、标签、备注、最佳图) · `POST delete`(删整条并回收无引用文件) · `GET export/{html,pptx,favorites-pptx}`(FileResponse 下载)。
@@ -220,6 +220,7 @@ POST /api/jobs ──秒回 job_id──▶ 后台 asyncio task(routes_jobs._run
 - **评审复盘**：`GET /api/review/summary` 聚合维度统计 · `GET /api/review/gallery?filter=pass|best` 好图样本库。
 - **失败** `POST /api/failure/classify` · `GET /api/failure/rules`；**连通** `GET /api/connection/test`。
 - **配置** `GET/PUT /api/config`；`DELETE /api/config/secrets/{gemini|fal|deepseek}` 清系统密钥；**模型** `GET /api/models`；**选项** `GET /api/options`；**用量** `GET /api/usage`（含 uncertain 与成本上下限）；**健康** `GET /api/healthz`。
+- **全屋研究快线**：`PUT /api/whole-home-design/projects/{id}/anchors` 保存人工比例尺/空间/入口/门窗；`POST|PUT .../structure-review` 准备九问并编译结构合同；`POST .../model-runs` 启动 Blender/IFC；`POST .../model-runs/{run_id}/review` 重试 Gemini 复审；`GET .../artifacts/{kind}` 下载经过白名单过滤的产物。旧 `refine/preview|commit` 4K 全屋精修端点已删除。
 - **静态/缩略图**：`GET /thumb/{uploads,outputs}`(懒生成 JPEG)；`/outputs`、`/uploads` 挂目录服原图。
 
 ### 4.4 加新端点的范式
@@ -348,7 +349,7 @@ web/src/
 6. 在 **`开发日志.md` 顶部追加一条**（改了啥、为什么）。
 7. 提交（见 §九）。
 
-**测试**：`cd Floor_engine_server && python -m pytest`（引擎层 golden 提示词、安全硬化、全屋设计自动摘要/结构裁图/文字清理/revision/结构锁/Blender 任务包、人工评审元数据、AI/手绘蒙版与局部/全图校色、独立样品对色、SD 提示词/IP-Adapter/FAL 队列恢复、生成式修补智能选区的 RLE/扫描过滤/点击策略/路由契约，以及模式化 mask/提示词/EXIF/候选计费/无损落盘和非校色新功能回归；当前 **252 passed，1 skipped**）。本机若系统 `python` 无 pytest，可用项目虚拟环境：`.venv/bin/python -m pytest`。`tests/golden/` 基准入库，缓存不入。
+**测试**：在 runnable 根目录运行 `.venv\Scripts\python.exe -m pytest -q`（引擎层 golden 提示词、安全硬化、系统密钥环、计费安全重试、存储生命周期、全屋设计自动摘要/人工锚点/九问结构图/revision/本地 Blender/GLB/IFC研究快线、人工评审元数据、AI/手绘蒙版与局部/全图校色、独立样品对色、SD 提示词/IP-Adapter/FAL 队列恢复、生成式修补、路由契约及非校色功能回归；当前 **315 passed，1 skipped**）。前端依次运行 `npm run test:design`、`test:scene`、`test:storage`、`test:security`、`lint` 与 `build`。`tests/golden/` 基准入库，缓存不入。
 
 ---
 
@@ -363,20 +364,21 @@ web/src/
 ## 九、构建 / 打包 / Git
 
 - **前端生产静态站**：`cd web && npm run build` 生成 `web/out/`；本项目配置了 `output: "export"`，不使用 `next start`。从 `test/` 运行 `python Floor_engine_server/serve.py`，FastAPI 会把 `web/out` 挂到 `/`，前后端同源跑在 7870。
-- **当前商业主线 exe**（Windows 专属）：运行 `Floor_engine_server/build_windows.bat`。脚本先 `npm ci && npm run build`，再用独立 `.buildenv` 安装依赖并以 Nuitka `--onefile` 编译 `serve.py`；`assets/mobile_sam/*.onnx` 和 ONNX Runtime 会一并进入单文件，运行校色分割不联网。产物为 `test/dist/FloorEngine.exe`。完整说明见上级 `test/PACKAGING.md` 与仓库内 `打包说明.md`。
+- **Windows onefile（按需执行，不是日常 push 门）**：运行 `build_windows.bat`。脚本以 `--jobs=4` 限制 Nuitka 并发，打入 Web UI、MobileSAM/ONNX Runtime、IfcOpenShell、keyring 和 `tools.fastloop_research`；Blender 5.2 仍是外部依赖。产物为 `dist/FloorEngine.exe`。只有明确发布 exe 时才执行完整打包；普通代码 push 以全量测试、前端 build、HTTP 和相关真实 Blender/IFC 冒烟为门。
 - **不要误用旧脚本**：上级 `test/build.bat`、`floor_engine.spec`、`run_app.py` 是冻结 NiceGUI 原型 `floor_engine/` 的 PyInstaller/pywebview 打包链，不包含当前 Next.js 商业前端和最新功能。
-- **Git**：本仓库是独立 git 仓（分支 `main`，提交后 push 到远程 `origin`）。运行期产物与密钥已被 `.gitignore` + `web/.gitignore`（node_modules/.next）排除；`engine_config.json` 在 `test/` 不入库。提交信息沿用 `feat/fix/docs(scope): 说明` 风格，并保持「改完追加 `开发日志.md`」的习惯。
+- **Git**：本仓库是独立 git 仓。运行期产物、系统密钥、`data/`、虚拟环境和构建目录均不入库；提交信息沿用 `feat/fix/docs(scope): 说明`。日常 push 不自动触发 Nuitka 打包，除非发布任务明确要求 exe。
 
 ---
 
 ## 十、全屋设计 v1 合同
 
 - 页面：`/design`；后端：`routes_whole_home_design.py`；领域与 ZIP：`whole_home_design.py`。
-- 存储：`output_files/_whole_home_design/{projects,assets,bundles}`，项目 JSON 原子替换；改户型摘要、需求或参考图会使旧候选和任务包 stale。
-- 调用：草稿固定 2 次 B2/2K，精修固定 1 次 Pro/4K；每阶段单独 preview/commit，Google 与 Fal 不自动付费切线。Fal 保存队列 request ID，重启只恢复同一个请求。
-- QA：Gemini 可做自动对抗式结构检查；Fal-only 强制人工核对。自动 hard fail 永远不能人工覆写。最终锁定还要求 4K、当前 source/brief hash 和完整人工检查。
-- 建模包：原户型和确认摘要是结构权威；AI 成稿只负责家具/材料/灯光。缺少可信尺度时 Blender Agent 必须返回 `blocked_missing_scale`，不能猜米制尺寸。
-- 退役：主线不再提供 CAD/IFC、整屋灰模/机位、360° 新建/恢复/修补。旧记录中的 ERP 只允许查看和下载。
+- 存储：`output_files/_whole_home_design/{projects,assets,bundles,model-runs}`；项目 JSON 原子替换，所有模型输出按 project/structure hash 版本化且不覆盖。
+- 结构入口：必须有空间、入户门和且仅有一条人工两点比例尺；九问答案、技术结构包、source/normalized/project/revision/hash全部绑定。错误或不完整结构进入 `needs_professional_review`，不计产品失败。
+- 本地建模：`tools/fastloop_research` 通过 Blender CLI 参数数组生成 Blend/GLB/三视图，通过 IfcOpenShell 生成并回读研究 IFC；不用 PowerShell拼接、MCP、网络或全屋 Boolean。研究模型不等于施工 BIM。
+- 调用：概念草稿只保留固定 2 次 B2/2K；Google 与 Fal 不自动付费切线。概念图与研究灰模并行，不能改变墙体、门窗或邻接图。
+- QA：研究模型机械门通过后，Gemini 同时读取原图、人工叠图、顶视、东北和西北视图。Gemini 不可用时保留本地产物并标 `external_review_pending`；IfcOpenShell 缺失必须标 `blocked_dependency_missing`，不能由视觉通过晋级。
+- 高级任务包仍保留；360° 新建/恢复/修补继续退役，旧 ERP 只读。
 
 ---
 

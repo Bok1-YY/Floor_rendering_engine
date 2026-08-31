@@ -1,74 +1,81 @@
 {
-  "schema": "floor-engine-runnable-baseline-v1",
-  "created_at": "2026-08-27T14:51:24+08:00",
+  "schema": "floor-engine-runnable-baseline-v2",
+  "created_at": "2026-08-31T16:49:24+08:00",
   "location": "C:\\Users\\1_1\\Desktop\\Floor_engine_Runnable_433c16e_20260827",
   "git": {
+    "branch": "runnable/whole-home-research-fastlane-20260831",
     "selected_base_commit": "433c16e2dab99c32c1f2b89c187f5b36481889a0",
-    "selected_base_subject": "fix(design): harden real floorplan validation workflow",
     "local_usability_hotfix_commit": "c01dd43874f1b3a703f91f6422fe5e15854c87df",
-    "pushed": false,
+    "prompt_and_runtime_commit": "c8faaea4f924e89da5587af81194a07162dc3087",
+    "research_fastlane_commit": "48a865f46328a069448eb0eaf7f45fbbdc54a0bc",
     "origin": "git@github.com:Bok1-YY/Floor_rendering_engine.git",
-    "object_alternates": false
-  },
-  "runtime_copy": {
-    "mode": "physical-independent-copy",
-    "reparse_point_count": 0,
-    "roots": [
-      {"path": ".venv", "files": 10157, "bytes": 517524107},
-      {"path": ".tools", "files": 5187, "bytes": 819878997},
-      {"path": "HANDOFF_ASSETS", "files": 11, "bytes": 130145678},
-      {"path": "web/node_modules", "files": 37247, "bytes": 550540721},
-      {"path": "data", "files_at_copy": 429, "bytes_at_copy": 1943974517},
-      {"path": "assets/clipseg", "files": 5, "bytes": 141341737},
-      {"path": "assets/depth_anything_v2", "files": 3, "bytes": 99062108}
-    ]
-  },
-  "data_path_migration": {
-    "files": 5,
-    "absolute_path_replacements": 49,
-    "backup": "data/_runnable_path_migration_backup_20260827",
-    "active_old_root_references": 0,
-    "project_paths_checked": 13,
-    "missing_project_paths": 0
-  },
-  "verification": {
-    "backend_pytest": {"passed": 19, "failed": 0},
-    "frontend_node_tests": {"passed": 7, "failed": 0},
-    "next_production_build": {"passed": true, "static_routes": 7},
-    "http": {
-      "healthz": 200,
-      "projects": 200,
-      "root": 200,
-      "design": 200
-    },
-    "edge_ui": {
-      "passed": true,
-      "url": "http://127.0.0.1:7870/design/",
-      "project_detail_hydrated": true,
-      "scroll_container": {"client_height": 839, "scroll_height": 4105, "observed_scroll_top": 775.3333129882812},
-      "independent_candidate_inputs": ["左侧方案独立备注", "右侧方案独立备注"],
-      "zoomable_2k_candidates": 2,
-      "zoom_overlay_opened": true,
-      "new_project_entry_opened": true,
-      "paid_external_calls": 0
-    },
-    "computer_use_native_helper": {
-      "available": false,
-      "recovery_attempts": 3,
-      "fallback": "connected Edge browser extension",
-      "note": "The Windows native pipe was absent; Edge UI verification completed through the connected browser control extension."
-    }
+    "pushed": false
   },
   "scope": {
-    "includes_goal0_anchor_work": false,
-    "legacy_4k_refine_from_selected_base": true,
-    "usability_hotfixes": [
-      "hydrate project detail before rendering list-only records",
-      "bounded vertical scrolling",
-      "per-candidate refinement input state",
-      "2K candidate image zoom",
-      "copied-data absolute path migration"
-    ]
-  }
+    "prompt_customization_preserved": true,
+    "system_keyring": true,
+    "billing_safe_retry": true,
+    "storage_lifecycle": true,
+    "whole_home_research_fastlane": true,
+    "legacy_whole_home_4k_refine": false,
+    "two_parallel_2k_concepts": true,
+    "construction_grade_bim": false
+  },
+  "verification": {
+    "backend_pytest": {"passed": 315, "skipped": 1, "failed": 0},
+    "frontend": {
+      "design": {"passed": 9, "failed": 0},
+      "scene": {"passed": 3, "failed": 0},
+      "storage": {"passed": 2, "failed": 0},
+      "security": {"passed": 3, "failed": 0},
+      "lint": "passed",
+      "production_build": "passed",
+      "static_pages": 7
+    },
+    "dependencies": {
+      "pip_check": "passed",
+      "blender": "5.2.0 LTS",
+      "ifcopenshell": "0.8.5"
+    },
+    "prompt_hash_lock": "passed",
+    "route_contract": {"count": 99, "passed": true},
+    "http_source_runtime": {
+      "port": 7898,
+      "temporary_data": true,
+      "healthz": 200,
+      "design": 200,
+      "openapi": 200,
+      "floorplan_upload": 200,
+      "project_create": 200,
+      "project_detail": 200,
+      "sample_project": "design_20260831_163543_6386a53fe4",
+      "sample_status": "needs_anchor_review"
+    },
+    "research_model": {
+      "product_adapter": "passed",
+      "blend_cold_open": "passed",
+      "glb_cold_import": "passed",
+      "ifc4_reopen": "passed",
+      "top_view": "passed",
+      "north_east_view": "passed",
+      "north_west_view": "passed",
+      "output": "C:\\Users\\1_1\\Desktop\\floorplan_runnable_validation_20260831\\product-adapter\\test_product_adapter_runs_real0\\whole_home_design\\models\\e643b0\\design_20260831_154542_87fcbc76fa-8e1e40aeae321b5f"
+    },
+    "paid_external_calls": 0,
+    "browser_automation": "not_available_in_this_validation",
+    "onefile": {
+      "required_for_push": false,
+      "attempt": "cancelled_after_resource_saturation_and_user_direction",
+      "jobs_limit_added": 4,
+      "generated_directories_recycled": [".buildenv", ".nuitka_stage", "dist"]
+    }
+  },
+  "remaining_gates": [
+    "1308 strict structure contract completion",
+    "121 square metre complex sample completion",
+    "two-cycle automatic correction",
+    "per-vertex and global wall-junction scoring",
+    "real Gemini composite review",
+    "construction-grade BIM release"
+  ]
 }
-

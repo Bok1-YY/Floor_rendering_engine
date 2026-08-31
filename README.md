@@ -4,7 +4,7 @@
 ![License](https://img.shields.io/badge/license-AGPL--3.0--only-blue)
 ![Python](https://img.shields.io/badge/python-3.10%2B-3776AB)
 ![Node](https://img.shields.io/badge/node-20%2B-339933)
-![Tests](https://img.shields.io/badge/tests-252%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-315%20passed-brightgreen)
 
 把一块真实地板色板，转译成可批量生成、可锁定产品颜色、可局部修补、可评审交付的空间内容。
 
@@ -18,7 +18,7 @@
 
 ## 2026.08 最新更新
 
-- **实验性全屋设计取代全屋自动 3D / 360° VR**：上传户型图片或 PDF，由 Gemini 自动预填标题、面积、尺寸、空间候选、置信度和待确认项；确认后生成两张 2K 正俯视 2.5D 草稿。自动 QA 发现结构硬错误时不能人工覆写，只有通过草稿才能精修 4K 并导出 Blender Agent 任务包。首个 121㎡真实户型验证中摘要可用、结构清理有效，但 4 张草稿均被严格门禁阻断，因此当前仍为 experimental，详见[真实验证记录](./docs/WHOLE_HOME_DESIGN_REAL_VALIDATION_20260821.md)。
+- **实验性全屋设计加入本地研究建模快线**：上传户型图片或 PDF，先用人工空间、入口和唯一两点比例尺约束 Gemini，再回答九个普通结构问题。通过严格 wall/opening/adjacency 合同后，产品可直接调用 Blender 5.2 和 IfcOpenShell 输出 Blend、GLB、研究 IFC 与三视图；2K 概念图并行生成且永远不是墙体权威。Gemini 线路不可用时状态为 `external_review_pending`，不会冒充正式 BIM 或计作产品失败。
 - **生成工作台重构**：用“产品 → 场景 → 输出”三步手风琴替代长参数列，常用的房间、风格、光线和镜头保持在核心层；结果区新增 B2 / Pro 页签、候选缩略条，并可直接完成通过、备选、淘汰和收藏。
 - **对色算法 2.0 + 独立样品对色工具**：不用启动 Floor Engine，也不调用网络或 AI 接口，就能把新拍大样对齐历史小样。除经典 LAB 统计校色外，新增可靠像素筛选、精细颜色分布迁移、可选空间光照校正，以及带四色诊断图的 0–100 可信度报告。Floor Engine 首次预览默认精细 2.0，顶部常驻显示 1.0/2.0 选择和画布实际生效版本；独立工具与旧 API 继续保持经典模式默认，兼顾质量与兼容性。
 
@@ -47,7 +47,7 @@ Floor Rendering Engine 把这套隐性的人工流程改成一组可执行、可
 
 当前生成工作台支持：
 
-- 在“全屋设计”中完成户型 PDF 选页、轻量摘要、两草稿一精修、严格结构锁和 Blender 任务包导出；
+- 在“全屋设计”中完成户型 PDF 选页、人工锚点/比例尺、九问结构确认、本地 Blender/GLB/研究 IFC，以及并行的两张 2K 概念草稿；
 - 用“产品 → 场景 → 输出”三步手风琴组织任务，核心参数常驻，其余参数按需展开；
 - 从色板自动识别色调，并给出适合地板营销的场景配方；
 - 批量生成多房间或多块地板，多模型使用独立并发槽；
@@ -146,14 +146,14 @@ Next.js 16 / React 19
         | HTTP + SSE
 FastAPI / task orchestration / queue recovery
         |-- Gemini / Fal / ComfyUI
-        |-- whole-home concept design / strict structure review / Blender task bundle
+        |-- whole-home anchors / structure contract / Blender + GLB + research IFC
         |-- MobileSAM / OpenCV / LAB
         `-- records / review / usage / export
 ```
 
 - B2、Pro 与 SD 使用独立并发槽；服务默认只监听 `127.0.0.1`。
 - 配置、输出、日志和任务恢复状态保存在本机数据目录。
-- 当前回归集覆盖提示词黄金样本、路由契约、路径安全、队列恢复、电影规划、全屋设计自动摘要/结构裁图/文字清理/revision/结构锁/建模包、地板占比、校色、独立样品对色、智能选区和记录链路；本次发布为 **252 tests passed，1 skipped**。
+- 当前回归集覆盖提示词黄金样本、路由契约、路径安全、队列恢复、系统密钥环、计费安全重试、存储生命周期、电影规划、全屋设计人工锚点/九问结构图/revision/Blender/GLB/IFC研究快线、地板占比、校色、独立样品对色、智能选区和记录链路；当前为 **315 tests passed，1 skipped**。
 
 ## My Role
 
@@ -190,6 +190,8 @@ dev-windows.bat                    # FastAPI 7870 + Next.js 3000
 ```
 
 `start-windows.bat` 会检查前端源码是否比 `web/out` 更新；只有产物缺失或过期时才重新构建，避免启动旧界面，也避免每次重复安装依赖。
+
+全屋研究灰模需要本机安装 Blender 5.2；程序会依次读取 `BLENDER_EXECUTABLE`、系统 PATH 和 Blender 的标准 Windows 安装路径。IfcOpenShell 随 Python 依赖安装。未安装 Blender 时，普通效果图、记录、对色和 2K 全屋概念图仍可使用，但本地 Blend/GLB/IFC 会明确显示“缺少本地依赖”。
 
 ### Linux / macOS
 

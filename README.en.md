@@ -4,7 +4,7 @@
 ![License](https://img.shields.io/badge/license-AGPL--3.0--only-blue)
 ![Python](https://img.shields.io/badge/python-3.10%2B-3776AB)
 ![Node](https://img.shields.io/badge/node-20%2B-339933)
-![Tests](https://img.shields.io/badge/tests-252%20passed-brightgreen)
+![Tests](https://img.shields.io/badge/tests-315%20passed-brightgreen)
 
 Turn a real flooring swatch into spatial content that can be batch-generated, color-locked, locally repaired, reviewed, and delivered.
 
@@ -18,7 +18,7 @@ This is not a “home interior” prompt preset. It asks whether the product col
 
 ## What's New in 2026.08
 
-- **Experimental whole-home design replaces automatic whole-home 3D / 360° VR:** Gemini prefills title, area, dimensions, room candidates, confidence and review items from a floor-plan image/PDF before two 2K bird's-eye drafts are generated. Structural hard failures cannot be overridden; only a passing draft may be refined to 4K or exported as a Blender Agent task bundle. In the first real 121㎡ validation, the summary and source cleanup worked, but all four drafts were blocked by the strict gate, so the feature remains experimental. See the [real validation report](./docs/WHOLE_HOME_DESIGN_REAL_VALIDATION_20260821.md).
+- **Experimental whole-home design now includes a local research-model fast lane:** upload a floor-plan image or PDF, anchor rooms, the entrance, and exactly one two-point scale, then answer nine plain-language structure questions. A strict wall/opening/adjacency contract can drive Blender 5.2 and IfcOpenShell to produce Blend, GLB, research IFC, and three orthographic views. The two 2K concepts run in parallel and never become geometric authority. If Gemini is unavailable, local artifacts remain available under `external_review_pending`; they are not mislabeled as construction BIM or a product failure.
 - **A redesigned production workspace:** Product → Scene → Output replaces the long parameter column. Core room, style, lighting, and camera controls stay close at hand, while B2 / Pro tabs, candidate thumbnails, and pass / alternative / reject / favorite actions now live directly on result cards.
 - **Color matching 2.0 + a standalone utility:** Match a newly photographed large sample to an older small swatch without starting Floor Engine or calling an AI service. Beyond classic LAB statistics, it now offers reliable-pixel filtering, detailed distribution transfer, optional spatial illumination correction, and a 0–100 confidence report with a four-color diagnostic overlay. Floor Engine previews default to Detailed 2.0 and always show both the selected engine and the version actually applied to the canvas; the standalone tool and legacy API retain Classic 1.0 defaults for compatibility.
 
@@ -47,7 +47,7 @@ One production job can run B2, Pro, and SD routes together, retain both API orig
 
 The current production workspace supports:
 
-- A Whole-home Design workspace with PDF page selection, lightweight plan review, two drafts plus one refinement, a strict structural lock, and Blender task-bundle export;
+- A Whole-home Design workspace with PDF page selection, human anchors and scale calibration, nine-question structure review, local Blend/GLB/research IFC generation, and two parallel zoomable 2K concepts;
 - A Product → Scene → Output accordion that keeps core controls visible and expands secondary parameters only when needed;
 - Swatch-aware tone detection and flooring-specific scene recipes;
 - Batch generation across rooms or products, with independent model concurrency;
@@ -146,13 +146,14 @@ Next.js 16 / React 19
         | HTTP + SSE
 FastAPI / task orchestration / queue recovery
         |-- Gemini / Fal / ComfyUI
+        |-- whole-home anchors / structure contract / Blender + GLB + research IFC
         |-- MobileSAM / OpenCV / LAB
         `-- records / review / usage / export
 ```
 
 - B2, Pro, and SD use independent concurrency slots. The service binds to `127.0.0.1` by default.
 - Configuration, outputs, logs, and queue recovery state remain in the local data directory.
-- Regression coverage includes prompt snapshots, route contracts, path security, queue recovery, cinematic planning, whole-home automatic summaries/plan cropping/text cleanup/revisions/structural locks/Blender bundles, floor coverage, color matching, standalone sample matching, smart selection, and record lineage. This release is verified at **252 tests passed, 1 skipped**.
+- Regression coverage includes prompt snapshots, route contracts, path security, queue recovery, OS-keyring secrets, billing-safe retries, storage lifecycle, cinematic planning, whole-home anchors/nine-question review/structure contracts/Blend/GLB/research IFC, floor coverage, color matching, standalone sample matching, smart selection, and record lineage. This release is verified at **315 tests passed, 1 skipped**.
 
 ## My Role
 
@@ -189,6 +190,8 @@ dev-windows.bat                    # FastAPI 7870 + Next.js 3000
 ```
 
 `start-windows.bat` checks whether frontend source files are newer than `web/out`. It rebuilds only when output is missing or stale, preventing an old UI without reinstalling dependencies on every launch.
+
+Local whole-home research models require Blender 5.2. Floor Engine checks `BLENDER_EXECUTABLE`, the system PATH, and standard Windows Blender locations. IfcOpenShell is installed with the Python dependencies. Without Blender, image generation, records, color matching, and 2K whole-home concepts remain available, while local Blend/GLB/IFC runs report a missing dependency explicitly.
 
 ### Linux / macOS
 
