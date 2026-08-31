@@ -2,6 +2,7 @@
   "schema": "goal-loop-v2-checkpoint-v1",
   "stage": "contract_hardening",
   "status": "rejected_by_independent_verifier_round_3",
+  "superseded_by": "0001-stage-a-contract-hardening",
   "sample": "1308",
   "evidence": {
     "backend": "345 passed, 1 skipped",

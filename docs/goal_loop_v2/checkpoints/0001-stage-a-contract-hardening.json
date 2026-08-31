@@ -5,6 +5,7 @@
   "status": "accepted",
   "accepted_at": "2026-09-01T04:52:27.3596463+08:00",
   "baseline_commit": "d9695b8f36f772132c573b79e58b24ce7d1b5e9d",
+  "accepted_commit": "6202e8f0d47dce3d1ab8aae3e7fdfe4365249dc0",
   "candidate_diff_sha256_before_checkpoint": "cff7ab48c242324e23f7a85b9b1b6f6efc6cf55dd73a76b146afbc692506bbd3",
   "independent_verdict": "accept_stage_a",
   "tests": {
