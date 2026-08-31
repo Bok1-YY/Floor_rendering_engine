@@ -6,11 +6,16 @@
 ![Node](https://img.shields.io/badge/node-20%2B-339933)
 ![Tests](https://img.shields.io/badge/tests-315%20passed-brightgreen)
 
-Turn a real flooring swatch into spatial content that can be batch-generated, color-locked, locally repaired, reviewed, and delivered.
+Turn real flooring swatches and residential floor plans into spatial content that can be verified, edited, and delivered.
 
-This is not a “home interior” prompt preset. It asks whether the product color is accurate, how much of the frame the floor occupies, whether the space feels believable, how a failed output can be repaired, and whether a marketing team can publish the result.
+Floor Rendering Engine is now a local AI workspace with two independent but connected product lines:
 
-> The goal is not to make AI generate more images. It is to move a real product reliably into publishable content.
+- **Flooring visual production:** from physical swatches, scene prompting, and multi-model generation through color locking, local repair, review, records, and delivery.
+- **Whole-home design research:** from an original floor plan, human scale and landmark anchors through Gemini's nine-question structure review and a strict geometry contract, producing editable and validated Blender, GLB, and research IFC architectural blockouts.
+
+This is neither a generic “home interior” prompt preset nor a way to relabel an attractive AI bird's-eye image as construction BIM. It asks whether product color is accurate, space is believable, walls/openings remain traceable, failures can be repaired, and each result can enter the next real production stage.
+
+> From product color to spatial structure, AI output should be confirmed, validated, and handed off—not merely generated in greater volume.
 
 [中文](./README.md) · [Product case study](./docs/PRODUCT_CASE_STUDY.en.md) · [Live demo](https://www.bokiframe.com) · [Developer guide](./DEVGUIDE.md)
 
