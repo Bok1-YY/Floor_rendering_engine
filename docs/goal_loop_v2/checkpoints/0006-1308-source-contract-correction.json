@@ -1,0 +1,59 @@
+{
+  "schema": "goal-loop-v2-checkpoint-v1",
+  "checkpoint_id": "0006-1308-source-contract-correction",
+  "stage": "reference_freeze",
+  "status": "accepted_source_correction_supersedes_0005_crossing_resolution",
+  "accepted_at": "2026-09-01T07:35:12.5063884+08:00",
+  "baseline_commit": "d78e133517eee8e035dfa44619a849bd6da65e0a",
+  "accepted_commit": "d78e133517eee8e035dfa44619a849bd6da65e0a",
+  "independent_verdict": "accept_1308_source_endpoint_correction",
+  "severity": {"p0": 0, "p1": 0, "p2": 1},
+  "evidence_artifacts": {
+    "endpoint_report_sha256": "3b3a6c0723efed6855cff60a94ea8db3fa737305a9639929fcbe66805a81ddca",
+    "endpoint_evidence_json_sha256": "834ca89ad03e602706e611074f99a5fd03802700b7d9eacc2e952b851e7ac978",
+    "reference_manifest_sha256": "60e37e560d44a93e87254b9705e2ce6ae69cb009af332da8a5b6b75cd6b3851d",
+    "sha256_manifest_sha256": "e489eb1dc43e1ee42a0d7d76994ce37d065a23c961b8594f18f5d909c5cb7dec",
+    "verified_manifest_files": 31,
+    "verified_endpoint_crops": 22
+  },
+  "superseded_claims": [
+    {
+      "checkpoint": "0005-1308-geometry-adjudication-semantic-partial",
+      "claim": "B1308-CROSSING-JAMB resolved",
+      "reason": "The mechanical proof assumed a vertical OP005 hosted by WB007. Independent raw-image evidence proves the visible Bedroom-02 door is a horizontal gap from the WB006 east face to WB009 e0; the old host and direction were wrong."
+    },
+    {
+      "artifact": "endpoint repair attempt 1 before rectangular-footprint correction",
+      "claim": "WB006 may be diagonally snapped to WB016",
+      "reason": "That target used a radial rounded-cap construction outside the finite rectangular wall footprint and was rejected before commit."
+    }
+  ],
+  "accepted_source_corrections": {
+    "op005": "Replace vertical WB007/crossing-jamb interpretation with a horizontal gap-between-branches portal between the WB006 east face and WB009 e0; visible gap approximately 0.900168 m, nominal-face gap approximately 0.924330 m.",
+    "missing_portal": "Preserve the WB011 e1 to WB006 west-face gap as a real hinged portal; visible gap approximately 0.878212 m, nominal-face gap approximately 0.902374 m.",
+    "op001": "Preserve the nominal source segment and create a separate effective void clipped to the selected WB006 west-face convention; nominal-face clip approximately 0.034385 m.",
+    "wb020": "Remove WB020 from first-stage full-height structural wall topology and preserve it as evidence-only DISPLAY joinery/low element."
+  },
+  "endpoint_classification": {
+    "source_supported_wall_face": ["WB006:e1", "WB007:e1", "WB014:e1", "WB015:e0", "WB016:e1", "WB017:e0", "WB018:e1"],
+    "intentional_opening_termination": ["WB009:e0", "WB011:e1"],
+    "nonstructural_joinery": ["WB020:e0", "WB020:e1"],
+    "unresolved_endpoint_semantics": []
+  },
+  "known_p2": "WB009:e0 pixel and metric records drift by approximately 0.645 px / 4.72 mm; canonicalize one representation before freeze.",
+  "remaining_1308_blockers": [
+    "B1308-JUNCTION-ENDPOINTS",
+    "B1308-CROSSING-JAMB",
+    "B1308-OP001-RETURN",
+    "B1308-SEMANTIC-ADJACENCY"
+  ],
+  "build_state": {
+    "ready": false,
+    "build_opening_ids": [],
+    "build_authorized": false
+  },
+  "stage_boundary": "This checkpoint corrects source interpretation only. It explicitly reopens the crossing-jamb blocker, supersedes the old OP005 host/direction, and requires new generic schema/validation support before any corrected document can be frozen or built.",
+  "budget_spent_usd": 0.1,
+  "budget_remaining_usd": 19.9,
+  "next_action": "Implement and validate generic gap-between-branches portal plus evidence-only linear-element support, then apply the four accepted source corrections and recompute topology/adjacency from the corrected contract."
+}
