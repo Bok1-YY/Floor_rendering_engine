@@ -335,6 +335,20 @@ def validate_v2_document(document: Mapping[str, Any]) -> dict[str, Any]:
         _fail("opening_contract: unsupported version/minimum")
     openings = _unique_ids(opening_contract["openings"], "opening_contract.openings")
     cut_openings: set[str] = set()
+
+    def validate_effective_void(value: Any, path: str) -> Mapping[str, Any]:
+        effective = _exact(value, {"segment_m", "width_m", "sill_m", "head_m", "host_cut_scope", "status"}, path)
+        if not isinstance(effective["segment_m"], list) or len(effective["segment_m"]) != 2:
+            _fail(f"{path}.segment_m: invalid")
+        first, second = _point(effective["segment_m"][0], f"{path}.segment_m[0]"), _point(effective["segment_m"][1], f"{path}.segment_m[1]")
+        width = _number(effective["width_m"], f"{path}.width_m")
+        if width <= 0 or abs(math.dist(first, second) - width) > 0.05 + 1e-9:
+            _fail(f"{path}.width_m: differs from effective segment by more than 50mm")
+        if effective["host_cut_scope"] != "owning_wall_atom_only" or _number(effective["head_m"], f"{path}.head_m") <= _number(effective["sill_m"], f"{path}.sill_m"):
+            _fail(f"{path}: invalid effective void")
+        _status(effective["status"], f"{path}.status")
+        return effective
+
     for opening_id, raw in openings.items():
         opening = _exact(raw, {"id", "source_observation", "build_disposition", "build_kind", "owning_wall_atom_id", "effective_void", "swing_direction", "traversable", "side_a_space_id", "side_b_space_id", "jamb_before", "jamb_after", "status", "assumption_ids"}, f"opening_contract.openings[{opening_id}]")
         _status(opening["status"], f"opening_contract.openings[{opening_id}].status")
@@ -354,10 +368,7 @@ def validate_v2_document(document: Mapping[str, Any]) -> dict[str, Any]:
             cut_openings.add(opening_id)
             if opening["build_kind"] not in {"entrance", "door", "window"} or opening["owning_wall_atom_id"] not in atoms or opening["effective_void"] is None:
                 _fail(f"opening {opening_id}: cut requires kind, owner and effective void")
-            effective = _exact(opening["effective_void"], {"segment_m", "width_m", "sill_m", "head_m", "host_cut_scope", "status"}, f"opening {opening_id} effective_void")
-            _status(effective["status"], f"opening {opening_id} effective status")
-            if effective["host_cut_scope"] != "owning_wall_atom_only" or _number(effective["head_m"], "head") <= _number(effective["sill_m"], "sill"):
-                _fail(f"opening {opening_id}: invalid effective void")
+            effective = validate_effective_void(opening["effective_void"], f"opening {opening_id} effective_void")
             for support_name in ("jamb_before", "jamb_after"):
                 support = opening[support_name]
                 if not isinstance(support, Mapping):
@@ -377,11 +388,13 @@ def validate_v2_document(document: Mapping[str, Any]) -> dict[str, Any]:
             if opening["build_kind"] == "window" and opening["traversable"] is not False:
                 _fail(f"opening {opening_id}: window cut must be non-traversable")
         else:
-            forbidden = (opening["build_kind"], opening["owning_wall_atom_id"], opening["effective_void"], opening["jamb_before"], opening["jamb_after"], opening["swing_direction"], opening["side_a_space_id"], opening["side_b_space_id"])
+            forbidden = (opening["build_kind"], opening["owning_wall_atom_id"], opening["jamb_before"], opening["jamb_after"], opening["swing_direction"], opening["side_a_space_id"], opening["side_b_space_id"])
             if any(item is not None for item in forbidden):
                 _fail(f"opening {opening_id}: non-cut evidence must not create build geometry")
             if opening["traversable"] not in {False, None}:
                 _fail(f"opening {opening_id}: non-cut evidence cannot be traversable")
+            if opening["effective_void"] is not None:
+                validate_effective_void(opening["effective_void"], f"opening {opening_id} effective_void evidence")
 
     adjacency = _exact(root["adjacency_truth"], {"version", "status", "entrance_opening_id", "edges"}, "adjacency_truth")
     if adjacency["version"] != ADJACENCY_SCHEMA:
@@ -488,9 +501,12 @@ def assess_v2_build_readiness(document: Mapping[str, Any]) -> dict[str, Any]:
     require_confirmed(doc["adjacency_truth"]["status"], "adjacency_not_confirmed")
     for edge in doc["adjacency_truth"]["edges"]:
         require_confirmed(edge["status"], f"adjacency_edge_not_confirmed:{edge['id']}")
+    research_assumptions: list[str] = []
     for assumption in doc["assumptions"]["items"]:
-        if assumption["build_policy"] == "block_build" or assumption["status"] != "human_accepted":
+        if assumption["build_policy"] == "block_build" or assumption["status"] == "superseded":
             blockers.add(f"assumption_blocks_build:{assumption['id']}")
+        elif assumption["build_policy"] == "allow_research_only":
+            research_assumptions.append(assumption["id"])
     for issue in doc["unresolved_issues"]:
         if issue["status"] == "open" and issue["blocks_build"]:
             blockers.add(issue["id"])
@@ -500,6 +516,7 @@ def assess_v2_build_readiness(document: Mapping[str, Any]) -> dict[str, Any]:
         "blocker_ids": sorted(blockers),
         "build_opening_ids": sorted(build_openings),
         "evidence_only_opening_ids": sorted(evidence_only),
+        "research_assumption_ids": sorted(research_assumptions),
         "structure_hash": doc["structure_hash"],
     }
 

@@ -175,11 +175,22 @@ def convert_proposal_to_v2(proposal: Mapping[str, Any], orientation: Mapping[str
         if source_kind not in {"entrance_symbol", "door", "window", "glazed_access_door", "glazed_interface", "open_passage", "unknown"}:
             source_kind = "unknown"
         unresolved_observation = not row.get("contract_kind_candidate") and source_kind in {"glazed_interface", "unknown"}
+        effective_source = row.get("effective_void")
+        effective_evidence = None
+        if isinstance(effective_source, Mapping) and effective_source.get("segment_m") and effective_source.get("effective_clear_width_m"):
+            effective_evidence = {
+                "segment_m": effective_source["segment_m"],
+                "width_m": float(effective_source["effective_clear_width_m"]),
+                "sill_m": float(row.get("sill_m") or 0.0),
+                "head_m": float(row.get("height_m") or 2.1),
+                "host_cut_scope": "owning_wall_atom_only",
+                "status": "candidate",
+            }
         openings.append({
             "id": row["id"],
             "source_observation": {"kind": "entrance_symbol" if row.get("contract_kind_candidate") == "entrance" else source_kind, "nominal_segment_m": row["source_segment_m"], "nominal_width_m": float(row["nominal_width_m"]), "anchor_id": anchor_id, "evidence_refs": ["VIEW-CANONICAL"], "status": "unresolved" if unresolved_observation else "candidate"},
             "build_disposition": "exclude_pending_resolution", "build_kind": None,
-            "owning_wall_atom_id": None, "effective_void": None, "swing_direction": None,
+            "owning_wall_atom_id": None, "effective_void": effective_evidence, "swing_direction": None,
             "traversable": False, "side_a_space_id": None, "side_b_space_id": None,
             "jamb_before": None, "jamb_after": None,
             "status": "unresolved" if unresolved_observation else "candidate",

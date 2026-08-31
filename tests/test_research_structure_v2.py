@@ -10,6 +10,7 @@ from tools.fastloop_research.v2_contract import (
     compute_v2_structure_hash,
     validate_v2_document,
 )
+from tools.goal_loop_v2.freeze import apply_freeze_verdict
 
 
 def v2_fixture() -> dict:
@@ -74,6 +75,20 @@ def test_confirmed_v2_document_is_build_ready() -> None:
     readiness = assess_v2_build_readiness(document)
     assert readiness["ready"] is True
     assert readiness["build_opening_ids"] == ["OPEN-ENTRY"]
+
+
+def test_disclosed_unverified_research_assumption_can_build_but_block_policy_cannot() -> None:
+    document = v2_fixture()
+    document["assumptions"]["items"][0]["status"] = "unverified"
+    rehash(document)
+    readiness = assess_v2_build_readiness(document)
+    assert readiness["ready"] is True
+    assert readiness["research_assumption_ids"] == ["ASSUME-Z"]
+    document["assumptions"]["items"][0]["build_policy"] = "block_build"
+    rehash(document)
+    readiness = assess_v2_build_readiness(document)
+    assert readiness["ready"] is False
+    assert "assumption_blocks_build:ASSUME-Z" in readiness["blocker_ids"]
 
 
 def test_candidate_document_is_valid_but_not_build_ready() -> None:
@@ -171,3 +186,51 @@ def test_candidate_adjacency_can_preserve_nonbuild_opening_evidence() -> None:
     assert readiness["ready"] is False
     assert "adjacency_not_confirmed" in readiness["blocker_ids"]
     assert "opening_pending_resolution:OPEN-ENTRY" in readiness["blocker_ids"]
+
+
+def test_nonbuild_opening_can_preserve_candidate_effective_void_without_cutting() -> None:
+    document = v2_fixture()
+    opening = document["opening_contract"]["openings"][0]
+    effective = deepcopy(opening["effective_void"])
+    effective["status"] = "candidate"
+    opening.update(build_disposition="exclude_pending_resolution", build_kind=None, owning_wall_atom_id=None, effective_void=effective, swing_direction=None, traversable=False, side_a_space_id=None, side_b_space_id=None, jamb_before=None, jamb_after=None, status="candidate")
+    document["adjacency_truth"].update(status="candidate")
+    document["adjacency_truth"]["edges"][0]["status"] = "candidate"
+    rehash(document)
+    validate_v2_document(document)
+    readiness = assess_v2_build_readiness(document)
+    assert readiness["ready"] is False
+    assert readiness["build_opening_ids"] == []
+
+
+def test_reference_freeze_applies_exact_partition_without_authorizing_build() -> None:
+    document = v2_fixture()
+    document["outer_boundary"]["status"] = "candidate"
+    document["unresolved_issues"] = [
+        {"id": issue_id, "severity": "hard", "category": "reference", "entity_refs": [], "status": "open", "message": issue_id, "blocks_reference_freeze": True, "blocks_build": True, "evidence_refs": ["VIEW-EVIDENCE"]}
+        for issue_id in ("ISSUE-FREEZE", "ISSUE-KEEP")
+    ]
+    rehash(document)
+    verdict = {
+        "schema": "goal-loop-v2-reference-freeze-verdict-v1",
+        "verdict": "accept_reference_freeze",
+        "build_authorized": False,
+        "prior_structure_hash": document["structure_hash"],
+        "decisions": [
+            {"blocker_id": "ISSUE-FREEZE", "decision": "freeze"},
+            {"blocker_id": "ISSUE-KEEP", "decision": "keep_unresolved"},
+        ],
+        "remaining_blocker_ids": ["ISSUE-KEEP"],
+        "operations": [
+            {"operation": "set_outer_status", "status": "confirmed"},
+            {"operation": "remove_resolved_issues", "entity_ids": ["ISSUE-FREEZE"]},
+        ],
+    }
+    frozen = apply_freeze_verdict(document, verdict)
+    assert [row["id"] for row in frozen["unresolved_issues"]] == ["ISSUE-KEEP"]
+    assert frozen["outer_boundary"]["status"] == "confirmed"
+    assert assess_v2_build_readiness(frozen)["ready"] is False
+
+    verdict["operations"][0]["operation"] = "confirm_everything"
+    with pytest.raises(ValueError, match="unsupported"):
+        apply_freeze_verdict(document, verdict)
