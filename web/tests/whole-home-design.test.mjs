@@ -37,6 +37,8 @@ test("manual anchors use normalized coordinates and gate Gemini recognition", ()
   assert.match(page, /saveWholeHomeDesignAnchors/);
   assert.match(page, /anchor_verification\?\.status === "verified"/);
   assert.match(page, /Gemini 自动补充/);
+  assert.match(page, /保持原始像素（确认 EXIF 方向错误时）/);
+  assert.match(api, /ignore_invalid_exif_user_confirmed_raw/);
 });
 
 test("research fast lane exposes nine questions and direct Blender artifacts", () => {
@@ -47,6 +49,9 @@ test("research fast lane exposes nine questions and direct Blender artifacts", (
   assert.match(api, /structure-review/);
   assert.match(api, /model-runs/);
   assert.match(types, /research-structure-bundle-v1|DesignStructureReview/);
+  assert.match(types, /goal-loop-v2/);
+  assert.match(structure, /Goal-Loop v2 · 第/);
+  assert.match(structure, /取来源\/产物较低分/);
 });
 
 test("paid calls stop after the two 2K concept endpoints", () => {

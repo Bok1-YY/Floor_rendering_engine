@@ -104,8 +104,8 @@ export const api = {
     upload<DesignFloorplanUpload>("/api/uploads/design-floorplan", f),
   uploadDesignReference: (f: File) =>
     upload<DesignReferenceUpload>("/api/uploads/design-reference", f),
-  createWholeHomeDesignProject: (floorplan_path: string, source_name = "") =>
-    jsend<WholeHomeDesignProject>("/api/whole-home-design/projects", "POST", { floorplan_path, source_name }),
+  createWholeHomeDesignProject: (floorplan_path: string, source_name = "", orientation_policy: "exif_transpose-v1" | "ignore_invalid_exif_user_confirmed_raw" = "exif_transpose-v1") =>
+    jsend<WholeHomeDesignProject>("/api/whole-home-design/projects", "POST", { floorplan_path, source_name, orientation_policy }),
   listWholeHomeDesignProjects: (limit = 50) =>
     jget<WholeHomeDesignProjectListItem[]>(`/api/whole-home-design/projects?limit=${limit}`),
   getWholeHomeDesignProject: (id: string) =>

@@ -3,6 +3,7 @@ import io
 import json
 import os
 import zipfile
+from copy import deepcopy
 
 import pymupdf
 import pytest
@@ -11,6 +12,7 @@ from PIL import Image, ImageDraw
 
 from Floor_engine_server import routes_whole_home_design as routes
 from Floor_engine_server import whole_home_design as design
+from Floor_engine_server.tools.fastloop_research.contract import compute_anchor_set_hash, compute_structure_hash
 
 
 def test_invalid_design_pdf_upload_is_removed(tmp_path, monkeypatch):
@@ -19,6 +21,19 @@ def test_invalid_design_pdf_upload_is_removed(tmp_path, monkeypatch):
     with pytest.raises(HTTPException):
         routes.upload_design_floorplan(upload)
     assert [path for path in tmp_path.iterdir() if path.is_file()] == []
+
+
+def test_project_create_route_forwards_explicit_orientation_policy(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(routes, "require_upload_image_path", lambda value, *_args, **_kwargs: value)
+    monkeypatch.setattr(routes, "create_project", lambda source, name, *, orientation_policy: captured.update(source=source, name=name, policy=orientation_policy) or {"project_id": "P"})
+    monkeypatch.setattr(routes, "public_project", lambda project: project)
+    result = asyncio.run(routes.create_design_project(routes.ProjectCreateRequest(
+        floorplan_path="C:/fixture.jpg", source_name="fixture",
+        orientation_policy="ignore_invalid_exif_user_confirmed_raw",
+    )))
+    assert result == {"project_id": "P"}
+    assert captured["policy"] == "ignore_invalid_exif_user_confirmed_raw"
 
 
 def test_oversized_design_pdf_cleans_source_and_partial_pages(tmp_path, monkeypatch):
@@ -105,6 +120,28 @@ def test_normalization_trims_only_white_margin_and_pads_supported_ratio(design_s
     with Image.open(project["normalized_path"]) as image:
         assert image.width >= project["normalization"]["content_size"][0]
         assert image.height >= project["normalization"]["content_size"][1]
+
+
+def test_floorplan_orientation_is_explicit_and_can_ignore_confirmed_invalid_exif(tmp_path, monkeypatch):
+    assets = tmp_path / "assets"
+    assets.mkdir()
+    monkeypatch.setattr(design, "ASSET_ROOT", str(assets))
+    source = tmp_path / "stale-orientation.jpg"
+    image = Image.new("RGB", (200, 100), "white")
+    ImageDraw.Draw(image).rectangle((10, 20, 190, 80), outline="black", width=5)
+    exif = Image.Exif()
+    exif[274] = 8
+    image.save(source, exif=exif)
+    _, default_meta = design.normalize_floorplan(str(source), "default")
+    ignored_path, ignored_meta = design.normalize_floorplan(str(source), "ignored", orientation_policy="ignore_invalid_exif_user_confirmed_raw")
+    assert default_meta["original_size"] == [100, 200]
+    assert ignored_meta["original_size"] == [200, 100]
+    assert ignored_meta["exif_orientation"] == 8
+    assert ignored_meta["orientation_policy"] == "ignore_invalid_exif_user_confirmed_raw"
+    project = design.create_project(str(source), "stale-orientation.jpg", orientation_policy="ignore_invalid_exif_user_confirmed_raw")
+    assert project["source_hash"] == design.file_sha256(str(source))
+    assert project["source_orientation"]["raw_pixel_hash"] == ignored_meta["raw_pixel_hash"]
+    assert project["source_orientation"]["normalized_hash"] == design.file_sha256(ignored_path) or project["source_orientation"]["normalized_hash"] == design.file_sha256(project["normalized_path"])
 
 
 def test_generation_crop_excludes_detached_thin_detail_but_keeps_main_plan(tmp_path, monkeypatch):
@@ -472,7 +509,8 @@ def test_structure_review_compiles_metric_bundle_from_human_scale(design_store):
     assert completed["status"] == "verified"
     bundle = completed["structure_bundle"]
     assert bundle["schema"] == "research-structure-bundle-v1"
-    assert len(bundle["wall_branch_graph"]["walls"]) == 5
+    assert len(bundle["wall_branch_graph"]["walls"]) == 7
+    assert all(junction["kind"] != "X" or len(junction["incident_wall_ids"]) >= 4 for junction in bundle["wall_branch_graph"]["junctions"])
     assert len(bundle["opening_contract"]["openings"]) == 3
     assert bundle["structure_hash"] == completed["structure_hash"]
     first = design.create_model_run_record(project)
@@ -527,11 +565,90 @@ def test_professional_bundle_is_bound_to_current_project_source_and_revision(des
     assert any("当前项目" in item for item in result["unresolved"])
 
 
+@pytest.mark.parametrize("field,value", [
+    ("raw_pixel_hash", "f" * 64),
+    ("exif_orientation", 8),
+    ("orientation_policy", "ignore_invalid_exif_user_confirmed_raw"),
+    ("canonical_visible_size", [1, 1]),
+    ("normalized_hash", "e" * 64),
+])
+def test_professional_bundle_binds_every_source_orientation_field(design_store, field, value):
+    project = confirmed_project(design_store)
+    design.prepare_structure_review(project, payload_override=_two_room_structure_seed())
+    answers = {
+        "Q01_ANNOTATIONS": "annotations", "Q02_PARALLEL_LINES": "floor_feature",
+        "Q03_GLAZING": "mostly_openings", "Q04_ENTRANCE": "yes",
+        "Q05_LOW_FEATURES": "not_walls", "Q06_BALCONIES": "connected",
+        "Q07_MISSING_OPENINGS": "none", "Q08_ROOM_LIST": "complete", "Q09_READY": "yes",
+    }
+    verified = design.submit_structure_review(project, answers)
+    assert verified["status"] == "verified"
+    tampered = deepcopy(verified["structure_bundle"])
+    tampered["source"][field] = value
+    result = design.submit_structure_review(project, answers, technical_bundle=tampered)
+    assert result["status"] == "needs_professional_review"
+    assert any("来源方向/像素证据" in item or "规范化证据图" in item for item in result["unresolved"])
+
+
+def test_professional_bundle_cannot_rewrite_current_human_anchor_geometry(design_store):
+    project = confirmed_project(design_store)
+    design.prepare_structure_review(project, payload_override=_two_room_structure_seed())
+    answers = {
+        "Q01_ANNOTATIONS": "annotations", "Q02_PARALLEL_LINES": "floor_feature",
+        "Q03_GLAZING": "mostly_openings", "Q04_ENTRANCE": "yes",
+        "Q05_LOW_FEATURES": "not_walls", "Q06_BALCONIES": "connected",
+        "Q07_MISSING_OPENINGS": "none", "Q08_ROOM_LIST": "complete", "Q09_READY": "yes",
+    }
+    verified = design.submit_structure_review(project, answers)
+    bundle = deepcopy(verified["structure_bundle"])
+    source_anchor = next(anchor for anchor in bundle["source"]["anchors"] if anchor["anchor_id"] == "P03")
+    source_anchor["points_norm"] = [[400, 800]]
+    matrix = bundle["source"]["normalized_to_metric_3x3"]
+    source_anchor["points_metric_m"] = [[matrix[0][0] * 400 + matrix[0][1] * 800 + matrix[0][2], matrix[1][0] * 400 + matrix[1][1] * 800 + matrix[1][2]]]
+    bundle["source"]["anchor_set_hash"] = compute_anchor_set_hash(bundle["source"]["coordinate_space"], bundle["source_hash"], bundle["source"]["normalized_hash"], bundle["source"]["anchors"])
+    opening = next(item for item in bundle["opening_contract"]["openings"] if item["id"] == "O1")
+    opening["segment_m"] = [[3.25, 0.0], [4.25, 0.0]]
+    opening["width_m"] = 1.0
+    opening["jamb_before_support"].update(face_distance_m=3.25, effective_support_m=3.25)
+    opening["jamb_after_support"].update(face_distance_m=0.75, effective_support_m=0.75)
+    bundle["structure_hash"] = compute_structure_hash(bundle)
+    assert next(anchor for anchor in project["anchor_set"]["anchors"] if anchor["anchor_id"] == "P03")["points"] == [{"x": 240, "y": 800}]
+    result = design.submit_structure_review(project, answers, technical_bundle=bundle)
+    assert result["status"] == "needs_professional_review"
+    assert any("人工锚点几何" in item for item in result["unresolved"])
+
+
+def test_legacy_project_lazily_recomputes_anchor_hash_from_project_truth(design_store):
+    project = confirmed_project(design_store)
+    expected = project["anchor_set"].pop("anchor_set_hash")
+    design.save_project(project)
+    loaded = design.load_project(project["project_id"])
+    assert loaded["anchor_set"]["anchor_set_hash"] == expected
+
+
 def test_gemini_entrance_must_geometrically_match_human_anchor(design_store):
     project = confirmed_project(design_store)
     seed = _two_room_structure_seed()
     seed["openings"][0]["a"] = {"x": 800, "y": 200}
     seed["openings"][0]["b"] = {"x": 860, "y": 200}
+    design.prepare_structure_review(project, payload_override=seed)
+    answers = {
+        "Q01_ANNOTATIONS": "annotations", "Q02_PARALLEL_LINES": "floor_feature",
+        "Q03_GLAZING": "mostly_openings", "Q04_ENTRANCE": "yes",
+        "Q05_LOW_FEATURES": "not_walls", "Q06_BALCONIES": "connected",
+        "Q07_MISSING_OPENINGS": "none", "Q08_ROOM_LIST": "complete", "Q09_READY": "yes",
+    }
+    result = design.submit_structure_review(project, answers)
+    assert result["status"] == "needs_professional_review"
+    assert any("人工entrance锚点" in item for item in result["unresolved"])
+
+
+def test_two_point_human_opening_rejects_ai_segment_with_wrong_length(design_store):
+    project = confirmed_project(design_store)
+    entrance = next(anchor for anchor in project["anchor_set"]["anchors"] if anchor["kind"] == "entrance")
+    entrance["points"] = [{"x": 200, "y": 800}, {"x": 280, "y": 800}]
+    seed = _two_room_structure_seed()
+    seed["openings"][0]["b"] = {"x": 560, "y": 800}
     design.prepare_structure_review(project, payload_override=seed)
     answers = {
         "Q01_ANNOTATIONS": "annotations", "Q02_PARALLEL_LINES": "floor_feature",

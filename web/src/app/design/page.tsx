@@ -101,6 +101,7 @@ export default function WholeHomeDesignPage() {
   const [project, setProject] = useState<WholeHomeDesignProject | null>(null);
   const [uploadResult, setUploadResult] = useState<DesignFloorplanUpload | null>(null);
   const [uploading, setUploading] = useState(false);
+  const [orientationPolicy, setOrientationPolicy] = useState<"exif_transpose-v1" | "ignore_invalid_exif_user_confirmed_raw">("exif_transpose-v1");
   const [busy, setBusy] = useState("");
   const [references, setReferences] = useState<DesignReferenceUpload[]>([]);
   const [requirements, setRequirements] = useState("");
@@ -199,7 +200,7 @@ export default function WholeHomeDesignPage() {
   async function startProject(path: string, name: string) {
     setBusy("create");
     try {
-      const value = await api.createWholeHomeDesignProject(path, name);
+      const value = await api.createWholeHomeDesignProject(path, name, orientationPolicy);
       setProject(value);
       setProjects((items) => [value, ...items]);
       setUploadResult(null);
@@ -543,6 +544,13 @@ export default function WholeHomeDesignPage() {
         {!project ? (
           <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
             <div className="mb-4 flex items-center gap-2"><UploadCloud className="text-primary" /><h2 className="font-extrabold">1. 上传户型图</h2></div>
+            <label className="mb-3 block text-xs font-bold">图片方向
+              <select aria-label="户型图方向策略" value={orientationPolicy} onChange={(event) => setOrientationPolicy(event.target.value as typeof orientationPolicy)} className="mt-1 h-9 w-full rounded-lg border border-border bg-background px-2 text-sm font-normal">
+                <option value="exif_transpose-v1">按照片方向（默认，读取 EXIF）</option>
+                <option value="ignore_invalid_exif_user_confirmed_raw">保持原始像素（确认 EXIF 方向错误时）</option>
+              </select>
+              <span className="mt-1 block font-normal text-muted-foreground">若预览被横置或文字侧倒，重新新建并选择“保持原始像素”。方向策略会写入结构来源合同。</span>
+            </label>
             <button type="button" onClick={() => fileInput.current?.click()} className="flex min-h-52 w-full flex-col items-center justify-center rounded-2xl border border-dashed border-primary/40 bg-primary/5 p-6 text-center hover:border-primary">
               <input ref={fileInput} hidden type="file" accept=".png,.jpg,.jpeg,.webp,.pdf" onChange={(event) => { const file = event.target.files?.[0]; if (file) void uploadPlan(file); event.currentTarget.value = ""; }} />
               {uploading ? <LoaderCircle className="animate-spin text-primary" /> : <FileImage className="text-primary" size={34} />}

@@ -1,0 +1,60 @@
+{
+  "schema": "goal-loop-v2-checkpoint-v1",
+  "checkpoint_id": "0001-stage-a-contract-hardening",
+  "stage": "contract_hardening",
+  "status": "accepted",
+  "accepted_at": "2026-09-01T04:52:27.3596463+08:00",
+  "baseline_commit": "d9695b8f36f772132c573b79e58b24ce7d1b5e9d",
+  "candidate_diff_sha256_before_checkpoint": "cff7ab48c242324e23f7a85b9b1b6f6efc6cf55dd73a76b146afbc692506bbd3",
+  "independent_verdict": "accept_stage_a",
+  "tests": {
+    "backend": {"passed": 348, "skipped": 1, "failed": 0},
+    "frontend_design": {"passed": 9, "failed": 0},
+    "frontend_scene": {"passed": 3, "failed": 0},
+    "frontend_storage": {"passed": 2, "failed": 0},
+    "frontend_security": {"passed": 3, "failed": 0},
+    "eslint": "passed",
+    "next_production_build": "passed",
+    "pip_check": "passed",
+    "diff_check": "passed",
+    "prompt_hash_lock": "passed",
+    "real_blender_glb_ifc": "passed",
+    "filled_opening_blend_quality_regression": "rejected_as_expected",
+    "filled_opening_glb_quality_regression": "rejected_as_expected"
+  },
+  "closed_findings": [
+    "source anchor geometry is independently recomputed from canonical normalized geometry and affine transform",
+    "technical bundles are bound to the current project anchor-set hash and source-orientation evidence",
+    "L/T/X/return junctions are explicit and unsplit T/X intersections fail closed",
+    "return-wall support is measured from wall-solid geometry instead of trusting a boolean or declared length",
+    "score progress is bound to sample, source, reference and scoring identities",
+    "CURRENT cannot claim completion before both samples and final human acceptance",
+    "repair parameters recursively reject direct Blender-mesh mutation fields",
+    "orientation policy is selectable through the product API and UI",
+    "Blend and GLB validation measure real wall-mesh opening occupancy and cut boundaries"
+  ],
+  "remaining_1308_blockers": [
+    "B1308-ORIENTATION-FREEZE",
+    "B1308-NORM-SPACE-SCHEMA",
+    "B1308-OUTER-BOUNDARY",
+    "B1308-JUNCTION-ENDPOINTS",
+    "B1308-UNSPLIT-X",
+    "B1308-OP005-NOMINAL-EFFECTIVE",
+    "B1308-CROSSING-JAMB",
+    "B1308-OPENING-GAP",
+    "B1308-OP001-RETURN",
+    "B1308-OP011-KIND",
+    "B1308-SEMANTIC-ADJACENCY",
+    "B1308-Z-ASSUMPTIONS"
+  ],
+  "external_evidence": {
+    "research_report": "C:/Users/1_1/Desktop/goal_loop_v2_research_20260901/REPORT.md",
+    "verifier_matrix": "C:/Users/1_1/Desktop/goal_loop_v2_verifier_20260901/matrix.json",
+    "stage_b_schema_report": "C:/Users/1_1/Desktop/goal_loop_v2_stageb_schema_20260901/REPORT.md",
+    "reference_proposal": "data/goal_loop_v2/references/1308/reference-contract-proposal-v0.json",
+    "main_quality_regression": "C:/Users/1_1/Desktop/goal_loop_v2_main_review_20260901"
+  },
+  "budget_spent_usd": 0,
+  "budget_remaining_usd": 20,
+  "next_action": "Resolve and independently freeze the 12 recorded 1308 reference blockers before emitting a strict buildable bundle; do not reuse an old Blend file."
+}

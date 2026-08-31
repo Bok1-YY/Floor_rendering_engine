@@ -1,0 +1,65 @@
+{
+  "schema": "goal-loop-v2-contract",
+  "version": 2,
+  "samples": ["1308", "121m2"],
+  "sample_order": ["1308", "121m2", "1308-cold-regression"],
+  "max_repair_attempts": 2,
+  "max_builds_per_session": 6,
+  "session_budget_usd": 20,
+  "minimum_score": 95,
+  "minimum_score_gain": 2,
+  "score_contract": {
+    "scoring_version": "goal-loop-v2-scoring-v2",
+    "combination": "minimum; source and artifact scores never compensate for each other",
+    "source_contract": {
+      "minimum": 95,
+      "checks": {
+        "S01_SOURCE_IDENTITY": 5,
+        "S02_ORIENTATION_COORDINATE_CHAIN": 5,
+        "S03_SCALE_AND_DIMENSIONS": 15,
+        "S04_OUTER_BOUNDARY": 20,
+        "S05_WALL_GRAPH": 20,
+        "S06_OPENINGS": 20,
+        "S07_SPACES_ADJACENCY_REACHABILITY": 10,
+        "S08_PROVENANCE_UNRESOLVED": 5
+      }
+    },
+    "artifact_mechanical": {
+      "minimum": 95,
+      "checks": {
+        "M01_SCHEMA_HASH_UNITS": 5,
+        "M02_FLOOR_OUTER": 10,
+        "M03_WALLS_1MM_0_1DEG": 25,
+        "M04_OPENINGS_AND_CUTS": 25,
+        "M05_JUNCTIONS_MANIFOLD_NO_BOOLEAN_NO_DECOR": 15,
+        "M06_SPACES_AND_IFC_RELATIONS": 10,
+        "M07_COLD_CROSS_FORMAT_THREE_VIEWS": 10
+      }
+    },
+    "progress_rule": "same method requires score delta >=2 or at least one net hard-blocker reduction"
+  },
+  "allowed_repair_operations": [
+    "split_wall",
+    "merge_collinear_walls",
+    "move_wall_endpoint",
+    "change_wall_thickness",
+    "reassign_wall_spaces",
+    "attach_opening",
+    "move_opening",
+    "resize_opening",
+    "change_opening_type",
+    "update_opening_height",
+    "update_adjacency"
+  ],
+  "acceptance": {
+    "hard_gates_must_pass": true,
+    "blend_cold_open": true,
+    "glb_cold_import": true,
+    "ifc_reopen": true,
+    "contract_artifact_tolerance_m": 0.001,
+    "contract_artifact_angle_degrees": 0.1,
+    "gemini_independent_reviews": 2,
+    "independent_verdict": "accept_sample",
+    "final_human_review": true
+  }
+}

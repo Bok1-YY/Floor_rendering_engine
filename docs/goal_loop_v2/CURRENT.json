@@ -1,0 +1,36 @@
+{
+  "schema": "goal-loop-v2-state",
+  "goal_status": "running",
+  "active_sample": "1308",
+  "stage": "reference_freeze",
+  "iteration": 0,
+  "method_id": "deterministic-contract-v2",
+  "sample_status": {
+    "1308": "running",
+    "121m2": "pending"
+  },
+  "last_accepted_commit": "d9695b8f36f772132c573b79e58b24ce7d1b5e9d",
+  "last_run_id": "",
+  "last_score": 0,
+  "score_history": [],
+  "failure_class": null,
+  "next_action": "Resolve and independently freeze the 12 recorded 1308 reference blockers before emitting a strict buildable bundle; do not reuse an old Blend file.",
+  "budget_spent_usd": 0,
+  "budget_remaining_usd": 20,
+  "blockers": [
+    "B1308-ORIENTATION-FREEZE",
+    "B1308-NORM-SPACE-SCHEMA",
+    "B1308-OUTER-BOUNDARY",
+    "B1308-JUNCTION-ENDPOINTS",
+    "B1308-UNSPLIT-X",
+    "B1308-OP005-NOMINAL-EFFECTIVE",
+    "B1308-CROSSING-JAMB",
+    "B1308-OPENING-GAP",
+    "B1308-OP001-RETURN",
+    "B1308-OP011-KIND",
+    "B1308-SEMANTIC-ADJACENCY",
+    "B1308-Z-ASSUMPTIONS"
+  ],
+  "final_human_accepted": false,
+  "updated_at": "2026-09-01T04:46:40.6107048+08:00"
+}

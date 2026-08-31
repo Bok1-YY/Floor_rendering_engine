@@ -175,7 +175,14 @@ def load_project(project_id: str) -> Optional[dict]:
     path = project_path(project_id)
     try:
         with open(path, "r", encoding="utf-8") as handle:
-            return json.load(handle)
+            project = json.load(handle)
+        anchor_set = project.get("anchor_set") or {}
+        if anchor_set.get("anchors") is not None and not anchor_set.get("anchor_set_hash"):
+            try:
+                anchor_set["anchor_set_hash"] = _project_anchor_set_hash(project)
+            except (ValueError, TypeError):
+                anchor_set["anchor_set_hash"] = ""
+        return project
     except (OSError, ValueError, TypeError):
         return None
 
@@ -232,11 +239,11 @@ def mark_candidates_stale(project: dict, reason: str) -> None:
     project["locked_candidate_id"] = ""
 
 
-def create_project(source_path: str, original_name: str = "") -> dict:
+def create_project(source_path: str, original_name: str = "", *, orientation_policy: str = "exif_transpose-v1") -> dict:
     source_hash = file_sha256(source_path)
     project_id = new_id("design")
-    normalized_path, normalization = normalize_floorplan(source_path, project_id)
-    generation_path, generation_crop = extract_generation_plan(source_path, project_id)
+    normalized_path, normalization = normalize_floorplan(source_path, project_id, orientation_policy=orientation_policy)
+    generation_path, generation_crop = extract_generation_plan(source_path, project_id, orientation_policy=orientation_policy)
     generation_hash = file_sha256(generation_path)
     now = time.time()
     project = {
@@ -249,6 +256,14 @@ def create_project(source_path: str, original_name: str = "") -> dict:
         "source_path": source_path,
         "source_name": original_name or os.path.basename(source_path),
         "source_hash": source_hash,
+        "source_orientation": {
+            "source_file_hash": source_hash,
+            "raw_pixel_hash": normalization["raw_pixel_hash"],
+            "exif_orientation": normalization["exif_orientation"],
+            "orientation_policy": normalization["orientation_policy"],
+            "canonical_visible_size": normalization["original_size"],
+            "normalized_hash": file_sha256(normalized_path),
+        },
         "normalized_path": normalized_path,
         "normalization": normalization,
         "generation_path": generation_path,
@@ -313,10 +328,25 @@ def empty_anchor_set(source_hash: str = "", normalized_hash: str = "") -> dict:
         "coordinate_space": "normalized-evidence-1000-v1",
         "source_hash": source_hash,
         "normalized_hash": normalized_hash,
+        "anchor_set_hash": "",
         "confirmed_complete": False,
         "anchors": [],
         "updated_at": 0.0,
     }
+
+
+def _project_anchor_set_hash(project: dict) -> str:
+    anchor_set = project.get("anchor_set") or {}
+    try:
+        from .tools.fastloop_research.contract import compute_anchor_set_hash
+    except ImportError:
+        from tools.fastloop_research.contract import compute_anchor_set_hash
+    return compute_anchor_set_hash(
+        str(anchor_set.get("coordinate_space") or ""),
+        str(project.get("source_hash") or anchor_set.get("source_hash") or ""),
+        file_sha256(project["normalized_path"]),
+        list(anchor_set.get("anchors") or []),
+    )
 
 
 def empty_structure_review() -> dict:
@@ -392,7 +422,7 @@ def validate_anchor_set(project: dict, payload: dict) -> dict:
         scale_count = sum(row["kind"] == "scale" for row in normalized)
         if scale_count != 1:
             raise ValueError("必须且只能标注一条两点比例尺并填写真实长度")
-    return {
+    result = {
         "version": "floorplan-anchors-v1",
         "coordinate_space": "normalized-evidence-1000-v1",
         "source_hash": project["source_hash"],
@@ -401,6 +431,14 @@ def validate_anchor_set(project: dict, payload: dict) -> dict:
         "anchors": normalized,
         "updated_at": time.time(),
     }
+    try:
+        from .tools.fastloop_research.contract import compute_anchor_set_hash
+    except ImportError:
+        from tools.fastloop_research.contract import compute_anchor_set_hash
+    result["anchor_set_hash"] = compute_anchor_set_hash(
+        result["coordinate_space"], result["source_hash"], result["normalized_hash"], result["anchors"]
+    )
+    return result
 
 
 def _anchor_font(size: int):
@@ -450,9 +488,17 @@ def render_anchor_overlay(project: dict, anchor_set: dict) -> tuple[str, str]:
     return destination, file_sha256(destination)
 
 
-def normalize_floorplan(source_path: str, project_id: str) -> tuple[str, dict]:
+def normalize_floorplan(source_path: str, project_id: str, *, orientation_policy: str = "exif_transpose-v1") -> tuple[str, dict]:
     with Image.open(source_path) as opened:
-        image = ImageOps.exif_transpose(opened).convert("RGB")
+        exif_orientation = int(opened.getexif().get(274, 1) or 1)
+        raw = opened.convert("RGB")
+        raw_pixel_hash = hashlib.sha256(raw.tobytes()).hexdigest()
+        if orientation_policy == "exif_transpose-v1":
+            image = ImageOps.exif_transpose(opened).convert("RGB")
+        elif orientation_policy == "ignore_invalid_exif_user_confirmed_raw":
+            image = raw
+        else:
+            raise ValueError(f"不支持的户型方向策略: {orientation_policy}")
     original_size = image.size
     # Trim only near-white page margin.  Dark architectural content is never
     # inferred or cropped by semantic heuristics.
@@ -487,6 +533,9 @@ def normalize_floorplan(source_path: str, project_id: str) -> tuple[str, dict]:
     return destination, {
         "version": "floorplan-normalization-v1",
         "original_size": list(original_size),
+        "raw_pixel_hash": raw_pixel_hash,
+        "exif_orientation": exif_orientation,
+        "orientation_policy": orientation_policy,
         "cropped_box": list(cropped_box),
         "content_size": [image.width, image.height],
         "canvas_size": [canvas.width, canvas.height],
@@ -497,7 +546,7 @@ def normalize_floorplan(source_path: str, project_id: str) -> tuple[str, dict]:
     }
 
 
-def extract_generation_plan(source_path: str, project_id: str) -> tuple[str, dict]:
+def extract_generation_plan(source_path: str, project_id: str, *, orientation_policy: str = "exif_transpose-v1") -> tuple[str, dict]:
     """Extract the main architectural plan while excluding detached details.
 
     Evidence/OCR continues to use the normalized full sheet. Image generation
@@ -506,7 +555,12 @@ def extract_generation_plan(source_path: str, project_id: str) -> tuple[str, dic
     signal; thin dimension lines and text are intentionally ignored.
     """
     with Image.open(source_path) as opened:
-        image = ImageOps.exif_transpose(opened).convert("RGB")
+        if orientation_policy == "exif_transpose-v1":
+            image = ImageOps.exif_transpose(opened).convert("RGB")
+        elif orientation_policy == "ignore_invalid_exif_user_confirmed_raw":
+            image = opened.convert("RGB")
+        else:
+            raise ValueError(f"不支持的户型方向策略: {orientation_policy}")
     gray = cv2.cvtColor(np.asarray(image), cv2.COLOR_RGB2GRAY)
     binary = (gray < 80).astype(np.uint8) * 255
     short = min(image.width, image.height)
@@ -806,36 +860,57 @@ def _compile_structure_bundle(project: dict, seed: dict) -> dict:
         px, py = x / 1000 * canvas_w, y / 1000 * canvas_h
         return [round((px - origin_x) * mpp, 6), round((origin_y - py) * mpp, 6)]
 
-    def norm_distance_to_segment(point: dict, a: dict, b: dict) -> float:
-        px, py = _norm_point(point, "人工开口锚点")
-        ax, ay = _norm_point(a, "AI开口起点")
-        bx, by = _norm_point(b, "AI开口终点")
+    def point_distance_to_segment(point: list[float], a: list[float], b: list[float]) -> float:
+        px, py = point
+        ax, ay = a
+        bx, by = b
         dx, dy = bx - ax, by - ay
         if dx == 0 and dy == 0:
             return math.hypot(px - ax, py - ay)
         t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)))
         return math.hypot(px - (ax + t * dx), py - (ay + t * dy))
 
+    def segment_metrics(anchor: dict, opening: dict) -> dict[str, Any]:
+        human = [to_m(point) for point in anchor.get("points") or []]
+        ai = [to_m(opening.get("a")), to_m(opening.get("b"))]
+        if len(human) == 1:
+            distance = point_distance_to_segment(human[0], ai[0], ai[1])
+            return {"mode": "point", "status": "pass" if distance <= 0.05 + 1.0e-9 else "fail", "point_distance_m": round(distance, 6)}
+        human_to_ai = max(point_distance_to_segment(point, ai[0], ai[1]) for point in human)
+        ai_to_human = max(point_distance_to_segment(point, human[0], human[1]) for point in ai)
+        hausdorff = max(human_to_ai, ai_to_human)
+        human_length, ai_length = math.dist(*human), math.dist(*ai)
+        length_error = abs(human_length - ai_length)
+        length_ratio = length_error / max(human_length, 1.0e-9)
+        hv, av = (human[1][0] - human[0][0], human[1][1] - human[0][1]), (ai[1][0] - ai[0][0], ai[1][1] - ai[0][1])
+        cosine = max(-1.0, min(1.0, abs((hv[0] * av[0] + hv[1] * av[1]) / max(math.hypot(*hv) * math.hypot(*av), 1.0e-9))))
+        angle = math.degrees(math.acos(cosine))
+        passed = hausdorff <= 0.05 + 1.0e-9 and (length_error <= 0.05 + 1.0e-9 or length_ratio <= 0.05 + 1.0e-9) and angle <= 2.0 + 1.0e-9
+        return {"mode": "segment", "status": "pass" if passed else "fail", "symmetric_hausdorff_m": round(hausdorff, 6), "length_error_m": round(length_error, 6), "length_error_ratio": round(length_ratio, 6), "angle_error_degrees": round(angle, 6)}
+
     raw_openings = list(seed.get("openings") or [])
-    anchor_bindings: dict[str, str] = {}
+    anchor_bindings: list[dict[str, str]] = []
     used_opening_ids: set[str] = set()
     for anchor in (project.get("anchor_set") or {}).get("anchors", []):
         if anchor.get("kind") not in {"entrance", "opening"}:
             continue
         candidates = [row for row in raw_openings if anchor["kind"] != "entrance" or row.get("kind") == "entrance"]
-        matches = [
-            row for row in candidates
-            if max(norm_distance_to_segment(point, row.get("a") or {}, row.get("b") or {}) for point in anchor.get("points") or []) <= 35.0
-        ]
+        checked = [(row, segment_metrics(anchor, row)) for row in candidates]
+        matches = [(row, check) for row, check in checked if check["status"] == "pass"]
         if not matches:
             raise ValueError(f"人工{anchor['kind']}锚点 {anchor['anchor_id']} 未与任何 Gemini 开口几何对应")
         if len(matches) > 1:
             raise ValueError(f"人工{anchor['kind']}锚点 {anchor['anchor_id']} 同时匹配多个 Gemini 开口")
-        opening_id = str(matches[0].get("id") or "")
+        matched, geometry_check = matches[0]
+        opening_id = str(matched.get("id") or "")
         if not opening_id or opening_id in used_opening_ids:
             raise ValueError(f"人工开口锚点 {anchor['anchor_id']} 未与 Gemini 开口形成唯一对应")
         used_opening_ids.add(opening_id)
-        anchor_bindings[anchor["anchor_id"]] = opening_id
+        anchor_bindings.append({
+            "anchor_id": anchor["anchor_id"],
+            "anchor_kind": anchor["kind"],
+            "opening_id": opening_id,
+        })
 
     spaces = []
     known_spaces = {"exterior"}
@@ -868,6 +943,87 @@ def _compile_structure_bundle(project: dict, seed: dict) -> dict:
             "confirmed": True,
         })
 
+    # A buildable branch graph is atomic: every T/X intersection must be an
+    # endpoint of every incident branch. Split Gemini's longer centerlines
+    # deterministically before assigning openings to their owning child.
+    split_parameters: dict[str, set[float]] = {wall["id"]: {0.0, 1.0} for wall in walls}
+    for first_index, first in enumerate(walls):
+        a, b = first["centerline_m"]
+        rx, ry = b[0] - a[0], b[1] - a[1]
+        for second in walls[first_index + 1:]:
+            c, d = second["centerline_m"]
+            sx, sy = d[0] - c[0], d[1] - c[1]
+            denominator = rx * sy - ry * sx
+            if abs(denominator) <= 1.0e-12:
+                continue
+            qx, qy = c[0] - a[0], c[1] - a[1]
+            t = (qx * sy - qy * sx) / denominator
+            u = (qx * ry - qy * rx) / denominator
+            if -1.0e-9 <= t <= 1.0 + 1.0e-9 and -1.0e-9 <= u <= 1.0 + 1.0e-9:
+                split_parameters[first["id"]].add(max(0.0, min(1.0, t)))
+                split_parameters[second["id"]].add(max(0.0, min(1.0, u)))
+    atomic_walls: list[dict[str, Any]] = []
+    parent_segments: dict[str, list[str]] = {}
+    for wall in walls:
+        cuts = sorted(split_parameters[wall["id"]])
+        a, b = wall["centerline_m"]
+        pieces = []
+        for piece_index, (start, end) in enumerate(zip(cuts, cuts[1:]), 1):
+            if end - start <= 1.0e-9:
+                continue
+            piece = deepcopy(wall)
+            piece["id"] = wall["id"] if len(cuts) == 2 else f"{wall['id']}.S{piece_index:02d}"
+            piece["centerline_m"] = [
+                [round(a[0] + (b[0] - a[0]) * start, 6), round(a[1] + (b[1] - a[1]) * start, 6)],
+                [round(a[0] + (b[0] - a[0]) * end, 6), round(a[1] + (b[1] - a[1]) * end, 6)],
+            ]
+            atomic_walls.append(piece)
+            pieces.append(piece["id"])
+        parent_segments[wall["id"]] = pieces
+    walls = atomic_walls
+    wall_ids = {wall["id"] for wall in walls}
+
+    try:
+        from .tools.fastloop_research.contract import derive_wall_junctions, project_opening
+    except ImportError:
+        from tools.fastloop_research.contract import derive_wall_junctions, project_opening
+    junctions = derive_wall_junctions(walls)
+    wall_by_id = {wall["id"]: wall for wall in walls}
+
+    def atomic_owner(parent_id: str, a_m: list[float], b_m: list[float]) -> str:
+        candidates: list[str] = []
+        for child_id in parent_segments.get(parent_id, []):
+            child = wall_by_id[child_id]
+            ca, cb = child["centerline_m"]
+            dx, dy = cb[0] - ca[0], cb[1] - ca[1]
+            length = math.hypot(dx, dy)
+            tx, ty = dx / length, dy / length
+            valid = True
+            for point in (a_m, b_m):
+                px, py = point[0] - ca[0], point[1] - ca[1]
+                projection = px * tx + py * ty
+                distance = abs(px * (-ty) + py * tx)
+                if distance > 0.05 + 1.0e-9 or projection < -1.0e-9 or projection > length + 1.0e-9:
+                    valid = False
+            if valid:
+                candidates.append(child_id)
+        if len(candidates) != 1:
+            raise ValueError(f"开口跨越原墙 {parent_id} 的原子分段，无法唯一归属")
+        return candidates[0]
+
+    def same_wall_support(owner: dict, opening: dict, *, before: bool) -> dict[str, Any]:
+        projection = project_opening(owner, opening)
+        margin = projection["start_m"] if before else projection["wall_length_m"] - projection["end_m"]
+        if margin < 0.05 - 1.0e-9:
+            raise ValueError(f"{opening['id']} 墙端余量不足 50mm，必须由专业结构图声明 return_wall_face 支承")
+        return {
+            "mode": "same_wall_margin", "supporting_wall_id": owner["id"],
+            "junction_id": None, "face_distance_m": round(margin, 6),
+            "effective_support_m": round(margin, 6),
+            "provenance": "computed_from_confirmed_wall_axis",
+            "solid_provenance": "owning_wall_continuous_solid",
+        }
+
     openings = []
     opening_ids: set[str] = set()
     for index, raw in enumerate(seed.get("openings") or [], 1):
@@ -875,24 +1031,28 @@ def _compile_structure_bundle(project: dict, seed: dict) -> dict:
         if opening_id in opening_ids:
             raise ValueError(f"开口 ID 重复: {opening_id}")
         opening_ids.add(opening_id)
-        owner = str(raw.get("owning_wall_id") or "")
-        if owner not in wall_ids:
+        parent_owner = str(raw.get("owning_wall_id") or "")
+        if parent_owner not in parent_segments:
             raise ValueError(f"{opening_id} 缺少有效所属墙")
         side_a, side_b = str(raw.get("side_a_space_id") or ""), str(raw.get("side_b_space_id") or "")
         if side_a not in known_spaces or side_b not in known_spaces or side_a == side_b:
             raise ValueError(f"{opening_id} 两侧空间无效")
         a_m, b_m = to_m(raw.get("a")), to_m(raw.get("b"))
+        owner = atomic_owner(parent_owner, a_m, b_m)
         width = math.dist(a_m, b_m)
         kind = str(raw.get("kind") or "")
         swing = None if kind == "window" else str(raw.get("swing_direction") or "not_shown")
-        openings.append({
+        opening = {
             "id": opening_id, "kind": kind, "owning_wall_id": owner, "segment_m": [a_m, b_m],
             "width_m": round(width, 6), "sill_m": round(float(raw.get("sill_m") or 0), 4),
             "head_m": round(float(raw.get("head_m") or 2.1), 4), "swing_direction": swing,
             "side_a_space_id": side_a, "side_b_space_id": side_b,
             "jamb_before_supported": True, "jamb_after_supported": True, "junction_clearance_m": 0.05,
             "junction_diagnostics": [], "confirmed": True, "source": "gemini_inferred",
-        })
+        }
+        opening["jamb_before_support"] = same_wall_support(wall_by_id[owner], opening, before=True)
+        opening["jamb_after_support"] = same_wall_support(wall_by_id[owner], opening, before=False)
+        openings.append(opening)
 
     edges = []
     for index, raw in enumerate(seed.get("adjacencies") or [], 1):
@@ -908,13 +1068,39 @@ def _compile_structure_bundle(project: dict, seed: dict) -> dict:
 
     bundle = {
         "schema": "research-structure-bundle-v1",
-        "source": {"normalized_hash": file_sha256(project["normalized_path"]), "scale_anchor_id": calibration["anchor_id"], "anchor_opening_bindings": anchor_bindings},
+        "source": {
+            "schema": "source-provenance-v2",
+            "source_file_hash": project["source_hash"],
+            "normalized_hash": file_sha256(project["normalized_path"]),
+            "raw_pixel_hash": str((project.get("source_orientation") or {}).get("raw_pixel_hash") or project["source_hash"]),
+            "exif_orientation": int((project.get("source_orientation") or {}).get("exif_orientation") or 1),
+            "orientation_policy": str((project.get("source_orientation") or {}).get("orientation_policy") or "exif_transpose-v1"),
+            "canonical_visible_size": list((project.get("source_orientation") or {}).get("canonical_visible_size") or (project.get("normalization") or {}).get("original_size") or [1, 1]),
+            "coordinate_space": "normalized-evidence-1000-v1",
+            "normalized_to_metric_3x3": [
+                [round(canvas_w / 1000.0 * mpp, 12), 0.0, round(-origin_x * mpp, 12)],
+                [0.0, round(-canvas_h / 1000.0 * mpp, 12), round(origin_y * mpp, 12)],
+                [0.0, 0.0, 1.0],
+            ],
+            "anchor_set_hash": _project_anchor_set_hash(project),
+            "scale_anchor_id": calibration["anchor_id"],
+            "anchors": [
+                {
+                    "anchor_id": anchor["anchor_id"], "kind": anchor["kind"],
+                    "points_norm": [[float(point["x"]), float(point["y"])] for point in anchor.get("points") or []],
+                    "points_metric_m": [to_m(point) for point in anchor.get("points") or []],
+                    "distance_mm": float(anchor["distance_mm"]) if anchor.get("kind") == "scale" else None,
+                }
+                for anchor in (project.get("anchor_set") or {}).get("anchors", [])
+            ],
+            "anchor_opening_bindings": anchor_bindings,
+        },
         "project": {"id": project["project_id"], "revision": project["revision"]},
         "source_hash": project["source_hash"],
         "structure_hash": "0" * 64,
         "outer_boundary_m": [to_m({"x": x, "y": y}) for x, y in boundary_norm],
         "spaces": spaces,
-        "wall_branch_graph": {"version": "wall-branch-graph-v1", "walls": walls},
+        "wall_branch_graph": {"version": "wall-branch-graph-v1", "walls": walls, "junctions": junctions},
         "opening_contract": {"version": "opening-contract-v1", "junction_clearance_m": 0.05, "openings": openings},
         "adjacency_truth": {"version": "adjacency-truth-v1", "edges": edges, "confirmed": True},
         "assumptions": {"scale_m_per_unit": 1.0, "floor_slab_thickness_m": 0.12, "research_only": True},
@@ -960,6 +1146,39 @@ def submit_structure_review(project: dict, answers: dict[str, str], *, technical
                 raise ValueError("专业结构包 revision 已过期")
             if (bundle.get("source") or {}).get("normalized_hash") != file_sha256(project["normalized_path"]):
                 raise ValueError("专业结构包不属于当前规范化证据图")
+            source = bundle.get("source") or {}
+            orientation = project.get("source_orientation") or {}
+            expected_source = {
+                "source_file_hash": project.get("source_hash"),
+                "raw_pixel_hash": orientation.get("raw_pixel_hash"),
+                "exif_orientation": orientation.get("exif_orientation"),
+                "orientation_policy": orientation.get("orientation_policy"),
+                "canonical_visible_size": orientation.get("canonical_visible_size"),
+                "normalized_hash": file_sha256(project["normalized_path"]),
+            }
+            mismatched = [key for key, expected in expected_source.items() if source.get(key) != expected]
+            if mismatched:
+                raise ValueError(f"专业结构包来源方向/像素证据不属于当前项目: {mismatched}")
+            from .tools.fastloop_research.contract import canonical_anchor_geometry_payload, compute_anchor_set_hash
+            current_anchor_set = project.get("anchor_set") or {}
+            current_anchor_hash = compute_anchor_set_hash(
+                str(current_anchor_set.get("coordinate_space") or ""), project["source_hash"],
+                file_sha256(project["normalized_path"]), list(current_anchor_set.get("anchors") or []),
+            )
+            bundle_anchor_hash = compute_anchor_set_hash(
+                str(source.get("coordinate_space") or ""), str(source.get("source_file_hash") or ""),
+                str(source.get("normalized_hash") or ""), list(source.get("anchors") or []),
+            )
+            current_payload = canonical_anchor_geometry_payload(
+                str(current_anchor_set.get("coordinate_space") or ""), project["source_hash"],
+                file_sha256(project["normalized_path"]), list(current_anchor_set.get("anchors") or []),
+            )
+            bundle_payload = canonical_anchor_geometry_payload(
+                str(source.get("coordinate_space") or ""), str(source.get("source_file_hash") or ""),
+                str(source.get("normalized_hash") or ""), list(source.get("anchors") or []),
+            )
+            if source.get("anchor_set_hash") != current_anchor_hash or bundle_anchor_hash != current_anchor_hash or bundle_payload != current_payload:
+                raise ValueError("专业结构包人工锚点几何不属于当前项目")
             from .tools.fastloop_research import compute_structure_hash, validate_bundle
             bundle["structure_hash"] = compute_structure_hash(bundle)
             validate_bundle(bundle)
@@ -1549,6 +1768,13 @@ def create_model_run_record(project: dict) -> dict:
         "unresolved": list(review.get("unresolved") or []),
         "mechanical_report": {},
         "gemini_review": {"version": QA_PROMPT_VERSION, "status": "not_run", "hard_fail": False, "summary": "", "checks": [], "provider": ""},
+        "loop": {
+            "version": "goal-loop-v2", "status": "not_started", "attempt": 0,
+            "max_attempts": 2, "method_id": "deterministic-contract-v2",
+            "mechanical_score": None, "gemini_score": None, "total_score": None,
+            "score_delta": None, "hard_gates": [], "repair_history": [],
+            "next_action": "从当前结构合同生成新的空白 Blender 灰模",
+        },
         "stale": False,
         "created_at": now,
         "updated_at": now,
@@ -1605,6 +1831,8 @@ def run_model_job(project_id: str, run_id: str) -> dict:
         if row.get("status") not in {"queued", "interrupted"}:
             return row
         row.update(status="building", stage="正在生成 Blender、GLB 和研究 IFC", error="", updated_at=time.time())
+        row.setdefault("loop", {})["status"] = "building"
+        row["loop"]["next_action"] = "等待本轮机械验证完成"
         bundle = deepcopy(row["structure_bundle"])
         output_root = row["output_root"]
         save_project(project)
@@ -1635,6 +1863,7 @@ def run_model_job(project_id: str, run_id: str) -> dict:
             axon_paths = [item["path"] for item in artifacts if item["kind"] in {"north_east", "north_west"}]
             if result_status == "blocked_dependency_missing" and not top_path:
                 row.update(status="blocked_dependency_missing", stage="本地建模依赖缺失", error=str(result.get("message") or "缺少 Blender"))
+                row.setdefault("loop", {}).update(status="paused_external", next_action="安装缺失的本地建模依赖后重新开始本轮")
                 row["updated_at"] = time.time()
                 project["stage"] = row["stage"]
                 save_project(project)
@@ -1644,16 +1873,21 @@ def run_model_job(project_id: str, run_id: str) -> dict:
                 "summary": "顶视图缺失，不能运行复合审查", "checks": [], "provider": "local_missing_artifact",
             }
             row["gemini_review"] = qa
+            row.setdefault("loop", {})["status"] = "evaluating"
             if result_status == "blocked_dependency_missing":
                 row.update(status="blocked_dependency_missing", stage="Blender 研究模型已生成；研究 IFC 依赖缺失", error=str(result.get("message") or "缺少 IfcOpenShell"))
             elif qa.get("status") == "passed":
                 row.update(status="ready_research", stage="研究灰模已通过机械与 Gemini 审查", error="")
+                row["loop"].update(status="accepted", next_action="交给独立 verifier 复算")
             elif qa.get("status") == "failed" or qa.get("hard_fail"):
                 row.update(status="needs_correction", stage="Gemini 发现结构差异，需要校正", error=str(qa.get("summary") or ""))
+                row["loop"].update(status="repairing", next_action="生成只修改结构合同的最小 repair plan")
             else:
                 row.update(status="external_review_pending", stage="本地研究模型可用；等待 Gemini 复合审查", error=str(qa.get("summary") or ""))
+                row["loop"].update(status="paused_external", next_action="恢复 Gemini 后复审现有本地产物，不重新付费建模")
         else:
             row.update(status="failed_product", stage="研究建模失败", error=str(result.get("error") or "本地建模内核失败"))
+            row.setdefault("loop", {}).update(status="repairing", next_action="根据机械失败生成只修改结构合同的最小 repair plan")
         row["updated_at"] = time.time()
         project["status"] = "locked" if project.get("locked_candidate_id") else project.get("status")
         project["stage"] = row["stage"]

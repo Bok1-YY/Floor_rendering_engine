@@ -67,6 +67,7 @@ def has_active_tasks() -> bool:
 class ProjectCreateRequest(BaseModel):
     floorplan_path: str = Field(min_length=1, max_length=2000)
     source_name: str = Field(default="", max_length=300)
+    orientation_policy: Literal["exif_transpose-v1", "ignore_invalid_exif_user_confirmed_raw"] = "exif_transpose-v1"
 
 
 class PlanSummaryPutRequest(BaseModel):
@@ -329,7 +330,7 @@ def upload_design_reference(file: UploadFile = File(...)):
 @router.post("/api/whole-home-design/projects")
 async def create_design_project(req: ProjectCreateRequest):
     source = require_upload_image_path(req.floorplan_path, "户型图", required=True)
-    project = await asyncio.to_thread(create_project, source, req.source_name)
+    project = await asyncio.to_thread(create_project, source, req.source_name, orientation_policy=req.orientation_policy)
     return public_project(project)
 
 

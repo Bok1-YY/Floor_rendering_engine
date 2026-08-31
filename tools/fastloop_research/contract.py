@@ -22,6 +22,17 @@ WALL_SCHEMA = "wall-branch-graph-v1"
 OPENING_SCHEMA = "opening-contract-v1"
 ADJACENCY_SCHEMA = "adjacency-truth-v1"
 JUNCTION_CLEARANCE_M = 0.05
+OPENING_ANGLE_TOLERANCE_DEGREES = 5.0
+GEOMETRY_TOLERANCE_M = 0.001
+SOURCE_SCHEMA = "source-provenance-v2"
+SOURCE_KEYS = {
+    "schema", "source_file_hash", "normalized_hash", "raw_pixel_hash",
+    "exif_orientation", "orientation_policy", "canonical_visible_size",
+    "coordinate_space", "normalized_to_metric_3x3", "anchor_set_hash", "scale_anchor_id", "anchors",
+    "anchor_opening_bindings",
+}
+SOURCE_ANCHOR_KEYS = {"anchor_id", "kind", "points_norm", "points_metric_m", "distance_mm"}
+SOURCE_BINDING_KEYS = {"anchor_id", "anchor_kind", "opening_id"}
 TOP_LEVEL_KEYS = {
     "schema",
     "source",
@@ -60,11 +71,15 @@ OPENING_KEYS = {
     "side_b_space_id",
     "jamb_before_supported",
     "jamb_after_supported",
+    "jamb_before_support",
+    "jamb_after_support",
     "junction_clearance_m",
     "junction_diagnostics",
     "confirmed",
     "source",
 }
+JUNCTION_KEYS = {"id", "point_m", "kind", "incident_wall_ids", "provenance"}
+JAMB_SUPPORT_KEYS = {"mode", "supporting_wall_id", "junction_id", "face_distance_m", "effective_support_m", "provenance", "solid_provenance"}
 EDGE_KEYS = {
     "id",
     "space_a_id",
@@ -225,6 +240,123 @@ def _proper_intersection_parameter(
     return None
 
 
+def _distance_point_to_segment(point, start, end) -> float:
+    dx, dy = end[0] - start[0], end[1] - start[1]
+    length_squared = dx * dx + dy * dy
+    if length_squared <= 1.0e-18:
+        return math.dist(point, start)
+    t = max(0.0, min(1.0, ((point[0] - start[0]) * dx + (point[1] - start[1]) * dy) / length_squared))
+    return math.dist(point, (start[0] + t * dx, start[1] + t * dy))
+
+
+def _segment_hausdorff(first, second) -> tuple[float, float, float]:
+    first_to_second = max(_distance_point_to_segment(point, *second) for point in first)
+    second_to_first = max(_distance_point_to_segment(point, *first) for point in second)
+    return first_to_second, second_to_first, max(first_to_second, second_to_first)
+
+
+def _segment_angle_degrees(first, second) -> float:
+    first_vector = (first[1][0] - first[0][0], first[1][1] - first[0][1])
+    second_vector = (second[1][0] - second[0][0], second[1][1] - second[0][1])
+    denominator = math.hypot(*first_vector) * math.hypot(*second_vector)
+    if denominator <= 1.0e-18:
+        return 180.0
+    cosine = max(-1.0, min(1.0, abs((first_vector[0] * second_vector[0] + first_vector[1] * second_vector[1]) / denominator)))
+    return math.degrees(math.acos(cosine))
+
+
+def _endpoint_match_error(first, second) -> float:
+    direct = max(math.dist(first[0], second[0]), math.dist(first[1], second[1]))
+    reverse = max(math.dist(first[0], second[1]), math.dist(first[1], second[0]))
+    return min(direct, reverse)
+
+
+def analyze_wall_junctions(
+    walls: Sequence[Mapping[str, Any]], *, tolerance_m: float = GEOMETRY_TOLERANCE_M
+) -> list[dict[str, Any]]:
+    """Classify L/T/X/collinear relations; unsplit T/X and overlaps fail."""
+
+    diagnostics: list[dict[str, Any]] = []
+    for first_index, first in enumerate(walls):
+        first_a, first_b = (tuple(map(float, point)) for point in first["centerline_m"])
+        first_length = math.dist(first_a, first_b)
+        for second in walls[first_index + 1 :]:
+            second_a, second_b = (tuple(map(float, point)) for point in second["centerline_m"])
+            second_length = math.dist(second_a, second_b)
+            collinear = _orientation(first_a, first_b, second_a) == 0 and _orientation(first_a, first_b, second_b) == 0
+            if collinear:
+                dx, dy = first_b[0] - first_a[0], first_b[1] - first_a[1]
+                tx, ty = dx / first_length, dy / first_length
+                second_interval = sorted(((second_a[0] - first_a[0]) * tx + (second_a[1] - first_a[1]) * ty, (second_b[0] - first_a[0]) * tx + (second_b[1] - first_a[1]) * ty))
+                overlap = min(first_length, second_interval[1]) - max(0.0, second_interval[0])
+                if overlap > tolerance_m:
+                    diagnostics.append({"kind": "collinear_overlap", "severity": "error", "wall_ids": [first["id"], second["id"]], "overlap_m": round(overlap, 9)})
+                continue
+            first_parameter = _proper_intersection_parameter(first_a, first_b, second_a, second_b)
+            second_parameter = _proper_intersection_parameter(second_a, second_b, first_a, first_b)
+            if first_parameter is None or second_parameter is None:
+                endpoint_gap = min(math.dist(a, b) for a in (first_a, first_b) for b in (second_a, second_b))
+                if tolerance_m < endpoint_gap <= JUNCTION_CLEARANCE_M:
+                    diagnostics.append({"kind": "near_miss_gap", "severity": "error", "wall_ids": [first["id"], second["id"]], "gap_m": round(endpoint_gap, 9)})
+                continue
+            first_endpoint = min(first_parameter, first_length - first_parameter) <= tolerance_m
+            second_endpoint = min(second_parameter, second_length - second_parameter) <= tolerance_m
+            if first_endpoint and second_endpoint:
+                diagnostics.append({"kind": "l_junction", "severity": "pass", "wall_ids": [first["id"], second["id"]]})
+            elif first_endpoint != second_endpoint:
+                diagnostics.append({"kind": "t_junction", "severity": "pass", "wall_ids": [first["id"], second["id"]]})
+            else:
+                diagnostics.append({"kind": "unsplit_x_junction", "severity": "error", "wall_ids": [first["id"], second["id"]]})
+    return diagnostics
+
+
+def derive_wall_junctions(walls: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """Derive unique geometric junctions, grouped at 1mm coordinates."""
+
+    points: dict[tuple[int, int], dict[str, Any]] = {}
+    for first_index, first in enumerate(walls):
+        a, b = (tuple(map(float, point)) for point in first["centerline_m"])
+        first_length = math.dist(a, b)
+        for second in walls[first_index + 1 :]:
+            c, d = (tuple(map(float, point)) for point in second["centerline_m"])
+            if _orientation(a, b, c) == 0 and _orientation(a, b, d) == 0:
+                shared = [point for point in (a, b) if min(math.dist(point, c), math.dist(point, d)) <= GEOMETRY_TOLERANCE_M]
+                if not shared:
+                    continue
+                point = shared[0]
+            else:
+                first_parameter = _proper_intersection_parameter(a, b, c, d)
+                if first_parameter is None:
+                    continue
+                ratio = first_parameter / first_length
+                point = (a[0] + (b[0] - a[0]) * ratio, a[1] + (b[1] - a[1]) * ratio)
+            key = (round(point[0] / GEOMETRY_TOLERANCE_M), round(point[1] / GEOMETRY_TOLERANCE_M))
+            row = points.setdefault(key, {"point_m": [point[0], point[1]], "incident_wall_ids": set()})
+            row["incident_wall_ids"].update((first["id"], second["id"]))
+    result: list[dict[str, Any]] = []
+    for index, row in enumerate(sorted(points.values(), key=lambda item: (item["point_m"][0], item["point_m"][1])), 1):
+        incident = sorted(row["incident_wall_ids"])
+        interiors = 0
+        for wall in walls:
+            if wall["id"] not in incident:
+                continue
+            a, b = (tuple(map(float, point)) for point in wall["centerline_m"])
+            if min(math.dist(tuple(row["point_m"]), a), math.dist(tuple(row["point_m"]), b)) > GEOMETRY_TOLERANCE_M:
+                interiors += 1
+        if interiors >= 2 or (interiors == 0 and len(incident) >= 4):
+            kind = "X"
+        elif len(incident) >= 3 or interiors == 1:
+            kind = "T"
+        else:
+            first = next(wall for wall in walls if wall["id"] == incident[0])
+            second = next(wall for wall in walls if wall["id"] == incident[1])
+            first_a, first_b = tuple(first["centerline_m"][0]), tuple(first["centerline_m"][1])
+            second_a, second_b = tuple(second["centerline_m"][0]), tuple(second["centerline_m"][1])
+            kind = "continuation" if _orientation(first_a, first_b, second_a) == 0 and _orientation(first_a, first_b, second_b) == 0 else "L"
+        result.append({"id": f"J-{index:03d}", "point_m": [round(value, 6) for value in row["point_m"]], "kind": kind, "incident_wall_ids": incident, "provenance": "derived_geometry"})
+    return result
+
+
 def _polygon(value: Any, path: str) -> list[tuple[float, float]]:
     if not isinstance(value, list):
         _fail(f"{path}: expected an array")
@@ -291,6 +423,53 @@ def compute_structure_hash(bundle: Mapping[str, Any]) -> str:
     return hashlib.sha256(canonical_json(payload)).hexdigest()
 
 
+def canonical_anchor_geometry_payload(
+    coordinate_space: str,
+    source_hash: str,
+    normalized_hash: str,
+    anchors: Sequence[Mapping[str, Any]],
+) -> dict[str, Any]:
+    """Return the label/note-independent human anchor geometry authority."""
+
+    records: list[dict[str, Any]] = []
+    seen: set[str] = set()
+    for index, raw in enumerate(anchors):
+        anchor_id = _identifier(raw.get("anchor_id"), f"anchors[{index}].anchor_id")
+        if anchor_id in seen:
+            _fail(f"anchors[{index}].anchor_id: duplicate ID")
+        seen.add(anchor_id)
+        kind = raw.get("kind")
+        if not isinstance(kind, str):
+            _fail(f"anchors[{index}].kind: expected string")
+        raw_points = raw.get("points_norm", raw.get("points"))
+        if not isinstance(raw_points, list):
+            _fail(f"anchors[{index}]: missing canonical points")
+        points = []
+        for point_index, raw_point in enumerate(raw_points):
+            if isinstance(raw_point, Mapping):
+                point = [_finite(raw_point.get("x"), f"anchors[{index}].points[{point_index}].x"), _finite(raw_point.get("y"), f"anchors[{index}].points[{point_index}].y")]
+            else:
+                parsed = _point(raw_point, f"anchors[{index}].points[{point_index}]")
+                point = [parsed[0], parsed[1]]
+            points.append([int(value) if float(value).is_integer() else float(value) for value in point])
+        distance = raw.get("distance_mm")
+        distance_value = None if distance is None else _finite(distance, f"anchors[{index}].distance_mm")
+        if distance_value is not None and distance_value.is_integer():
+            distance_value = int(distance_value)
+        records.append({"anchor_id": anchor_id, "kind": kind, "points_norm": points, "distance_mm": distance_value})
+    records.sort(key=lambda item: item["anchor_id"])
+    return {"coordinate_space": coordinate_space, "source_hash": source_hash, "normalized_hash": normalized_hash, "anchors": records}
+
+
+def compute_anchor_set_hash(
+    coordinate_space: str,
+    source_hash: str,
+    normalized_hash: str,
+    anchors: Sequence[Mapping[str, Any]],
+) -> str:
+    return hashlib.sha256(canonical_json(canonical_anchor_geometry_payload(coordinate_space, source_hash, normalized_hash, anchors))).hexdigest()
+
+
 def project_opening(wall: Mapping[str, Any], opening: Mapping[str, Any]) -> dict[str, float]:
     a = tuple(map(float, wall["centerline_m"][0]))
     b = tuple(map(float, wall["centerline_m"][1]))
@@ -308,6 +487,9 @@ def project_opening(wall: Mapping[str, Any], opening: Mapping[str, Any]) -> dict
 
     p0, d0 = one(start)
     p1, d1 = one(end)
+    projected_segment = ((a[0] + tx * p0, a[1] + ty * p0), (a[0] + tx * p1, a[1] + ty * p1))
+    opening_segment = (start, end)
+    first_to_second, second_to_first, hausdorff = _segment_hausdorff(opening_segment, projected_segment)
     return {
         "wall_length_m": length,
         "start_m": min(p0, p1),
@@ -315,6 +497,11 @@ def project_opening(wall: Mapping[str, Any], opening: Mapping[str, Any]) -> dict
         "endpoint_0_distance_m": d0,
         "endpoint_1_distance_m": d1,
         "projected_width_m": abs(p1 - p0),
+        "opening_to_projection_hausdorff_m": first_to_second,
+        "projection_to_opening_hausdorff_m": second_to_first,
+        "symmetric_hausdorff_m": hausdorff,
+        "endpoint_match_error_m": _endpoint_match_error(opening_segment, projected_segment),
+        "angle_error_degrees": _segment_angle_degrees(opening_segment, (a, b)),
     }
 
 
@@ -341,8 +528,8 @@ def _validate_spaces(
     return spaces, ids
 
 
-def _validate_walls(raw_graph: Any, space_ids: set[str]) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]]]:
-    graph = _exact_keys(raw_graph, {"version", "walls"}, "wall_branch_graph")
+def _validate_walls(raw_graph: Any, space_ids: set[str]) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    graph = _exact_keys(raw_graph, {"version", "walls", "junctions"}, "wall_branch_graph")
     if graph["version"] != WALL_SCHEMA:
         _fail(f"wall_branch_graph.version: expected {WALL_SCHEMA}")
     if not isinstance(graph["walls"], list) or not graph["walls"]:
@@ -367,8 +554,6 @@ def _validate_walls(raw_graph: Any, space_ids: set[str]) -> tuple[list[dict[str,
         _bounded(record["thickness_m"], f"{path}.thickness_m", 0.03, 1.0)
         base = _bounded(record["base_m"], f"{path}.base_m", 0.0, 20.0)
         height = _bounded(record["height_m"], f"{path}.height_m", 0.10, 50.0)
-        if height - base < 0.10:
-            _fail(f"{path}: height_m must be at least 0.10m above base_m")
         left, right = record["left_space_id"], record["right_space_id"]
         if left not in allowed_spaces or right not in allowed_spaces or left == right:
             _fail(f"{path}: left/right spaces must be distinct known IDs")
@@ -378,13 +563,59 @@ def _validate_walls(raw_graph: Any, space_ids: set[str]) -> tuple[list[dict[str,
         normalized = deepcopy(dict(record))
         walls.append(normalized)
         by_id[stable_id] = normalized
-    return walls, by_id
+    if not isinstance(graph["junctions"], list):
+        _fail("wall_branch_graph.junctions: expected an array")
+    detected = derive_wall_junctions(walls)
+    for detected_junction in detected:
+        if detected_junction["kind"] not in {"T", "X"}:
+            continue
+        point = tuple(detected_junction["point_m"])
+        unsplit = [
+            wall_id for wall_id in detected_junction["incident_wall_ids"]
+            if min(math.dist(point, tuple(by_id[wall_id]["centerline_m"][0])), math.dist(point, tuple(by_id[wall_id]["centerline_m"][1]))) > GEOMETRY_TOLERANCE_M
+        ]
+        if unsplit:
+            _fail(f"wall_branch_graph: non-atomic {detected_junction['kind']} junction; split walls at intersection {unsplit}")
+    if len(graph["junctions"]) != len(detected):
+        _fail("wall_branch_graph.junctions: every actual intersection requires exactly one declaration")
+    junction_by_id: dict[str, dict[str, Any]] = {}
+    used_detected: set[int] = set()
+    for index, raw in enumerate(graph["junctions"]):
+        path = f"wall_branch_graph.junctions[{index}]"
+        record = _exact_keys(raw, JUNCTION_KEYS, path)
+        junction_id = _identifier(record["id"], f"{path}.id")
+        if junction_id in junction_by_id:
+            _fail(f"{path}.id: duplicate junction ID")
+        point = _point(record["point_m"], f"{path}.point_m")
+        incident = record["incident_wall_ids"]
+        if not isinstance(incident, list) or len(incident) < 2 or len(incident) != len(set(incident)) or any(item not in by_id for item in incident):
+            _fail(f"{path}.incident_wall_ids: expected unique known walls")
+        if record["kind"] not in {"L", "T", "X", "return", "continuation"}:
+            _fail(f"{path}.kind: expected L|T|X|return|continuation")
+        _nonempty_text(record["provenance"], f"{path}.provenance")
+        candidates = [
+            (detected_index, item) for detected_index, item in enumerate(detected)
+            if detected_index not in used_detected
+            and math.dist(point, tuple(item["point_m"])) <= GEOMETRY_TOLERANCE_M + 1.0e-9
+            and set(incident) == set(item["incident_wall_ids"])
+            and (record["kind"] == item["kind"] or (record["kind"] == "return" and item["kind"] == "L"))
+        ]
+        if len(candidates) != 1:
+            _fail(f"{path}: ghost, duplicate, or mismatched junction declaration")
+        used_detected.add(candidates[0][0])
+        junction_by_id[junction_id] = deepcopy(dict(record))
+    for wall in walls:
+        for endpoint in wall["centerline_m"]:
+            if not any(wall["id"] in item["incident_wall_ids"] and math.dist(tuple(endpoint), tuple(item["point_m"])) <= GEOMETRY_TOLERANCE_M + 1.0e-9 for item in graph["junctions"]):
+                _fail(f"wall_branch_graph: dangling endpoint on {wall['id']}")
+    return walls, by_id, junction_by_id
 
 
 def _validate_openings(
     raw_contract: Any,
     walls: list[dict[str, Any]],
     wall_by_id: dict[str, dict[str, Any]],
+    junction_by_id: dict[str, dict[str, Any]],
     space_ids: set[str],
 ) -> tuple[list[dict[str, Any]], dict[str, dict[str, Any]], dict[str, dict[str, float]]]:
     contract = _exact_keys(
@@ -426,15 +657,20 @@ def _validate_openings(
             _fail(f"{path}.width_m: differs from segment length by more than 50mm")
         wall = wall_by_id[wall_id]
         projection = project_opening(wall, record)
-        if max(projection["endpoint_0_distance_m"], projection["endpoint_1_distance_m"]) > JUNCTION_CLEARANCE_M + 1.0e-9:
-            _fail(f"{path}.segment_m: endpoint is more than 50mm from owning wall")
+        if projection["symmetric_hausdorff_m"] > JUNCTION_CLEARANCE_M + 1.0e-9:
+            _fail(f"{path}.segment_m: symmetric Hausdorff distance from owning wall exceeds 50mm")
+        if projection["endpoint_match_error_m"] > JUNCTION_CLEARANCE_M + 1.0e-9:
+            _fail(f"{path}.segment_m: projected endpoint correspondence exceeds 50mm")
+        if projection["angle_error_degrees"] > OPENING_ANGLE_TOLERANCE_DEGREES + 1.0e-9:
+            _fail(f"{path}.segment_m: direction differs from owning wall by more than 5 degrees")
         if abs(projection["projected_width_m"] - width) > JUNCTION_CLEARANCE_M + 1.0e-9:
             _fail(f"{path}.width_m: projected wall width differs by more than 50mm")
-        if projection["start_m"] < JUNCTION_CLEARANCE_M - 1.0e-9 or projection["end_m"] > projection["wall_length_m"] - JUNCTION_CLEARANCE_M + 1.0e-9:
-            _fail(f"{path}: each opening jamb needs 50mm wall-end protection")
+        if projection["start_m"] < -JUNCTION_CLEARANCE_M - 1.0e-9 or projection["end_m"] > projection["wall_length_m"] + JUNCTION_CLEARANCE_M + 1.0e-9:
+            _fail(f"{path}: opening projects more than 50mm outside owning wall")
         sill = _finite(record["sill_m"], f"{path}.sill_m")
         head = _finite(record["head_m"], f"{path}.head_m")
-        base, top = float(wall["base_m"]), float(wall["height_m"])
+        base = float(wall["base_m"])
+        top = base + float(wall["height_m"])
         if kind in {"entrance", "door"}:
             if not math.isclose(sill, 0.0, abs_tol=1.0e-9) or not math.isclose(base, 0.0, abs_tol=1.0e-9):
                 _fail(f"{path}: doors/entrances require sill_m=0 and wall base_m=0")
@@ -451,6 +687,66 @@ def _validate_openings(
             _fail(f"{path}: opening side spaces must match owning wall sides")
         if record["jamb_before_supported"] is not True or record["jamb_after_supported"] is not True:
             _fail(f"{path}: both jamb support flags must be true")
+        wall_a, wall_b = (tuple(map(float, point)) for point in wall["centerline_m"])
+        wall_dx, wall_dy = wall_b[0] - wall_a[0], wall_b[1] - wall_a[1]
+        wall_length = math.hypot(wall_dx, wall_dy)
+        tangent = (wall_dx / wall_length, wall_dy / wall_length)
+        jamb_specs = (
+            ("jamb_before_support", projection["start_m"], projection["start_m"]),
+            ("jamb_after_support", wall_length - projection["end_m"], projection["end_m"]),
+        )
+        for support_key, same_wall_margin, jamb_parameter in jamb_specs:
+            support_path = f"{path}.{support_key}"
+            support = _exact_keys(record[support_key], JAMB_SUPPORT_KEYS, support_path)
+            mode = support["mode"]
+            support_wall_id = support["supporting_wall_id"]
+            effective = _finite(support["effective_support_m"], f"{support_path}.effective_support_m")
+            _nonempty_text(support["provenance"], f"{support_path}.provenance")
+            _nonempty_text(support["solid_provenance"], f"{support_path}.solid_provenance")
+            if mode == "same_wall_margin":
+                if support_wall_id != wall_id or support["junction_id"] is not None or same_wall_margin < JUNCTION_CLEARANCE_M - 1.0e-9 or effective < JUNCTION_CLEARANCE_M - 1.0e-9:
+                    _fail(f"{support_path}: same-wall support requires at least 50mm owner solid")
+                if abs(_finite(support["face_distance_m"], f"{support_path}.face_distance_m") - same_wall_margin) > GEOMETRY_TOLERANCE_M + 1.0e-9:
+                    _fail(f"{support_path}: declared same-wall margin differs by more than 1mm")
+            elif mode == "return_wall_face":
+                if support_wall_id not in wall_by_id or support_wall_id == wall_id:
+                    _fail(f"{support_path}: return support requires another known wall")
+                junction_id = support["junction_id"]
+                junction = junction_by_id.get(junction_id)
+                if not junction or junction["kind"] != "return" or {wall_id, support_wall_id} - set(junction["incident_wall_ids"]):
+                    _fail(f"{support_path}: return support requires an explicit return junction")
+                support_wall = wall_by_id[support_wall_id]
+                if float(support_wall["base_m"]) > sill + GEOMETRY_TOLERANCE_M or float(support_wall["base_m"]) + float(support_wall["height_m"]) < head - GEOMETRY_TOLERANCE_M:
+                    _fail(f"{support_path}: support wall solid does not cover opening height")
+                jamb_point = (wall_a[0] + tangent[0] * jamb_parameter, wall_a[1] + tangent[1] * jamb_parameter)
+                support_a, support_b = (tuple(map(float, point)) for point in support_wall["centerline_m"])
+                support_dx, support_dy = support_b[0] - support_a[0], support_b[1] - support_a[1]
+                perpendicular_error = abs(90.0 - math.degrees(math.acos(max(-1.0, min(1.0, abs((wall_dx * support_dx + wall_dy * support_dy) / max(wall_length * math.hypot(support_dx, support_dy), 1.0e-12)))))))
+                if perpendicular_error > 10.0 + 1.0e-9:
+                    _fail(f"{support_path}: return support wall is not perpendicular within 10 degrees")
+                actual_face_distance = max(0.0, _distance_point_to_segment(jamb_point, support_a, support_b) - float(support_wall["thickness_m"]) * 0.5)
+                if actual_face_distance > GEOMETRY_TOLERANCE_M + 1.0e-9 or abs(_finite(support["face_distance_m"], f"{support_path}.face_distance_m") - actual_face_distance) > GEOMETRY_TOLERANCE_M + 1.0e-9:
+                    _fail(f"{support_path}: return wall face is not continuous within 1mm")
+                support_length = math.hypot(support_dx, support_dy)
+                support_normal = (-support_dy / support_length, support_dx / support_length)
+                half_support = float(support_wall["thickness_m"]) * 0.5
+                footprint = [
+                    (point[0] + sign * support_normal[0] * half_support, point[1] + sign * support_normal[1] * half_support)
+                    for point in (support_a, support_b) for sign in (-1.0, 1.0)
+                ]
+                support_interval = sorted((point[0] - wall_a[0]) * tangent[0] + (point[1] - wall_a[1]) * tangent[1] for point in footprint)
+                if support_key == "jamb_before_support":
+                    union_contiguous = support_interval[-1] >= -GEOMETRY_TOLERANCE_M
+                    actual_effective = jamb_parameter - min(0.0, support_interval[0])
+                else:
+                    union_contiguous = support_interval[0] <= wall_length + GEOMETRY_TOLERANCE_M
+                    actual_effective = max(wall_length, support_interval[1]) - jamb_parameter
+                if not union_contiguous or actual_effective < JUNCTION_CLEARANCE_M - 1.0e-9:
+                    _fail(f"{support_path}: independently derived wall-solid union support is below 50mm (actual={actual_effective:.6f}m, interval={support_interval})")
+                if abs(effective - actual_effective) > GEOMETRY_TOLERANCE_M + 1.0e-9:
+                    _fail(f"{support_path}: declared effective support differs from wall-solid union by more than 1mm")
+            else:
+                _fail(f"{support_path}.mode: expected same_wall_margin|return_wall_face")
         item_clearance = _finite(record["junction_clearance_m"], f"{path}.junction_clearance_m")
         if not math.isclose(item_clearance, JUNCTION_CLEARANCE_M, abs_tol=1.0e-9):
             _fail(f"{path}.junction_clearance_m: must be exactly 0.05m")
@@ -464,13 +760,18 @@ def _validate_openings(
         protected_end = projection["end_m"] + JUNCTION_CLEARANCE_M
         owning_a = tuple(map(float, wall["centerline_m"][0]))
         owning_b = tuple(map(float, wall["centerline_m"][1]))
+        return_support_wall_ids = {
+            record[key]["supporting_wall_id"]
+            for key in ("jamb_before_support", "jamb_after_support")
+            if record[key]["mode"] == "return_wall_face"
+        }
         for other in walls:
             if other["id"] == wall_id:
                 continue
             other_a = tuple(map(float, other["centerline_m"][0]))
             other_b = tuple(map(float, other["centerline_m"][1]))
             intersection = _proper_intersection_parameter(owning_a, owning_b, other_a, other_b)
-            if intersection is not None and protected_start - 1.0e-9 <= intersection <= protected_end + 1.0e-9:
+            if intersection is not None and protected_start - 1.0e-9 <= intersection <= protected_end + 1.0e-9 and other["id"] not in return_support_wall_ids:
                 _fail(f"{path}: protected jamb interval intersects wall junction {other['id']}")
             if (
                 intersection is None
@@ -497,6 +798,19 @@ def _validate_openings(
         by_id[stable_id] = normalized
         projections[stable_id] = projection
 
+    for opening in openings:
+        for support_key in ("jamb_before_support", "jamb_after_support"):
+            support = opening[support_key]
+            if support["mode"] != "return_wall_face":
+                continue
+            junction_point = tuple(junction_by_id[support["junction_id"]]["point_m"])
+            for other in openings:
+                if other["id"] == opening["id"] or other["owning_wall_id"] != support["supporting_wall_id"]:
+                    continue
+                other_segment = tuple(tuple(map(float, point)) for point in other["segment_m"])
+                if _distance_point_to_segment(junction_point, *other_segment) <= float(support["effective_support_m"]) + JUNCTION_CLEARANCE_M:
+                    _fail(f"opening_contract: {other['id']} cuts return-wall support for {opening['id']}")
+
     by_wall: dict[str, list[tuple[float, float, str]]] = {}
     for opening in openings:
         projection = projections[opening["id"]]
@@ -512,6 +826,123 @@ def _validate_openings(
                     "need independent 50mm jamb protection"
                 )
     return openings, by_id, projections
+
+
+def _validate_source(raw_source, *, source_hash: str, opening_by_id) -> dict[str, Any]:
+    source = _exact_keys(raw_source, SOURCE_KEYS, "bundle.source")
+    if source["schema"] != SOURCE_SCHEMA:
+        _fail(f"bundle.source.schema: expected {SOURCE_SCHEMA}")
+    if _hash(source["source_file_hash"], "bundle.source.source_file_hash") != source_hash:
+        _fail("bundle.source.source_file_hash: must equal bundle.source_hash")
+    _hash(source["normalized_hash"], "bundle.source.normalized_hash")
+    _hash(source["raw_pixel_hash"], "bundle.source.raw_pixel_hash")
+    orientation = source["exif_orientation"]
+    if isinstance(orientation, bool) or not isinstance(orientation, int) or not 1 <= orientation <= 8:
+        _fail("bundle.source.exif_orientation: expected integer 1..8")
+    if source["orientation_policy"] not in {"exif_transpose-v1", "ignore_invalid_exif_user_confirmed_raw"}:
+        _fail("bundle.source.orientation_policy: unsupported canonical-visible policy")
+    size = source["canonical_visible_size"]
+    if not isinstance(size, list) or len(size) != 2 or any(isinstance(value, bool) or not isinstance(value, int) or value <= 0 for value in size):
+        _fail("bundle.source.canonical_visible_size: expected [positive width, positive height]")
+    if source["coordinate_space"] not in {"normalized-evidence-1000-v1", "raw-full-canvas-normalized-1000-v1"}:
+        _fail("bundle.source.coordinate_space: unsupported canonical normalized-1000 space")
+    matrix = source["normalized_to_metric_3x3"]
+    if not isinstance(matrix, list) or len(matrix) != 3 or any(not isinstance(row, list) or len(row) != 3 for row in matrix):
+        _fail("bundle.source.normalized_to_metric_3x3: expected 3x3 affine matrix")
+    numeric_matrix = [[_finite(value, f"bundle.source.normalized_to_metric_3x3[{r}][{c}]") for c, value in enumerate(row)] for r, row in enumerate(matrix)]
+    if any(abs(value) > 1.0e-12 for value in numeric_matrix[2][:2]) or not math.isclose(numeric_matrix[2][2], 1.0, abs_tol=1.0e-12):
+        _fail("bundle.source.normalized_to_metric_3x3: last row must be [0,0,1]")
+
+    def metric_from_norm(point: tuple[float, float]) -> tuple[float, float]:
+        return (
+            numeric_matrix[0][0] * point[0] + numeric_matrix[0][1] * point[1] + numeric_matrix[0][2],
+            numeric_matrix[1][0] * point[0] + numeric_matrix[1][1] * point[1] + numeric_matrix[1][2],
+        )
+    if not isinstance(source["anchors"], list) or not source["anchors"]:
+        _fail("bundle.source.anchors: expected a non-empty array")
+    supplied_anchor_hash = _hash(source["anchor_set_hash"], "bundle.source.anchor_set_hash")
+    expected_anchor_hash = compute_anchor_set_hash(source["coordinate_space"], source["source_file_hash"], source["normalized_hash"], source["anchors"])
+    if supplied_anchor_hash != expected_anchor_hash:
+        _fail(f"bundle.source.anchor_set_hash: expected canonical hash {expected_anchor_hash}")
+    anchors: dict[str, dict[str, Any]] = {}
+    allowed_kinds = {"space", "entrance", "opening", "fixed_feature", "ignore", "scale"}
+    for index, raw in enumerate(source["anchors"]):
+        path = f"bundle.source.anchors[{index}]"
+        record = _exact_keys(raw, SOURCE_ANCHOR_KEYS, path)
+        anchor_id = _identifier(record["anchor_id"], f"{path}.anchor_id")
+        if anchor_id in anchors:
+            _fail(f"{path}.anchor_id: duplicate ID {anchor_id!r}")
+        if record["kind"] not in allowed_kinds:
+            _fail(f"{path}.kind: unsupported anchor kind")
+        points_norm, points_metric = record["points_norm"], record["points_metric_m"]
+        expected_count = (2,) if record["kind"] == "scale" else (1, 2) if record["kind"] in {"entrance", "opening"} else (1,)
+        if not isinstance(points_norm, list) or len(points_norm) not in expected_count or not isinstance(points_metric, list) or len(points_metric) != len(points_norm):
+            _fail(f"{path}: normalized and metric anchor geometry point counts are invalid")
+        normalized_points: list[tuple[float, float]] = []
+        metric_points: list[tuple[float, float]] = []
+        for point_index, (raw_norm, raw_metric) in enumerate(zip(points_norm, points_metric)):
+            norm = _point(raw_norm, f"{path}.points_norm[{point_index}]")
+            if not 0.0 <= norm[0] <= 1000.0 or not 0.0 <= norm[1] <= 1000.0:
+                _fail(f"{path}.points_norm[{point_index}]: outside 0..1000")
+            metric = _point(raw_metric, f"{path}.points_metric_m[{point_index}]")
+            if math.dist(metric, metric_from_norm(norm)) > 1.0e-6 + 1.0e-12:
+                _fail(f"{path}.points_metric_m[{point_index}]: differs from affine transform by more than 1e-6m")
+            normalized_points.append(norm)
+            metric_points.append(metric)
+        distance_mm = record["distance_mm"]
+        if record["kind"] == "scale":
+            distance = _finite(distance_mm, f"{path}.distance_mm")
+            if not 10.0 <= distance <= 1_000_000.0 or abs(math.dist(*metric_points) - distance / 1000.0) > 1.0e-6 + 1.0e-12:
+                _fail(f"{path}.distance_mm: does not match transformed scale geometry")
+        elif distance_mm is not None:
+            _fail(f"{path}.distance_mm: non-scale anchors require null")
+        anchors[anchor_id] = {"kind": record["kind"], "metric_points": metric_points}
+    scale_anchor_id = _identifier(source["scale_anchor_id"], "bundle.source.scale_anchor_id")
+    if (anchors.get(scale_anchor_id) or {}).get("kind") != "scale" or sum(anchor["kind"] == "scale" for anchor in anchors.values()) != 1:
+        _fail("bundle.source.scale_anchor_id: must reference the only scale anchor")
+    if not isinstance(source["anchor_opening_bindings"], list):
+        _fail("bundle.source.anchor_opening_bindings: expected an array")
+    bound_anchors: set[str] = set()
+    bound_openings: set[str] = set()
+    for index, raw in enumerate(source["anchor_opening_bindings"]):
+        path = f"bundle.source.anchor_opening_bindings[{index}]"
+        record = _exact_keys(raw, SOURCE_BINDING_KEYS, path)
+        anchor_id = _identifier(record["anchor_id"], f"{path}.anchor_id")
+        opening_id = _identifier(record["opening_id"], f"{path}.opening_id")
+        anchor_kind = record["anchor_kind"]
+        if anchor_id in bound_anchors or opening_id in bound_openings:
+            _fail(f"{path}: anchor and opening bindings must both be one-to-one")
+        anchor = anchors.get(anchor_id)
+        if not anchor or anchor["kind"] != anchor_kind or anchor_kind not in {"entrance", "opening"}:
+            _fail(f"{path}: anchor kind does not match a declared entrance/opening anchor")
+        if opening_id not in opening_by_id:
+            _fail(f"{path}.opening_id: unknown opening {opening_id!r}")
+        if anchor_kind == "entrance" and opening_by_id[opening_id]["kind"] != "entrance":
+            _fail(f"{path}: entrance anchor must bind an entrance opening")
+        opening_segment = tuple(tuple(map(float, point)) for point in opening_by_id[opening_id]["segment_m"])
+        anchor_points = tuple(anchor["metric_points"])
+        if len(anchor_points) == 1:
+            if _distance_point_to_segment(anchor_points[0], *opening_segment) > JUNCTION_CLEARANCE_M + 1.0e-9:
+                _fail(f"{path}: independently derived point-to-opening distance exceeds 50mm")
+        else:
+            _, _, hausdorff = _segment_hausdorff(anchor_points, opening_segment)
+            endpoint_error = _endpoint_match_error(anchor_points, opening_segment)
+            anchor_length, opening_length = math.dist(*anchor_points), math.dist(*opening_segment)
+            length_error = abs(anchor_length - opening_length)
+            length_ratio = length_error / max(anchor_length, 1.0e-12)
+            angle_error = _segment_angle_degrees(anchor_points, opening_segment)
+            if hausdorff > JUNCTION_CLEARANCE_M + 1.0e-9 or endpoint_error > JUNCTION_CLEARANCE_M + 1.0e-9:
+                _fail(f"{path}: independently derived segment Hausdorff/endpoint error exceeds 50mm")
+            if length_error > JUNCTION_CLEARANCE_M + 1.0e-9 and length_ratio > 0.05 + 1.0e-9:
+                _fail(f"{path}: independently derived length differs by more than 50mm and 5%")
+            if angle_error > 2.0 + 1.0e-9:
+                _fail(f"{path}: independently derived direction differs by more than 2 degrees")
+        bound_anchors.add(anchor_id)
+        bound_openings.add(opening_id)
+    required = {anchor_id for anchor_id, anchor in anchors.items() if anchor["kind"] in {"entrance", "opening"}}
+    if bound_anchors != required:
+        _fail(f"bundle.source.anchor_opening_bindings: missing bindings for {sorted(required - bound_anchors)}")
+    return deepcopy(dict(source))
 
 
 def _validate_adjacency(
@@ -591,19 +1022,23 @@ def validate_bundle(bundle: Mapping[str, Any]) -> dict[str, Any]:
     root = _exact_keys(bundle, TOP_LEVEL_KEYS, "bundle")
     if root["schema"] != SCHEMA:
         _fail(f"bundle.schema: expected {SCHEMA}")
-    _json_metadata(root["source"], "bundle.source")
     _json_metadata(root["project"], "bundle.project")
-    _hash(root["source_hash"], "bundle.source_hash")
+    source_hash = _hash(root["source_hash"], "bundle.source_hash")
     supplied_hash = _hash(root["structure_hash"], "bundle.structure_hash")
     expected_hash = compute_structure_hash(root)
     if supplied_hash != expected_hash:
         _fail(f"bundle.structure_hash: expected canonical hash {expected_hash}")
     outer = _polygon(root["outer_boundary_m"], "outer_boundary_m")
     spaces, space_ids = _validate_spaces(root["spaces"], outer)
-    walls, wall_by_id = _validate_walls(root["wall_branch_graph"], space_ids)
+    walls, wall_by_id, junction_by_id = _validate_walls(root["wall_branch_graph"], space_ids)
+    junction_errors = [item for item in analyze_wall_junctions(walls) if item["severity"] == "error" and item["kind"] != "unsplit_x_junction"]
+    if junction_errors:
+        first = junction_errors[0]
+        _fail(f"wall_branch_graph: {first['kind']} between {first['wall_ids']}")
     openings, opening_by_id, _ = _validate_openings(
-        root["opening_contract"], walls, wall_by_id, space_ids
+        root["opening_contract"], walls, wall_by_id, junction_by_id, space_ids
     )
+    _validate_source(root["source"], source_hash=source_hash, opening_by_id=opening_by_id)
     edges = _validate_adjacency(root["adjacency_truth"], space_ids, openings, opening_by_id)
     assumptions = _exact_keys(
         root["assumptions"],
@@ -672,7 +1107,8 @@ def wall_mesh(
     tx, ty = dx / length, dy / length
     nx, ny = -ty, tx
     half = float(wall["thickness_m"]) * 0.5
-    base, top = float(wall["base_m"]), float(wall["height_m"])
+    base = float(wall["base_m"])
+    top = base + float(wall["height_m"])
     projection_by_id = {opening["id"]: project_opening(wall, opening) for opening in openings}
     t_cuts = _dedupe_sorted(
         [0.0, length]

@@ -11,6 +11,7 @@ from typing import Any, Sequence
 
 import bmesh
 import bpy
+from mathutils import Vector
 
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
@@ -18,6 +19,7 @@ if os.fspath(REPOSITORY_ROOT) not in sys.path:
     sys.path.insert(0, os.fspath(REPOSITORY_ROOT))
 
 from tools.fastloop_research.contract import stable_token, validate_bundle  # noqa: E402
+from tools.fastloop_research.mechanical import verify_contract_geometry, verify_wall_opening_voids  # noqa: E402
 
 
 def _fail(message: str) -> None:
@@ -101,6 +103,64 @@ def _verify_names(bundle: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _artifact_geometry(bundle: dict[str, Any]) -> dict[str, Any]:
+    walls: list[dict[str, Any]] = []
+    for expected in bundle["wall_branch_graph"]["walls"]:
+        obj = bpy.data.objects[f"GEO-WALL-{stable_token(expected['id'])}"]
+        vertices = [obj.matrix_world @ vertex.co for vertex in obj.data.vertices]
+        a, b = Vector((*expected["centerline_m"][0], 0.0)), Vector((*expected["centerline_m"][1], 0.0))
+        tangent = (b - a).normalized()
+        normal = Vector((-tangent.y, tangent.x, 0.0))
+        along = [(vertex - a).dot(tangent) for vertex in vertices]
+        across = [(vertex - a).dot(normal) for vertex in vertices]
+        center_offset = (min(across) + max(across)) * 0.5
+        start = a + tangent * min(along) + normal * center_offset
+        end = a + tangent * max(along) + normal * center_offset
+        walls.append({
+            "id": expected["id"],
+            "centerline_m": [[float(start.x), float(start.y)], [float(end.x), float(end.y)]],
+            "thickness_m": max(across) - min(across),
+            "base_m": min(vertex.z for vertex in vertices),
+            "height_m": max(vertex.z for vertex in vertices) - min(vertex.z for vertex in vertices),
+            "void_verification": verify_wall_opening_voids(
+                expected,
+                [opening for opening in bundle["opening_contract"]["openings"] if opening["owning_wall_id"] == expected["id"]],
+                [(float(vertex.x), float(vertex.y), float(vertex.z)) for vertex in vertices],
+                [list(polygon.vertices) for polygon in obj.data.polygons],
+            ),
+        })
+    openings: list[dict[str, Any]] = []
+    for expected in bundle["opening_contract"]["openings"]:
+        obj = bpy.data.objects[f"OPENING-{stable_token(expected['id'])}"]
+        matrix = obj.matrix_world
+        center = matrix.translation
+        x_axis = matrix.to_3x3() @ Vector((1.0, 0.0, 0.0))
+        z_axis = matrix.to_3x3() @ Vector((0.0, 0.0, 1.0))
+        half_width, half_height = x_axis.length, z_axis.length
+        direction = x_axis.normalized()
+        start, end = center - direction * half_width, center + direction * half_width
+        openings.append({
+            "id": expected["id"],
+            "segment_m": [[float(start.x), float(start.y)], [float(end.x), float(end.y)]],
+            "width_m": half_width * 2.0,
+            "sill_m": float(center.z - half_height),
+            "head_m": float(center.z + half_height),
+        })
+    spaces = [
+        {
+            "id": expected["id"],
+            "point_m": [
+                float(bpy.data.objects[f"SPACE-{stable_token(expected['id'])}"].matrix_world.translation.x),
+                float(bpy.data.objects[f"SPACE-{stable_token(expected['id'])}"].matrix_world.translation.y),
+            ],
+        }
+        for expected in bundle["spaces"]
+    ]
+    report = {"schema": "research-artifact-geometry-v1", "structure_hash": bundle["structure_hash"], "walls": walls, "openings": openings, "spaces": spaces}
+    report["verification"] = verify_contract_geometry(bundle, report)
+    return report
+
+
 def _verify_blend(input_path: Path, bundle: dict[str, Any]) -> dict[str, Any]:
     if not bpy.data.filepath or Path(bpy.data.filepath).resolve() != input_path.resolve():
         _fail("Blender did not cold-open the requested scene.blend")
@@ -135,6 +195,7 @@ def _verify_blend(input_path: Path, bundle: dict[str, Any]) -> dict[str, Any]:
         "cameras": sorted(cameras),
         "materials": len(bpy.data.materials),
         "lights": len([obj for obj in bpy.data.objects if obj.type == "LIGHT"]),
+        "contract_geometry": _artifact_geometry(bundle),
     }
 
 
@@ -169,6 +230,7 @@ def _verify_glb(input_path: Path, bundle: dict[str, Any]) -> dict[str, Any]:
         "manifold": manifold,
         "cameras": 0,
         "lights": 0,
+        "contract_geometry": _artifact_geometry(bundle),
     }
 
 

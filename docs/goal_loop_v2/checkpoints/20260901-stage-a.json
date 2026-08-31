@@ -1,0 +1,24 @@
+{
+  "schema": "goal-loop-v2-checkpoint-v1",
+  "stage": "contract_hardening",
+  "status": "rejected_by_independent_verifier_round_3",
+  "sample": "1308",
+  "evidence": {
+    "backend": "345 passed, 1 skipped",
+    "focused": "71 passed",
+    "frontend_design": "9 passed",
+    "frontend_lint": "passed",
+    "frontend_build": "passed",
+    "resume_cli": "status --json and resume --dry-run passed"
+  },
+  "decisions": [
+    "Existing uploads keep exif_transpose-v1; 1308 explicitly ignores confirmed-invalid EXIF Orientation=8.",
+    "Source and artifact scores are non-compensating; total is their minimum and every failed check is a hard gate.",
+    "Repairs may mutate only a source-bound structure contract and stop after two attempts.",
+    "Jamb support requires detailed same-wall or explicit return-wall solid provenance; bare booleans are insufficient."
+  ],
+  "next_action": "Resolve and independently freeze the 12 recorded 1308 reference blockers before emitting a strict buildable bundle; do not reuse an old Blend file.",
+  "stage_boundary": "Stage A delivers a fail-closed resume/score/repair skeleton and source-bound geometry gates. Per-operation repair parameter schemas and complete raw-to-canonical source scoring are explicit Stage B/P2 work, not claimed as Stage A completion.",
+  "rejection": "The first candidate was rejected for self-reported anchor checks, non-atomic junction acceptance, score identity gaps, fake-complete state, shallow repair scans, missing orientation UI, and mesh-void blindness. All listed P1 paths now have deterministic negative tests; an independent recheck is still required.",
+  "created_at": "2026-09-01T03:36:36.9814142+08:00"
+}

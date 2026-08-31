@@ -1231,6 +1231,7 @@ export interface DesignAnchorSet {
   coordinate_space: "normalized-evidence-1000-v1";
   source_hash: string;
   normalized_hash: string;
+  anchor_set_hash: string;
   confirmed_complete: boolean;
   anchors: DesignPlanAnchor[];
   updated_at: number;
@@ -1283,6 +1284,20 @@ export interface DesignModelRun {
   unresolved: string[];
   mechanical_report?: Record<string, unknown>;
   gemini_review?: DesignStructureQa;
+  loop?: {
+    version: "goal-loop-v2";
+    status: "not_started" | "building" | "evaluating" | "repairing" | "method_pivot" | "accepted" | "exhausted" | "paused_external";
+    attempt: number;
+    max_attempts: 2;
+    method_id: string;
+    mechanical_score: number | null;
+    gemini_score: number | null;
+    total_score: number | null;
+    score_delta: number | null;
+    hard_gates: Array<{ id: string; status: "pass" | "fail"; evidence: string }>;
+    repair_history: Array<{ attempt: number; operations: string[]; prior_structure_hash: string; new_structure_hash: string; score_before: number | null; score_after: number | null }>;
+    next_action: string;
+  };
   stale: boolean;
   stale_reason?: string;
   created_at: number;
