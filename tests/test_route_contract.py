@@ -92,17 +92,21 @@ EXPECTED_ROUTES = [
     ("/api/whole-home-design/projects", "POST"),
     ("/api/whole-home-design/projects/{project_id}", "GET"),
     ("/api/whole-home-design/projects/{project_id}/analyze-plan", "POST"),
+    ("/api/whole-home-design/projects/{project_id}/anchors", "PUT"),
     ("/api/whole-home-design/projects/{project_id}/brief", "PUT"),
     ("/api/whole-home-design/projects/{project_id}/bundles/{bundle_id}", "GET"),
     ("/api/whole-home-design/projects/{project_id}/cancel", "POST"),
     ("/api/whole-home-design/projects/{project_id}/candidates/{candidate_id}/lock", "POST"),
-    ("/api/whole-home-design/projects/{project_id}/candidates/{candidate_id}/refine/commit", "POST"),
-    ("/api/whole-home-design/projects/{project_id}/candidates/{candidate_id}/refine/preview", "POST"),
     ("/api/whole-home-design/projects/{project_id}/candidates/{candidate_id}/structure-review", "PUT"),
     ("/api/whole-home-design/projects/{project_id}/drafts/commit", "POST"),
     ("/api/whole-home-design/projects/{project_id}/drafts/preview", "POST"),
     ("/api/whole-home-design/projects/{project_id}/modeling-bundle", "POST"),
+    ("/api/whole-home-design/projects/{project_id}/model-runs", "POST"),
+    ("/api/whole-home-design/projects/{project_id}/model-runs/{run_id}/artifacts/{kind}", "GET"),
+    ("/api/whole-home-design/projects/{project_id}/model-runs/{run_id}/review", "POST"),
     ("/api/whole-home-design/projects/{project_id}/plan-summary", "PUT"),
+    ("/api/whole-home-design/projects/{project_id}/structure-review", "POST"),
+    ("/api/whole-home-design/projects/{project_id}/structure-review", "PUT"),
     ("/outputs/{relpath:path}", "GET"),
     ("/thumb/outputs/{relpath:path}", "GET"),
     ("/thumb/uploads/{name}", "GET"),
@@ -140,7 +144,7 @@ def test_route_contract_unchanged():
 
 
 def test_route_count():
-    assert len(_actual_routes()) == 95
+    assert len(_actual_routes()) == 99
 
 
 def test_retired_3d_and_panorama_write_routes_are_absent():

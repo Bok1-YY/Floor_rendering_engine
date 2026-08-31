@@ -1186,7 +1186,9 @@ export interface FloorVisualizeApplyResponse {
 
 // ── 全屋设计：户型图 → 正俯视 2.5D 概念图 → Blender Agent 任务包 ──
 export type WholeHomeDesignStatus =
+  | "needs_anchor_review"
   | "analyzing_plan"
+  | "verifying_plan"
   | "needs_plan_review"
   | "needs_brief"
   | "ready"
@@ -1210,6 +1212,81 @@ export interface DesignPlanRoom {
   confidence?: number;
   evidence?: string;
   needs_confirmation?: boolean;
+  anchor_ids?: string[];
+  source?: "human_anchor" | "gemini_inferred";
+}
+
+export interface DesignAnchorPoint { x: number; y: number; }
+export interface DesignPlanAnchor {
+  anchor_id: string;
+  kind: "space" | "entrance" | "opening" | "fixed_feature" | "ignore" | "scale";
+  label: string;
+  note: string;
+  points: DesignAnchorPoint[];
+  distance_mm?: number;
+  source?: "human";
+}
+export interface DesignAnchorSet {
+  version: "floorplan-anchors-v1";
+  coordinate_space: "normalized-evidence-1000-v1";
+  source_hash: string;
+  normalized_hash: string;
+  confirmed_complete: boolean;
+  anchors: DesignPlanAnchor[];
+  updated_at: number;
+}
+export interface DesignAnchorVerification {
+  status: "not_run" | "unverified" | "verified" | "conflict";
+  conflicts: string[];
+  changes: string[];
+  inferred_anchor_gaps: string[];
+}
+
+export interface DesignStructureQuestion {
+  id: string;
+  title: string;
+  prompt: string;
+  hint: string;
+  box_2d?: number[];
+  choices: Array<{ value: string; label: string }>;
+}
+
+export interface DesignStructureReview {
+  version: "whole-home-structure-review-v1";
+  status: "not_run" | "needs_answers" | "compiling" | "needs_professional_review" | "verified" | "external_review_pending";
+  questions: DesignStructureQuestion[];
+  answers: Record<string, string>;
+  scale_calibration: null | { anchor_id: string; distance_mm: number; metres_per_pixel: number };
+  structure_hash: string;
+  unresolved: string[];
+  provider: string;
+  error: string;
+  updated_at: number;
+}
+
+export interface DesignModelArtifact {
+  kind: string;
+  filename: string;
+  bytes: number;
+  sha256: string;
+  download_url: string;
+}
+
+export interface DesignModelRun {
+  run_id: string;
+  status: "queued" | "building" | "mechanical_verified" | "external_review_pending" | "needs_correction" | "ready_research" | "blocked_dependency_missing" | "failed_product" | "interrupted" | "cancelled";
+  stage: string;
+  error: string;
+  structure_hash: string;
+  score?: number;
+  artifacts: DesignModelArtifact[];
+  unresolved: string[];
+  mechanical_report?: Record<string, unknown>;
+  gemini_review?: DesignStructureQa;
+  stale: boolean;
+  stale_reason?: string;
+  created_at: number;
+  updated_at: number;
 }
 
 export interface DesignPlanSummary {
@@ -1254,8 +1331,9 @@ export interface DesignPlanSummary {
   dimension_evidence: string[];
   must_preserve: string[];
   uncertainties: string[];
-  source: "gemini" | "human" | "human_confirmed_ai";
+  source: "gemini" | "gemini_verified" | "human" | "human_confirmed_ai";
   prompt_version: string;
+  verification?: DesignAnchorVerification;
 }
 
 export interface DesignStructureCheck {
@@ -1326,6 +1404,12 @@ export interface WholeHomeDesignProject {
   source_name: string;
   source_hash: string;
   generation_hash: string;
+  anchor_set: DesignAnchorSet;
+  anchor_overlay_url: string;
+  anchor_overlay_hash: string;
+  anchor_verification: DesignAnchorVerification;
+  structure_review: DesignStructureReview;
+  legacy_unanchored: boolean;
   source_url: string;
   normalized_url: string;
   generation_url: string;
@@ -1366,11 +1450,22 @@ export interface WholeHomeDesignProject {
   brief_hash: string;
   candidates: WholeHomeDesignCandidate[];
   bundles: WholeHomeDesignBundle[];
+  model_runs: DesignModelRun[];
   locked_candidate_id: string;
   cancel_requested: boolean;
   created_at: number;
   updated_at: number;
 }
+
+/**
+ * The project collection endpoint intentionally omits the potentially large
+ * plan summary and brief.  Callers must fetch the detail endpoint before
+ * treating a selected list row as a complete project.
+ */
+export type WholeHomeDesignProjectListItem = Omit<
+  WholeHomeDesignProject,
+  "plan_summary" | "brief" | "anchor_set" | "anchor_verification" | "structure_review" | "model_runs"
+>;
 
 export interface WholeHomeDesignPaidPreview {
   preview_id: string;

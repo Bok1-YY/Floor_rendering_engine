@@ -12,27 +12,32 @@ import {
   ImagePlus,
   LoaderCircle,
   LockKeyhole,
+  ZoomIn,
   Plus,
   Sparkles,
   UploadCloud,
   X,
-  ZoomIn,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "@/lib/api";
 import type {
   DesignFloorplanUpload,
   DesignPlanRoom,
+  DesignPlanAnchor,
   DesignReferenceUpload,
   WholeHomeDesignCandidate,
+  DesignModelRun,
   WholeHomeDesignPaidPreview,
   WholeHomeDesignProject,
+  WholeHomeDesignProjectListItem,
 } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
-import { ImageZoom } from "@/components/ImageZoom";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { ImageZoom } from "@/components/ImageZoom";
+import { FloorplanAnchorEditor } from "@/components/FloorplanAnchorEditor";
+import { StructureResearchPanel } from "@/components/StructureResearchPanel";
 
 const REVIEW_ITEMS = [
   ["orientation_and_crop", "朝向、镜像和裁切与原户型一致"],
@@ -46,7 +51,7 @@ const REVIEW_ITEMS = [
   ["no_labels_dimensions_or_watermarks", "画面没有文字、尺寸、图例或水印"],
 ] as const;
 
-const ACTIVE = new Set(["analyzing_plan", "generating_drafts", "refining", "interrupted"]);
+const ACTIVE = new Set(["analyzing_plan", "verifying_plan", "generating_drafts", "refining", "interrupted"]);
 
 function csv(value: string[]) {
   return value.join("\n");
@@ -56,17 +61,17 @@ function rows(value: string) {
   return value.split(/\r?\n|，|,/).map((item) => item.trim()).filter(Boolean);
 }
 
-function statusLabel(project: WholeHomeDesignProject) {
+function statusLabel(project: Pick<WholeHomeDesignProject, "status">) {
   const labels: Record<string, string> = {
+    needs_anchor_review: "待标注锚点",
     needs_plan_review: "待确认户型",
     analyzing_plan: "正在识别户型",
+    verifying_plan: "正在复核户型",
     needs_brief: "待填写需求",
     ready: "可生成草稿",
     draft_previewed: "待确认费用",
     generating_drafts: "草稿生成中",
     needs_draft_selection: "待选草稿",
-    refine_previewed: "待确认精修",
-    refining: "精修中",
     needs_structure_review: "待结构核对",
     locked: "已锁定",
     interrupted: "恢复任务中",
@@ -92,7 +97,7 @@ function qaLabel(candidate: WholeHomeDesignCandidate) {
 export default function WholeHomeDesignPage() {
   const fileInput = useRef<HTMLInputElement>(null);
   const referenceInput = useRef<HTMLInputElement>(null);
-  const [projects, setProjects] = useState<WholeHomeDesignProject[]>([]);
+  const [projects, setProjects] = useState<WholeHomeDesignProjectListItem[]>([]);
   const [project, setProject] = useState<WholeHomeDesignProject | null>(null);
   const [uploadResult, setUploadResult] = useState<DesignFloorplanUpload | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -109,10 +114,9 @@ export default function WholeHomeDesignPage() {
     dimension_evidence: "", must_preserve: "", uncertainties: "",
   });
   const [preview, setPreview] = useState<WholeHomeDesignPaidPreview | null>(null);
-  const [previewCandidateId, setPreviewCandidateId] = useState("");
   const [confirmation, setConfirmation] = useState("");
-  const [refinementTextByCandidate, setRefinementTextByCandidate] = useState<Record<string, string>>({});
   const [zoomUrl, setZoomUrl] = useState<string | null>(null);
+  const [designProvider, setDesignProvider] = useState<"google" | "fal">("google");
   const [reviewCandidate, setReviewCandidate] = useState<WholeHomeDesignCandidate | null>(null);
   const [reviewChecks, setReviewChecks] = useState<Record<string, boolean>>({});
   const [reviewNote, setReviewNote] = useState("");
@@ -137,11 +141,9 @@ export default function WholeHomeDesignPage() {
         setHasGemini(config.has_gemini_key);
         if (!items[0]) return;
 
-        // The list endpoint intentionally omits the heavy plan summary. Hydrate
-        // the selected project before rendering fields that depend on it.
         const detail = await api.getWholeHomeDesignProject(items[0].project_id);
         if (!active) return;
-        setProject(detail);
+        setProject((current) => current ?? detail);
         setProjects((current) => [
           detail,
           ...current.filter((item) => item.project_id !== detail.project_id),
@@ -154,7 +156,7 @@ export default function WholeHomeDesignPage() {
   }, []);
 
   useEffect(() => {
-    if (!project || !ACTIVE.has(project.status)) return;
+    if (!project || (!ACTIVE.has(project.status) && !(project.model_runs || []).some((run) => ["queued", "building"].includes(run.status)))) return;
     const id = project.project_id;
     const timer = window.setInterval(() => refreshProject(id), 2000);
     return () => window.clearInterval(timer);
@@ -201,7 +203,7 @@ export default function WholeHomeDesignPage() {
       setProject(value);
       setProjects((items) => [value, ...items]);
       setUploadResult(null);
-      toast.success("全屋设计项目已创建；有 Gemini Key 时会自动生成轻量户型摘要");
+      toast.success("项目已创建；请先点选全部空间、入户门和一条真实比例尺");
     } catch (error) {
       toast.error(`创建失败：${String(error)}`);
     } finally {
@@ -256,6 +258,32 @@ export default function WholeHomeDesignPage() {
     }
   }
 
+  async function saveAnchorsAndAnalyze(anchors: DesignPlanAnchor[], confirmedComplete: boolean) {
+    if (!project) return;
+    setBusy("anchors");
+    try {
+      const saved = await api.saveWholeHomeDesignAnchors(project.project_id, {
+        base_revision: project.revision,
+        coordinate_space: "normalized-evidence-1000-v1",
+        source_hash: project.source_hash,
+        confirmed_complete: confirmedComplete,
+        anchors,
+      });
+      setProject(saved);
+      if (hasGemini) {
+        const analyzing = await api.analyzeWholeHomeDesignPlan(saved.project_id, saved.revision);
+        setProject(analyzing);
+        toast.success("人工锚点已保存；Gemini 正在进行提取与独立复核");
+      } else {
+        toast.success("人工锚点和比例尺已保存；可以先人工确认摘要，Gemini 恢复后再复核");
+      }
+    } catch (error) {
+      toast.error(`锚点识别失败：${String(error)}`);
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function uploadReference(file: File) {
     if (references.length >= 4) return toast.warning("最多上传 4 张风格或材料参考图");
     setBusy("reference");
@@ -291,29 +319,8 @@ export default function WholeHomeDesignPage() {
     if (!project) return;
     setBusy("preview");
     try {
-      const value = await api.previewWholeHomeDesignDrafts(project.project_id, project.revision);
+      const value = await api.previewWholeHomeDesignDrafts(project.project_id, project.revision, designProvider);
       setPreview(value);
-      setPreviewCandidateId("");
-      setConfirmation("");
-    } catch (error) {
-      toast.error(String(error));
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function openRefinePreview(candidate: WholeHomeDesignCandidate) {
-    if (!project) return;
-    setBusy(`refine-${candidate.candidate_id}`);
-    try {
-      const value = await api.previewWholeHomeDesignRefine(
-        project.project_id,
-        candidate.candidate_id,
-        project.revision,
-        refinementTextByCandidate[candidate.candidate_id] || "",
-      );
-      setPreview(value);
-      setPreviewCandidateId(candidate.candidate_id);
       setConfirmation("");
     } catch (error) {
       toast.error(String(error));
@@ -334,12 +341,10 @@ export default function WholeHomeDesignPage() {
       idempotency_key: `${preview.preview_id}-web-client`,
     };
     try {
-      const value = preview.kind === "drafts"
-        ? await api.commitWholeHomeDesignDrafts(project.project_id, body)
-        : await api.commitWholeHomeDesignRefine(project.project_id, previewCandidateId, body);
+      const value = await api.commitWholeHomeDesignDrafts(project.project_id, body);
       setProject(value);
       setPreview(null);
-      toast.success(preview.kind === "drafts" ? "两张草稿已提交" : "4K 精修已提交");
+      toast.success("两张 2K 方案已提交");
     } catch (error) {
       toast.error(String(error));
     } finally {
@@ -408,7 +413,7 @@ export default function WholeHomeDesignPage() {
       const value = await api.lockWholeHomeDesignCandidate(
         project.project_id, candidate.candidate_id, project.revision);
       setProject(value);
-      toast.success("4K 全屋概念方案已锁定");
+      toast.success("2K 全屋概念方案已锁定");
     } catch (error) {
       toast.error(String(error));
     } finally {
@@ -430,12 +435,68 @@ export default function WholeHomeDesignPage() {
     }
   }
 
+  async function prepareStructureReview() {
+    if (!project) return;
+    setBusy("structure-prepare");
+    try {
+      const value = await api.prepareWholeHomeDesignStructure(project.project_id, project.revision);
+      setProject(value);
+      toast.success(value.structure_review.status === "needs_answers" ? "结构候选已生成，请回答九个问题" : "九问已准备；外部结构线路暂不可用");
+    } catch (error) {
+      toast.error(String(error));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function saveStructureGuidance(answers: Record<string, string>) {
+    if (!project) return;
+    setBusy("structure-save");
+    try {
+      const value = await api.saveWholeHomeDesignStructureGuidance(project.project_id, { base_revision: project.revision, answers });
+      setProject(value);
+      if (value.structure_review.status === "verified") toast.success("九问和结构图已通过研究建模门");
+      else toast.warning("答案已保存；仍需 Gemini 或专业结构校正");
+    } catch (error) {
+      toast.error(String(error));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function startModelRun() {
+    if (!project?.structure_review?.structure_hash) return;
+    setBusy("model-run");
+    try {
+      const value = await api.createWholeHomeDesignModelRun(project.project_id, {
+        base_revision: project.revision,
+        structure_hash: project.structure_review.structure_hash,
+        idempotency_key: `${project.project_id}-${project.structure_review.structure_hash.slice(0, 20)}`,
+      });
+      setProject(value);
+      toast.success("本地 Blender 研究建模已启动，不会重复调用 2K 图像模型");
+    } catch (error) {
+      toast.error(String(error));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function retryModelReview(run: DesignModelRun) {
+    if (!project) return;
+    setBusy("model-review");
+    try {
+      const value = await api.retryWholeHomeDesignModelReview(project.project_id, run.run_id, project.revision);
+      setProject(value);
+    } catch (error) {
+      toast.error(String(error));
+    } finally {
+      setBusy("");
+    }
+  }
+
   const draftCandidates = useMemo(
     () => (project?.candidates || []).filter((candidate) => candidate.phase === "draft" && !candidate.stale),
-    [project?.candidates],
-  );
-  const finalCandidates = useMemo(
-    () => (project?.candidates || []).filter((candidate) => candidate.phase === "final" && !candidate.stale),
     [project?.candidates],
   );
   const lockedCandidate = project?.candidates.find((candidate) => candidate.candidate_id === project.locked_candidate_id);
@@ -446,6 +507,7 @@ export default function WholeHomeDesignPage() {
   const summaryValid = roomsState.length > 0 && !duplicateRoomIds && !incompleteRooms && !unknownAdjacency;
   const canStartDraftBatch = Boolean(
     project?.plan_summary_confirmed && project?.brief?.requirements_text
+    && project?.anchor_set?.confirmed_complete && project?.anchor_verification?.status === "verified"
     && !ACTIVE.has(project.status) && project.status !== "locked" && project.status !== "cancelled");
 
   return (
@@ -492,14 +554,17 @@ export default function WholeHomeDesignPage() {
           <>
             <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
               <div className="mb-4 flex flex-wrap items-center gap-2">
-                <FileImage className="text-primary" /><h2 className="font-extrabold">1. 原户型与自动摘要</h2>
+                <FileImage className="text-primary" /><h2 className="font-extrabold">1. 人工锚点与 Gemini 双重摘要</h2>
                 <span className="text-xs text-muted-foreground">revision {project.revision}</span>
-                <Button className="ml-auto" size="sm" variant="outline" disabled={!hasGemini || project.status === "analyzing_plan" || busy === "analyze-plan"} onClick={analyzePlanAgain}>
-                  {project.status === "analyzing_plan" || busy === "analyze-plan" ? <LoaderCircle className="animate-spin" /> : <Sparkles />}自动识别/重新识别
+                <Button className="ml-auto" size="sm" variant="outline" disabled={!hasGemini || !project.anchor_set?.confirmed_complete || ACTIVE.has(project.status) || busy === "analyze-plan"} onClick={analyzePlanAgain}>
+                  {project.status === "analyzing_plan" || project.status === "verifying_plan" || busy === "analyze-plan" ? <LoaderCircle className="animate-spin" /> : <Sparkles />}重新执行 Gemini 双重识别
                 </Button>
               </div>
               {hasGemini === false && <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"><b>当前未配置 Gemini Key，自动摘要不可用。</b><div className="mt-1 text-xs">可以先人工补录，但不能确认空摘要。推荐先到 <a className="font-bold underline" href="/settings/">设置</a> 配置 Gemini，然后回来点击“自动识别”。</div></div>}
               {project.error && <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">自动识别提示：{project.error}</div>}
+              <FloorplanAnchorEditor key={`${project.project_id}-${project.anchor_set?.updated_at || 0}`} imageUrl={api.imgUrl(project.normalized_url)} initial={project.anchor_set?.anchors || []} busy={busy === "anchors"} onSave={saveAnchorsAndAnalyze} />
+              {project.anchor_verification?.status !== "not_run" && <div className={`mt-4 rounded-xl border p-3 text-xs ${project.anchor_verification.status === "verified" ? "border-emerald-300 bg-emerald-50 text-emerald-900" : "border-amber-300 bg-amber-50 text-amber-900"}`}><b>Gemini 复核：{project.anchor_verification.status}</b>{project.anchor_verification.changes?.map((value) => <div key={value}>• 修正：{value}</div>)}{project.anchor_verification.conflicts?.map((value) => <div key={value}>• 冲突：{value}</div>)}{project.anchor_verification.inferred_anchor_gaps?.map((value) => <div key={value}>• 自动补充提示：{value}</div>)}</div>}
+              <div className="my-4 border-t border-border" />
               <div className="grid grid-cols-[minmax(260px,0.8fr)_minmax(0,1.2fr)] gap-4 max-[900px]:grid-cols-1">
                 <div className="space-y-3">
                   <div className="rounded-xl border border-border bg-[#f8f8f6] p-3"><div className="mb-2 text-xs font-bold">证据原图 · 用于标题/尺寸/摘要</div><img src={api.imgUrl(project.normalized_url)} alt="规范化户型证据图" className="max-h-[390px] w-full object-contain" /><div className="mt-2 text-[11px] text-muted-foreground">只裁近白页边并补中性留白 · {project.normalization.aspect_ratio} · 保留尺寸和图纸说明</div></div>
@@ -513,7 +578,7 @@ export default function WholeHomeDesignPage() {
                     <label className="text-[11px] font-bold">建筑面积㎡<Input className="mt-1" type="number" min={0} value={declaredArea} onChange={(event) => setDeclaredArea(Number(event.target.value))} /></label>
                     <label className="text-[11px] font-bold">总宽 mm<Input className="mt-1" type="number" min={0} value={overallDimensions.width} onChange={(event) => setOverallDimensions((value) => ({ ...value, width: Number(event.target.value) }))} /></label>
                     <label className="text-[11px] font-bold">总深 mm<Input className="mt-1" type="number" min={0} value={overallDimensions.depth} onChange={(event) => setOverallDimensions((value) => ({ ...value, depth: Number(event.target.value) }))} /></label>
-                    <div className="col-span-6 flex flex-wrap gap-2 text-[11px] text-muted-foreground max-[760px]:col-span-2"><span>空间条目：{roomsState.length}</span><span>来源：{project.plan_summary?.source || "unknown"}</span><span>AI 总置信度：{Math.round((project.plan_summary?.summary_confidence || 0) * 100)}%</span>{declaredLayout.source_text && <span>标题证据：{declaredLayout.source_text}</span>}</div>
+                    <div className="col-span-6 flex flex-wrap gap-2 text-[11px] text-muted-foreground max-[760px]:col-span-2"><span>空间条目：{roomsState.length}</span><span>来源：{project.plan_summary?.source || "摘要尚未加载"}</span><span>AI 总置信度：{Math.round((project.plan_summary?.summary_confidence || 0) * 100)}%</span>{declaredLayout.source_text && <span>标题证据：{declaredLayout.source_text}</span>}</div>
                   </div>
                   <div className="space-y-2">{roomsState.map((room, index) => <div key={`${room.id}-${index}`} className={`rounded-xl border p-2 ${room.needs_confirmation ? "border-amber-300 bg-amber-50/50" : "border-border"}`}>
                     <div className="grid grid-cols-[100px_0.8fr_1fr_1fr_34px] gap-2 max-[840px]:grid-cols-1">
@@ -523,7 +588,7 @@ export default function WholeHomeDesignPage() {
                       <Input value={room.adjacent_room_ids.join(",")} placeholder="相邻 room_id，逗号分隔" onChange={(event) => setRoomsState((items) => items.map((item, i) => i === index ? { ...item, adjacent_room_ids: event.target.value.split(/[,，]/).map((value) => value.trim()).filter(Boolean) } : item))} />
                       <button className="text-muted-foreground hover:text-red-600" onClick={() => setRoomsState((items) => items.filter((_, i) => i !== index))}><X size={16} /></button>
                     </div>
-                    {(room.evidence || room.confidence != null) && <div className="mt-2 flex flex-wrap items-start gap-2 text-[11px] text-muted-foreground"><span className={`rounded-full px-2 py-0.5 font-bold ${(room.confidence || 0) >= 0.8 ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>置信度 {Math.round((room.confidence || 0) * 100)}%</span>{room.needs_confirmation && <span className="rounded-full bg-amber-100 px-2 py-0.5 font-bold text-amber-800">待确认</span>}<span>{room.evidence}</span></div>}
+                    {(room.evidence || room.confidence != null) && <div className="mt-2 flex flex-wrap items-start gap-2 text-[11px] text-muted-foreground"><span className={`rounded-full px-2 py-0.5 font-bold ${room.source === "human_anchor" ? "bg-emerald-100 text-emerald-800" : room.source === "gemini_inferred" ? "bg-blue-100 text-blue-800" : "bg-stone-100 text-stone-700"}`}>{room.source === "human_anchor" ? `人工锚点 ${room.anchor_ids?.join(",") || ""}` : room.source === "gemini_inferred" ? "Gemini 自动补充" : "历史摘要"}</span><span className={`rounded-full px-2 py-0.5 font-bold ${(room.confidence || 0) >= 0.8 ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>置信度 {Math.round((room.confidence || 0) * 100)}%</span>{room.needs_confirmation && <span className="rounded-full bg-amber-100 px-2 py-0.5 font-bold text-amber-800">待确认</span>}<span>{room.evidence}</span></div>}
                   </div>)}</div>
                   <Button size="sm" variant="outline" onClick={() => setRoomsState((items) => [...items, { id: `room_${items.length + 1}`, label: "", room_type: "", coarse_location: "", adjacent_room_ids: [], confidence: 1, evidence: "人工添加", needs_confirmation: false }])}><Plus />添加空间</Button>
                   <div className="grid grid-cols-2 gap-2 max-[720px]:grid-cols-1">{Object.entries({ entrances: "入口", openings_summary: "主要门窗/开口", wet_zones: "厨房/卫生间湿区", balconies: "阳台", dimension_evidence: "尺寸证据", must_preserve: "必须保留", uncertainties: "不确定项" }).map(([key, label]) => <label key={key} className="text-xs font-bold">{label}<Textarea className="mt-1 min-h-20 font-normal" value={listFields[key as keyof typeof listFields]} onChange={(event) => setListFields((fields) => ({ ...fields, [key]: event.target.value }))} placeholder="每行一项" /></label>)}</div>
@@ -547,15 +612,17 @@ export default function WholeHomeDesignPage() {
               <div className="mt-4 flex justify-end"><Button disabled={!project.plan_summary_confirmed || !requirements.trim() || busy === "brief"} onClick={saveBrief}>{busy === "brief" ? <LoaderCircle className="animate-spin" /> : <Check />}保存设计要求</Button></div>
             </section>
 
+            <StructureResearchPanel key={`${project.project_id}-${project.structure_review?.updated_at || 0}`} project={project} busy={busy} onPrepare={prepareStructureReview} onSubmit={saveStructureGuidance} onStartModel={startModelRun} onRetryReview={retryModelReview} />
+
             <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-              <div className="flex flex-wrap items-center justify-between gap-3"><div><div className="flex items-center gap-2"><Sparkles className="text-primary" /><h2 className="font-extrabold">3. 两张 2K 设计草稿</h2></div><p className="mt-1 text-xs text-muted-foreground">草稿结构失败不会自动重试，也不能进入精修；可保留旧结果并新建一批，仍需再次确认两次调用。</p></div><Button disabled={!canStartDraftBatch || busy === "preview"} onClick={openDraftPreview}>{busy === "preview" ? <LoaderCircle className="animate-spin" /> : <Sparkles />}{draftCandidates.length ? "重新预览并生成新批次" : "预览并确认 2 次调用"}</Button></div>
-              <div className="mt-4 grid grid-cols-2 gap-4 max-[780px]:grid-cols-1">{draftCandidates.map((candidate) => <CandidateCard key={candidate.candidate_id} candidate={candidate} busy={busy} onReview={() => openReview(candidate)} onZoom={() => candidate.url && setZoomUrl(api.imgUrl(candidate.url))} onRefine={() => openRefinePreview(candidate)} refinementText={refinementTextByCandidate[candidate.candidate_id] || ""} onRefinementText={(value) => setRefinementTextByCandidate((items) => ({ ...items, [candidate.candidate_id]: value }))} />)}{!draftCandidates.length && <div className="col-span-2 rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">保存户型摘要和设计要求后，先生成两张不同方向的 2K 草稿。</div>}</div>
+              <div className="flex flex-wrap items-center justify-between gap-3"><div><div className="flex items-center gap-2"><Sparkles className="text-primary" /><h2 className="font-extrabold">4. 两张 2K 设计草稿</h2></div><p className="mt-1 text-xs text-muted-foreground">与 Blender 结构灰模并行；默认 Google Gemini，可手动切 Fal，不会自动切线或重复付费。</p></div><div className="flex items-center gap-2"><select aria-label="全屋设计生图线路" value={designProvider} onChange={(event) => setDesignProvider(event.target.value as "google" | "fal")} className="h-9 rounded-lg border border-border bg-background px-2 text-sm"><option value="google">Google Gemini（推荐）</option><option value="fal">Fal（手动切换）</option></select><Button disabled={!canStartDraftBatch || busy === "preview"} onClick={openDraftPreview}>{busy === "preview" ? <LoaderCircle className="animate-spin" /> : <Sparkles />}{draftCandidates.length ? "重新预览并生成新批次" : "预览并确认 2 次调用"}</Button></div></div>
+              <div className="mt-4 grid grid-cols-2 gap-4 max-[780px]:grid-cols-1">{draftCandidates.map((candidate) => <CandidateCard key={candidate.candidate_id} candidate={candidate} busy={busy} onReview={() => openReview(candidate)} onZoom={() => candidate.url && setZoomUrl(api.imgUrl(candidate.url))} onLock={() => lockCandidate(candidate)} />)}{!draftCandidates.length && <div className="col-span-2 rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">保存户型摘要和设计要求后，先生成两张不同方向的 2K 草稿。</div>}</div>
             </section>
 
             <section className="rounded-2xl border border-border bg-card p-5 shadow-sm">
-              <div className="flex items-center gap-2"><LockKeyhole className="text-primary" /><h2 className="font-extrabold">4. 4K 精修、严格结构锁与 Blender 任务包</h2></div>
-              <div className="mt-4 grid grid-cols-2 gap-4 max-[780px]:grid-cols-1">{finalCandidates.map((candidate) => <CandidateCard key={candidate.candidate_id} candidate={candidate} busy={busy} onReview={() => openReview(candidate)} onLock={() => lockCandidate(candidate)} />)}{!finalCandidates.length && <div className="col-span-2 rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">选择结构通过的草稿后，确认一次 Pro 4K 精修调用。</div>}</div>
-              {lockedCandidate && <div className="mt-4 rounded-xl border border-emerald-300 bg-emerald-50 p-4 text-emerald-950"><div className="flex flex-wrap items-center gap-3"><CheckCircle2 /><div><b>方案已锁定</b><div className="text-xs">锁定图只作为家具、材料和氛围参考；Blender Agent 必须以原户型为几何权威。</div></div><Button className="ml-auto" disabled={busy === "bundle"} onClick={createBundle}>{busy === "bundle" ? <LoaderCircle className="animate-spin" /> : <Archive />}生成 Blender 任务包</Button></div>{project.bundles.filter((bundle) => !bundle.stale).map((bundle) => <a key={bundle.bundle_id} href={api.imgUrl(bundle.download_url)} className="mt-3 flex items-center gap-2 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm font-bold hover:border-emerald-600"><Download size={16} />下载 {bundle.bundle_id}<span className="ml-auto font-mono text-[10px] text-muted-foreground">SHA256 {bundle.sha256.slice(0, 16)}…</span></a>)}</div>}
+              <div className="flex items-center gap-2"><LockKeyhole className="text-primary" /><h2 className="font-extrabold">5. 锁定 2K 方案与高级 Agent 任务包</h2></div>
+              {!lockedCandidate && <div className="mt-4 rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">在上方放大检查 2K 方案；通过全部结构核对后，直接锁定其中一张作为建模外观参考。</div>}
+              {lockedCandidate && <div className="mt-4 rounded-xl border border-emerald-300 bg-emerald-50 p-4 text-emerald-950"><div className="flex flex-wrap items-center gap-3"><CheckCircle2 /><div><b>2K 方案已锁定</b><div className="text-xs">锁定图只作为家具、材料和氛围参考；Blender Agent 必须以原户型为几何权威。</div></div><Button className="ml-auto" disabled={busy === "bundle"} onClick={createBundle}>{busy === "bundle" ? <LoaderCircle className="animate-spin" /> : <Archive />}生成 Blender 任务包</Button></div>{project.bundles.filter((bundle) => !bundle.stale).map((bundle) => <a key={bundle.bundle_id} href={api.imgUrl(bundle.download_url)} className="mt-3 flex items-center gap-2 rounded-lg border border-emerald-300 bg-white px-3 py-2 text-sm font-bold hover:border-emerald-600"><Download size={16} />下载 {bundle.bundle_id}<span className="ml-auto font-mono text-[10px] text-muted-foreground">SHA256 {bundle.sha256.slice(0, 16)}…</span></a>)}</div>}
             </section>
           </>
         )}
@@ -569,34 +636,29 @@ export default function WholeHomeDesignPage() {
 
       <Dialog open={!!reviewCandidate} onOpenChange={(open) => !open && setReviewCandidate(null)}>
         <DialogContent className="max-w-2xl">
-          {reviewCandidate && <div><h2 className="text-lg font-extrabold">严格结构核对 · {reviewCandidate.phase === "final" ? "4K 成稿" : "2K 草稿"}</h2>{reviewCandidate.structure_qa?.hard_fail ? <div className="mt-3 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800"><b>自动/人工 QA 已发现结构硬错误，不能覆写。</b><div className="mt-1">{reviewCandidate.structure_qa.summary}</div></div> : <><p className="mt-2 text-sm text-muted-foreground">逐项对照原户型与候选图。任何不确定都不要勾选；发现结构错误时写明问题并标记失败。</p><div className="mt-4 space-y-2">{REVIEW_ITEMS.map(([key, label]) => <label key={key} className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${reviewChecks[key] ? "border-emerald-300 bg-emerald-50" : "border-border"}`}><input type="checkbox" className="mt-0.5 size-4" checked={reviewChecks[key] || false} onChange={(event) => setReviewChecks((checks) => ({ ...checks, [key]: event.target.checked }))} /><span className="text-sm">{label}</span></label>)}</div><Textarea className="mt-3" value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} placeholder="通过时可选；标记失败时必须写清新增/删除/移动了什么" /><div className="mt-4 flex flex-wrap justify-end gap-2"><Button variant="outline" className="border-red-300 text-red-700 hover:bg-red-50" disabled={busy === "review" || !reviewNote.trim()} onClick={rejectReview}>标记结构失败</Button><Button disabled={busy === "review" || REVIEW_ITEMS.some(([key]) => !reviewChecks[key])} onClick={submitReview}>{busy === "review" ? <LoaderCircle className="animate-spin" /> : <CheckCircle2 />}保存全部通过</Button></div></>}</div>}
+          {reviewCandidate && <div><h2 className="text-lg font-extrabold">严格结构核对 · 2K 方案</h2>{reviewCandidate.structure_qa?.hard_fail ? <div className="mt-3 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800"><b>自动/人工 QA 已发现结构硬错误，不能覆写。</b><div className="mt-1">{reviewCandidate.structure_qa.summary}</div></div> : <><p className="mt-2 text-sm text-muted-foreground">逐项对照原户型与候选图。任何不确定都不要勾选；发现结构错误时写明问题并标记失败。</p><div className="mt-4 space-y-2">{REVIEW_ITEMS.map(([key, label]) => <label key={key} className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${reviewChecks[key] ? "border-emerald-300 bg-emerald-50" : "border-border"}`}><input type="checkbox" className="mt-0.5 size-4" checked={reviewChecks[key] || false} onChange={(event) => setReviewChecks((checks) => ({ ...checks, [key]: event.target.checked }))} /><span className="text-sm">{label}</span></label>)}</div><Textarea className="mt-3" value={reviewNote} onChange={(event) => setReviewNote(event.target.value)} placeholder="通过时可选；标记失败时必须写清新增/删除/移动了什么" /><div className="mt-4 flex flex-wrap justify-end gap-2"><Button variant="outline" className="border-red-300 text-red-700 hover:bg-red-50" disabled={busy === "review" || !reviewNote.trim()} onClick={rejectReview}>标记结构失败</Button><Button disabled={busy === "review" || REVIEW_ITEMS.some(([key]) => !reviewChecks[key])} onClick={submitReview}>{busy === "review" ? <LoaderCircle className="animate-spin" /> : <CheckCircle2 />}保存全部通过</Button></div></>}</div>}
         </DialogContent>
       </Dialog>
-
       <ImageZoom url={zoomUrl} onClose={() => setZoomUrl(null)} />
     </div>
   );
 }
 
-function CandidateCard({ candidate, busy, onReview, onZoom, onRefine, onLock, refinementText, onRefinementText }: {
+function CandidateCard({ candidate, busy, onReview, onZoom, onLock }: {
   candidate: WholeHomeDesignCandidate;
   busy: string;
   onReview: () => void;
-  onZoom?: () => void;
-  onRefine?: () => void;
+  onZoom: () => void;
   onLock?: () => void;
-  refinementText?: string;
-  onRefinementText?: (value: string) => void;
 }) {
   const waiting = ["queued", "running", "qa_running", "interrupted"].includes(candidate.status);
   const eligible = candidate.status === "done" && !candidate.stale && !candidate.structure_qa?.hard_fail
     && (candidate.structure_qa?.status === "passed" || candidate.human_review?.status === "passed");
   return <article className="overflow-hidden rounded-2xl border border-border bg-background">
-    <div className="relative aspect-[4/3] bg-muted/40">{candidate.url && onZoom ? <button type="button" aria-label={`放大预览 2K 方案方向 ${candidate.direction_index}`} onClick={onZoom} className="group size-full cursor-zoom-in"><img src={api.imgUrl(candidate.url)} alt={candidate.candidate_id} className="size-full object-contain" /><span className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-black/65 px-2 py-1 text-[11px] font-bold text-white opacity-90 transition group-hover:bg-black/80"><ZoomIn size={13} />点击放大</span></button> : candidate.url ? <img src={api.imgUrl(candidate.url)} alt={candidate.candidate_id} className="size-full object-contain" /> : <div className="flex size-full flex-col items-center justify-center text-sm text-muted-foreground">{waiting ? <LoaderCircle className="animate-spin text-primary" /> : <AlertTriangle />}<span className="mt-2">{candidate.error || candidate.stage}</span></div>}<span className={`pointer-events-none absolute left-3 top-3 rounded-full border px-2 py-1 text-[11px] font-bold ${qaTone(candidate)}`}>{qaLabel(candidate)}</span></div>
-    <div className="p-3"><div className="flex items-center gap-2 text-xs"><b>{candidate.phase === "draft" ? `草稿方向 ${candidate.direction_index}` : "4K 精修成稿"}</b><span className="ml-auto text-muted-foreground">{candidate.provider} · {candidate.model_label} · {candidate.resolution}</span></div>{candidate.structure_qa?.summary && <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">{candidate.structure_qa.summary}</p>}{candidate.structure_qa?.hard_fail && <div className="mt-2 space-y-1 text-[11px] text-red-700">{candidate.structure_qa.checks.filter((check) => check.status !== "pass").map((check) => <div key={check.check_id}>• {check.check_id}: {check.evidence}</div>)}</div>}
+    <div className="relative aspect-[4/3] bg-muted/40">{candidate.url ? <button type="button" aria-label={`放大预览 2K 方案方向 ${candidate.direction_index}`} onClick={onZoom} className="group size-full cursor-zoom-in"><img src={api.imgUrl(candidate.url)} alt={candidate.candidate_id} className="size-full object-contain" /><span className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-black/65 px-2 py-1 text-[11px] font-bold text-white opacity-90 transition group-hover:bg-black/80"><ZoomIn size={13} />点击放大</span></button> : <div className="flex size-full flex-col items-center justify-center text-sm text-muted-foreground">{waiting ? <LoaderCircle className="animate-spin text-primary" /> : <AlertTriangle />}<span className="mt-2">{candidate.error || candidate.stage}</span></div>}<span className={`pointer-events-none absolute left-3 top-3 rounded-full border px-2 py-1 text-[11px] font-bold ${qaTone(candidate)}`}>{qaLabel(candidate)}</span></div>
+    <div className="p-3"><div className="flex items-center gap-2 text-xs"><b>2K 方案方向 {candidate.direction_index}</b><span className="ml-auto text-muted-foreground">{candidate.provider} · {candidate.model_label} · {candidate.resolution}</span></div>{candidate.structure_qa?.summary && <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">{candidate.structure_qa.summary}</p>}{candidate.structure_qa?.hard_fail && <div className="mt-2 space-y-1 text-[11px] text-red-700">{candidate.structure_qa.checks.filter((check) => check.status !== "pass").map((check) => <div key={check.check_id}>• {check.check_id}: {check.evidence}</div>)}</div>}
       {candidate.status === "done" && !candidate.structure_qa?.hard_fail && candidate.human_review?.status !== "passed" && <Button className="mt-3" size="sm" variant="outline" onClick={onReview}>人工核对结构</Button>}
-      {candidate.phase === "draft" && onRefine && <div className="mt-3 border-t border-border pt-3"><Textarea value={refinementText || ""} onChange={(event) => onRefinementText?.(event.target.value)} placeholder="可选：精修阶段只调整材质、家具细节和灯光，不得改结构" /><Button className="mt-2 w-full" disabled={!eligible || busy.startsWith("refine-")} onClick={onRefine}>{busy.startsWith("refine-") ? <LoaderCircle className="animate-spin" /> : <Sparkles />}预览 1 次 Pro 4K 精修</Button></div>}
-      {candidate.phase === "final" && onLock && <Button className="mt-3 w-full" disabled={!eligible || candidate.human_review?.status !== "passed" || busy === "lock"} onClick={onLock}>{busy === "lock" ? <LoaderCircle className="animate-spin" /> : <LockKeyhole />}锁定为建模参考方案</Button>}
+      {onLock && <Button className="mt-3 w-full" disabled={!eligible || candidate.human_review?.status !== "passed" || busy === "lock"} onClick={onLock}>{busy === "lock" ? <LoaderCircle className="animate-spin" /> : <LockKeyhole />}锁定此 2K 方案</Button>}
     </div>
   </article>;
 }

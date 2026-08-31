@@ -43,6 +43,7 @@ import type {
   FloorVisualizeApplyResponse,
   FilmRepeatContract,
   WholeHomeDesignProject,
+  WholeHomeDesignProjectListItem,
   WholeHomeDesignPaidPreview,
   DesignFloorplanUpload,
   DesignReferenceUpload,
@@ -106,9 +107,17 @@ export const api = {
   createWholeHomeDesignProject: (floorplan_path: string, source_name = "") =>
     jsend<WholeHomeDesignProject>("/api/whole-home-design/projects", "POST", { floorplan_path, source_name }),
   listWholeHomeDesignProjects: (limit = 50) =>
-    jget<WholeHomeDesignProject[]>(`/api/whole-home-design/projects?limit=${limit}`),
+    jget<WholeHomeDesignProjectListItem[]>(`/api/whole-home-design/projects?limit=${limit}`),
   getWholeHomeDesignProject: (id: string) =>
     jget<WholeHomeDesignProject>(`/api/whole-home-design/projects/${encodeURIComponent(id)}`),
+  saveWholeHomeDesignAnchors: (id: string, body: {
+    base_revision: number;
+    coordinate_space: "normalized-evidence-1000-v1";
+    source_hash: string;
+    confirmed_complete: boolean;
+    anchors: import("./types").DesignPlanAnchor[];
+  }) => jsend<WholeHomeDesignProject>(
+    `/api/whole-home-design/projects/${encodeURIComponent(id)}/anchors`, "PUT", body),
   saveWholeHomeDesignPlanSummary: (id: string, body: {
     base_revision: number; room_count: number; rooms: import("./types").DesignPlanRoom[];
     declared_layout: import("./types").DesignPlanSummary["declared_layout"];
@@ -128,23 +137,28 @@ export const api = {
     base_revision: number; requirements_text: string; reference_paths: string[];
   }) => jsend<WholeHomeDesignProject>(
     `/api/whole-home-design/projects/${encodeURIComponent(id)}/brief`, "PUT", body),
-  previewWholeHomeDesignDrafts: (id: string, base_revision: number) =>
+  prepareWholeHomeDesignStructure: (id: string, base_revision: number) =>
+    jsend<WholeHomeDesignProject>(
+      `/api/whole-home-design/projects/${encodeURIComponent(id)}/structure-review`, "POST", { base_revision }),
+  saveWholeHomeDesignStructureGuidance: (id: string, body: {
+    base_revision: number; answers: Record<string, string>; technical_bundle?: Record<string, unknown>;
+  }) => jsend<WholeHomeDesignProject>(
+    `/api/whole-home-design/projects/${encodeURIComponent(id)}/structure-review`, "PUT", body),
+  createWholeHomeDesignModelRun: (id: string, body: {
+    base_revision: number; structure_hash: string; idempotency_key: string;
+  }) => jsend<WholeHomeDesignProject>(
+    `/api/whole-home-design/projects/${encodeURIComponent(id)}/model-runs`, "POST", body),
+  retryWholeHomeDesignModelReview: (id: string, runId: string, base_revision: number) =>
+    jsend<WholeHomeDesignProject>(
+      `/api/whole-home-design/projects/${encodeURIComponent(id)}/model-runs/${encodeURIComponent(runId)}/review`,
+      "POST", { base_revision }),
+  previewWholeHomeDesignDrafts: (id: string, base_revision: number, provider: "google" | "fal" = "google") =>
     jsend<WholeHomeDesignPaidPreview>(
-      `/api/whole-home-design/projects/${encodeURIComponent(id)}/drafts/preview`, "POST", { base_revision }),
+      `/api/whole-home-design/projects/${encodeURIComponent(id)}/drafts/preview`, "POST", { base_revision, provider }),
   commitWholeHomeDesignDrafts: (id: string, body: {
     base_revision: number; preview_id: string; preview_hash: string; confirmation_phrase: string; idempotency_key: string;
   }) => jsend<WholeHomeDesignProject>(
     `/api/whole-home-design/projects/${encodeURIComponent(id)}/drafts/commit`, "POST", body),
-  previewWholeHomeDesignRefine: (
-    id: string, candidateId: string, base_revision: number, refinement_text: string,
-  ) => jsend<WholeHomeDesignPaidPreview>(
-    `/api/whole-home-design/projects/${encodeURIComponent(id)}/candidates/${encodeURIComponent(candidateId)}/refine/preview`,
-    "POST", { base_revision, refinement_text }),
-  commitWholeHomeDesignRefine: (id: string, candidateId: string, body: {
-    base_revision: number; preview_id: string; preview_hash: string; confirmation_phrase: string; idempotency_key: string;
-  }) => jsend<WholeHomeDesignProject>(
-    `/api/whole-home-design/projects/${encodeURIComponent(id)}/candidates/${encodeURIComponent(candidateId)}/refine/commit`,
-    "POST", body),
   reviewWholeHomeDesignStructure: (id: string, candidateId: string, body: {
     base_revision: number; checks: Record<string, boolean>; decision: "pass" | "fail"; reviewer: string; note: string;
   }) => jsend<WholeHomeDesignProject>(

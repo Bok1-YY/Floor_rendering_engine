@@ -23,19 +23,28 @@ from .whole_home_design import (
     _project_lock,
     _stable_hash,
     analyze_plan,
+    anchor_summary_conflicts,
     build_design_prompt,
     build_modeling_bundle,
     call_design_image,
+    create_model_run_record,
     create_project,
     evaluate_structure,
+    empty_structure_review,
     file_sha256,
     list_projects,
     load_project,
     mark_candidates_stale,
     new_id,
     public_project,
+    prepare_structure_review,
+    render_anchor_overlay,
     recover_interrupted_projects,
     save_project,
+    run_model_job,
+    retry_model_review,
+    submit_structure_review,
+    validate_anchor_set,
 )
 
 router = APIRouter()
@@ -98,6 +107,32 @@ class PreviewRequest(BaseModel):
     base_revision: int = Field(ge=1)
 
 
+class AnchorPointRequest(BaseModel):
+    x: int = Field(ge=0, le=1000)
+    y: int = Field(ge=0, le=1000)
+
+
+class AnchorRequest(BaseModel):
+    anchor_id: str = Field(min_length=1, max_length=40)
+    kind: Literal["space", "entrance", "opening", "fixed_feature", "ignore", "scale"]
+    label: str = Field(min_length=1, max_length=120)
+    note: str = Field(default="", max_length=500)
+    points: list[AnchorPointRequest] = Field(min_length=1, max_length=2)
+    distance_mm: Optional[float] = Field(default=None, ge=10, le=1_000_000)
+
+
+class AnchorSetRequest(BaseModel):
+    base_revision: int = Field(ge=1)
+    coordinate_space: str = Field(default="normalized-evidence-1000-v1")
+    source_hash: str = Field(min_length=32, max_length=128)
+    confirmed_complete: bool = False
+    anchors: list[AnchorRequest] = Field(default_factory=list, max_length=80)
+
+
+class DraftPreviewRequest(PreviewRequest):
+    provider: Literal["google", "fal"] = "google"
+
+
 class CommitRequest(BaseModel):
     base_revision: int = Field(ge=1)
     preview_id: str = Field(min_length=1, max_length=120)
@@ -106,16 +141,24 @@ class CommitRequest(BaseModel):
     idempotency_key: str = Field(min_length=8, max_length=160)
 
 
-class RefinePreviewRequest(PreviewRequest):
-    refinement_text: str = Field(default="", max_length=2000)
-
-
 class StructureReviewRequest(BaseModel):
     base_revision: int = Field(ge=1)
     checks: dict[str, bool]
     decision: Literal["pass", "fail"] = "pass"
     reviewer: str = Field(default="local-user", min_length=1, max_length=100)
     note: str = Field(default="", max_length=2000)
+
+
+class StructureGuidancePutRequest(BaseModel):
+    base_revision: int = Field(ge=1)
+    answers: dict[str, str] = Field(min_length=9, max_length=9)
+    technical_bundle: Optional[dict] = None
+
+
+class ModelRunCreateRequest(BaseModel):
+    base_revision: int = Field(ge=1)
+    structure_hash: str = Field(min_length=64, max_length=64)
+    idempotency_key: str = Field(min_length=8, max_length=160)
 
 
 class CandidateActionRequest(BaseModel):
@@ -287,11 +330,6 @@ def upload_design_reference(file: UploadFile = File(...)):
 async def create_design_project(req: ProjectCreateRequest):
     source = require_upload_image_path(req.floorplan_path, "户型图", required=True)
     project = await asyncio.to_thread(create_project, source, req.source_name)
-    if str(load_config().get("gemini_api_key") or "").strip():
-        project["status"] = "analyzing_plan"
-        project["stage"] = "Gemini 正在生成轻量户型摘要"
-        save_project(project)
-        _track(asyncio.to_thread(analyze_plan, project["project_id"]))
     return public_project(project)
 
 
@@ -305,6 +343,32 @@ def get_design_project(project_id: str):
     return public_project(_project_or_404(project_id))
 
 
+@router.put("/api/whole-home-design/projects/{project_id}/anchors")
+def save_design_anchors(project_id: str, req: AnchorSetRequest):
+    with _project_lock(project_id):
+        project = _project_or_404(project_id)
+        _assert_revision(project, req.base_revision)
+        try:
+            anchors = validate_anchor_set(project, req.model_dump(exclude={"base_revision"}))
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        overlay_path, overlay_hash = render_anchor_overlay(project, anchors)
+        project["anchor_set"] = anchors
+        project["anchor_overlay_path"] = overlay_path
+        project["anchor_overlay_hash"] = overlay_hash
+        project["anchor_verification"] = {"status": "not_run", "conflicts": [], "changes": [], "inferred_anchor_gaps": []}
+        project["structure_review"] = empty_structure_review()
+        project["plan_summary"] = project.get("plan_summary") or {}
+        project["plan_summary_confirmed"] = False
+        project["revision"] += 1
+        mark_candidates_stale(project, "人工户型锚点已更新")
+        project["status"] = "needs_anchor_review"
+        project["stage"] = "锚点已保存，可以交给 Gemini 双重识别" if anchors["confirmed_complete"] else "请完成全部空间和入户门锚点"
+        project["error"] = ""
+        save_project(project)
+        return public_project(project)
+
+
 @router.post("/api/whole-home-design/projects/{project_id}/analyze-plan")
 async def retry_design_plan_analysis(project_id: str, req: PreviewRequest):
     if not str(load_config().get("gemini_api_key") or "").strip():
@@ -315,8 +379,11 @@ async def retry_design_plan_analysis(project_id: str, req: PreviewRequest):
     with _project_lock(project_id):
         project = _project_or_404(project_id)
         _assert_revision(project, req.base_revision)
+        if not (project.get("anchor_set") or {}).get("confirmed_complete"):
+            raise HTTPException(409, {"code": "anchors_required", "message": "请先点选并确认全部空间和入户门"})
         project["revision"] += 1
         project["plan_summary_confirmed"] = False
+        project["structure_review"] = empty_structure_review()
         mark_candidates_stale(project, "重新自动识别户型摘要")
         project["status"] = "analyzing_plan"
         project["stage"] = "Gemini 正在重新生成户型摘要"
@@ -336,12 +403,16 @@ def save_plan_summary(project_id: str, req: PlanSummaryPutRequest):
         _assert_revision(project, req.base_revision)
         summary = req.model_dump(exclude={"base_revision", "confirmed"})
         _validate_plan_summary_payload(summary, req.confirmed)
+        conflicts = anchor_summary_conflicts(project.get("anchor_set") or {}, summary)
+        if conflicts:
+            raise HTTPException(409, {"code": "human_anchor_contract_conflict", "conflicts": conflicts})
         previous_source = str((project.get("plan_summary") or {}).get("source") or "human")
-        source = "human_confirmed_ai" if previous_source == "gemini" else "human"
+        source = "human_confirmed_ai" if previous_source in ("gemini", "gemini_verified") else "human"
         summary.update(version="plan-summary-v1", source=source,
-                       prompt_version="whole-home-plan-summary-v1")
+                       prompt_version="whole-home-anchor-plan-v2")
         project["plan_summary"] = summary
         project["plan_summary_confirmed"] = bool(req.confirmed)
+        project["structure_review"] = empty_structure_review()
         project["revision"] += 1
         mark_candidates_stale(project, "户型摘要已更新")
         project["brief_hash"] = _brief_hash(project)
@@ -374,6 +445,123 @@ def save_design_brief(project_id: str, req: BriefPutRequest):
         return public_project(project)
 
 
+@router.post("/api/whole-home-design/projects/{project_id}/structure-review")
+async def prepare_design_structure_review(project_id: str, req: PreviewRequest):
+    with _project_lock(project_id):
+        project = _project_or_404(project_id)
+        _assert_revision(project, req.base_revision)
+        if not project.get("plan_summary_confirmed"):
+            raise HTTPException(409, "请先确认户型摘要")
+        if not (project.get("anchor_set") or {}).get("confirmed_complete"):
+            raise HTTPException(409, "请先完成人工空间、入口和比例尺锚点")
+        project["revision"] += 1
+        project["structure_review"] = {
+            **(project.get("structure_review") or {}),
+            "version": "whole-home-structure-review-v1",
+            "status": "compiling",
+            "error": "",
+            "updated_at": time.time(),
+        }
+        revision = project["revision"]
+        save_project(project)
+    try:
+        await asyncio.to_thread(prepare_structure_review, project)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    with _project_lock(project_id):
+        current = _project_or_404(project_id)
+        if int(current.get("revision") or 0) != revision:
+            return public_project(current)
+        current["structure_review"] = project["structure_review"]
+        current["stage"] = (
+            "请回答九个结构确认问题" if project["structure_review"]["status"] == "needs_answers"
+            else "Gemini 结构线路不可用；保留人工答案并等待外部复核"
+        )
+        current["error"] = str(project["structure_review"].get("error") or "")
+        save_project(current)
+        return public_project(current)
+
+
+@router.put("/api/whole-home-design/projects/{project_id}/structure-review")
+def save_design_structure_guidance(project_id: str, req: StructureGuidancePutRequest):
+    with _project_lock(project_id):
+        project = _project_or_404(project_id)
+        _assert_revision(project, req.base_revision)
+        try:
+            review = submit_structure_review(project, req.answers, technical_bundle=req.technical_bundle)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
+        for row in project.get("model_runs") or []:
+            row["stale"] = True
+            row["stale_reason"] = "人工结构答案或技术结构图已更新"
+        project["revision"] += 1
+        project["stage"] = (
+            "结构图已确认，可以立即生成 Blender 研究灰模"
+            if review["status"] == "verified" else
+            "需要专业校正后才能生成研究灰模" if review["status"] == "needs_professional_review"
+            else "已保存九问；等待 Gemini 或专业结构图"
+        )
+        project["error"] = str(review.get("error") or "")
+        save_project(project)
+        return public_project(project)
+
+
+@router.post("/api/whole-home-design/projects/{project_id}/model-runs")
+async def create_design_model_run(project_id: str, req: ModelRunCreateRequest):
+    with _project_lock(project_id):
+        project = _project_or_404(project_id)
+        _assert_revision(project, req.base_revision)
+        review = project.get("structure_review") or {}
+        if review.get("structure_hash") != req.structure_hash:
+            raise HTTPException(409, "结构图已变化，请刷新后重新提交")
+        try:
+            row = create_model_run_record(project)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        if row.get("idempotency_key") and row["idempotency_key"] != req.idempotency_key:
+            raise HTTPException(409, "相同结构已存在另一个建模任务")
+        row["idempotency_key"] = req.idempotency_key
+        should_start = row.get("status") == "queued" and not row.get("background_started_at")
+        if should_start:
+            row["background_started_at"] = time.time()
+        project["revision"] += 1
+        project["stage"] = "正在启动本地 Blender 研究建模" if should_start else row.get("stage") or project.get("stage")
+        save_project(project)
+        run_id = row["run_id"]
+    if should_start:
+        _track(asyncio.to_thread(run_model_job, project_id, run_id))
+    return public_project(project)
+
+
+@router.post("/api/whole-home-design/projects/{project_id}/model-runs/{run_id}/review")
+async def retry_design_model_review(project_id: str, run_id: str, req: PreviewRequest):
+    with _project_lock(project_id):
+        project = _project_or_404(project_id)
+        _assert_revision(project, req.base_revision)
+        row = next((value for value in project.get("model_runs") or [] if value.get("run_id") == run_id), None)
+        if not row or row.get("status") not in {"external_review_pending", "needs_correction", "ready_research"}:
+            raise HTTPException(409, "该任务当前不能重新执行 Gemini 审查")
+        project["revision"] += 1
+        row["stage"] = "正在重新执行 Gemini 复合审查"
+        save_project(project)
+    try:
+        await asyncio.to_thread(retry_model_review, project_id, run_id)
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return public_project(_project_or_404(project_id))
+
+
+@router.get("/api/whole-home-design/projects/{project_id}/model-runs/{run_id}/artifacts/{kind}")
+def download_design_model_artifact(project_id: str, run_id: str, kind: str):
+    project = _project_or_404(project_id)
+    row = next((value for value in project.get("model_runs") or [] if value.get("run_id") == run_id), None)
+    artifact = next((value for value in (row or {}).get("artifacts") or [] if value.get("kind") == kind), None)
+    path = str((artifact or {}).get("path") or "")
+    if not artifact or not os.path.isfile(path):
+        raise HTTPException(404, "研究建模产物不存在")
+    return FileResponse(path, filename=os.path.basename(path))
+
+
 def _price(model_label: str, count: int) -> Optional[float]:
     try:
         value = get_usage_prices().get(model_label)
@@ -382,32 +570,33 @@ def _price(model_label: str, count: int) -> Optional[float]:
         return None
 
 
-def _create_preview(project: dict, *, kind: str, candidate_id: str = "",
-                    refinement_text: str = "") -> dict:
-    provider = str(load_config().get("image_provider") or "google").strip().lower()
-    if kind == "drafts":
-        model_label, calls, resolution, phrase = "Nano Banana 2", 2, "2K", "生成2张全屋设计草稿"
-    else:
-        model_label, calls, resolution, phrase = "Nano Banana Pro", 1, "4K", "精修1张全屋设计成稿"
+def _create_preview(project: dict, provider: str = "google") -> dict:
+    provider = str(provider or "google").strip().lower()
+    cfg = load_config()
+    if provider == "google" and not str(cfg.get("gemini_api_key") or "").strip():
+        raise HTTPException(409, "Google Gemini Key 未配置")
+    if provider == "fal" and not str(cfg.get("fal_api_key") or "").strip():
+        raise HTTPException(409, "Fal API Key 未配置")
+    model_label, calls, resolution, phrase = "Nano Banana 2", 2, "2K", "生成2张全屋设计方案"
     model_id = GEMINI_MODEL_MAP[model_label]
     preview_id = new_id("design_preview")
     payload = {
         "preview_id": preview_id,
-        "kind": kind,
+        "kind": "drafts",
         "project_id": project["project_id"],
         "project_revision": project["revision"],
         "source_hash": project["source_hash"],
         "generation_hash": project.get("generation_hash") or "",
+        "anchor_overlay_hash": project.get("anchor_overlay_hash") or "",
         "brief_hash": project["brief_hash"],
-        "candidate_id": candidate_id,
-        "refinement_text": refinement_text.strip(),
+        "candidate_id": "",
         "provider": provider,
         "model_label": model_label,
         "model_id": model_id,
         "call_count": calls,
         "resolution": resolution,
         "aspect_ratio": project["normalization"]["aspect_ratio"],
-        "estimated_cost": _price("B2" if kind == "drafts" else "Pro", calls),
+        "estimated_cost": _price("B2", calls),
         "confirmation_phrase": phrase,
         "created_at": time.time(),
         "expires_at": time.time() + 30 * 60,
@@ -417,20 +606,22 @@ def _create_preview(project: dict, *, kind: str, candidate_id: str = "",
     payload["preview_hash"] = _stable_hash({key: value for key, value in payload.items()
                                              if key not in ("confirmation_phrase", "preview_hash", "status")})
     project.setdefault("paid_previews", {})[preview_id] = payload
-    project["status"] = "draft_previewed" if kind == "drafts" else "refine_previewed"
+    project["status"] = "draft_previewed"
     project["stage"] = "等待付费确认"
     save_project(project)
     return payload
 
 
 @router.post("/api/whole-home-design/projects/{project_id}/drafts/preview")
-def preview_design_drafts(project_id: str, req: PreviewRequest):
+def preview_design_drafts(project_id: str, req: DraftPreviewRequest):
     with _project_lock(project_id):
         project = _project_or_404(project_id)
         _assert_revision(project, req.base_revision)
         if not project.get("plan_summary_confirmed") or not project.get("brief", {}).get("requirements_text"):
             raise HTTPException(409, "请先确认户型摘要并填写设计要求")
-        return _create_preview(project, kind="drafts")
+        if not (project.get("anchor_set") or {}).get("confirmed_complete") or (project.get("anchor_verification") or {}).get("status") != "verified":
+            raise HTTPException(409, "人工锚点尚未通过 Gemini 双重验证")
+        return _create_preview(project, req.provider)
 
 
 def _validate_commit(project: dict, req: CommitRequest, kind: str) -> dict:
@@ -447,6 +638,7 @@ def _validate_commit(project: dict, req: CommitRequest, kind: str) -> dict:
     if (preview.get("project_revision") != project.get("revision")
             or preview.get("source_hash") != project.get("source_hash")
             or preview.get("generation_hash") != project.get("generation_hash")
+            or preview.get("anchor_overlay_hash") != project.get("anchor_overlay_hash")
             or preview.get("brief_hash") != project.get("brief_hash")):
         raise HTTPException(409, "项目输入已变化，请重新生成付费预览")
     if preview.get("status") == "committed":
@@ -517,48 +709,6 @@ async def commit_design_drafts(project_id: str, req: CommitRequest):
     return public_project(project)
 
 
-@router.post("/api/whole-home-design/projects/{project_id}/candidates/{candidate_id}/refine/preview")
-def preview_design_refine(project_id: str, candidate_id: str, req: RefinePreviewRequest):
-    with _project_lock(project_id):
-        project = _project_or_404(project_id)
-        _assert_revision(project, req.base_revision)
-        row = _candidate(project, candidate_id)
-        if row.get("phase") != "draft" or row.get("status") != "done" or row.get("stale"):
-            raise HTTPException(409, "只能精修当前版本已完成的草稿")
-        qa = row.get("structure_qa") or {}
-        human = row.get("human_review") or {}
-        if qa.get("hard_fail") or (qa.get("status") != "passed" and human.get("status") != "passed"):
-            raise HTTPException(409, "草稿尚未通过结构检查")
-        return _create_preview(project, kind="refine", candidate_id=candidate_id,
-                               refinement_text=req.refinement_text)
-
-
-@router.post("/api/whole-home-design/projects/{project_id}/candidates/{candidate_id}/refine/commit")
-async def commit_design_refine(project_id: str, candidate_id: str, req: CommitRequest):
-    should_start = False
-    with _project_lock(project_id):
-        project = _project_or_404(project_id)
-        preview = _validate_commit(project, req, "refine")
-        if preview.get("candidate_id") != candidate_id:
-            raise HTTPException(409, "精修预览与草稿不匹配")
-        existing_ids = list(preview.get("candidate_ids") or [])
-        if not existing_ids:
-            row = _new_candidate(project, preview, phase="final", parent_id=candidate_id)
-            project.setdefault("candidates", []).append(row)
-            existing_ids = [row["candidate_id"]]
-            preview["candidate_ids"] = existing_ids
-        queued = [row for row in project.get("candidates") or []
-                  if row.get("candidate_id") in existing_ids and row.get("status") == "queued"]
-        if queued and not preview.get("background_started_at"):
-            preview["background_started_at"] = time.time()
-            should_start = True
-        project.update(status="refining", stage="正在精修 4K 全屋设计成稿", error="")
-        save_project(project)
-    if should_start:
-        _track(_run_candidate_batch(project_id, existing_ids, preview))
-    return public_project(project)
-
-
 async def _run_candidate_batch(project_id: str, candidate_ids: list[str], preview: dict) -> None:
     await asyncio.gather(*[
         asyncio.to_thread(_generate_one_candidate, project_id, candidate_id, preview, False)
@@ -588,6 +738,8 @@ def _generate_one_candidate(project_id: str, candidate_id: str, preview: dict,
         if not project:
             return
         row = _candidate(project, candidate_id)
+        if not (project.get("anchor_set") or {}).get("confirmed_complete") or (project.get("anchor_verification") or {}).get("status") != "verified":
+            raise HTTPException(409, "人工锚点尚未通过 Gemini 双重验证")
         parent = next((item for item in project.get("candidates") or []
                        if item.get("candidate_id") == row.get("parent_candidate_id")), None)
         phase = row["phase"]
@@ -596,6 +748,8 @@ def _generate_one_candidate(project_id: str, candidate_id: str, preview: dict,
             refinement_text=str(preview.get("refinement_text") or ""),
         )
         image_paths = [project.get("generation_path") or project["normalized_path"]]
+        if project.get("anchor_overlay_path"):
+            image_paths.append(project["anchor_overlay_path"])
         if parent and parent.get("path"):
             image_paths.append(parent["path"])
         image_paths.extend(project.get("brief", {}).get("reference_paths") or [])
@@ -730,18 +884,18 @@ def lock_design_candidate(project_id: str, candidate_id: str, req: CandidateActi
         project = _project_or_404(project_id)
         _assert_revision(project, req.base_revision)
         row = _candidate(project, candidate_id)
+        if not (project.get("anchor_set") or {}).get("confirmed_complete") or (project.get("anchor_verification") or {}).get("status") != "verified":
+            raise HTTPException(409, "人工锚点尚未通过 Gemini 双重验证")
         qa = row.get("structure_qa") or {}
         human = row.get("human_review") or {}
-        if row.get("phase") != "final" or row.get("status") != "done" or row.get("stale"):
-            raise HTTPException(409, "只能锁定当前版本已完成的 4K 成稿")
+        if row.get("phase") not in ("draft", "final") or row.get("status") != "done" or row.get("stale"):
+            raise HTTPException(409, "只能锁定当前版本已完成的 2K 方案")
         if (row.get("source_hash") != project.get("source_hash")
                 or row.get("generation_hash") != project.get("generation_hash")
                 or row.get("brief_hash") != project.get("brief_hash")):
-            raise HTTPException(409, "成稿输入哈希已过期")
+            raise HTTPException(409, "方案输入哈希已过期")
         if qa.get("status") != "passed" or qa.get("hard_fail") or human.get("status") != "passed":
             raise HTTPException(409, "自动/人工结构核对尚未全部通过")
-        if max(row.get("image_size") or [0]) < 3500:
-            raise HTTPException(409, "成稿未达到 4K 合同")
         project["locked_candidate_id"] = candidate_id
         project["status"] = "locked"
         project["stage"] = "全屋设计方案已锁定"
@@ -758,7 +912,9 @@ def create_modeling_bundle(project_id: str, req: CandidateActionRequest):
         _assert_revision(project, req.base_revision)
         locked_id = str(project.get("locked_candidate_id") or "")
         if not locked_id or project.get("status") != "locked":
-            raise HTTPException(409, "请先锁定通过全部结构核对的 4K 成稿")
+            raise HTTPException(409, "请先锁定通过全部结构核对的 2K 方案")
+        if not (project.get("anchor_set") or {}).get("confirmed_complete") or (project.get("anchor_verification") or {}).get("status") != "verified":
+            raise HTTPException(409, "人工锚点尚未通过 Gemini 双重验证")
         candidate = _candidate(project, locked_id)
         existing = next((row for row in reversed(project.get("bundles") or [])
                          if not row.get("stale") and row.get("candidate_id") == locked_id

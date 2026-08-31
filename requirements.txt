@@ -23,3 +23,4 @@ python-pptx==1.0.2
 PyMuPDF==1.28.2
 keyring==25.7.0
 SecretStorage==3.3.3; sys_platform == "linux"
+ifcopenshell==0.8.5

@@ -41,12 +41,14 @@ def design_store(tmp_path, monkeypatch):
     projects = root / "projects"
     assets = root / "assets"
     bundles = root / "bundles"
-    for folder in (projects, assets, bundles):
+    models = root / "models"
+    for folder in (projects, assets, bundles, models):
         folder.mkdir(parents=True)
     monkeypatch.setattr(design, "ROOT", str(root))
     monkeypatch.setattr(design, "PROJECT_ROOT", str(projects))
     monkeypatch.setattr(design, "ASSET_ROOT", str(assets))
     monkeypatch.setattr(design, "BUNDLE_ROOT", str(bundles))
+    monkeypatch.setattr(design, "MODEL_ROOT", str(models))
     design._LOCKS.clear()
     source = tmp_path / "plan.png"
     image = Image.new("RGB", (1200, 900), "white")
@@ -59,12 +61,27 @@ def design_store(tmp_path, monkeypatch):
 
 def confirmed_project(source):
     project = design.create_project(str(source), "unit-plan.png")
+    anchors = design.validate_anchor_set(project, {
+        "coordinate_space": "normalized-evidence-1000-v1",
+        "source_hash": project["source_hash"], "confirmed_complete": True,
+        "anchors": [
+            {"anchor_id": "P01", "kind": "space", "label": "客厅", "note": "", "points": [{"x": 300, "y": 500}]},
+            {"anchor_id": "P02", "kind": "space", "label": "卧室", "note": "", "points": [{"x": 700, "y": 500}]},
+            {"anchor_id": "P03", "kind": "entrance", "label": "入户门", "note": "", "points": [{"x": 240, "y": 800}]},
+            {"anchor_id": "P04", "kind": "scale", "label": "总宽 10m", "note": "", "distance_mm": 10000, "points": [{"x": 100, "y": 100}, {"x": 900, "y": 100}]},
+        ],
+    })
+    overlay, overlay_hash = design.render_anchor_overlay(project, anchors)
+    project["anchor_set"] = anchors
+    project["anchor_overlay_path"] = overlay
+    project["anchor_overlay_hash"] = overlay_hash
+    project["anchor_verification"] = {"status": "verified", "conflicts": [], "changes": [], "inferred_anchor_gaps": []}
     project["plan_summary"] = {
         **design.empty_plan_summary("human"),
         "room_count": 2,
         "rooms": [
-            {"id": "living", "label": "客厅", "room_type": "living", "coarse_location": "left", "adjacent_room_ids": ["bed"]},
-            {"id": "bed", "label": "卧室", "room_type": "bedroom", "coarse_location": "right", "adjacent_room_ids": ["living"]},
+            {"id": "living", "label": "客厅", "room_type": "living", "coarse_location": "left", "adjacent_room_ids": ["bed"], "anchor_ids": ["P01"], "source": "human_anchor"},
+            {"id": "bed", "label": "卧室", "room_type": "bedroom", "coarse_location": "right", "adjacent_room_ids": ["living"], "anchor_ids": ["P02"], "source": "human_anchor"},
         ],
         "dimension_evidence": ["overall width 10m"],
     }
@@ -133,6 +150,55 @@ def test_annotation_cleanup_erases_only_safe_boxes(tmp_path, monkeypatch):
     assert metadata["applied_count"] == 1
 
 
+def test_anchor_contract_and_overlay_are_deterministic(design_store):
+    project = design.create_project(str(design_store), "plan.png")
+    payload = {
+        "coordinate_space": "normalized-evidence-1000-v1",
+        "source_hash": project["source_hash"], "confirmed_complete": True,
+        "anchors": [
+            {"anchor_id": "P01", "kind": "space", "label": "主卧", "note": "人工确认", "points": [{"x": 750, "y": 600}]},
+            {"anchor_id": "P02", "kind": "entrance", "label": "入户门", "note": "", "points": [{"x": 120, "y": 800}, {"x": 180, "y": 800}]},
+            {"anchor_id": "P03", "kind": "scale", "label": "总宽 10m", "note": "", "distance_mm": 10000, "points": [{"x": 100, "y": 100}, {"x": 900, "y": 100}]},
+        ],
+    }
+    anchors = design.validate_anchor_set(project, payload)
+    first_path, first_hash = design.render_anchor_overlay(project, anchors)
+    second_path, second_hash = design.render_anchor_overlay(project, anchors)
+    assert first_path == second_path and first_hash == second_hash
+    assert anchors["anchors"][0]["label"] == "主卧"
+    with Image.open(first_path) as overlay:
+        with Image.open(project["normalized_path"]) as source:
+            assert overlay.width > source.width and overlay.height == source.height
+
+
+def test_anchor_route_invalidates_old_candidates_and_requires_entrance(design_store):
+    project = design.create_project(str(design_store), "plan.png")
+    project["candidates"] = [{"candidate_id": "old", "stale": False}]
+    design.save_project(project)
+    bad = routes.AnchorSetRequest(
+        base_revision=project["revision"], source_hash=project["source_hash"], confirmed_complete=True,
+        anchors=[routes.AnchorRequest(anchor_id="P01", kind="space", label="客厅", points=[routes.AnchorPointRequest(x=300, y=400)])],
+    )
+    with pytest.raises(HTTPException) as exc:
+        routes.save_design_anchors(project["project_id"], bad)
+    assert exc.value.status_code == 422
+
+    good = routes.AnchorSetRequest(
+        base_revision=project["revision"], source_hash=project["source_hash"], confirmed_complete=True,
+        anchors=[
+            routes.AnchorRequest(anchor_id="P01", kind="space", label="客厅", points=[routes.AnchorPointRequest(x=300, y=400)]),
+            routes.AnchorRequest(anchor_id="P02", kind="entrance", label="入户门", points=[routes.AnchorPointRequest(x=120, y=800)]),
+            routes.AnchorRequest(anchor_id="P03", kind="scale", label="总宽 10m", distance_mm=10000, points=[routes.AnchorPointRequest(x=100, y=100), routes.AnchorPointRequest(x=900, y=100)]),
+        ],
+    )
+    result = routes.save_design_anchors(project["project_id"], good)
+    assert result["anchor_set"]["confirmed_complete"] is True
+    assert result["candidates"][0]["stale"] is True
+    assert result["anchor_overlay_hash"]
+    stored = design.load_project(project["project_id"])
+    assert stored and os.path.isfile(stored["anchor_overlay_path"])
+
+
 def test_prompt_makes_source_structural_authority(design_store):
     project = confirmed_project(design_store)
     prompt = design.build_design_prompt(project, phase="draft", direction_index=2)
@@ -142,28 +208,30 @@ def test_prompt_makes_source_structural_authority(design_store):
     assert "现代暖木自然风" in prompt
 
 
-def test_room_normalization_adds_missing_adjacency_placeholder_and_symmetry():
+def test_room_normalization_drops_unknown_adjacency_without_inventing_rooms():
     rooms = design.normalize_plan_rooms([{
         "id": "Bedroom 1", "label": "卧室", "room_type": "bedroom",
         "coarse_location": "north", "adjacent_room_ids": ["hallway"],
         "confidence": 0.8, "evidence": "door to corridor", "needs_confirmation": False,
     }])
-    assert [room["id"] for room in rooms] == ["bedroom_1", "hallway"]
-    hallway = rooms[1]
-    assert hallway["label"] == "过道"
-    assert hallway["needs_confirmation"] is True
-    assert hallway["adjacent_room_ids"] == ["bedroom_1"]
+    assert [room["id"] for room in rooms] == ["bedroom_1"]
+    assert rooms[0]["adjacent_room_ids"] == []
 
 
 def test_automatic_summary_prefills_evidence_confidence_and_title_facts(design_store, monkeypatch):
     project = design.create_project(str(design_store), "plan.png")
+    anchored = confirmed_project(design_store)
+    project["anchor_set"] = anchored["anchor_set"]
+    project["anchor_overlay_path"] = anchored["anchor_overlay_path"]
+    project["anchor_overlay_hash"] = anchored["anchor_overlay_hash"]
+    design.save_project(project)
     payload = {
         "room_count": 2,
         "rooms": [
             {"id": "living", "label": "客厅", "room_type": "living", "coarse_location": "left",
-             "adjacent_room_ids": ["bed"], "confidence": 0.92, "evidence": "large central space", "needs_confirmation": False},
+             "adjacent_room_ids": ["bed"], "anchor_ids": ["P01"], "source": "human_anchor", "confidence": 0.92, "evidence": "large central space", "needs_confirmation": False},
             {"id": "bed", "label": "卧室", "room_type": "bedroom", "coarse_location": "right",
-             "adjacent_room_ids": ["living"], "confidence": 0.7, "evidence": "bay window and AC", "needs_confirmation": True},
+             "adjacent_room_ids": ["living"], "anchor_ids": ["P02"], "source": "human_anchor", "confidence": 0.7, "evidence": "bay window and AC", "needs_confirmation": True},
         ],
         "declared_layout": {"bedrooms": 1, "halls": 1, "bathrooms": 0,
                             "source_text": "1房1厅", "confidence": 0.98},
@@ -177,6 +245,7 @@ def test_automatic_summary_prefills_evidence_confidence_and_title_facts(design_s
         "entrances": ["south"], "openings_summary": ["east bay window"],
         "wet_zones": [], "balconies": [], "dimension_evidence": ["10000mm"],
         "must_preserve": ["east bay window"], "uncertainties": ["bedroom role"],
+        "verification": {"status": "verified", "conflicts": [], "changes": [], "inferred_anchor_gaps": []},
     }
     monkeypatch.setattr(design, "call_gemini_json", lambda *_args, **_kwargs: (payload, None))
     result = design.analyze_plan(project["project_id"])
@@ -217,7 +286,8 @@ def test_retry_analysis_runs_from_async_route_and_invalidates_confirmation(desig
 
 def test_draft_commit_schedules_once_and_idempotent_retry_reuses_candidates(design_store, monkeypatch):
     project = confirmed_project(design_store)
-    preview = routes._create_preview(project, kind="drafts")
+    monkeypatch.setattr(routes, "load_config", lambda: {"gemini_api_key": "configured"})
+    preview = routes._create_preview(project)
     scheduled = []
     def capture(coro):
         scheduled.append(coro)
@@ -297,33 +367,34 @@ def test_manual_review_can_record_non_overridable_structure_failure(design_store
     assert "楼梯" in candidate["structure_qa"]["summary"]
 
 
-def test_lock_requires_final_4k_and_both_reviews(design_store):
+def test_lock_accepts_2k_draft_after_both_reviews(design_store):
     project = confirmed_project(design_store)
-    final_path = design._save_candidate_image(
-        project["project_id"], "final_good", Image.new("RGB", (3600, 2700), (220, 210, 195)))
+    concept_path = design._save_candidate_image(
+        project["project_id"], "draft_good", Image.new("RGB", (2000, 1500), (220, 210, 195)))
     candidate = {
-        "candidate_id": "final_good", "phase": "final", "status": "done", "stale": False,
-        "path": final_path, "image_size": [3600, 2700], "source_hash": project["source_hash"],
+        "candidate_id": "draft_good", "phase": "draft", "status": "done", "stale": False,
+        "path": concept_path, "image_size": [2000, 1500], "resolution": "2K",
+        "source_hash": project["source_hash"],
         "generation_hash": project["generation_hash"],
-        "brief_hash": project["brief_hash"], "result_hash": design.file_sha256(final_path),
+        "brief_hash": project["brief_hash"], "result_hash": design.file_sha256(concept_path),
         "structure_qa": {"status": "passed", "hard_fail": False, "checks": []},
         "human_review": {"status": "passed", "checks": {item: True for item in design.STRUCTURE_REVIEW_ITEMS}},
     }
     project["candidates"] = [candidate]
     design.save_project(project)
     result = routes.lock_design_candidate(
-        project["project_id"], "final_good", routes.CandidateActionRequest(base_revision=project["revision"]))
+        project["project_id"], "draft_good", routes.CandidateActionRequest(base_revision=project["revision"]))
     assert result["status"] == "locked"
-    assert result["locked_candidate_id"] == "final_good"
+    assert result["locked_candidate_id"] == "draft_good"
 
 
 def test_modeling_bundle_has_authority_and_no_secrets(design_store):
     project = confirmed_project(design_store)
-    final_path = design._save_candidate_image(
-        project["project_id"], "final", Image.new("RGB", (3600, 2700), "white"))
+    concept_path = design._save_candidate_image(
+        project["project_id"], "draft", Image.new("RGB", (2000, 1500), "white"))
     candidate = {
-        "candidate_id": "final", "parent_candidate_id": "", "path": final_path,
-        "result_hash": design.file_sha256(final_path), "prompt_version": design.PROMPT_VERSION,
+        "candidate_id": "draft", "phase": "draft", "resolution": "2K", "path": concept_path,
+        "result_hash": design.file_sha256(concept_path), "prompt_version": design.PROMPT_VERSION,
         "prompt": "safe prompt", "provider": "fal", "model_id": "model", "endpoint": "endpoint",
         "structure_qa": {"status": "passed", "hard_fail": False},
         "human_review": {"status": "passed", "checks": {item: True for item in design.STRUCTURE_REVIEW_ITEMS}},
@@ -335,9 +406,14 @@ def test_modeling_bundle_has_authority_and_no_secrets(design_store):
         assert "manifest.json" in names
         assert "AGENT_TASK.md" in names
         assert "blender/acceptance.json" in names
+        assert "design/locked-concept-2k.png" in names
+        assert "prompts/concept-prompt-snapshot.json" in names
+        assert "design/final-locked.png" not in names
+        assert "prompts/refine-prompt-snapshot.json" not in names
         manifest = json.loads(archive.read("manifest.json"))
         assert manifest["target_profile"] == "blender-mcp-v1"
         assert manifest["blocked_when_scale_missing"] is True
+        assert manifest["appearance_authority"][0] == "design/locked-concept-2k.png"
         content = b"".join(archive.read(name) for name in names if name.endswith((".json", ".md", ".txt")))
         assert b"api_key" not in content.lower()
         assert str(design_store).encode() not in content
@@ -352,3 +428,214 @@ def test_public_project_redacts_queue_handle(design_store):
     assert "queue_handle" not in public["candidates"][0]
     assert "source_path" not in public
     assert "normalized_path" not in public
+    assert public["plan_summary"]["source"] == "human"
+
+    listed = design.public_project(project, list_mode=True)
+    assert "plan_summary" not in listed
+    assert "brief" not in listed
+
+
+def _two_room_structure_seed():
+    return {
+        "outer_boundary": [{"x": 100, "y": 100}, {"x": 900, "y": 100}, {"x": 900, "y": 800}, {"x": 100, "y": 800}],
+        "walls": [
+            {"id": "W1", "a": {"x": 100, "y": 100}, "b": {"x": 900, "y": 100}, "thickness_m": .2, "height_m": 2.8, "left_space_id": "exterior", "right_space_id": "bed", "confidence": .95, "evidence": "top wall"},
+            {"id": "W2", "a": {"x": 900, "y": 100}, "b": {"x": 900, "y": 800}, "thickness_m": .2, "height_m": 2.8, "left_space_id": "exterior", "right_space_id": "bed", "confidence": .95, "evidence": "right wall"},
+            {"id": "W3", "a": {"x": 900, "y": 800}, "b": {"x": 100, "y": 800}, "thickness_m": .2, "height_m": 2.8, "left_space_id": "exterior", "right_space_id": "living", "confidence": .95, "evidence": "bottom wall"},
+            {"id": "W4", "a": {"x": 100, "y": 800}, "b": {"x": 100, "y": 100}, "thickness_m": .2, "height_m": 2.8, "left_space_id": "exterior", "right_space_id": "living", "confidence": .95, "evidence": "left wall"},
+            {"id": "W5", "a": {"x": 500, "y": 100}, "b": {"x": 500, "y": 800}, "thickness_m": .12, "height_m": 2.8, "left_space_id": "living", "right_space_id": "bed", "confidence": .9, "evidence": "partition"},
+        ],
+        "openings": [
+            {"id": "O1", "kind": "entrance", "a": {"x": 200, "y": 800}, "b": {"x": 280, "y": 800}, "owning_wall_id": "W3", "sill_m": 0, "head_m": 2.1, "side_a_space_id": "exterior", "side_b_space_id": "living", "swing_direction": "not_shown", "confidence": .9, "evidence": "entry"},
+            {"id": "O2", "kind": "door", "a": {"x": 500, "y": 430}, "b": {"x": 500, "y": 500}, "owning_wall_id": "W5", "sill_m": 0, "head_m": 2.1, "side_a_space_id": "living", "side_b_space_id": "bed", "swing_direction": "not_shown", "confidence": .9, "evidence": "room door"},
+            {"id": "O3", "kind": "window", "a": {"x": 650, "y": 100}, "b": {"x": 760, "y": 100}, "owning_wall_id": "W1", "sill_m": .9, "head_m": 2.1, "side_a_space_id": "exterior", "side_b_space_id": "bed", "swing_direction": "none", "confidence": .9, "evidence": "window"},
+        ],
+        "adjacencies": [
+            {"id": "A1", "space_a_id": "exterior", "space_b_id": "living", "kind": "door", "opening_id": "O1", "confidence": .9},
+            {"id": "A2", "space_a_id": "living", "space_b_id": "bed", "kind": "door", "opening_id": "O2", "confidence": .9},
+        ],
+        "unresolved": [],
+    }
+
+
+def test_structure_review_compiles_metric_bundle_from_human_scale(design_store):
+    project = confirmed_project(design_store)
+    review = design.prepare_structure_review(project, payload_override=_two_room_structure_seed())
+    assert review["status"] == "needs_answers"
+    answers = {
+        "Q01_ANNOTATIONS": "annotations", "Q02_PARALLEL_LINES": "floor_feature",
+        "Q03_GLAZING": "mostly_openings", "Q04_ENTRANCE": "yes",
+        "Q05_LOW_FEATURES": "not_walls", "Q06_BALCONIES": "connected",
+        "Q07_MISSING_OPENINGS": "none", "Q08_ROOM_LIST": "complete", "Q09_READY": "yes",
+    }
+    completed = design.submit_structure_review(project, answers)
+    assert completed["status"] == "verified"
+    bundle = completed["structure_bundle"]
+    assert bundle["schema"] == "research-structure-bundle-v1"
+    assert len(bundle["wall_branch_graph"]["walls"]) == 5
+    assert len(bundle["opening_contract"]["openings"]) == 3
+    assert bundle["structure_hash"] == completed["structure_hash"]
+    first = design.create_model_run_record(project)
+    second = design.create_model_run_record(project)
+    assert first["run_id"] == second["run_id"]
+
+
+def test_structure_review_keeps_external_failure_out_of_product_failure(design_store, monkeypatch):
+    project = confirmed_project(design_store)
+    monkeypatch.setattr(design, "call_gemini_json", lambda *args, **kwargs: (None, "Gemini HTTP 400: region"))
+    review = design.prepare_structure_review(project)
+    assert review["status"] == "external_review_pending"
+    assert review["provider"] == "gemini_unavailable"
+    assert len(review["questions"]) == 9
+    assert project["status"] == "ready"
+
+
+def test_invalid_structure_contract_becomes_professional_review_not_product_failure(design_store):
+    project = confirmed_project(design_store)
+    seed = _two_room_structure_seed()
+    seed["openings"][0]["owning_wall_id"] = "missing-wall"
+    design.prepare_structure_review(project, payload_override=seed)
+    answers = {
+        "Q01_ANNOTATIONS": "annotations", "Q02_PARALLEL_LINES": "floor_feature",
+        "Q03_GLAZING": "mostly_openings", "Q04_ENTRANCE": "yes",
+        "Q05_LOW_FEATURES": "not_walls", "Q06_BALCONIES": "connected",
+        "Q07_MISSING_OPENINGS": "none", "Q08_ROOM_LIST": "complete", "Q09_READY": "yes",
+    }
+    review = design.submit_structure_review(project, answers)
+    assert review["status"] == "needs_professional_review"
+    assert review["structure_hash"] == ""
+    assert any("所属墙" in item for item in review["unresolved"])
+    assert project["status"] == "ready"
+
+
+def test_professional_bundle_is_bound_to_current_project_source_and_revision(design_store):
+    first = confirmed_project(design_store)
+    design.prepare_structure_review(first, payload_override=_two_room_structure_seed())
+    answers = {
+        "Q01_ANNOTATIONS": "annotations", "Q02_PARALLEL_LINES": "floor_feature",
+        "Q03_GLAZING": "mostly_openings", "Q04_ENTRANCE": "yes",
+        "Q05_LOW_FEATURES": "not_walls", "Q06_BALCONIES": "connected",
+        "Q07_MISSING_OPENINGS": "none", "Q08_ROOM_LIST": "complete", "Q09_READY": "yes",
+    }
+    verified = design.submit_structure_review(first, answers)
+    foreign_bundle = json.loads(json.dumps(verified["structure_bundle"]))
+    second = confirmed_project(design_store)
+    design.prepare_structure_review(second, payload_override=_two_room_structure_seed())
+    result = design.submit_structure_review(second, answers, technical_bundle=foreign_bundle)
+    assert result["status"] == "needs_professional_review"
+    assert result["structure_hash"] == ""
+    assert any("当前项目" in item for item in result["unresolved"])
+
+
+def test_gemini_entrance_must_geometrically_match_human_anchor(design_store):
+    project = confirmed_project(design_store)
+    seed = _two_room_structure_seed()
+    seed["openings"][0]["a"] = {"x": 800, "y": 200}
+    seed["openings"][0]["b"] = {"x": 860, "y": 200}
+    design.prepare_structure_review(project, payload_override=seed)
+    answers = {
+        "Q01_ANNOTATIONS": "annotations", "Q02_PARALLEL_LINES": "floor_feature",
+        "Q03_GLAZING": "mostly_openings", "Q04_ENTRANCE": "yes",
+        "Q05_LOW_FEATURES": "not_walls", "Q06_BALCONIES": "connected",
+        "Q07_MISSING_OPENINGS": "none", "Q08_ROOM_LIST": "complete", "Q09_READY": "yes",
+    }
+    result = design.submit_structure_review(project, answers)
+    assert result["status"] == "needs_professional_review"
+    assert any("人工entrance锚点" in item for item in result["unresolved"])
+
+
+def test_product_adapter_runs_real_blender_and_keeps_missing_gemini_as_external_wait(design_store, monkeypatch):
+    project = confirmed_project(design_store)
+    design.prepare_structure_review(project, payload_override=_two_room_structure_seed())
+    answers = {
+        "Q01_ANNOTATIONS": "annotations", "Q02_PARALLEL_LINES": "floor_feature",
+        "Q03_GLAZING": "mostly_openings", "Q04_ENTRANCE": "yes",
+        "Q05_LOW_FEATURES": "not_walls", "Q06_BALCONIES": "connected",
+        "Q07_MISSING_OPENINGS": "none", "Q08_ROOM_LIST": "complete", "Q09_READY": "yes",
+    }
+    design.submit_structure_review(project, answers)
+    row = design.create_model_run_record(project)
+    design.save_project(project)
+    monkeypatch.setattr(design, "evaluate_structure", lambda *_args, **_kwargs: {
+        "version": design.QA_PROMPT_VERSION, "status": "manual_required", "hard_fail": False,
+        "summary": "Gemini route unavailable", "checks": [], "provider": "gemini_unavailable",
+    })
+    completed = design.run_model_job(project["project_id"], row["run_id"])
+    assert completed["status"] == "external_review_pending"
+    artifact_kinds = {item["kind"] for item in completed["artifacts"]}
+    assert {"blend", "glb", "ifc", "top", "north_east", "north_west"} <= artifact_kinds
+    public = design.public_project(design.load_project(project["project_id"]))
+    public_run = public["model_runs"][0]
+    assert "structure_bundle" not in public_run and "output_root" not in public_run
+    assert all(item["download_url"].startswith("/api/whole-home-design/") for item in public_run["artifacts"])
+
+
+def test_ifc_dependency_block_cannot_be_promoted_by_gemini_pass(design_store, monkeypatch):
+    from Floor_engine_server.tools import fastloop_research as kernel
+    project = confirmed_project(design_store)
+    design.prepare_structure_review(project, payload_override=_two_room_structure_seed())
+    answers = {
+        "Q01_ANNOTATIONS": "annotations", "Q02_PARALLEL_LINES": "floor_feature",
+        "Q03_GLAZING": "mostly_openings", "Q04_ENTRANCE": "yes",
+        "Q05_LOW_FEATURES": "not_walls", "Q06_BALCONIES": "connected",
+        "Q07_MISSING_OPENINGS": "none", "Q08_ROOM_LIST": "complete", "Q09_READY": "yes",
+    }
+    design.submit_structure_review(project, answers)
+    row = design.create_model_run_record(project)
+    design.save_project(project)
+    blocked_folder = design_store.parent / "blocked-ifc"
+    blocked_folder.mkdir()
+    top = blocked_folder / "top.png"
+    Image.new("RGB", (32, 32), "white").save(top)
+    monkeypatch.setattr(kernel, "run_research_model", lambda *_args, **_kwargs: {
+        "status": "blocked_dependency_missing", "message": "IfcOpenShell missing",
+        "artifacts": {"top.png": {"path": str(top), "bytes": top.stat().st_size, "sha256": design.file_sha256(str(top))}},
+    })
+    monkeypatch.setattr(design, "evaluate_structure", lambda *_args, **_kwargs: {
+        "version": design.QA_PROMPT_VERSION, "status": "passed", "hard_fail": False,
+        "summary": "visual pass", "checks": [], "provider": "fixture",
+    })
+    completed = design.run_model_job(project["project_id"], row["run_id"])
+    assert completed["status"] == "blocked_dependency_missing"
+    assert "IFC" in completed["stage"]
+
+
+def test_recovery_hides_interrupted_local_model_run(design_store):
+    project = confirmed_project(design_store)
+    project["model_runs"] = [{
+        "run_id": "model_interrupted", "status": "building", "stage": "building", "error": "",
+        "structure_hash": "a" * 64, "artifacts": [], "unresolved": [], "stale": False,
+    }]
+    design.save_project(project)
+    design.recover_interrupted_projects()
+    stored = design.load_project(project["project_id"])
+    assert stored["model_runs"][0]["status"] == "interrupted"
+    assert stored["model_runs"][0]["stale"] is True
+
+
+def test_structure_and_model_run_routes_form_one_revision_bound_fast_lane(design_store, monkeypatch):
+    project = confirmed_project(design_store)
+    monkeypatch.setattr(routes, "prepare_structure_review", lambda value: design.prepare_structure_review(value, payload_override=_two_room_structure_seed()))
+    prepared = asyncio.run(routes.prepare_design_structure_review(
+        project["project_id"], routes.PreviewRequest(base_revision=project["revision"])))
+    assert prepared["structure_review"]["status"] == "needs_answers"
+    answers = {
+        "Q01_ANNOTATIONS": "annotations", "Q02_PARALLEL_LINES": "floor_feature",
+        "Q03_GLAZING": "mostly_openings", "Q04_ENTRANCE": "yes",
+        "Q05_LOW_FEATURES": "not_walls", "Q06_BALCONIES": "connected",
+        "Q07_MISSING_OPENINGS": "none", "Q08_ROOM_LIST": "complete", "Q09_READY": "yes",
+    }
+    compiled = routes.save_design_structure_guidance(project["project_id"], routes.StructureGuidancePutRequest(
+        base_revision=prepared["revision"], answers=answers))
+    assert compiled["structure_review"]["status"] == "verified"
+    captured = []
+    def no_background(coro):
+        captured.append(coro)
+        coro.close()
+        return None
+    monkeypatch.setattr(routes, "_track", no_background)
+    started = asyncio.run(routes.create_design_model_run(project["project_id"], routes.ModelRunCreateRequest(
+        base_revision=compiled["revision"], structure_hash=compiled["structure_review"]["structure_hash"],
+        idempotency_key="route-fast-lane-001")))
+    assert started["model_runs"][0]["status"] == "queued"
+    assert len(captured) == 1

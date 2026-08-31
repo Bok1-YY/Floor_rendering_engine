@@ -1,10 +1,9 @@
-"""Whole-home concept design domain service.
+"""Whole-home design and local research-model domain service.
 
-This module deliberately stops before geometric modelling.  The source plan is
-the structural authority; generated bird's-eye images are concept references for
-materials, furniture and atmosphere.  Projects are append-only in practice:
-changing an accepted input revision makes older candidates stale instead of
-rewriting their evidence.
+The source plan and human-confirmed structure remain the geometry authority.
+Generated bird's-eye images are concept references for materials, furniture and
+atmosphere only.  Local Blender/GLB/IFC research outputs are versioned artifacts;
+they are never promoted to construction/BIM truth by this module.
 """
 from __future__ import annotations
 
@@ -12,6 +11,7 @@ import base64
 import hashlib
 import io
 import json
+import math
 import os
 import re
 import tempfile
@@ -20,12 +20,13 @@ import time
 import uuid
 import zipfile
 from copy import deepcopy
+from pathlib import Path
 from typing import Any, Callable, Iterable, Optional
 
 import requests
 import cv2
 import numpy as np
-from PIL import Image, ImageChops, ImageDraw, ImageOps
+from PIL import Image, ImageChops, ImageDraw, ImageFont, ImageOps
 
 from .api import (
     _call_fal_queue_json,
@@ -39,13 +40,15 @@ from .server_helpers import result_thumb_url, to_url
 
 SCHEMA_VERSION = "whole-home-design-project-v1"
 PROMPT_VERSION = "whole-home-birdseye-v1"
-PLAN_PROMPT_VERSION = "whole-home-plan-summary-v1"
+PLAN_PROMPT_VERSION = "whole-home-anchor-plan-v2"
+PLAN_VERIFY_VERSION = "whole-home-anchor-verify-v1"
 QA_PROMPT_VERSION = "whole-home-structure-qa-v1"
 ROOT = os.path.join(MAIN_OUTPUT_DIR, "_whole_home_design")
 PROJECT_ROOT = os.path.join(ROOT, "projects")
 ASSET_ROOT = os.path.join(ROOT, "assets")
 BUNDLE_ROOT = os.path.join(ROOT, "bundles")
-for _folder in (PROJECT_ROOT, ASSET_ROOT, BUNDLE_ROOT):
+MODEL_ROOT = os.path.join(ROOT, "model-runs")
+for _folder in (PROJECT_ROOT, ASSET_ROOT, BUNDLE_ROOT, MODEL_ROOT):
     os.makedirs(_folder, exist_ok=True)
 
 _LOCKS_GUARD = threading.RLock()
@@ -67,6 +70,63 @@ STRUCTURE_REVIEW_ITEMS = (
     "no_added_or_missing_spaces",
     "orthographic_topdown_view",
     "no_labels_dimensions_or_watermarks",
+)
+
+STRUCTURE_GUIDANCE_QUESTIONS = (
+    {
+        "id": "Q01_ANNOTATIONS", "title": "尺寸数字、虚线和说明文字",
+        "prompt": "图中的尺寸数字、H/W、虚线和引线是否都只是说明，不需要建成墙？",
+        "hint": "通常这些内容只用于读图。若其中确有结构，请选择不确定并在备注中说明。",
+        "choices": (("annotations", "对，只是说明"), ("has_structure", "其中有真实结构"), ("unsure", "看不清")),
+    },
+    {
+        "id": "Q02_PARALLEL_LINES", "title": "卫生间和高差区域的平行线",
+        "prompt": "湿区里的多条平行线主要是地面高差/下沉边线，而不是全高墙吗？",
+        "hint": "只判断它是否应该升到墙高，不需要判断施工做法。",
+        "choices": (("floor_feature", "主要是地面高差"), ("wall", "其中有全高墙"), ("unsure", "看不清")),
+    },
+    {
+        "id": "Q03_GLAZING", "title": "外墙细长双线",
+        "prompt": "外墙上的细长双线大部分是窗、玻璃或阳台界面吗？",
+        "hint": "有采光或可开启界面即可选择门窗/玻璃。",
+        "choices": (("mostly_openings", "大部分是门窗/玻璃"), ("contains_walls", "其中有实墙"), ("unsure", "看不清")),
+    },
+    {
+        "id": "Q04_ENTRANCE", "title": "入户门",
+        "prompt": "红色人工锚点标出的入口就是本户入户门吗？",
+        "hint": "只确认位置；门扇方向看不清时可保留 not_shown。",
+        "choices": (("yes", "是入户门"), ("no", "位置不对"), ("unsure", "看不清")),
+    },
+    {
+        "id": "Q05_LOW_FEATURES", "title": "低柜、电视柜和展示柜",
+        "prompt": "DISPLAY、TV UNIT、LOW HEIGHT STORAGE 等标注都不是全高墙吗？",
+        "hint": "这些通常属于家具或低构造，不应封堵公共空间。",
+        "choices": (("not_walls", "都不是全高墙"), ("some_walls", "其中有真实墙体"), ("unsure", "看不清")),
+    },
+    {
+        "id": "Q06_BALCONIES", "title": "阳台与室内连接",
+        "prompt": "图上标出的阳台与相邻室内空间之间存在门或玻璃开口吗？",
+        "hint": "只确认是否连通；栏杆和窗框细节交给后续模型。",
+        "choices": (("connected", "存在门/玻璃开口"), ("closed", "是封闭实墙"), ("unsure", "看不清")),
+    },
+    {
+        "id": "Q07_MISSING_OPENINGS", "title": "遗漏门窗",
+        "prompt": "人工锚点之外，图上是否还有明显但未标记的门、窗或开放通道？",
+        "hint": "有遗漏时选择有；Gemini 会列出候选，必要时进入专业校正。",
+        "choices": (("none", "没有明显遗漏"), ("has_missing", "还有遗漏"), ("unsure", "看不清")),
+    },
+    {
+        "id": "Q08_ROOM_LIST", "title": "空间清单",
+        "prompt": "当前人工标记的空间名称和大致位置是否完整？",
+        "hint": "储物间、生活阳台、楼梯间和卫生间也算空间。",
+        "choices": (("complete", "名称和位置完整"), ("incomplete", "仍有空间缺失"), ("unsure", "不确定")),
+    },
+    {
+        "id": "Q09_READY", "title": "允许生成研究灰模",
+        "prompt": "是否允许系统按已确认比例和上述答案生成研究灰模？",
+        "hint": "研究灰模不是施工图；所有默认墙高和未知项都会写进假设清单。",
+        "choices": (("yes", "允许生成研究灰模"), ("no", "暂不生成"), ("unsure", "仍需专业复核")),
+    },
 )
 
 
@@ -154,6 +214,7 @@ def _brief_hash(project: dict) -> str:
         "plan_summary": project.get("plan_summary") or {},
         "source_hash": project.get("source_hash") or "",
         "generation_hash": project.get("generation_hash") or "",
+        "anchor_overlay_hash": project.get("anchor_overlay_hash") or "",
         "prompt_version": PROMPT_VERSION,
     })
 
@@ -165,6 +226,9 @@ def mark_candidates_stale(project: dict, reason: str) -> None:
     for bundle in project.get("bundles") or []:
         bundle["stale"] = True
         bundle["stale_reason"] = reason
+    for model_run in project.get("model_runs") or []:
+        model_run["stale"] = True
+        model_run["stale_reason"] = reason
     project["locked_candidate_id"] = ""
 
 
@@ -179,8 +243,8 @@ def create_project(source_path: str, original_name: str = "") -> dict:
         "schema_version": SCHEMA_VERSION,
         "project_id": project_id,
         "revision": 1,
-        "status": "needs_plan_review",
-        "stage": "等待轻量户型摘要",
+        "status": "needs_anchor_review",
+        "stage": "请先点选全部空间和入户门",
         "error": "",
         "source_path": source_path,
         "source_name": original_name or os.path.basename(source_path),
@@ -192,6 +256,11 @@ def create_project(source_path: str, original_name: str = "") -> dict:
         "generation_crop": generation_crop,
         "generation_cleanup": {"version": "annotation-cleanup-v1", "applied_count": 0, "boxes": []},
         "generation_hash": generation_hash,
+        "anchor_set": empty_anchor_set(source_hash, file_sha256(normalized_path)),
+        "anchor_overlay_path": "",
+        "anchor_overlay_hash": "",
+        "anchor_verification": {"status": "not_run", "conflicts": [], "changes": [], "inferred_anchor_gaps": []},
+        "structure_review": empty_structure_review(),
         "plan_summary": empty_plan_summary("human"),
         "plan_summary_confirmed": False,
         "brief": {"requirements_text": "", "reference_paths": [], "reference_hashes": []},
@@ -199,6 +268,7 @@ def create_project(source_path: str, original_name: str = "") -> dict:
         "paid_previews": {},
         "candidates": [],
         "bundles": [],
+        "model_runs": [],
         "locked_candidate_id": "",
         "cancel_requested": False,
         "created_at": now,
@@ -233,7 +303,151 @@ def empty_plan_summary(source: str = "human") -> dict:
         "uncertainties": [],
         "source": source,
         "prompt_version": PLAN_PROMPT_VERSION,
+        "verification": {"status": "not_run", "conflicts": [], "changes": [], "inferred_anchor_gaps": []},
     }
+
+
+def empty_anchor_set(source_hash: str = "", normalized_hash: str = "") -> dict:
+    return {
+        "version": "floorplan-anchors-v1",
+        "coordinate_space": "normalized-evidence-1000-v1",
+        "source_hash": source_hash,
+        "normalized_hash": normalized_hash,
+        "confirmed_complete": False,
+        "anchors": [],
+        "updated_at": 0.0,
+    }
+
+
+def empty_structure_review() -> dict:
+    return {
+        "version": "whole-home-structure-review-v1",
+        "status": "not_run",
+        "questions": [],
+        "answers": {},
+        "scale_calibration": None,
+        "seed_graph": None,
+        "structure_bundle": None,
+        "structure_hash": "",
+        "unresolved": [],
+        "provider": "",
+        "error": "",
+        "updated_at": 0.0,
+    }
+
+
+def validate_anchor_set(project: dict, payload: dict) -> dict:
+    if str(payload.get("coordinate_space") or "") != "normalized-evidence-1000-v1":
+        raise ValueError("锚点坐标系必须是 normalized-evidence-1000-v1")
+    if str(payload.get("source_hash") or "") != str(project.get("source_hash") or ""):
+        raise ValueError("锚点对应的户型图已变化，请重新标注")
+    rows = list(payload.get("anchors") or [])
+    if len(rows) > 80:
+        raise ValueError("锚点最多 80 个")
+    normalized: list[dict] = []
+    seen: set[str] = set()
+    valid_kinds = {"space", "entrance", "opening", "fixed_feature", "ignore", "scale"}
+    for index, raw in enumerate(rows, 1):
+        row = dict(raw or {})
+        anchor_id = re.sub(r"[^A-Za-z0-9_-]+", "", str(row.get("anchor_id") or f"P{index:02d}"))[:40]
+        if not anchor_id or anchor_id in seen:
+            raise ValueError("anchor_id 必须非空且唯一")
+        seen.add(anchor_id)
+        kind = str(row.get("kind") or "")
+        if kind not in valid_kinds:
+            raise ValueError(f"不支持的锚点类型: {kind}")
+        label = re.sub(r"[\x00-\x1f]+", " ", str(row.get("label") or "")).strip()[:120]
+        note = re.sub(r"[\x00-\x1f]+", " ", str(row.get("note") or "")).strip()[:500]
+        if not label:
+            raise ValueError(f"{anchor_id} 缺少人工标签")
+        points = list(row.get("points") or [])
+        expected = (2,) if kind == "scale" else (1, 2) if kind in {"entrance", "opening"} else (1,)
+        if len(points) not in expected:
+            raise ValueError(f"{anchor_id} 的点数不符合 {kind} 合同")
+        clean_points = []
+        for point in points:
+            x, y = int(point.get("x", -1)), int(point.get("y", -1))
+            if not (0 <= x <= 1000 and 0 <= y <= 1000):
+                raise ValueError(f"{anchor_id} 坐标超出 0–1000")
+            clean_points.append({"x": x, "y": y})
+        if len(clean_points) == 2 and abs(clean_points[0]["x"] - clean_points[1]["x"]) + abs(clean_points[0]["y"] - clean_points[1]["y"]) < 8:
+            raise ValueError(f"{anchor_id} 两点距离过短")
+        distance_mm = None
+        if kind == "scale":
+            raw_distance = row.get("distance_mm")
+            if isinstance(raw_distance, bool) or not isinstance(raw_distance, (int, float)):
+                raise ValueError(f"{anchor_id} 缺少真实比例尺长度")
+            distance_mm = round(float(raw_distance), 3)
+            if not 10 <= distance_mm <= 1_000_000:
+                raise ValueError(f"{anchor_id} 的比例尺长度必须在 10–1000000 mm")
+        normalized_row = {"anchor_id": anchor_id, "kind": kind, "label": label, "note": note, "points": clean_points, "source": "human"}
+        if distance_mm is not None:
+            normalized_row["distance_mm"] = distance_mm
+        normalized.append(normalized_row)
+    if payload.get("confirmed_complete"):
+        if not any(row["kind"] == "space" for row in normalized):
+            raise ValueError("至少标注一个空间")
+        if not any(row["kind"] == "entrance" for row in normalized):
+            raise ValueError("至少标注一个入户门")
+        scale_count = sum(row["kind"] == "scale" for row in normalized)
+        if scale_count != 1:
+            raise ValueError("必须且只能标注一条两点比例尺并填写真实长度")
+    return {
+        "version": "floorplan-anchors-v1",
+        "coordinate_space": "normalized-evidence-1000-v1",
+        "source_hash": project["source_hash"],
+        "normalized_hash": file_sha256(project["normalized_path"]),
+        "confirmed_complete": bool(payload.get("confirmed_complete")),
+        "anchors": normalized,
+        "updated_at": time.time(),
+    }
+
+
+def _anchor_font(size: int):
+    for path in ("C:/Windows/Fonts/msyh.ttc", "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"):
+        try:
+            return ImageFont.truetype(path, size)
+        except OSError:
+            pass
+    return ImageFont.load_default()
+
+
+def render_anchor_overlay(project: dict, anchor_set: dict) -> tuple[str, str]:
+    with Image.open(project["normalized_path"]) as opened:
+        source = opened.convert("RGB")
+    legend_width = max(360, min(720, source.width // 2))
+    canvas = Image.new("RGB", (source.width + legend_width, source.height), "white")
+    canvas.paste(source, (0, 0))
+    draw = ImageDraw.Draw(canvas)
+    font_size = max(15, source.width // 75)
+    small_size = max(12, source.width // 95)
+    font = _anchor_font(font_size)
+    small = _anchor_font(small_size)
+    colors = {"space": "#0f766e", "entrance": "#dc2626", "opening": "#2563eb", "fixed_feature": "#7c3aed", "ignore": "#6b7280", "scale": "#d97706"}
+    radius = max(9, source.width // 85)
+    for index, anchor in enumerate(anchor_set.get("anchors") or []):
+        color = colors.get(anchor["kind"], "#111827")
+        pixels = [(round(p["x"] / 1000 * source.width), round(p["y"] / 1000 * source.height)) for p in anchor["points"]]
+        if len(pixels) == 2:
+            draw.line(pixels, fill=color, width=max(3, radius // 3))
+        for part, (x, y) in enumerate(pixels):
+            draw.ellipse((x - radius, y - radius, x + radius, y + radius), fill="white", outline=color, width=max(3, radius // 4))
+            suffix = chr(65 + part) if len(pixels) == 2 else ""
+            draw.text((x + radius + 3, y - radius), f"{anchor['anchor_id']}{suffix}", fill=color, font=small, stroke_width=2, stroke_fill="white")
+        y = 18 + index * max(34, source.height // max(12, len(anchor_set.get("anchors") or [])))
+        legend = f"{anchor['anchor_id']} [{anchor['kind']}] {anchor['label']}"
+        if anchor.get("distance_mm"):
+            legend += f" · {anchor['distance_mm']:g} mm"
+        draw.text((source.width + 18, y), legend[:70], fill=color, font=font)
+        if anchor.get("note"):
+            draw.text((source.width + 28, y + font_size + 2), str(anchor["note"])[:90], fill="#4b5563", font=small)
+    folder = os.path.join(ASSET_ROOT, os.path.basename(project["project_id"]))
+    os.makedirs(folder, exist_ok=True)
+    destination = os.path.join(folder, "floorplan-anchor-overlay.png")
+    temporary = destination + ".tmp"
+    canvas.save(temporary, "PNG", optimize=True)
+    os.replace(temporary, destination)
+    return destination, file_sha256(destination)
 
 
 def normalize_floorplan(source_path: str, project_id: str) -> tuple[str, dict]:
@@ -461,6 +675,315 @@ def call_gemini_json(prompt: str, image_paths: list[str], schema: dict,
         return None, f"Gemini JSON 解析失败: {exc}"
 
 
+_STRUCTURE_GRAPH_SCHEMA = {
+    "type": "OBJECT",
+    "properties": {
+        "outer_boundary": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {
+            "x": {"type": "INTEGER"}, "y": {"type": "INTEGER"},
+        }, "required": ["x", "y"]}},
+        "walls": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {
+            "id": {"type": "STRING"},
+            "a": {"type": "OBJECT", "properties": {"x": {"type": "INTEGER"}, "y": {"type": "INTEGER"}}, "required": ["x", "y"]},
+            "b": {"type": "OBJECT", "properties": {"x": {"type": "INTEGER"}, "y": {"type": "INTEGER"}}, "required": ["x", "y"]},
+            "thickness_m": {"type": "NUMBER"}, "height_m": {"type": "NUMBER"},
+            "left_space_id": {"type": "STRING"}, "right_space_id": {"type": "STRING"},
+            "confidence": {"type": "NUMBER"}, "evidence": {"type": "STRING"},
+        }, "required": ["id", "a", "b", "thickness_m", "height_m", "left_space_id", "right_space_id", "confidence", "evidence"]}},
+        "openings": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {
+            "id": {"type": "STRING"}, "kind": {"type": "STRING", "enum": ["entrance", "door", "window"]},
+            "a": {"type": "OBJECT", "properties": {"x": {"type": "INTEGER"}, "y": {"type": "INTEGER"}}, "required": ["x", "y"]},
+            "b": {"type": "OBJECT", "properties": {"x": {"type": "INTEGER"}, "y": {"type": "INTEGER"}}, "required": ["x", "y"]},
+            "owning_wall_id": {"type": "STRING"}, "sill_m": {"type": "NUMBER"}, "head_m": {"type": "NUMBER"},
+            "side_a_space_id": {"type": "STRING"}, "side_b_space_id": {"type": "STRING"},
+            "swing_direction": {"type": "STRING", "enum": ["hinge_left", "hinge_right", "sliding", "double", "not_shown", "none"]},
+            "confidence": {"type": "NUMBER"}, "evidence": {"type": "STRING"},
+        }, "required": ["id", "kind", "a", "b", "owning_wall_id", "sill_m", "head_m", "side_a_space_id", "side_b_space_id", "swing_direction", "confidence", "evidence"]}},
+        "adjacencies": {"type": "ARRAY", "items": {"type": "OBJECT", "properties": {
+            "id": {"type": "STRING"}, "space_a_id": {"type": "STRING"}, "space_b_id": {"type": "STRING"},
+            "kind": {"type": "STRING", "enum": ["door", "open_passage"]}, "opening_id": {"type": "STRING"},
+            "confidence": {"type": "NUMBER"},
+        }, "required": ["id", "space_a_id", "space_b_id", "kind", "opening_id", "confidence"]}},
+        "unresolved": {"type": "ARRAY", "items": {"type": "STRING"}},
+    },
+    "required": ["outer_boundary", "walls", "openings", "adjacencies", "unresolved"],
+}
+
+
+def _guidance_questions() -> list[dict]:
+    return [
+        {**{key: value for key, value in row.items() if key != "choices"},
+         "choices": [{"value": value, "label": label} for value, label in row["choices"]]}
+        for row in STRUCTURE_GUIDANCE_QUESTIONS
+    ]
+
+
+def _scale_calibration(project: dict) -> dict:
+    scales = [row for row in (project.get("anchor_set") or {}).get("anchors", []) if row.get("kind") == "scale"]
+    if len(scales) != 1:
+        raise ValueError("研究建模必须且只能有一条人工比例尺")
+    scale = scales[0]
+    points = scale.get("points") or []
+    if len(points) != 2 or not scale.get("distance_mm"):
+        raise ValueError("比例尺必须包含两个端点和真实毫米长度")
+    canvas = (project.get("normalization") or {}).get("canvas_size") or []
+    if len(canvas) != 2 or min(canvas) <= 0:
+        raise ValueError("规范化图像尺寸缺失")
+    ax, ay = points[0]["x"] / 1000 * canvas[0], points[0]["y"] / 1000 * canvas[1]
+    bx, by = points[1]["x"] / 1000 * canvas[0], points[1]["y"] / 1000 * canvas[1]
+    pixels = math.hypot(bx - ax, by - ay)
+    if pixels < 2:
+        raise ValueError("比例尺像素长度过短")
+    return {
+        "anchor_id": scale["anchor_id"],
+        "distance_mm": float(scale["distance_mm"]),
+        "metres_per_pixel": float(scale["distance_mm"]) / 1000.0 / pixels,
+        "canvas_size": [int(canvas[0]), int(canvas[1])],
+    }
+
+
+def prepare_structure_review(project: dict, *, payload_override: Optional[dict] = None) -> dict:
+    anchors = project.get("anchor_set") or {}
+    if not anchors.get("confirmed_complete"):
+        raise ValueError("请先完成人工空间、入口和比例尺锚点")
+    calibration = _scale_calibration(project)
+    room_rows = list((project.get("plan_summary") or {}).get("rooms") or [])
+    room_ids = [str(row.get("id") or "") for row in room_rows if str(row.get("id") or "")]
+    prompt = f"""Extract one editable architectural structure graph from this residential floor plan.
+Image 1 is the normalized full evidence. Image 2 contains immutable human anchors.
+Use normalized integer coordinates 0..1000 with top-left origin. Human anchors and room IDs are hard facts.
+ROOM_IDS={json.dumps(room_ids, ensure_ascii=False)}
+ANCHORS={json.dumps(anchors.get('anchors') or [], ensure_ascii=False)}
+Return an ordered outer boundary, wall centerline segments, door/window segments, and the room/exterior adjacency graph.
+Every wall/opening ID must be unique. Use only ROOM_IDS or exterior for side-space fields. Do not turn text,
+dimensions, dashed leaders, furniture, TV/display/low storage, door leaves, window tracks or floor-drop lines into walls.
+Exterior walls default 0.20m and interior walls 0.12m only when the drawing does not provide thickness; default
+research wall height is 2.80m and must be listed as unresolved. Door/entrance sill is 0; windows require sill<head.
+Use swing_direction=not_shown when the drawing does not prove the swing. Do not invent an opening owner.
+"""
+    payload, error = (payload_override, None) if payload_override is not None else call_gemini_json(
+        prompt,
+        [project["normalized_path"], project.get("anchor_overlay_path") or project["normalized_path"]],
+        _STRUCTURE_GRAPH_SCHEMA,
+        max_output_tokens=12000,
+    )
+    review = empty_structure_review()
+    review.update(
+        status="needs_answers" if payload else "external_review_pending",
+        questions=_guidance_questions(),
+        scale_calibration=calibration,
+        seed_graph=payload,
+        provider="fixture" if payload_override is not None else "gemini" if payload else "gemini_unavailable",
+        error=error or "",
+        unresolved=list((payload or {}).get("unresolved") or []),
+        updated_at=time.time(),
+    )
+    project["structure_review"] = review
+    return review
+
+
+def _norm_point(raw: Any, label: str) -> tuple[int, int]:
+    if not isinstance(raw, dict):
+        raise ValueError(f"{label} 必须是坐标对象")
+    x, y = int(raw.get("x", -1)), int(raw.get("y", -1))
+    if not (0 <= x <= 1000 and 0 <= y <= 1000):
+        raise ValueError(f"{label} 超出 0–1000")
+    return x, y
+
+
+def _compile_structure_bundle(project: dict, seed: dict) -> dict:
+    calibration = _scale_calibration(project)
+    canvas_w, canvas_h = calibration["canvas_size"]
+    mpp = calibration["metres_per_pixel"]
+    boundary_norm = [_norm_point(point, "outer_boundary") for point in list(seed.get("outer_boundary") or [])]
+    if len(boundary_norm) < 3:
+        raise ValueError("Gemini 未返回可用外轮廓")
+    pixels = [(x / 1000 * canvas_w, y / 1000 * canvas_h) for x, y in boundary_norm]
+    origin_x = min(x for x, _ in pixels)
+    origin_y = max(y for _, y in pixels)
+
+    def to_m(point: Any) -> list[float]:
+        x, y = _norm_point(point, "结构点")
+        px, py = x / 1000 * canvas_w, y / 1000 * canvas_h
+        return [round((px - origin_x) * mpp, 6), round((origin_y - py) * mpp, 6)]
+
+    def norm_distance_to_segment(point: dict, a: dict, b: dict) -> float:
+        px, py = _norm_point(point, "人工开口锚点")
+        ax, ay = _norm_point(a, "AI开口起点")
+        bx, by = _norm_point(b, "AI开口终点")
+        dx, dy = bx - ax, by - ay
+        if dx == 0 and dy == 0:
+            return math.hypot(px - ax, py - ay)
+        t = max(0.0, min(1.0, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)))
+        return math.hypot(px - (ax + t * dx), py - (ay + t * dy))
+
+    raw_openings = list(seed.get("openings") or [])
+    anchor_bindings: dict[str, str] = {}
+    used_opening_ids: set[str] = set()
+    for anchor in (project.get("anchor_set") or {}).get("anchors", []):
+        if anchor.get("kind") not in {"entrance", "opening"}:
+            continue
+        candidates = [row for row in raw_openings if anchor["kind"] != "entrance" or row.get("kind") == "entrance"]
+        matches = [
+            row for row in candidates
+            if max(norm_distance_to_segment(point, row.get("a") or {}, row.get("b") or {}) for point in anchor.get("points") or []) <= 35.0
+        ]
+        if not matches:
+            raise ValueError(f"人工{anchor['kind']}锚点 {anchor['anchor_id']} 未与任何 Gemini 开口几何对应")
+        if len(matches) > 1:
+            raise ValueError(f"人工{anchor['kind']}锚点 {anchor['anchor_id']} 同时匹配多个 Gemini 开口")
+        opening_id = str(matches[0].get("id") or "")
+        if not opening_id or opening_id in used_opening_ids:
+            raise ValueError(f"人工开口锚点 {anchor['anchor_id']} 未与 Gemini 开口形成唯一对应")
+        used_opening_ids.add(opening_id)
+        anchor_bindings[anchor["anchor_id"]] = opening_id
+
+    spaces = []
+    known_spaces = {"exterior"}
+    room_by_id = {str(row.get("id")): row for row in (project.get("plan_summary") or {}).get("rooms", []) if row.get("id")}
+    anchor_by_id = {row.get("anchor_id"): row for row in (project.get("anchor_set") or {}).get("anchors", [])}
+    for room_id, room in room_by_id.items():
+        anchor = next((anchor_by_id.get(anchor_id) for anchor_id in room.get("anchor_ids") or [] if anchor_by_id.get(anchor_id)), None)
+        if not anchor:
+            anchor = next((row for row in anchor_by_id.values() if row.get("kind") == "space" and row.get("label") == room.get("label")), None)
+        if not anchor:
+            raise ValueError(f"空间 {room_id} 缺少人工点位")
+        spaces.append({"id": room_id, "label": str(room.get("label") or room_id), "point_m": to_m(anchor["points"][0])})
+        known_spaces.add(room_id)
+
+    walls = []
+    wall_ids: set[str] = set()
+    for index, raw in enumerate(seed.get("walls") or [], 1):
+        wall_id = str(raw.get("id") or f"WALL-{index:03d}")
+        if wall_id in wall_ids:
+            raise ValueError(f"墙 ID 重复: {wall_id}")
+        wall_ids.add(wall_id)
+        left, right = str(raw.get("left_space_id") or ""), str(raw.get("right_space_id") or "")
+        if left not in known_spaces or right not in known_spaces or left == right:
+            raise ValueError(f"{wall_id} 两侧空间无效")
+        walls.append({
+            "id": wall_id, "centerline_m": [to_m(raw.get("a")), to_m(raw.get("b"))],
+            "thickness_m": round(float(raw.get("thickness_m") or 0.12), 4), "base_m": 0.0,
+            "height_m": round(float(raw.get("height_m") or 2.8), 4),
+            "left_space_id": left, "right_space_id": right, "source": "gemini_inferred",
+            "confirmed": True,
+        })
+
+    openings = []
+    opening_ids: set[str] = set()
+    for index, raw in enumerate(seed.get("openings") or [], 1):
+        opening_id = str(raw.get("id") or f"OPENING-{index:03d}")
+        if opening_id in opening_ids:
+            raise ValueError(f"开口 ID 重复: {opening_id}")
+        opening_ids.add(opening_id)
+        owner = str(raw.get("owning_wall_id") or "")
+        if owner not in wall_ids:
+            raise ValueError(f"{opening_id} 缺少有效所属墙")
+        side_a, side_b = str(raw.get("side_a_space_id") or ""), str(raw.get("side_b_space_id") or "")
+        if side_a not in known_spaces or side_b not in known_spaces or side_a == side_b:
+            raise ValueError(f"{opening_id} 两侧空间无效")
+        a_m, b_m = to_m(raw.get("a")), to_m(raw.get("b"))
+        width = math.dist(a_m, b_m)
+        kind = str(raw.get("kind") or "")
+        swing = None if kind == "window" else str(raw.get("swing_direction") or "not_shown")
+        openings.append({
+            "id": opening_id, "kind": kind, "owning_wall_id": owner, "segment_m": [a_m, b_m],
+            "width_m": round(width, 6), "sill_m": round(float(raw.get("sill_m") or 0), 4),
+            "head_m": round(float(raw.get("head_m") or 2.1), 4), "swing_direction": swing,
+            "side_a_space_id": side_a, "side_b_space_id": side_b,
+            "jamb_before_supported": True, "jamb_after_supported": True, "junction_clearance_m": 0.05,
+            "junction_diagnostics": [], "confirmed": True, "source": "gemini_inferred",
+        })
+
+    edges = []
+    for index, raw in enumerate(seed.get("adjacencies") or [], 1):
+        a, b = str(raw.get("space_a_id") or ""), str(raw.get("space_b_id") or "")
+        if a not in known_spaces or b not in known_spaces or a == b:
+            raise ValueError(f"邻接 {index} 两侧空间无效")
+        opening_id = str(raw.get("opening_id") or "")
+        if opening_id and opening_id not in opening_ids:
+            raise ValueError(f"邻接 {index} 引用了未知开口")
+        kind = str(raw.get("kind") or "open_passage")
+        edges.append({"id": str(raw.get("id") or f"ADJ-{index:03d}"), "space_a_id": a, "space_b_id": b,
+                      "kind": kind, "opening_id": opening_id if kind == "door" else None, "confirmed": True})
+
+    bundle = {
+        "schema": "research-structure-bundle-v1",
+        "source": {"normalized_hash": file_sha256(project["normalized_path"]), "scale_anchor_id": calibration["anchor_id"], "anchor_opening_bindings": anchor_bindings},
+        "project": {"id": project["project_id"], "revision": project["revision"]},
+        "source_hash": project["source_hash"],
+        "structure_hash": "0" * 64,
+        "outer_boundary_m": [to_m({"x": x, "y": y}) for x, y in boundary_norm],
+        "spaces": spaces,
+        "wall_branch_graph": {"version": "wall-branch-graph-v1", "walls": walls},
+        "opening_contract": {"version": "opening-contract-v1", "junction_clearance_m": 0.05, "openings": openings},
+        "adjacency_truth": {"version": "adjacency-truth-v1", "edges": edges, "confirmed": True},
+        "assumptions": {"scale_m_per_unit": 1.0, "floor_slab_thickness_m": 0.12, "research_only": True},
+        "unresolved_issues": list(seed.get("unresolved") or []),
+    }
+    try:
+        from .tools.fastloop_research import compute_structure_hash, validate_bundle
+        bundle["structure_hash"] = compute_structure_hash(bundle)
+        validate_bundle(bundle)
+    except ImportError:
+        bundle["structure_hash"] = _stable_hash({key: value for key, value in bundle.items() if key != "structure_hash"})
+    return bundle
+
+
+def submit_structure_review(project: dict, answers: dict[str, str], *, technical_bundle: Optional[dict] = None) -> dict:
+    review = project.get("structure_review") or empty_structure_review()
+    question_map = {row["id"]: row for row in review.get("questions") or _guidance_questions()}
+    if set(answers) != set(question_map):
+        missing = sorted(set(question_map) - set(answers))
+        unknown = sorted(set(answers) - set(question_map))
+        raise ValueError(f"九问答案不完整: missing={missing}, unknown={unknown}")
+    for question_id, value in answers.items():
+        allowed = {choice["value"] for choice in question_map[question_id]["choices"]}
+        if value not in allowed:
+            raise ValueError(f"{question_id} 包含非法答案")
+    review["answers"] = dict(answers)
+    unresolved = list(review.get("unresolved") or [])
+    unresolved.extend(f"{key}: {value}" for key, value in answers.items() if value in {"unsure", "has_structure", "contains_walls", "some_walls", "has_missing", "incomplete", "no"})
+    if technical_bundle is None and not review.get("seed_graph"):
+        review.update(status="external_review_pending", unresolved=unresolved, error=review.get("error") or "Gemini 结构图不可用", updated_at=time.time())
+        project["structure_review"] = review
+        return review
+    try:
+        if technical_bundle is not None:
+            if technical_bundle.get("schema") != "research-structure-bundle-v1":
+                raise ValueError("专业结构包版本错误")
+            bundle = deepcopy(technical_bundle)
+            if bundle.get("source_hash") != project.get("source_hash"):
+                raise ValueError("专业结构包不属于当前原户型")
+            if (bundle.get("project") or {}).get("id") != project.get("project_id"):
+                raise ValueError("专业结构包不属于当前项目")
+            if int((bundle.get("project") or {}).get("revision") or -1) != int(project.get("revision") or 0):
+                raise ValueError("专业结构包 revision 已过期")
+            if (bundle.get("source") or {}).get("normalized_hash") != file_sha256(project["normalized_path"]):
+                raise ValueError("专业结构包不属于当前规范化证据图")
+            from .tools.fastloop_research import compute_structure_hash, validate_bundle
+            bundle["structure_hash"] = compute_structure_hash(bundle)
+            validate_bundle(bundle)
+        else:
+            bundle = _compile_structure_bundle(project, review["seed_graph"])
+    except (ValueError, OSError) as exc:
+        unresolved.append(f"技术结构合同未通过：{exc}")
+        review.update(
+            status="needs_professional_review", structure_bundle=None, structure_hash="",
+            unresolved=list(dict.fromkeys(unresolved)), error="技术结构图需要专业校正", updated_at=time.time(),
+        )
+        project["structure_review"] = review
+        return review
+    review.update(
+        status="needs_professional_review" if unresolved or answers.get("Q09_READY") != "yes" else "verified",
+        structure_bundle=bundle,
+        structure_hash=bundle["structure_hash"],
+        unresolved=unresolved,
+        updated_at=time.time(),
+    )
+    project["structure_review"] = review
+    return review
+
+
 _PLAN_SCHEMA = {
     "type": "OBJECT",
     "properties": {
@@ -469,10 +992,12 @@ _PLAN_SCHEMA = {
             "id": {"type": "STRING"}, "label": {"type": "STRING"},
             "room_type": {"type": "STRING"}, "coarse_location": {"type": "STRING"},
             "adjacent_room_ids": {"type": "ARRAY", "items": {"type": "STRING"}},
+            "anchor_ids": {"type": "ARRAY", "items": {"type": "STRING"}},
+            "source": {"type": "STRING", "enum": ["human_anchor", "gemini_inferred"]},
             "confidence": {"type": "NUMBER"}, "evidence": {"type": "STRING"},
             "needs_confirmation": {"type": "BOOLEAN"},
         }, "required": ["id", "label", "room_type", "coarse_location", "adjacent_room_ids",
-                         "confidence", "evidence", "needs_confirmation"]}},
+                         "anchor_ids", "source", "confidence", "evidence", "needs_confirmation"]}},
         "declared_layout": {"type": "OBJECT", "properties": {
             "bedrooms": {"type": "INTEGER"}, "halls": {"type": "INTEGER"},
             "bathrooms": {"type": "INTEGER"}, "source_text": {"type": "STRING"},
@@ -502,26 +1027,22 @@ _PLAN_SCHEMA = {
         "dimension_evidence": {"type": "ARRAY", "items": {"type": "STRING"}},
         "must_preserve": {"type": "ARRAY", "items": {"type": "STRING"}},
         "uncertainties": {"type": "ARRAY", "items": {"type": "STRING"}},
+        "verification": {"type": "OBJECT", "properties": {
+            "status": {"type": "STRING"},
+            "conflicts": {"type": "ARRAY", "items": {"type": "STRING"}},
+            "changes": {"type": "ARRAY", "items": {"type": "STRING"}},
+            "inferred_anchor_gaps": {"type": "ARRAY", "items": {"type": "STRING"}},
+        }, "required": ["status", "conflicts", "changes", "inferred_anchor_gaps"]},
     },
     "required": ["room_count", "rooms", "declared_layout", "declared_area_m2",
                  "overall_dimensions_mm", "summary_confidence", "review_items", "annotation_boxes", "entrances",
                  "openings_summary", "wet_zones", "balconies", "dimension_evidence",
-                 "must_preserve", "uncertainties"],
-}
-
-
-_ROOM_LABELS = {
-    "hallway": ("过道", "hallway"),
-    "corridor": ("走廊", "hallway"),
-    "entry": ("玄关", "entry"),
-    "foyer": ("玄关", "entry"),
-    "living_room": ("客厅", "living_room"),
-    "dining_room": ("餐厅", "dining_room"),
+                 "must_preserve", "uncertainties", "verification"],
 }
 
 
 def normalize_plan_rooms(raw_rooms: list[dict]) -> list[dict]:
-    """Make AI room rows and adjacency internally consistent without guessing geometry."""
+    """Sanitize AI rows without inventing rooms, roles, or reciprocal adjacency."""
     rooms: list[dict] = []
     id_map: dict[str, str] = {}
     used: set[str] = set()
@@ -540,7 +1061,6 @@ def normalize_plan_rooms(raw_rooms: list[dict]) -> list[dict]:
         row["id"] = safe
         rooms.append(row)
     known = {row["id"] for row in rooms}
-    missing_referrers: dict[str, set[str]] = {}
     for room in rooms:
         mapped: list[str] = []
         for raw_adjacent in room.get("adjacent_room_ids") or []:
@@ -550,27 +1070,29 @@ def normalize_plan_rooms(raw_rooms: list[dict]) -> list[dict]:
                 adjacent = re.sub(r"[^a-z0-9_-]+", "_", original.lower()).strip("_-")
             if not adjacent or adjacent == room["id"]:
                 continue
-            if adjacent not in mapped:
+            if adjacent in known and adjacent not in mapped:
                 mapped.append(adjacent)
-            if adjacent not in known:
-                missing_referrers.setdefault(adjacent, set()).add(room["id"])
         room["adjacent_room_ids"] = mapped
-    for missing_id, referrers in sorted(missing_referrers.items()):
-        label, room_type = _ROOM_LABELS.get(missing_id, (f"待确认：{missing_id}", "unknown"))
-        rooms.append({
-            "id": missing_id, "label": label, "room_type": room_type,
-            "coarse_location": "unknown", "adjacent_room_ids": sorted(referrers),
-            "confidence": 0.0,
-            "evidence": f"被 {', '.join(sorted(referrers))} 的邻接关系引用，但模型漏掉了空间行",
-            "needs_confirmation": True,
-        })
-    by_id = {room["id"]: room for room in rooms}
     for room in rooms:
-        for adjacent in list(room.get("adjacent_room_ids") or []):
-            target = by_id.get(adjacent)
-            if target is not None and room["id"] not in (target.get("adjacent_room_ids") or []):
-                target.setdefault("adjacent_room_ids", []).append(room["id"])
+        room["anchor_ids"] = [str(value) for value in (room.get("anchor_ids") or []) if str(value)]
+        room["source"] = "human_anchor" if room.get("source") == "human_anchor" else "gemini_inferred"
     return rooms[:80]
+
+
+def anchor_summary_conflicts(anchor_set: dict, summary: dict) -> list[str]:
+    rooms = list(summary.get("rooms") or [])
+    conflicts: list[str] = []
+    for anchor in anchor_set.get("anchors") or []:
+        if anchor.get("kind") != "space":
+            continue
+        matches = [room for room in rooms if anchor.get("anchor_id") in (room.get("anchor_ids") or [])]
+        if len(matches) != 1:
+            conflicts.append(f"{anchor.get('anchor_id')} {anchor.get('label')} 未唯一对应一个空间")
+        elif str(matches[0].get("label") or "").strip() != str(anchor.get("label") or "").strip():
+            conflicts.append(f"{anchor.get('anchor_id')} 人工标签被改写：{anchor.get('label')} → {matches[0].get('label')}")
+        elif matches[0].get("source") != "human_anchor":
+            conflicts.append(f"{anchor.get('anchor_id')} 未保留 human_anchor 来源")
+    return conflicts
 
 
 def analyze_plan(project_id: str) -> dict:
@@ -578,41 +1100,55 @@ def analyze_plan(project_id: str) -> dict:
         project = load_project(project_id)
         if not project:
             raise KeyError(project_id)
-        project.update(stage="Gemini 正在生成轻量户型摘要", error="")
+        anchors = project.get("anchor_set") or {}
+        if not anchors.get("confirmed_complete") or not project.get("anchor_overlay_path"):
+            project.update(status="needs_anchor_review", stage="请先完成全部空间和入户门锚点", error="锚点尚未确认")
+            save_project(project)
+            return project
+        project.update(status="analyzing_plan", stage="Gemini 正在根据人工锚点读取户型", error="")
         save_project(project)
         normalized = project["normalized_path"]
         generation_raw = project.get("generation_raw_path") or project.get("generation_path") or normalized
-    prompt = """You are a conservative residential floor-plan evidence reader.
-Image 1 is the complete evidence sheet. Image 2 is the automatically cropped main plan used for generation.
-Read the Chinese or international residential plan without redesigning it. The user must receive
-an already-filled summary and should only need to correct mistakes—not compose a plan description from zero.
+        overlay = project["anchor_overlay_path"]
+        anchor_json = json.dumps(anchors, ensure_ascii=False, sort_keys=True)
+    prompt = f"""Read this residential floor plan using human anchors as hard facts.
+Image 1 is the complete clean evidence sheet. Image 2 is the same evidence with numbered human anchors and a legend.
+Image 3 is the cropped generation plan. Anchor JSON follows:
+{anchor_json}
 
-Evidence priority:
-1. Read the title/caption first for declared layout and area (for example 3房2厅2卫, 121㎡).
-2. Read visible overall and chained dimensions exactly; use 0 rather than guessing an unreadable value.
-3. Use walls, door swings, windows, bay windows, AC boxes, gas meter, plumbing fixtures and sunken-slab
-   annotations to propose room roles and adjacency.
-4. Include circulation/hall, kitchen, bathrooms and balcony/service spaces as separate room rows when visible.
-5. A room role inferred only from symbols must have lower confidence and needs_confirmation=true.
-6. Never invent metric polygons, coordinates, doors or room labels that are not supported by pixels.
+Rules: preserve every human label verbatim. Attach space anchor_ids to matching room rows; use entrance/opening/
+fixed_feature/ignore anchors in their corresponding summary fields and never turn them into fake rooms. Never move,
+rename, or silently discard a human anchor. Infer walls and room extents from pixels, not marker radius. You may add clearly
+visible unmarked spaces with source=gemini_inferred; anchored rooms use source=human_anchor. Return conflicts when
+an anchor appears outside the plan or contradicts visible evidence. Read title, area, exact dimensions, entrance,
+openings, balconies, wet zones and level differences conservatively. Do not invent geometry. annotation_boxes use
+0..1000 coordinates against Image 3 and may cover safe non-structural text only. Set verification.status=draft."""
+    first, first_error = call_gemini_json(prompt, [normalized, overlay, generation_raw], _PLAN_SCHEMA)
+    if first:
+        with _project_lock(project_id):
+            current = load_project(project_id) or {}
+            current.update(status="verifying_plan", stage="Gemini 正在独立复核锚点与户型摘要")
+            save_project(current)
+        verify_prompt = f"""Act as an independent adversarial floor-plan verifier.
+Images 1-3 and anchor JSON are authoritative exactly as in the extraction pass. Audit the draft JSON below, correct
+wrong room roles, missing/invalid adjacency, title-area-dimension contradictions and unsupported inferred spaces.
+Human anchor labels and coordinates are immutable. Keep source=human_anchor for anchored rooms and
+source=gemini_inferred for additions. List every correction in verification.changes, every human-anchor problem in
+verification.conflicts, and likely missing manual anchors in verification.inferred_anchor_gaps. Return the complete
+corrected schema with verification.status=verified when no conflicts, otherwise conflict.
 
-Return stable ASCII snake_case room IDs. For every room include a short visual evidence sentence, confidence
-0..1 and needs_confirmation. Put every ambiguous entrance, room role, opening or balcony in review_items and
-uncertainties. Put all non-negotiable outline features, curved/bay windows, wet zones and level differences in
-must_preserve. All user-visible labels, evidence, review labels, summaries and uncertainty text must be in
-Simplified Chinese; only IDs, canonical room_type and coarse_location remain ASCII. The original plan remains
-the sole structural authority.
+ANCHORS:
+{anchor_json}
 
-For Image 2 only, return annotation_boxes for non-structural text that a local white-fill cleanup may safely
-erase: room names, H/W notes, dimension numbers, +elevation text, 下沉 text, 煤气表 text and A/C letters.
-Use box_2d=[y_min,x_min,y_max,x_max] normalized to 0..1000 against Image 2. Set safe_to_erase=false if a box
-would touch a wall, door swing, window/frame, column, fixture outline or any uncertain geometry. Do not box
-architectural lines themselves."""
-    payload, error = call_gemini_json(prompt, [normalized, generation_raw], _PLAN_SCHEMA)
+DRAFT:
+{json.dumps(first, ensure_ascii=False)}"""
+        payload, verify_error = call_gemini_json(verify_prompt, [normalized, overlay, generation_raw], _PLAN_SCHEMA)
+    else:
+        payload, verify_error = None, None
     with _project_lock(project_id):
         project = load_project(project_id) or {}
         if payload:
-            summary = empty_plan_summary("gemini")
+            summary = empty_plan_summary("gemini_verified")
             for key in summary:
                 if key in payload:
                     summary[key] = payload[key]
@@ -641,6 +1177,13 @@ architectural lines themselves."""
                     })
             summary["review_items"] = review_items[:100]
             summary["annotation_boxes"] = list(summary.get("annotation_boxes") or [])[:200]
+            verification = dict(summary.get("verification") or {})
+            verification["conflicts"] = list(verification.get("conflicts") or []) + anchor_summary_conflicts(anchors, summary)
+            verification["status"] = "conflict" if verification.get("conflicts") else "verified"
+            verification["conflicts"] = [str(v) for v in verification.get("conflicts") or []][:100]
+            verification["changes"] = [str(v) for v in verification.get("changes") or []][:100]
+            verification["inferred_anchor_gaps"] = [str(v) for v in verification.get("inferred_anchor_gaps") or []][:100]
+            summary["verification"] = verification
             previous_generation_hash = str(project.get("generation_hash") or "")
             try:
                 clean_path, cleanup = clean_generation_annotations(
@@ -661,14 +1204,16 @@ architectural lines themselves."""
                 }
             project["brief_hash"] = _brief_hash(project)
             project["plan_summary"] = summary
-            project["stage"] = "请确认轻量户型摘要"
-            project["status"] = "needs_plan_review"
-            project["error"] = ""
+            project["anchor_verification"] = verification
+            project["stage"] = "请修正锚点冲突" if verification["conflicts"] else "请确认 Gemini 双重验证摘要"
+            project["status"] = "needs_anchor_review" if verification["conflicts"] else "needs_plan_review"
+            project["error"] = "；".join(verification["conflicts"][:3])
         else:
             project["plan_summary"] = empty_plan_summary("human")
-            project["stage"] = "自动识别不可用，请人工填写户型摘要"
-            project["status"] = "needs_plan_review"
-            project["error"] = error or "自动识别不可用"
+            project["anchor_verification"] = {"status": "unverified", "conflicts": [], "changes": [], "inferred_anchor_gaps": []}
+            project["stage"] = "Gemini 双重验证失败，请重试"
+            project["status"] = "needs_anchor_review"
+            project["error"] = verify_error or first_error or "Gemini 双重验证不可用"
         save_project(project)
         return project
 
@@ -677,6 +1222,7 @@ def build_design_prompt(project: dict, *, phase: str, direction_index: int = 1,
                         refinement_text: str = "") -> str:
     plan = project.get("plan_summary") or {}
     brief = project.get("brief") or {}
+    anchors = project.get("anchor_set") or {}
     room_lines = [
         f"- {row.get('id')}: {row.get('label')} / {row.get('room_type')} / "
         f"{row.get('coarse_location')} / adjacent={','.join(row.get('adjacent_room_ids') or [])}"
@@ -712,6 +1258,12 @@ wet_zones={plan.get('wet_zones') or []}
 openings={plan.get('openings_summary') or []}
 must_preserve={plan.get('must_preserve') or []}
 
+HUMAN ANCHOR CONTRACT (0..1000 on the clean normalized evidence image):
+{json.dumps(anchors.get('anchors') or [], ensure_ascii=False)}
+Image 1 is the clean structural generation plan. Image 2 is the numbered human-anchor semantic guide.
+Use Image 2 to understand human-confirmed labels and locations, but NEVER copy marker circles, IDs, lines,
+legend text, coordinates, or annotations into the output.
+
 USER DESIGN REQUIREMENTS:
 {brief.get('requirements_text') or ''}
 
@@ -719,7 +1271,7 @@ PHASE:
 {phase_rule}
 {('ADDITIONAL REFINEMENT REQUEST: ' + refinement_text) if refinement_text else ''}
 
-Image 1 is always the structural authority. Later images are appearance/material references only."""
+Image 1 is always the structural authority. Image 2 is semantic guidance; later images are appearance references."""
 
 
 def _fal_endpoint(model_id: str) -> str:
@@ -810,7 +1362,7 @@ _QA_SCHEMA = {
 }
 
 
-def evaluate_structure(project: dict, candidate_path: str) -> dict:
+def evaluate_structure(project: dict, candidate_path: str, extra_image_paths: Optional[list[str]] = None) -> dict:
     cfg = load_config()
     if not str(cfg.get("gemini_api_key") or "").strip():
         return {
@@ -821,8 +1373,14 @@ def evaluate_structure(project: dict, candidate_path: str) -> dict:
             "checks": [],
             "provider": "human_required",
         }
+    anchors = project.get("anchor_set") or {}
     prompt = f"""You are an adversarial architectural QA reviewer.
-Image 1 is the authoritative original floor plan. Image 2 is a generated vertical overhead 2.5D concept.
+Image 1 is the authoritative clean floor plan. Image 2 is the human numbered-anchor guide. Image 3 is the generated top view.
+When Images 4 and 5 are present, they are the north-east and north-west Blender axonometric views; use them to catch
+wall-height, opening, junction and connectivity contradictions that a top view can hide.
+Human anchors are hard facts. A missing, moved, renamed, or wrong-role anchored space is a hard failure. Any copied
+marker ID, point, direction line, legend, or coordinate in Image 3 is a hard failure.
+ANCHORS={json.dumps(anchors.get('anchors') or [], ensure_ascii=False)}
 Compare them, using this confirmed summary as supporting evidence only:
 {json.dumps(project.get('plan_summary') or {}, ensure_ascii=False)}
 
@@ -833,7 +1391,12 @@ entrance/balcony/major opening, kitchen/bath wet-zone location, added/missing sp
 or generated labels/dimensions/watermarks. Uncertainty in any architectural check is a hard failure.
 A beautiful image with altered structure must fail."""
     structure_source = project.get("generation_path") or project["normalized_path"]
-    payload, error = call_gemini_json(prompt, [structure_source, candidate_path], _QA_SCHEMA)
+    image_paths = [structure_source]
+    if project.get("anchor_overlay_path"):
+        image_paths.append(project["anchor_overlay_path"])
+    image_paths.append(candidate_path)
+    image_paths.extend(path for path in (extra_image_paths or []) if path and os.path.isfile(path))
+    payload, error = call_gemini_json(prompt, image_paths, _QA_SCHEMA)
     if not payload:
         return {
             "version": QA_PROMPT_VERSION,
@@ -866,9 +1429,22 @@ A beautiful image with altered structure must fail."""
 
 def public_project(project: dict, *, list_mode: bool = False) -> dict:
     row = deepcopy(project)
+    row["anchor_set"] = row.get("anchor_set") or empty_anchor_set(
+        str(project.get("source_hash") or ""),
+        file_sha256(project["normalized_path"]) if project.get("normalized_path") and os.path.isfile(project["normalized_path"]) else "",
+    )
+    row["anchor_verification"] = row.get("anchor_verification") or {
+        "status": "not_run", "conflicts": [], "changes": [], "inferred_anchor_gaps": [],
+    }
+    row["structure_review"] = row.get("structure_review") or empty_structure_review()
+    row["structure_review"].pop("seed_graph", None)
+    row["structure_review"].pop("structure_bundle", None)
+    row["model_runs"] = row.get("model_runs") or []
     row["source_url"] = to_url(project.get("source_path"))
     row["normalized_url"] = to_url(project.get("normalized_path"))
     row["generation_url"] = to_url(project.get("generation_path"))
+    row["anchor_overlay_url"] = to_url(project.get("anchor_overlay_path"))
+    row["legacy_unanchored"] = not bool((project.get("anchor_set") or {}).get("confirmed_complete"))
     for candidate in row.get("candidates") or []:
         candidate["url"] = to_url(candidate.get("path"))
         candidate["thumb"] = result_thumb_url(candidate.get("path")) if candidate.get("path") else ""
@@ -881,16 +1457,36 @@ def public_project(project: dict, *, list_mode: bool = False) -> dict:
             f"/api/whole-home-design/projects/{project['project_id']}/bundles/{bundle['bundle_id']}"
         )
         bundle.pop("path", None)
+    for model_run in row.get("model_runs") or []:
+        for artifact in model_run.get("artifacts") or []:
+            artifact["download_url"] = (
+                f"/api/whole-home-design/projects/{project['project_id']}/model-runs/"
+                f"{model_run['run_id']}/artifacts/{artifact['kind']}"
+            )
+            artifact.pop("path", None)
+        model_run.pop("output_root", None)
+        model_run.pop("structure_bundle", None)
+        model_run.pop("idempotency_key", None)
+        model_run.pop("background_started_at", None)
+        report = model_run.get("mechanical_report") or {}
+        model_run["mechanical_report"] = {
+            "schema": report.get("schema"), "status": report.get("status"),
+            "structure_hash": report.get("structure_hash"), "checks": list(report.get("checks") or []),
+            "blend_status": ((report.get("blender") or {}).get("blend") or {}).get("status"),
+            "glb_status": ((report.get("blender") or {}).get("glb") or {}).get("status"),
+            "ifc_status": (report.get("ifc") or {}).get("status"),
+        }
     for preview in (row.get("paid_previews") or {}).values():
         preview.pop("confirmation_phrase", None)
     if list_mode:
-        for key in ("paid_previews", "brief", "plan_summary"):
+        for key in ("paid_previews", "brief", "plan_summary", "anchor_set", "anchor_verification", "structure_review", "model_runs"):
             row.pop(key, None)
         row["candidates"] = [candidate for candidate in row.get("candidates") or [] if candidate.get("path")]
     row.pop("source_path", None)
     row.pop("normalized_path", None)
     row.pop("generation_path", None)
     row.pop("generation_raw_path", None)
+    row.pop("anchor_overlay_path", None)
     return row
 
 
@@ -911,12 +1507,184 @@ def recover_interrupted_projects() -> list[tuple[str, str]]:
                     candidate["status"] = "failed"
                     candidate["error"] = "程序重启时调用状态未知；未自动重新付费提交"
                 changed = True
+        for model_run in project.get("model_runs") or []:
+            if model_run.get("status") in {"queued", "building"}:
+                model_run["status"] = "interrupted"
+                model_run["stage"] = "程序重启中断了本地 Blender 子进程；可以重新生成，不会重复付费"
+                model_run["error"] = ""
+                model_run["stale"] = True
+                model_run["stale_reason"] = "程序重启中断了本地建模子进程"
+                model_run["updated_at"] = time.time()
+                changed = True
         if project.get("status") in ("generating_drafts", "refining"):
             project["status"] = "interrupted" if project_has_resume else "failed"
             changed = True
         if changed:
             save_project(project)
     return resumable
+
+
+def create_model_run_record(project: dict) -> dict:
+    review = project.get("structure_review") or {}
+    if review.get("status") != "verified" or not review.get("structure_bundle") or not review.get("structure_hash"):
+        raise ValueError("九问和技术结构图尚未通过研究建模门")
+    structure_hash = str(review["structure_hash"])
+    existing = next((row for row in reversed(project.get("model_runs") or [])
+                     if row.get("structure_hash") == structure_hash and not row.get("stale")
+                     and row.get("status") not in {"failed_product", "cancelled", "interrupted"}), None)
+    if existing:
+        return existing
+    run_id = new_id("model")
+    now = time.time()
+    row = {
+        "run_id": run_id,
+        "status": "queued",
+        "stage": "等待本地 Blender 研究建模",
+        "error": "",
+        "structure_hash": structure_hash,
+        "structure_bundle": deepcopy(review["structure_bundle"]),
+        "output_root": os.path.join(MODEL_ROOT, run_id[-6:]),
+        "score": None,
+        "artifacts": [],
+        "unresolved": list(review.get("unresolved") or []),
+        "mechanical_report": {},
+        "gemini_review": {"version": QA_PROMPT_VERSION, "status": "not_run", "hard_fail": False, "summary": "", "checks": [], "provider": ""},
+        "stale": False,
+        "created_at": now,
+        "updated_at": now,
+    }
+    project.setdefault("model_runs", []).append(row)
+    return row
+
+
+def _model_row(project: dict, run_id: str) -> dict:
+    row = next((value for value in project.get("model_runs") or [] if value.get("run_id") == run_id), None)
+    if not row:
+        raise ValueError("研究建模任务不存在")
+    return row
+
+
+def _normalize_model_artifacts(result: dict) -> list[dict]:
+    raw = result.get("artifacts") or {}
+    rows: list[dict] = []
+    if isinstance(raw, dict):
+        iterable = [({"kind": key, **(value if isinstance(value, dict) else {"path": value})}) for key, value in raw.items()]
+    elif isinstance(raw, list):
+        iterable = raw
+    else:
+        iterable = []
+    for item in iterable:
+        path = str(item.get("path") or "")
+        if not path or not os.path.isfile(path):
+            continue
+        filename = os.path.basename(path)
+        kind_map = {
+            "scene.blend": "blend", "scene.glb": "glb", "research.ifc": "ifc",
+            "top.png": "top", "north-east.png": "north_east", "north-west.png": "north_west",
+            "mechanical-report.json": "mechanical_report", "model-report.json": "model_report",
+            "ifc-report.json": "ifc_report", "unresolved-issues.json": "unresolved_report",
+        }
+        if filename not in kind_map:
+            continue
+        rows.append({
+            "kind": kind_map[filename],
+            "filename": filename,
+            "path": path,
+            "bytes": int(item.get("bytes") or os.path.getsize(path)),
+            "sha256": str(item.get("sha256") or file_sha256(path)),
+        })
+    return rows
+
+
+def run_model_job(project_id: str, run_id: str) -> dict:
+    with _project_lock(project_id):
+        project = load_project(project_id)
+        if not project:
+            raise ValueError("全屋设计项目不存在")
+        row = _model_row(project, run_id)
+        if row.get("status") not in {"queued", "interrupted"}:
+            return row
+        row.update(status="building", stage="正在生成 Blender、GLB 和研究 IFC", error="", updated_at=time.time())
+        bundle = deepcopy(row["structure_bundle"])
+        output_root = row["output_root"]
+        save_project(project)
+    try:
+        from .tools.fastloop_research import run_research_model
+        result = run_research_model(bundle, Path(output_root))
+    except Exception as exc:
+        logger.exception("全屋研究建模失败 project=%s run=%s", project_id, run_id)
+        result = {"status": "failed_product", "error": f"{type(exc).__name__}: {exc}", "artifacts": {}}
+    with _project_lock(project_id):
+        project = load_project(project_id)
+        if not project:
+            raise ValueError("全屋设计项目不存在")
+        row = _model_row(project, run_id)
+        artifacts = _normalize_model_artifacts(result)
+        row["artifacts"] = artifacts
+        mechanical_path = next((item["path"] for item in artifacts if item["kind"] == "mechanical_report"), "")
+        if mechanical_path:
+            try:
+                with open(mechanical_path, "r", encoding="utf-8") as handle:
+                    row["mechanical_report"] = json.load(handle)
+            except (OSError, ValueError, TypeError):
+                row["mechanical_report"] = {}
+        row["unresolved"] = list(dict.fromkeys([*(row.get("unresolved") or []), *(result.get("unresolved") or [])]))
+        result_status = str(result.get("status") or "failed_product")
+        if result_status in {"mechanical_verified", "blocked_dependency_missing"}:
+            top_path = next((item["path"] for item in artifacts if item["kind"] == "top"), "")
+            axon_paths = [item["path"] for item in artifacts if item["kind"] in {"north_east", "north_west"}]
+            if result_status == "blocked_dependency_missing" and not top_path:
+                row.update(status="blocked_dependency_missing", stage="本地建模依赖缺失", error=str(result.get("message") or "缺少 Blender"))
+                row["updated_at"] = time.time()
+                project["stage"] = row["stage"]
+                save_project(project)
+                return row
+            qa = evaluate_structure(project, top_path, axon_paths) if top_path else {
+                "version": QA_PROMPT_VERSION, "status": "manual_required", "hard_fail": False,
+                "summary": "顶视图缺失，不能运行复合审查", "checks": [], "provider": "local_missing_artifact",
+            }
+            row["gemini_review"] = qa
+            if result_status == "blocked_dependency_missing":
+                row.update(status="blocked_dependency_missing", stage="Blender 研究模型已生成；研究 IFC 依赖缺失", error=str(result.get("message") or "缺少 IfcOpenShell"))
+            elif qa.get("status") == "passed":
+                row.update(status="ready_research", stage="研究灰模已通过机械与 Gemini 审查", error="")
+            elif qa.get("status") == "failed" or qa.get("hard_fail"):
+                row.update(status="needs_correction", stage="Gemini 发现结构差异，需要校正", error=str(qa.get("summary") or ""))
+            else:
+                row.update(status="external_review_pending", stage="本地研究模型可用；等待 Gemini 复合审查", error=str(qa.get("summary") or ""))
+        else:
+            row.update(status="failed_product", stage="研究建模失败", error=str(result.get("error") or "本地建模内核失败"))
+        row["updated_at"] = time.time()
+        project["status"] = "locked" if project.get("locked_candidate_id") else project.get("status")
+        project["stage"] = row["stage"]
+        save_project(project)
+        return row
+
+
+def retry_model_review(project_id: str, run_id: str) -> dict:
+    with _project_lock(project_id):
+        project = load_project(project_id)
+        if not project:
+            raise ValueError("全屋设计项目不存在")
+        row = _model_row(project, run_id)
+        top_path = next((item.get("path") for item in row.get("artifacts") or [] if item.get("kind") == "top"), "")
+        axon_paths = [item.get("path") for item in row.get("artifacts") or [] if item.get("kind") in {"north_east", "north_west"}]
+    if not top_path or not os.path.isfile(top_path):
+        raise ValueError("研究模型顶视图不存在")
+    qa = evaluate_structure(project, top_path, axon_paths)
+    with _project_lock(project_id):
+        project = load_project(project_id)
+        row = _model_row(project, run_id)
+        row["gemini_review"] = qa
+        if qa.get("status") == "passed":
+            row.update(status="ready_research", stage="研究灰模已通过 Gemini 复合审查", error="")
+        elif qa.get("status") == "failed" or qa.get("hard_fail"):
+            row.update(status="needs_correction", stage="Gemini 发现结构差异，需要校正", error=str(qa.get("summary") or ""))
+        else:
+            row.update(status="external_review_pending", stage="本地研究模型可用；等待 Gemini 复合审查", error=str(qa.get("summary") or ""))
+        row["updated_at"] = time.time()
+        save_project(project)
+        return row
 
 
 def _fixed_zip_write(archive: zipfile.ZipFile, arcname: str, data: bytes) -> None:
@@ -946,10 +1714,11 @@ def build_modeling_bundle(project: dict, candidate: dict) -> dict:
         "brief_hash": project["brief_hash"],
         "locked_candidate_id": candidate["candidate_id"],
         "candidate_hash": candidate["result_hash"],
+        "anchor_overlay_hash": project.get("anchor_overlay_hash") or "",
         "units": "metres",
         "coordinate_system": "blender-z-up",
         "geometry_authority": ["source/floorplan-original", "qa/plan-summary.json"],
-        "appearance_authority": ["design/final-locked.png", "references/*"],
+        "appearance_authority": ["design/locked-concept-2k.png", "references/*"],
         "blocked_when_scale_missing": True,
         "created_at": time.time(),
     }
@@ -999,10 +1768,10 @@ Use `source/floorplan-original{os.path.splitext(project['source_path'])[1].lower
         ("source/floorplan-normalized.png", project["normalized_path"]),
         ("source/floorplan-generation-raw.png", project.get("generation_raw_path") or project.get("generation_path") or project["normalized_path"]),
         ("source/floorplan-generation.png", project.get("generation_path") or project["normalized_path"]),
-        ("design/final-locked.png", candidate["path"]),
+        ("design/locked-concept-2k.png", candidate["path"]),
     ]
-    parent = next((row for row in project.get("candidates") or []
-                   if row.get("candidate_id") == candidate.get("parent_candidate_id")), None)
+    if project.get("anchor_overlay_path") and os.path.isfile(project["anchor_overlay_path"]):
+        file_rows.append(("source/floorplan-anchor-overlay.png", project["anchor_overlay_path"]))
     brief_snapshot = {
         "requirements_text": project.get("brief", {}).get("requirements_text") or "",
         "references": [
@@ -1014,19 +1783,6 @@ Use `source/floorplan-original{os.path.splitext(project['source_path'])[1].lower
         ],
         "brief_hash": project.get("brief_hash") or "",
     }
-    parent_snapshot = ({
-        "candidate_id": parent.get("candidate_id"),
-        "result_hash": parent.get("result_hash"),
-        "prompt_version": parent.get("prompt_version"),
-        "prompt": parent.get("prompt"),
-        "provider": parent.get("provider"),
-        "model_id": parent.get("model_id"),
-        "endpoint": parent.get("endpoint"),
-        "resolution": parent.get("resolution"),
-        "aspect_ratio": parent.get("aspect_ratio"),
-    } if parent else {})
-    if parent and parent.get("path"):
-        file_rows.append(("design/selected-draft.png", parent["path"]))
     for index, path in enumerate(project.get("brief", {}).get("reference_paths") or [], 1):
         file_rows.append((f"references/{index:02d}{os.path.splitext(path)[1].lower()}", path))
     text_rows: list[tuple[str, bytes]] = [
@@ -1035,10 +1791,12 @@ Use `source/floorplan-original{os.path.splitext(project['source_path'])[1].lower
         ("design/design-brief.md", brief_md.encode("utf-8")),
         ("design/design-spec.json", _json_bytes(brief_snapshot)),
         ("qa/plan-summary.json", _json_bytes(project.get("plan_summary") or {})),
+        ("qa/human-anchors.json", _json_bytes(project.get("anchor_set") or {})),
+        ("qa/anchor-verification.json", _json_bytes(project.get("anchor_verification") or {})),
         ("qa/automated-structure-qa.json", _json_bytes(candidate.get("structure_qa") or {})),
         ("qa/human-structure-review.json", _json_bytes(candidate.get("human_review") or {})),
-        ("prompts/draft-prompt-snapshot.json", _json_bytes(parent_snapshot)),
-        ("prompts/refine-prompt-snapshot.json", _json_bytes({
+        ("prompts/concept-prompt-snapshot.json", _json_bytes({
+            "candidate_id": candidate.get("candidate_id"),
             "prompt_version": candidate.get("prompt_version"),
             "prompt": candidate.get("prompt"),
             "provider": candidate.get("provider"),
