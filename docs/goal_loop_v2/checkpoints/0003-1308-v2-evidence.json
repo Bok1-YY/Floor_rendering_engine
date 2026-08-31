@@ -5,6 +5,7 @@
   "status": "accepted_evidence_not_build_ready",
   "accepted_at": "2026-09-01T06:02:26.6617238+08:00",
   "baseline_commit": "9891a806f2975b4aa63235323868d80cf5085c60",
+  "accepted_commit": "c4238393db6a1296954714e97dd1966ba7970c08",
   "independent_verdict": "accept_1308_v2_evidence",
   "runtime_artifacts": {
     "reference_document_v2_sha256": "6c5bd3a0c36672c61d7ad2d504b20bb3e9dee4d1670eb47a53157d6bf4d993b5",
