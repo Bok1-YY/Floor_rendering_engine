@@ -1,0 +1,70 @@
+{
+  "schema": "goal-loop-v2-checkpoint-v1",
+  "checkpoint_id": "0005-1308-geometry-adjudication-semantic-partial",
+  "stage": "reference_freeze",
+  "status": "accepted_geometry_progress_semantic_partial_not_build_ready",
+  "accepted_at": "2026-09-01T07:12:45.2243310+08:00",
+  "baseline_commit": "e003e73686770513833c9fbf1bc11017224570e8",
+  "accepted_commit": "7b874deff09096d7ccaaa5ee8754bf759a914d6c",
+  "independent_verdicts": {
+    "geometry": "accept_1308_geometry_adjudication_v3",
+    "semantics": "partial_1308_semantic_freeze",
+    "op011_blind_review": "retain_unresolved_1308_op011"
+  },
+  "geometry_artifacts": {
+    "authorized_request_sha256": "cbb9af55e1dfbfecfe6cd6457a96b328c2fff7d0f59e5cc92dff96a7d5effedf",
+    "authorized_request_canonical_hash": "b4cfb1be1066af2c03fbe2ed4789d02afa5c8efd4023950053da41127d7140e5",
+    "adjudication_report_sha256": "d656eff14a6cbbd15d3e600045d317a2f226c14cf75b68f4fb4ef574023a53a0",
+    "adjudicated_document_sha256": "0eba3e5e3dc0bcb8bf03779bfa50d80310348ad119c96b2fe9f6ed13302cb46b"
+  },
+  "geometry_state": {
+    "stable_blockers_before": 4,
+    "stable_blockers_after": 3,
+    "resolved": ["B1308-CROSSING-JAMB"],
+    "endpoint_count": 44,
+    "mechanically_supported_endpoints": 33,
+    "unresolved_endpoints": 11,
+    "op001_return_face_gap_m": 0.023994744,
+    "ready": false,
+    "build_opening_ids": []
+  },
+  "semantic_artifacts": {
+    "first_review_report_sha256": "0b879cb2ceea4dcbf735db4e535865a270422b54265a97635c9ea5cc8011ebc1",
+    "first_gemini_response_sha256": "99d01c6d60ccd5554b2980ab77a5a53549263d64a4cb43c65a66845d021a931a",
+    "first_proposed_adjacency_sha256": "756f3d72eeec4ff9a6185db9a68afda9d6e0777f3cef190f7eded51637d23103",
+    "second_blind_synthesis_sha256": "cbfa22815f148cf7f87e9a71174a22b6659e98a8e8805c6a88f490154c7d4d90",
+    "second_raw_response_sha256": "436468000f7798e43c5dc7ef172a713fd335276afa704e97783c82a7fd4b6fb1"
+  },
+  "semantic_state": {
+    "independently_supported_but_not_yet_applied_opening_ids": ["OP001", "OP002", "OP003", "OP004", "OP005", "OP006", "OP007", "OP008", "OP009", "OP010"],
+    "unresolved_opening_ids": ["OP011"],
+    "op011_confirmed_sides": ["dry_balcony", "kitchen"],
+    "op011_unresolved_fields": ["relation_kind", "traversable", "portal", "dry_balcony_reachability"],
+    "semantic_blocker_closed": false
+  },
+  "gemini_usage": {
+    "captured_requests": 2,
+    "possible_uncaptured_requests": 1,
+    "captured_input_tokens": 7079,
+    "captured_output_and_thinking_tokens": 9684,
+    "known_list_price_cost_usd": 0.04162425,
+    "conservative_reserved_cost_usd": 0.1,
+    "pricing_source": "https://ai.google.dev/gemini-api/docs/pricing",
+    "note": "The first uncaptured attempt may have been billable. The loop reserves USD 0.10 rather than pretending the unobservable charge was zero."
+  },
+  "remaining_1308_blockers": [
+    "B1308-JUNCTION-ENDPOINTS",
+    "B1308-OP001-RETURN",
+    "B1308-SEMANTIC-ADJACENCY"
+  ],
+  "tests": {
+    "geometry_and_reference_focused": {"passed": 19, "failed": 0},
+    "backend": {"passed": 367, "skipped": 1, "failed": 0},
+    "diff_check": "passed",
+    "compileall": "passed"
+  },
+  "stage_boundary": "This checkpoint closes only the independently proven OP005 crossing-jamb geometry blocker. It preserves eleven unresolved wall endpoints, the OP001 return-face gap, OP011 subtype/portal/reachability ambiguity, all candidate build entities, and ready=false. It does not authorize Blender/IFC.",
+  "budget_spent_usd": 0.1,
+  "budget_remaining_usd": 19.9,
+  "next_action": "Run repair attempt 1 over the eleven unresolved endpoint measurements and OP001 return support, then re-adjudicate from the source contract."
+}

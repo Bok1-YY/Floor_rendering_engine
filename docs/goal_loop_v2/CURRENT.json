@@ -4,25 +4,24 @@
   "active_sample": "1308",
   "stage": "reference_freeze",
   "iteration": 0,
-  "method_id": "reference-repair-v2",
+  "method_id": "source-registered-endpoint-repair-v2",
   "sample_status": {
     "1308": "running",
     "121m2": "pending"
   },
-  "last_accepted_commit": "54c516f4153bae5e9a05b8441600b45e472db588",
+  "last_accepted_commit": "7b874deff09096d7ccaaa5ee8754bf759a914d6c",
   "last_run_id": "",
   "last_score": 0,
   "score_history": [],
   "failure_class": null,
-  "next_action": "Resolve the four remaining 1308 source blockers with independent evidence: dangling wall endpoints, crossing-jamb continuity, the OP001 return-wall face, and semantic adjacency. Re-freeze only after mechanical checks and Gemini composite review agree; keep Blender/IFC disabled until readiness passes.",
-  "budget_spent_usd": 0,
-  "budget_remaining_usd": 20,
+  "next_action": "Create repair attempt 1 for the eleven mechanically unresolved wall endpoints, including the OP001/WB006 return-face gap, using source-registered pixel evidence and only contract-level endpoint moves. Preserve OP011 and dry-balcony reachability as unresolved; do not start Blender/IFC while readiness is false.",
+  "budget_spent_usd": 0.1,
+  "budget_remaining_usd": 19.9,
   "blockers": [
     "B1308-JUNCTION-ENDPOINTS",
-    "B1308-CROSSING-JAMB",
     "B1308-OP001-RETURN",
     "B1308-SEMANTIC-ADJACENCY"
   ],
   "final_human_accepted": false,
-  "updated_at": "2026-09-01T06:41:46.2194867+08:00"
+  "updated_at": "2026-09-01T07:12:45.2243310+08:00"
 }
