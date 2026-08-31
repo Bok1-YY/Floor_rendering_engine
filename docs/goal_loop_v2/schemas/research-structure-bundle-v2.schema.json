@@ -1,0 +1,1532 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://floor-rendering-engine.local/schema/research-structure-bundle-v2-draft.json",
+  "title": "Research Structure Bundle v2 (Stage B architecture draft)",
+  "description": "Candidate schema only. It separates lossless reference representation from build readiness and does not confirm unresolved reference facts.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "project",
+    "source_hash",
+    "structure_hash",
+    "source",
+    "outer_boundary",
+    "spaces",
+    "wall_graph",
+    "opening_contract",
+    "adjacency_truth",
+    "assumptions",
+    "unresolved_issues"
+  ],
+  "properties": {
+    "schema": {
+      "const": "research-structure-bundle-v2"
+    },
+    "project": {
+      "$ref": "#/$defs/project"
+    },
+    "source_hash": {
+      "$ref": "#/$defs/sha256"
+    },
+    "structure_hash": {
+      "$ref": "#/$defs/sha256"
+    },
+    "source": {
+      "$ref": "#/$defs/source"
+    },
+    "outer_boundary": {
+      "$ref": "#/$defs/outerBoundary"
+    },
+    "spaces": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/space"
+      }
+    },
+    "wall_graph": {
+      "$ref": "#/$defs/wallGraph"
+    },
+    "opening_contract": {
+      "$ref": "#/$defs/openingContract"
+    },
+    "adjacency_truth": {
+      "$ref": "#/$defs/adjacencyTruth"
+    },
+    "assumptions": {
+      "$ref": "#/$defs/assumptionRegistry"
+    },
+    "unresolved_issues": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/unresolvedIssue"
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "stableId": {
+      "type": "string",
+      "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$"
+    },
+    "nonEmptyText": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^\\S(?:.*\\S)?$"
+    },
+    "point2": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "number"
+        }
+      ],
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "segment2": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/point2"
+        },
+        {
+          "$ref": "#/$defs/point2"
+        }
+      ],
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "matrix3": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "minItems": 3,
+          "maxItems": 3
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "minItems": 3,
+          "maxItems": 3
+        },
+        {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "minItems": 3,
+          "maxItems": 3
+        }
+      ],
+      "minItems": 3,
+      "maxItems": 3
+    },
+    "status": {
+      "enum": [
+        "confirmed",
+        "candidate",
+        "unresolved",
+        "legacy_confirmed"
+      ]
+    },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "project_id",
+        "revision",
+        "sample_id"
+      ],
+      "properties": {
+        "project_id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "sample_id": {
+          "$ref": "#/$defs/stableId"
+        }
+      }
+    },
+    "pixelAsset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file_sha256",
+        "pixel_sha256",
+        "size_px"
+      ],
+      "properties": {
+        "file_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "pixel_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "size_px": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "integer",
+              "minimum": 1
+            }
+          ],
+          "minItems": 2,
+          "maxItems": 2
+        }
+      }
+    },
+    "originalAsset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file_sha256",
+        "pixel_sha256",
+        "size_px",
+        "exif_orientation"
+      ],
+      "properties": {
+        "file_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "pixel_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "size_px": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "integer",
+              "minimum": 1
+            }
+          ],
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "exif_orientation": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8
+        }
+      }
+    },
+    "canonicalAsset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "file_sha256",
+        "pixel_sha256",
+        "size_px",
+        "orientation_policy",
+        "raw_to_canonical_3x3"
+      ],
+      "properties": {
+        "file_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "pixel_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "size_px": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "integer",
+              "minimum": 1
+            }
+          ],
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "orientation_policy": {
+          "enum": [
+            "raw_identity",
+            "exif_transpose",
+            "ignore_invalid_exif_user_confirmed_raw"
+          ]
+        },
+        "raw_to_canonical_3x3": {
+          "$ref": "#/$defs/matrix3"
+        }
+      }
+    },
+    "sourceView": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "role",
+        "file_sha256",
+        "pixel_sha256",
+        "size_px",
+        "canonical_to_view_3x3"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "role": {
+          "enum": [
+            "normalized_evidence",
+            "crop",
+            "overlay_base"
+          ]
+        },
+        "file_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "pixel_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "size_px": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "integer",
+              "minimum": 1
+            }
+          ],
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "canonical_to_view_3x3": {
+          "$ref": "#/$defs/matrix3"
+        }
+      }
+    },
+    "registrationControl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "canonical_px",
+        "metric_m",
+        "evidence_refs"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "canonical_px": {
+          "$ref": "#/$defs/point2"
+        },
+        "metric_m": {
+          "$ref": "#/$defs/point2"
+        },
+        "evidence_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/stableId"
+          }
+        }
+      }
+    },
+    "metricRegistration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "model",
+        "solver",
+        "canonical_px_to_metric_3x3",
+        "control_points",
+        "max_residual_m",
+        "tolerance_m",
+        "scale_anchor_id"
+      ],
+      "properties": {
+        "model": {
+          "const": "affine-2d"
+        },
+        "solver": {
+          "enum": [
+            "exact",
+            "least_squares"
+          ]
+        },
+        "canonical_px_to_metric_3x3": {
+          "$ref": "#/$defs/matrix3"
+        },
+        "control_points": {
+          "type": "array",
+          "minItems": 3,
+          "items": {
+            "$ref": "#/$defs/registrationControl"
+          }
+        },
+        "max_residual_m": {
+          "type": "number",
+          "minimum": 0
+        },
+        "tolerance_m": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 0.001
+        },
+        "scale_anchor_id": {
+          "$ref": "#/$defs/stableId"
+        }
+      }
+    },
+    "anchorGeometry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "space",
+        "primitive",
+        "points_px"
+      ],
+      "properties": {
+        "space": {
+          "const": "canonical_px"
+        },
+        "primitive": {
+          "enum": [
+            "point",
+            "segment",
+            "polyline",
+            "polygon",
+            "bbox"
+          ]
+        },
+        "points_px": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/point2"
+          }
+        }
+      }
+    },
+    "anchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "geometry",
+        "measured_distance_mm",
+        "status",
+        "evidence_asset_id",
+        "note"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "kind": {
+          "enum": [
+            "scale",
+            "space",
+            "entrance",
+            "opening",
+            "wall_axis",
+            "outer_boundary",
+            "fixed_feature",
+            "ignore",
+            "dimension"
+          ]
+        },
+        "geometry": {
+          "$ref": "#/$defs/anchorGeometry"
+        },
+        "measured_distance_mm": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "exclusiveMinimum": 0
+        },
+        "status": {
+          "enum": [
+            "human_confirmed",
+            "source_confirmed",
+            "source_candidate",
+            "derived_candidate",
+            "unresolved",
+            "legacy_confirmed"
+          ]
+        },
+        "evidence_asset_id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "note": {
+          "$ref": "#/$defs/nonEmptyText"
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "original",
+        "canonical",
+        "views",
+        "metric_registration",
+        "anchors"
+      ],
+      "properties": {
+        "schema": {
+          "const": "source-provenance-v3"
+        },
+        "original": {
+          "$ref": "#/$defs/originalAsset"
+        },
+        "canonical": {
+          "$ref": "#/$defs/canonicalAsset"
+        },
+        "views": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/sourceView"
+          }
+        },
+        "metric_registration": {
+          "$ref": "#/$defs/metricRegistration"
+        },
+        "anchors": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/anchor"
+          }
+        }
+      }
+    },
+    "outerBoundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "polygon_m",
+        "status",
+        "evidence_refs"
+      ],
+      "properties": {
+        "polygon_m": {
+          "type": "array",
+          "minItems": 4,
+          "items": {
+            "$ref": "#/$defs/point2"
+          }
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "evidence_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/stableId"
+          }
+        }
+      }
+    },
+    "space": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label",
+        "point_m",
+        "status",
+        "evidence_refs"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "label": {
+          "$ref": "#/$defs/nonEmptyText"
+        },
+        "point_m": {
+          "$ref": "#/$defs/point2"
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "evidence_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/stableId"
+          }
+        }
+      }
+    },
+    "wallBranch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "centerline_m",
+        "status",
+        "evidence_refs"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "centerline_m": {
+          "$ref": "#/$defs/segment2"
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "evidence_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/stableId"
+          }
+        }
+      }
+    },
+    "wallAtom": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "branch_id",
+        "branch_interval",
+        "centerline_m",
+        "thickness_m",
+        "base_m",
+        "height_m",
+        "left_space_id",
+        "right_space_id",
+        "start_node_id",
+        "end_node_id",
+        "status",
+        "evidence_refs",
+        "assumption_ids"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "branch_id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "branch_interval": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          ],
+          "minItems": 2,
+          "maxItems": 2
+        },
+        "centerline_m": {
+          "$ref": "#/$defs/segment2"
+        },
+        "thickness_m": {
+          "type": "number",
+          "minimum": 0.03,
+          "maximum": 1
+        },
+        "base_m": {
+          "type": "number"
+        },
+        "height_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "left_space_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "right_space_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "start_node_id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "end_node_id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "evidence_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/stableId"
+          }
+        },
+        "assumption_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/stableId"
+          }
+        }
+      }
+    },
+    "junctionIncident": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "atom_id",
+        "end",
+        "role",
+        "attachment",
+        "contact_point_m"
+      ],
+      "properties": {
+        "atom_id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "end": {
+          "enum": [
+            "start",
+            "end"
+          ]
+        },
+        "role": {
+          "enum": [
+            "through",
+            "terminating",
+            "continuing"
+          ]
+        },
+        "attachment": {
+          "enum": [
+            "axis",
+            "wall_face",
+            "free_end"
+          ]
+        },
+        "contact_point_m": {
+          "$ref": "#/$defs/point2"
+        }
+      }
+    },
+    "junction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "axis_point_m",
+        "termination_kind",
+        "incidents",
+        "solid_union_policy",
+        "status",
+        "evidence_refs"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "kind": {
+          "enum": [
+            "endpoint",
+            "L",
+            "T",
+            "X",
+            "continuation"
+          ]
+        },
+        "axis_point_m": {
+          "$ref": "#/$defs/point2"
+        },
+        "termination_kind": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "exterior_boundary",
+            "intentional_partition_end",
+            "source_termination",
+            "unresolved",
+            null
+          ]
+        },
+        "incidents": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/junctionIncident"
+          }
+        },
+        "solid_union_policy": {
+          "enum": [
+            "cap",
+            "union",
+            "face_abutment"
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "evidence_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/stableId"
+          }
+        }
+      }
+    },
+    "wallGraph": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "branches",
+        "atoms",
+        "junctions"
+      ],
+      "properties": {
+        "version": {
+          "const": "atomic-wall-junction-graph-v2"
+        },
+        "branches": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/wallBranch"
+          }
+        },
+        "atoms": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/wallAtom"
+          }
+        },
+        "junctions": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/junction"
+          }
+        }
+      }
+    },
+    "sourceOpeningObservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "nominal_segment_m",
+        "nominal_width_m",
+        "anchor_id",
+        "evidence_refs",
+        "status"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "entrance_symbol",
+            "door",
+            "window",
+            "glazed_access_door",
+            "glazed_interface",
+            "open_passage",
+            "unknown"
+          ]
+        },
+        "nominal_segment_m": {
+          "$ref": "#/$defs/segment2"
+        },
+        "nominal_width_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "anchor_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "evidence_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/stableId"
+          }
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        }
+      }
+    },
+    "effectiveVoid": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "segment_m",
+        "width_m",
+        "sill_m",
+        "head_m",
+        "host_cut_scope",
+        "status"
+      ],
+      "properties": {
+        "segment_m": {
+          "$ref": "#/$defs/segment2"
+        },
+        "width_m": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "sill_m": {
+          "type": "number"
+        },
+        "head_m": {
+          "type": "number"
+        },
+        "host_cut_scope": {
+          "const": "owning_wall_atom_only"
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        }
+      }
+    },
+    "jambSupport": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "supporting_atom_ids",
+        "junction_id",
+        "face_distance_m",
+        "effective_support_m",
+        "evidence_refs",
+        "status"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "same_wall_solid",
+            "return_wall_face",
+            "crossing_wall_jamb"
+          ]
+        },
+        "supporting_atom_ids": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/stableId"
+          }
+        },
+        "junction_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "face_distance_m": {
+          "type": "number",
+          "minimum": 0
+        },
+        "effective_support_m": {
+          "type": "number",
+          "minimum": 0
+        },
+        "evidence_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/stableId"
+          }
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        }
+      }
+    },
+    "opening": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "source_observation",
+        "build_disposition",
+        "build_kind",
+        "owning_wall_atom_id",
+        "effective_void",
+        "swing_direction",
+        "traversable",
+        "side_a_space_id",
+        "side_b_space_id",
+        "jamb_before",
+        "jamb_after",
+        "status",
+        "assumption_ids"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "source_observation": {
+          "$ref": "#/$defs/sourceOpeningObservation"
+        },
+        "build_disposition": {
+          "enum": [
+            "cut",
+            "retain_solid",
+            "evidence_only",
+            "exclude_pending_resolution"
+          ]
+        },
+        "build_kind": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "entrance",
+            "door",
+            "window",
+            null
+          ]
+        },
+        "owning_wall_atom_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "effective_void": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/effectiveVoid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "swing_direction": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "hinge_left",
+            "hinge_right",
+            "sliding",
+            "double",
+            "not_shown",
+            null
+          ]
+        },
+        "traversable": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "side_a_space_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "side_b_space_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "jamb_before": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/jambSupport"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "jamb_after": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/jambSupport"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "assumption_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/stableId"
+          }
+        }
+      }
+    },
+    "openingContract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "minimum_jamb_support_m",
+        "openings"
+      ],
+      "properties": {
+        "version": {
+          "const": "opening-contract-v2"
+        },
+        "minimum_jamb_support_m": {
+          "const": 0.05
+        },
+        "openings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/opening"
+          }
+        }
+      }
+    },
+    "adjacencyEdge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "space_a_id",
+        "space_b_id",
+        "kind",
+        "opening_id",
+        "status",
+        "evidence_refs"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "space_a_id": {
+          "type": "string"
+        },
+        "space_b_id": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "door",
+            "open_passage"
+          ]
+        },
+        "opening_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "evidence_refs": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/stableId"
+          }
+        }
+      }
+    },
+    "adjacencyTruth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "version",
+        "status",
+        "entrance_opening_id",
+        "edges"
+      ],
+      "properties": {
+        "version": {
+          "const": "adjacency-truth-v2"
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "entrance_opening_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "edges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/adjacencyEdge"
+          }
+        }
+      }
+    },
+    "assumptionTarget": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entity_kind",
+        "entity_id",
+        "field"
+      ],
+      "properties": {
+        "entity_kind": {
+          "enum": [
+            "bundle",
+            "wall_branch",
+            "wall_atom",
+            "opening",
+            "space",
+            "outer_boundary"
+          ]
+        },
+        "entity_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "field": {
+          "$ref": "#/$defs/nonEmptyText"
+        }
+      }
+    },
+    "assumption": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "category",
+        "targets",
+        "value",
+        "unit",
+        "basis",
+        "status",
+        "build_policy",
+        "evidence_refs",
+        "disclosure"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "category": {
+          "enum": [
+            "z_geometry",
+            "wall_thickness",
+            "scope",
+            "semantic",
+            "legacy_migration"
+          ]
+        },
+        "targets": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/assumptionTarget"
+          }
+        },
+        "value": {},
+        "unit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "basis": {
+          "enum": [
+            "research_default",
+            "source_inference",
+            "legacy_equal_nominal_effective",
+            "human_accepted_research_assumption"
+          ]
+        },
+        "status": {
+          "enum": [
+            "unverified",
+            "human_accepted",
+            "superseded"
+          ]
+        },
+        "build_policy": {
+          "enum": [
+            "allow_research_only",
+            "block_build"
+          ]
+        },
+        "evidence_refs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/stableId"
+          }
+        },
+        "disclosure": {
+          "$ref": "#/$defs/nonEmptyText"
+        }
+      }
+    },
+    "assumptionRegistry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema",
+        "research_only",
+        "items"
+      ],
+      "properties": {
+        "schema": {
+          "const": "assumption-registry-v2"
+        },
+        "research_only": {
+          "const": true
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/assumption"
+          }
+        }
+      }
+    },
+    "unresolvedIssue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "severity",
+        "category",
+        "entity_refs",
+        "status",
+        "message",
+        "blocks_reference_freeze",
+        "blocks_build",
+        "evidence_refs"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/stableId"
+        },
+        "severity": {
+          "enum": [
+            "hard",
+            "advisory"
+          ]
+        },
+        "category": {
+          "$ref": "#/$defs/nonEmptyText"
+        },
+        "entity_refs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/stableId"
+          }
+        },
+        "status": {
+          "enum": [
+            "open",
+            "accepted_research_assumption",
+            "resolved",
+            "superseded"
+          ]
+        },
+        "message": {
+          "$ref": "#/$defs/nonEmptyText"
+        },
+        "blocks_reference_freeze": {
+          "type": "boolean"
+        },
+        "blocks_build": {
+          "type": "boolean"
+        },
+        "evidence_refs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/stableId"
+          }
+        }
+      }
+    }
+  },
+  "x-document-vs-build": {
+    "document_validation": "Checks exact keys, types, references, affine reproducibility, graph consistency and finite geometry while preserving candidate/unresolved states.",
+    "build_readiness": "A separate fail-closed gate requires all build-consumed entities and topology to be confirmed, while deliberate evidence_only observations remain hash-bound and unbuilt.",
+    "forbidden": "Schema validation or migration must never rewrite candidate/unresolved to confirmed."
+  },
+  "x-structure-hash": {
+    "algorithm": "sha256(canonical_json(payload))",
+    "payload_top_level_fields_in_order_independent_object": [
+      "schema",
+      "project",
+      "source_hash",
+      "source",
+      "outer_boundary",
+      "spaces",
+      "wall_graph",
+      "opening_contract",
+      "adjacency_truth",
+      "assumptions",
+      "unresolved_issues"
+    ],
+    "excluded": [
+      "structure_hash",
+      "validation reports",
+      "scores and reviews",
+      "run IDs and timestamps",
+      "artifact paths",
+      "migration sidecar report"
+    ],
+    "array_order_policy": "Before hashing, sort entity arrays by stable ID and sort ID-reference arrays lexicographically; preserve geometric point order and directed branch intervals."
+  },
+  "x-build-ready-gates": [
+    "source_hash equals source.original.file_sha256 and every asset/transform/anchor is reproducible",
+    "metric registration refits from non-collinear controls within tolerance and has a nonzero determinant",
+    "outer boundary, build-consumed spaces, wall branches/atoms/junctions, cut openings and adjacency edges are confirmed",
+    "every wall atom endpoint belongs to exactly one junction incident and every junction incident references the matching endpoint",
+    "all T/X relations are atomized; no undeclared crossing, collinear overlap, ghost junction or unresolved interior free end remains",
+    "each cut opening has one host atom, one effective void, complete Z basis, two mechanically proven jamb supports and no effective-void overlap",
+    "evidence_only/retain_solid observations have no effective void, no build kind and no adjacency edge",
+    "exclude_pending_resolution observations and every open issue with blocks_build=true prevent build",
+    "all research assumptions referenced by build fields use allow_research_only and are disclosed; construction-grade output remains forbidden",
+    "all spaces are reachable from exterior through confirmed traversable door/open-passage edges"
+  ],
+  "x-opening-gap-rule": {
+    "measurement_domain": "effective void intervals projected to their common branch; nominal source segments are never used as build-gap intervals",
+    "same_wall_required_contribution_m": 0.05,
+    "return_or_cross_required_host_contribution_m": 0.0,
+    "rule": "Adjacent effective voids may not overlap. Their retained host gap must be at least the sum of the two facing same-wall contributions. Return/crossing support contributes only after its cited wall/junction solid independently proves at least 0.05 m support and remains uncut by host-scoped subtraction."
+  },
+  "x-repair-operations": {
+    "automatic_structure_scope": [
+      "split_wall_atom",
+      "merge_collinear_atoms_without_junction",
+      "move_wall_atom_endpoint",
+      "change_wall_thickness",
+      "reassign_wall_spaces",
+      "declare_junction",
+      "update_junction_contact",
+      "reassign_opening_host_atom",
+      "set_opening_effective_void",
+      "set_opening_build_semantics",
+      "set_opening_build_disposition",
+      "set_jamb_support",
+      "update_opening_height",
+      "update_adjacency",
+      "resolve_unresolved_issue"
+    ],
+    "reference_authoring_only_new_reference_hash": [
+      "update_canonical_source_binding",
+      "update_metric_registration",
+      "update_source_anchor",
+      "update_nominal_opening_observation",
+      "update_outer_boundary_evidence",
+      "update_research_assumption"
+    ],
+    "legacy_operation_mapping": {
+      "split_wall": "split_wall_atom",
+      "merge_collinear_walls": "merge_collinear_atoms_without_junction",
+      "attach_opening": "reassign_opening_host_atom",
+      "move_opening": "set_opening_effective_void",
+      "resize_opening": "set_opening_effective_void",
+      "change_opening_type": "set_opening_build_semantics"
+    }
+  },
+  "x-migration": {
+    "reader_policy": "Read v1 and v2 concurrently; preserve and validate the original schema and hash without write-back.",
+    "upgrade_policy": "A pure v1-to-v2 adapter requires an external canonical source manifest and emits a migration sidecar. It never copies confirmed=true into fields that cannot be recomputed under v2.",
+    "fail_closed_conditions": [
+      "canonical image hash/dimensions/transform cannot be reconstructed",
+      "metric affine cannot be refit from sufficient controls",
+      "unsplit T/X or face termination cannot be atomized without changing source geometry",
+      "nominal and effective opening geometry cannot be distinguished",
+      "jamb support, opening kind, adjacency or Z basis remains unresolved"
+    ],
+    "hash_policy": "The v1 hash remains immutable. A migrated v2 document receives a new v2 structure hash; migration lineage is kept in a sidecar and does not enter the v2 structure hash."
+  }
+}

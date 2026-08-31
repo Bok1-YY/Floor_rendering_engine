@@ -1,0 +1,43 @@
+{
+  "schema": "goal-loop-v2-checkpoint-v1",
+  "checkpoint_id": "0002-stage-b-document-readiness",
+  "stage": "reference_freeze",
+  "status": "accepted",
+  "accepted_at": "2026-09-01T05:45:50.9915286+08:00",
+  "baseline_commit": "b2708556d2e588ff43e837e9ad0972cd63100798",
+  "independent_verdict": "accept_stageb_min",
+  "schema_sha256": "5fc4af0d155f6a3eed415a161f9b38448f87c49ee778778bb4b3c4ea798a4656",
+  "capabilities": [
+    "research-structure-bundle-v2 evidence documents preserve candidate and unresolved truth",
+    "build readiness is a separate fail-closed promotion gate",
+    "entity and ID-reference arrays are normalized before structure hashing",
+    "metric registration requires an invertible affine and at least three non-collinear control points",
+    "atomic wall/junction/opening/adjacency and assumption references are closed over known IDs",
+    "evidence-only glazed interfaces cannot create opening cuts, entrance references or adjacency",
+    "candidate or build-blocking unresolved items remain valid evidence but prevent readiness"
+  ],
+  "tests": {
+    "v2_focused": {"passed": 7, "failed": 0},
+    "backend": {"passed": 355, "skipped": 1, "failed": 0},
+    "diff_check": "passed",
+    "sample_hardcoding_scan": "passed"
+  },
+  "stage_boundary": "This checkpoint validates v2 evidence documents and readiness decisions only. It does not adapt the 1308 proposal, resolve source truth, execute repair operations, or generate Blender/IFC from v2.",
+  "remaining_1308_blockers": [
+    "B1308-ORIENTATION-FREEZE",
+    "B1308-NORM-SPACE-SCHEMA",
+    "B1308-OUTER-BOUNDARY",
+    "B1308-JUNCTION-ENDPOINTS",
+    "B1308-UNSPLIT-X",
+    "B1308-OP005-NOMINAL-EFFECTIVE",
+    "B1308-CROSSING-JAMB",
+    "B1308-OPENING-GAP",
+    "B1308-OP001-RETURN",
+    "B1308-OP011-KIND",
+    "B1308-SEMANTIC-ADJACENCY",
+    "B1308-Z-ASSUMPTIONS"
+  ],
+  "budget_spent_usd": 0,
+  "budget_remaining_usd": 20,
+  "next_action": "Convert the 1308 reference proposal into a v2 evidence document without promoting unresolved evidence to build-ready geometry."
+}
