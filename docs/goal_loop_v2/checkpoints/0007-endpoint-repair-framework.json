@@ -1,0 +1,44 @@
+{
+  "schema": "goal-loop-v2-checkpoint-v1",
+  "checkpoint_id": "0007-endpoint-repair-framework",
+  "stage": "reference_freeze",
+  "status": "accepted_framework_pending_corrected_sample_reapplication",
+  "accepted_at": "2026-09-01T07:40:55.3409105+08:00",
+  "baseline_commit": "831c0f6d55f8f3a167c011eb1d8fa87b21b77fdf",
+  "accepted_commit": "ff598140a67b22627630fac85e2c06467ca97fce",
+  "independent_verdict": "accept_endpoint_repair_framework_attempt1_pending_review",
+  "framework_state": {
+    "operation": "move_wall_endpoint",
+    "maximum_attempts": 1,
+    "finite_rectangular_support_footprints": true,
+    "axis_angle_limit_degrees": 0.1,
+    "maximum_automatic_displacement_m": 0.03,
+    "self_confirmation_forbidden": true,
+    "re_adjudication_requires_new_independent_authorization": true,
+    "build_authorized": false
+  },
+  "legacy_1308_candidate_artifacts": {
+    "plan_sha256": "b7a60cca8e3d229243f9e3a79bbac39fdfe2ebb5505e130dcfe1c253a27b22f7",
+    "proposal_sha256": "91801c5a1e30f1d009575ef642c98a00db60dac181097abff6eb5be24c6764e5",
+    "document_sha256": "447d21512b4fad3cd13f0d2409220334af26a42b806f094addf8f95886ebc1bf",
+    "pending_request_sha256": "29da38bc292ab9fd685102fac67121f2a93753ff33a07d0eb23f693996e4d3fe",
+    "candidate_moves": ["WB007:e1", "WB017:e0"],
+    "note": "These outputs are reproducible and fail closed, but they were derived from the now-superseded source proposal. They do not change the accepted 1308 sample blocker set and must be regenerated after the source contract correction."
+  },
+  "remaining_1308_blockers": [
+    "B1308-JUNCTION-ENDPOINTS",
+    "B1308-CROSSING-JAMB",
+    "B1308-OP001-RETURN",
+    "B1308-SEMANTIC-ADJACENCY"
+  ],
+  "tests": {
+    "focused": {"passed": 24, "failed": 0},
+    "backend": {"passed": 372, "skipped": 1, "failed": 0},
+    "diff_check": "passed",
+    "compileall": "passed"
+  },
+  "stage_boundary": "This checkpoint accepts a generic, two-phase endpoint-repair framework only. It does not accept the legacy 1308 candidate moves as source truth, does not run readjudication, does not reduce blockers, and does not authorize Blender/IFC.",
+  "budget_spent_usd": 0.1,
+  "budget_remaining_usd": 19.9,
+  "next_action": "Implement the corrected gap-between-branches portal and evidence-only nonstructural-element contract, then regenerate any endpoint repair candidates from that corrected source proposal."
+}
