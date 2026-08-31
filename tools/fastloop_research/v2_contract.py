@@ -28,6 +28,7 @@ TOP_KEYS = {
     "adjacency_truth", "assumptions", "unresolved_issues",
 }
 STATUSES = {"confirmed", "candidate", "unresolved", "legacy_confirmed"}
+ANCHOR_STATUSES = {"human_confirmed", "source_confirmed", "source_candidate", "derived_candidate", "unresolved", "legacy_confirmed"}
 BUILD_DISPOSITIONS = {"cut", "retain_solid", "evidence_only", "exclude_pending_resolution"}
 HASH_RE = re.compile(r"^[0-9a-f]{64}$")
 ID_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,95}$")
@@ -207,7 +208,8 @@ def _validate_source(source: Any, source_hash: str) -> dict[str, Any]:
         anchor = _exact(raw, {"id", "kind", "geometry", "measured_distance_mm", "status", "evidence_asset_id", "note"}, path)
         if anchor["kind"] not in {"scale", "space", "entrance", "opening", "wall_axis", "outer_boundary", "fixed_feature", "ignore", "dimension"}:
             _fail(f"{path}.kind: unsupported")
-        _status(anchor["status"], f"{path}.status")
+        if anchor["status"] not in ANCHOR_STATUSES:
+            _fail(f"{path}.status: unsupported anchor status")
         geometry = _exact(anchor["geometry"], {"space", "primitive", "points_px"}, f"{path}.geometry")
         if geometry["space"] != "canonical_px" or geometry["primitive"] not in {"point", "segment", "polyline", "polygon", "bbox"}:
             _fail(f"{path}.geometry: unsupported")
@@ -386,8 +388,10 @@ def validate_v2_document(document: Mapping[str, Any]) -> dict[str, Any]:
         _fail(f"adjacency_truth.version: expected {ADJACENCY_SCHEMA}")
     _status(adjacency["status"], "adjacency_truth.status")
     entrance_id = adjacency["entrance_opening_id"]
-    if entrance_id is not None and (entrance_id not in cut_openings or openings[entrance_id]["build_kind"] != "entrance"):
-        _fail("adjacency_truth.entrance_opening_id: must reference a cut entrance")
+    if entrance_id is not None and entrance_id not in openings:
+        _fail("adjacency_truth.entrance_opening_id: unknown opening")
+    if adjacency["status"] == "confirmed" and entrance_id is not None and (entrance_id not in cut_openings or openings[entrance_id]["build_kind"] != "entrance"):
+        _fail("adjacency_truth.entrance_opening_id: confirmed truth must reference a cut entrance")
     edges = _unique_ids(adjacency["edges"], "adjacency_truth.edges")
     for edge_id, raw in edges.items():
         edge = _exact(raw, {"id", "space_a_id", "space_b_id", "kind", "opening_id", "status", "evidence_refs"}, f"adjacency edge {edge_id}")
@@ -395,15 +399,17 @@ def validate_v2_document(document: Mapping[str, Any]) -> dict[str, Any]:
             _fail(f"adjacency edge {edge_id}: unknown space")
         if edge["space_a_id"] == edge["space_b_id"] or edge["kind"] not in {"door", "open_passage"}:
             _fail(f"adjacency edge {edge_id}: invalid spaces/kind")
-        if edge["kind"] == "door" and edge["opening_id"] not in cut_openings:
-            _fail(f"adjacency edge {edge_id}: door requires cut opening")
-        if edge["kind"] == "door":
+        edge_status = _status(edge["status"], f"adjacency edge {edge_id}.status")
+        if edge["kind"] == "door" and edge["opening_id"] not in openings:
+            _fail(f"adjacency edge {edge_id}: door requires a known opening")
+        if edge["kind"] == "door" and edge_status == "confirmed":
+            if edge["opening_id"] not in cut_openings:
+                _fail(f"adjacency edge {edge_id}: confirmed door requires cut opening")
             opening = openings[edge["opening_id"]]
             if opening["build_kind"] not in {"entrance", "door"} or {edge["space_a_id"], edge["space_b_id"]} != {opening["side_a_space_id"], opening["side_b_space_id"]}:
                 _fail(f"adjacency edge {edge_id}: spaces/kind differ from opening")
         if edge["kind"] == "open_passage" and edge["opening_id"] is not None:
             _fail(f"adjacency edge {edge_id}: open passage requires null opening")
-        _status(edge["status"], f"adjacency edge {edge_id}.status")
 
     assumptions = _exact(root["assumptions"], {"schema", "research_only", "items"}, "assumptions")
     if assumptions["schema"] != ASSUMPTION_SCHEMA or assumptions["research_only"] is not True:
@@ -454,9 +460,10 @@ def assess_v2_build_readiness(document: Mapping[str, Any]) -> dict[str, Any]:
     require_confirmed(doc["outer_boundary"]["status"], "outer_boundary_not_confirmed")
     for row in doc["spaces"]:
         require_confirmed(row["status"], f"space_not_confirmed:{row['id']}")
+    group_labels = {"branches": "branch", "atoms": "atom", "junctions": "junction"}
     for group in ("branches", "atoms", "junctions"):
         for row in doc["wall_graph"][group]:
-            require_confirmed(row["status"], f"wall_{group[:-1]}_not_confirmed:{row['id']}")
+            require_confirmed(row["status"], f"wall_{group_labels[group]}_not_confirmed:{row['id']}")
 
     build_openings: list[str] = []
     evidence_only: list[str] = []

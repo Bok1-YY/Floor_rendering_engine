@@ -1,0 +1,36 @@
+{
+  "schema": "goal-loop-v2-checkpoint-v1",
+  "checkpoint_id": "0003-1308-v2-evidence",
+  "stage": "reference_freeze",
+  "status": "accepted_evidence_not_build_ready",
+  "accepted_at": "2026-09-01T06:02:26.6617238+08:00",
+  "baseline_commit": "9891a806f2975b4aa63235323868d80cf5085c60",
+  "independent_verdict": "accept_1308_v2_evidence",
+  "runtime_artifacts": {
+    "reference_document_v2_sha256": "6c5bd3a0c36672c61d7ad2d504b20bb3e9dee4d1670eb47a53157d6bf4d993b5",
+    "reference_readiness_v2_sha256": "21d5b08457389ffee4f89ef1b30bfcf9cfb9e4e01da63cee63ce716c53127632",
+    "truth_candidates_v1_sha256": "56855b8815e3957af7a3929e178288ee3e8bb54c24c5f532728268a79b66f78d"
+  },
+  "evidence_state": {
+    "candidate_entities": 137,
+    "source_candidate_anchors": 28,
+    "unresolved_entities": 4,
+    "source_branches": 22,
+    "source_openings": 11,
+    "source_spaces": 16,
+    "stable_blockers_preserved": 12,
+    "readiness_blockers": 155,
+    "ready": false,
+    "build_opening_ids": []
+  },
+  "tests": {
+    "adapter_and_v2_focused": {"passed": 10, "failed": 0},
+    "backend": {"passed": 358, "skipped": 1, "failed": 0},
+    "diff_check": "passed",
+    "sample_hardcoding_scan": "passed"
+  },
+  "stage_boundary": "The v2 document preserves source evidence and atomic candidate topology. It does not freeze the reference, reduce the twelve source blockers, create effective voids, or authorize Blender/IFC generation.",
+  "budget_spent_usd": 0,
+  "budget_remaining_usd": 20,
+  "next_action": "Run independent reference-freeze review over the v2 evidence document and five source-truth candidate groups."
+}

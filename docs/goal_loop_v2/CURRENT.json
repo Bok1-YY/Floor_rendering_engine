@@ -4,7 +4,7 @@
   "active_sample": "1308",
   "stage": "reference_freeze",
   "iteration": 0,
-  "method_id": "evidence-document-v2",
+  "method_id": "reference-freeze-v2",
   "sample_status": {
     "1308": "running",
     "121m2": "pending"
@@ -14,7 +14,7 @@
   "last_score": 0,
   "score_history": [],
   "failure_class": null,
-  "next_action": "Convert the 1308 reference proposal into a research-structure-bundle-v2 evidence document, preserve every candidate/unresolved item, and obtain an independent reference-freeze verdict before build readiness.",
+  "next_action": "Independently review the 1308 v2 evidence document and truth candidates; freeze only source-supported orientation, outer scope and disclosed research assumptions, while preserving OP001 and semantic adjacency as unresolved until evidence resolves them.",
   "budget_spent_usd": 0,
   "budget_remaining_usd": 20,
   "blockers": [
@@ -32,5 +32,5 @@
     "B1308-Z-ASSUMPTIONS"
   ],
   "final_human_accepted": false,
-  "updated_at": "2026-09-01T05:45:50.9915286+08:00"
+  "updated_at": "2026-09-01T06:02:26.6617238+08:00"
 }

@@ -27,8 +27,8 @@ def v2_fixture() -> dict:
             "views": [{"id": "VIEW-EVIDENCE", "role": "normalized_evidence", "file_sha256": h_view, "pixel_sha256": h_pixels, "size_px": [100, 100], "canonical_to_view_3x3": [[1, 0, 0], [0, 1, 0], [0, 0, 1]]}],
             "metric_registration": {"model": "affine-2d", "solver": "exact", "canonical_px_to_metric_3x3": [[0.1, 0, 0], [0, 0.1, 0], [0, 0, 1]], "control_points": [{"id": "CTRL-0", "canonical_px": [0, 0], "metric_m": [0, 0], "evidence_refs": ["VIEW-EVIDENCE"]}, {"id": "CTRL-1", "canonical_px": [10, 0], "metric_m": [1, 0], "evidence_refs": ["VIEW-EVIDENCE"]}, {"id": "CTRL-2", "canonical_px": [0, 10], "metric_m": [0, 1], "evidence_refs": ["VIEW-EVIDENCE"]}], "max_residual_m": 0.0, "tolerance_m": 0.001, "scale_anchor_id": "ANCHOR-SCALE"},
             "anchors": [
-                {"id": "ANCHOR-SCALE", "kind": "scale", "geometry": {"space": "canonical_px", "primitive": "segment", "points_px": [[0, 0], [10, 0]]}, "measured_distance_mm": 1000, "status": confirmed, "evidence_asset_id": "VIEW-EVIDENCE", "note": "one metre"},
-                {"id": "ANCHOR-ENTRY", "kind": "entrance", "geometry": {"space": "canonical_px", "primitive": "segment", "points_px": [[20, 0], [30, 0]]}, "measured_distance_mm": None, "status": confirmed, "evidence_asset_id": "VIEW-EVIDENCE", "note": "entry"},
+                {"id": "ANCHOR-SCALE", "kind": "scale", "geometry": {"space": "canonical_px", "primitive": "segment", "points_px": [[0, 0], [10, 0]]}, "measured_distance_mm": 1000, "status": "human_confirmed", "evidence_asset_id": "VIEW-EVIDENCE", "note": "one metre"},
+                {"id": "ANCHOR-ENTRY", "kind": "entrance", "geometry": {"space": "canonical_px", "primitive": "segment", "points_px": [[20, 0], [30, 0]]}, "measured_distance_mm": None, "status": "human_confirmed", "evidence_asset_id": "VIEW-EVIDENCE", "note": "entry"},
             ],
         },
         "outer_boundary": {"polygon_m": [[0, 0], [4, 0], [4, 4], [0, 4]], "status": confirmed, "evidence_refs": ["VIEW-EVIDENCE"]},
@@ -79,6 +79,7 @@ def test_confirmed_v2_document_is_build_ready() -> None:
 def test_candidate_document_is_valid_but_not_build_ready() -> None:
     document = v2_fixture()
     document["outer_boundary"]["status"] = "candidate"
+    document["source"]["anchors"][1]["status"] = "source_candidate"
     document["unresolved_issues"] = [{"id": "ISSUE-OUTER", "severity": "hard", "category": "outer_boundary", "entity_refs": [], "status": "open", "message": "Outer boundary still needs review", "blocks_reference_freeze": True, "blocks_build": True, "evidence_refs": ["VIEW-EVIDENCE"]}]
     rehash(document)
     validate_v2_document(document)
@@ -156,3 +157,17 @@ def test_v2_requires_three_non_collinear_registration_controls() -> None:
     rehash(document)
     with pytest.raises(V2ContractError, match="non-collinear"):
         validate_v2_document(document)
+
+
+def test_candidate_adjacency_can_preserve_nonbuild_opening_evidence() -> None:
+    document = v2_fixture()
+    opening = document["opening_contract"]["openings"][0]
+    opening.update(build_disposition="exclude_pending_resolution", build_kind=None, owning_wall_atom_id=None, effective_void=None, swing_direction=None, traversable=False, side_a_space_id=None, side_b_space_id=None, jamb_before=None, jamb_after=None, status="unresolved")
+    document["adjacency_truth"]["status"] = "candidate"
+    document["adjacency_truth"]["edges"][0]["status"] = "candidate"
+    rehash(document)
+    validate_v2_document(document)
+    readiness = assess_v2_build_readiness(document)
+    assert readiness["ready"] is False
+    assert "adjacency_not_confirmed" in readiness["blocker_ids"]
+    assert "opening_pending_resolution:OPEN-ENTRY" in readiness["blocker_ids"]
