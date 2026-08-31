@@ -13,9 +13,15 @@ from typing import List, Tuple, Optional
 
 from PIL import Image, PngImagePlugin
 
-from .config import MAIN_OUTPUT_DIR, UPLOAD_DIR, logger
-from .models import JobRecord, ensure_candidate_lists, legacy_filter_from_targets
+from .config import MAIN_OUTPUT_DIR, UPLOAD_DIR, THUMB_DIR, logger
+from .models import (
+    JobRecord, LEGACY_JOB_FIELDS, ensure_candidate_lists, legacy_filter_from_targets,
+    migrate_legacy_job_payload,
+)
 from .reveal_security import obfuscate_text, deobfuscate_text, load_reveal_hash
+from .storage_assets import (
+    asset_lifecycle_lock, purge_output_thumbnails, store_sample_bytes, store_sample_image,
+)
 
 # ── 记录文件并发保护 ──────────────────────────────────────────────
 # 同一记录 JSON 的「读-改-写」必须串行：双模型生成时 B2/Pro 在两个 worker 线程里
@@ -95,7 +101,11 @@ def persist_jobs(jobs) -> None:
         jobs = list(jobs)[:QUEUE_PERSIST_MAX]
         out = []
         for j in jobs:
+            ensure_candidate_lists(j)
             d = dataclasses.asdict(j)
+            d['_schema_version'] = 3
+            for legacy_field in LEGACY_JOB_FIELDS:
+                d.pop(legacy_field, None)
             ctx = d.get('retry_ctx')
             if isinstance(ctx, dict) and 'api_key' in ctx:
                 ctx = dict(ctx); ctx.pop('api_key', None); d['retry_ctx'] = ctx
@@ -131,7 +141,8 @@ def load_persisted_jobs() -> List[JobRecord]:
         if not isinstance(d, dict):
             continue
         try:
-            job = JobRecord(**{k: v for k, v in d.items() if k in _JOB_FIELDS})
+            migrated = migrate_legacy_job_payload(d)
+            job = JobRecord(**{k: v for k, v in migrated.items() if k in _JOB_FIELDS})
         except Exception:
             continue
         # 中断态修正：程序重启时仍标 queued/running 的任务不可能还在跑
@@ -252,20 +263,94 @@ def save_records_file(json_path, records):
             try: os.remove(tmp_path)
             except OSError: pass
 
-def delete_record_entry(json_path, record_id):
-    """删除 JSON 文件中指定 ID 的记录"""
+def _normalized_asset_rel(rel: str) -> str:
+    return os.path.normcase(os.path.normpath(str(rel or '').replace('/', os.sep)))
+
+
+def _asset_is_referenced(rel: str) -> bool:
+    target = _normalized_asset_rel(rel)
+    if not target:
+        return False
+    for path in scan_json_files():
+        for record in load_records_file(path):
+            if not isinstance(record, dict):
+                continue
+            refs = [record.get('sample_image_file')]
+            refs.extend(
+                result.get('result_image_file')
+                for result in (record.get('results') or []) if isinstance(result, dict)
+            )
+            if any(_normalized_asset_rel(value) == target for value in refs if value):
+                return True
+    return False
+
+
+def _delete_asset_if_unreferenced(rel: str) -> dict:
+    outcome = {
+        'rel': rel or '', 'file_deleted': False, 'kept_shared': False,
+        'thumbnail_files_deleted': 0, 'freed_bytes': 0, 'deleted_path': '',
+    }
+    if not rel:
+        return outcome
+    if _asset_is_referenced(rel):
+        outcome['kept_shared'] = True
+        return outcome
+    path = safe_output_path(rel)
+    if not path or not os.path.isfile(path):
+        return outcome
+    try:
+        size = os.path.getsize(path)
+        thumb_count, thumb_bytes = purge_output_thumbnails(path, THUMB_DIR)
+        os.remove(path)
+        outcome.update(
+            file_deleted=True,
+            thumbnail_files_deleted=thumb_count,
+            freed_bytes=size + thumb_bytes,
+            deleted_path=path,
+        )
+    except OSError as exc:
+        outcome['cleanup_error'] = str(exc)
+        logger.warning(f"[记录] 无引用文件删除失败 rel={rel}: {exc}")
+    return outcome
+
+
+def _delete_record_entry_unlocked(json_path, record_id):
+    """删除记录，并回收删除后不再被任何记录引用的受管图片。"""
+    removed = None
     with record_file_lock(json_path):
         records = load_records_file(json_path)
-        new_records = [r for r in records if r.get('id') != record_id]
+        new_records = []
+        for row in records:
+            if row.get('id') == record_id and removed is None:
+                removed = row
+            else:
+                new_records.append(row)
         if len(new_records) == len(records):
             logger.warning(f"[记录] 删除失败，未找到记录 json={json_path}, record={record_id}")
-            return False
+            return None
         save_records_file(json_path, new_records)
+    refs = []
+    if isinstance(removed, dict):
+        refs.append(str(removed.get('sample_image_file') or ''))
+        refs.extend(
+            str(result.get('result_image_file') or '')
+            for result in (removed.get('results') or []) if isinstance(result, dict)
+        )
+    outcomes = [_delete_asset_if_unreferenced(rel) for rel in dict.fromkeys(refs) if rel]
     logger.info(f"[记录] 已删除记录 json={json_path}, record={record_id}")
-    return True
+    return {
+        'ok': True,
+        'files_deleted': sum(bool(item['file_deleted']) for item in outcomes),
+        'kept_shared': sum(bool(item['kept_shared']) for item in outcomes),
+        'thumbnail_files_deleted': sum(item['thumbnail_files_deleted'] for item in outcomes),
+        'freed_bytes': sum(item['freed_bytes'] for item in outcomes),
+        'deleted_paths': [item['deleted_path'] for item in outcomes if item['deleted_path']],
+        'cleanup_errors': [item['cleanup_error'] for item in outcomes if item.get('cleanup_error')],
+    }
 
-def delete_result_image(json_path, record_id, result_ref):
-    """Delete a result reference by stable id (or a legacy integer index)."""
+def _delete_result_image_unlocked(json_path, record_id, result_ref):
+    """Delete one result reference and reclaim its file only after a full ref scan."""
+    removed = None
     with record_file_lock(json_path):
         records = load_records_file(json_path)
         for r in records:
@@ -273,12 +358,33 @@ def delete_result_image(json_path, record_id, result_ref):
                 results = r.get('results', [])
                 idx = _result_index(results, result_ref)
                 if idx >= 0:
-                    results.pop(idx)
+                    removed = results.pop(idx)
                     save_records_file(json_path, records)
-                    logger.info(f"[记录] 已删除效果图 json={json_path}, record={record_id}, result={result_ref}")
-                    return True
+                    break
+    if removed is not None:
+        outcome = _delete_asset_if_unreferenced(str(removed.get('result_image_file') or ''))
+        logger.info(f"[记录] 已删除效果图 json={json_path}, record={record_id}, result={result_ref}")
+        return {
+            'ok': True,
+            'file_deleted': outcome['file_deleted'],
+            'kept_shared': outcome['kept_shared'],
+            'thumbnail_files_deleted': outcome['thumbnail_files_deleted'],
+            'freed_bytes': outcome['freed_bytes'],
+            'deleted_paths': [outcome['deleted_path']] if outcome['deleted_path'] else [],
+            'cleanup_error': outcome.get('cleanup_error', ''),
+        }
     logger.warning(f"[记录] 删除效果图失败 json={json_path}, record={record_id}, result={result_ref}")
-    return False
+    return None
+
+
+def delete_record_entry(json_path, record_id):
+    with asset_lifecycle_lock():
+        return _delete_record_entry_unlocked(json_path, record_id)
+
+
+def delete_result_image(json_path, record_id, result_ref):
+    with asset_lifecycle_lock():
+        return _delete_result_image_unlocked(json_path, record_id, result_ref)
 
 
 def _new_result_id() -> str:
@@ -311,6 +417,15 @@ def img_to_b64(img_or_path, max_width: Optional[int] = None) -> str:
         return b64mod.b64encode(buf.getvalue()).decode('utf-8')
     except Exception as e:
         logger.error(f"图片转 base64 失败: {img_or_path} / {e}")
+        return ''
+
+
+def save_sample_asset(image_or_path) -> str:
+    """Store one small sample by content and return a portable relative path."""
+    try:
+        return store_sample_image(image_or_path, MAIN_OUTPUT_DIR)
+    except Exception as exc:
+        logger.error(f"小样内容寻址保存失败: {exc}")
         return ''
 
 def b64_to_pil(b64_str):
@@ -407,7 +522,9 @@ def migrate_all_record_storage() -> int:
     changed = 0
     for path in scan_json_files():
         try:
-            changed += int(migrate_record_storage(path))
+            schema_changed = migrate_record_storage(path)
+            image_changed = migrate_record_file(path)
+            changed += int(schema_changed or image_changed)
         except Exception as ex:
             logger.error(f"[记录迁移] 失败，已保留原文件 {path}: {ex}")
     return changed
@@ -845,12 +962,14 @@ def migrate_record_file(json_path) -> bool:
         for r in records:
             sb = r.get('sample_image_b64')
             if sb and not r.get('sample_image_file'):
-                pil = b64_to_pil(sb)
-                if pil is not None:
-                    rel = _rel_result_path(save_api_result_jpg(pil, 'sample', pseudo_png))
-                    if rel:
-                        r['sample_image_file'] = rel
-                        r.pop('sample_image_b64', None); changed += 1
+                try:
+                    rel = store_sample_bytes(b64mod.b64decode(sb), MAIN_OUTPUT_DIR)
+                except Exception as exc:
+                    logger.warning(f"[迁移] 小样内容寻址失败 record={r.get('id','')}: {exc}")
+                    rel = ''
+                if rel:
+                    r['sample_image_file'] = rel
+                    r.pop('sample_image_b64', None); changed += 1
             for res in r.get('results', []):
                 b = res.get('result_image_b64')
                 if b and not res.get('result_image_file'):
@@ -869,6 +988,7 @@ def migrate_record_file(json_path) -> bool:
 __all__ = [
     'record_file_lock', 'get_json_path', 'load_records_file', 'save_records_file',
     'delete_record_entry', 'delete_result_image', 'img_to_b64', 'b64_to_pil',
+    'save_sample_asset',
     'scan_json_files', 'get_record_labels',
     'append_edited_result_to_record',
     'reveal_prompt_fn',

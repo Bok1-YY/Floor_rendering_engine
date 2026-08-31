@@ -21,10 +21,10 @@
   server_state     注册表/信号量等全部可变状态;server_helpers 共享工具;
   server_schemas   请求模型;image_ops 纯图像处理。
 """
-import hashlib
 import mimetypes
 import os
 import re
+import tempfile
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
@@ -35,9 +35,13 @@ from PIL import Image
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import server_state as state
-from .config import MAIN_OUTPUT_DIR, UPLOAD_DIR, THUMB_DIR, logger, load_config
+from .config import (
+    BASE_DIR, MAIN_OUTPUT_DIR, UPLOAD_DIR, THUMB_DIR, logger, load_config,
+    migrate_plaintext_secrets,
+)
 from .records import migrate_all_record_storage, load_persisted_jobs, safe_output_path
 from .server_helpers import IMAGE_EXTS
+from .storage_assets import output_thumb_cache_path, purge_output_thumbnails
 from . import (
     routes_jobs, routes_previews, routes_library, routes_config, routes_tools,
     routes_inpaint, routes_whole_home_design,
@@ -49,6 +53,7 @@ from . import (
 # ============================================================
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    migrate_plaintext_secrets()
     try:
         lim = max(1, int(load_config().get('max_concurrent_per_model', 1)))
     except Exception as ex:
@@ -60,7 +65,7 @@ async def lifespan(_app: FastAPI):
     resumed = routes_whole_home_design.recover_background_tasks()
     logger.info(
         f"[server_api] 启动完成：迁移 {migrated} 个记录文件，恢复 {len(state.JOBS)} 条历史任务，"
-        f"恢复 {resumed} 个已有 Fal 全屋设计请求，每模型并发 {lim}")
+        f"恢复 {resumed} 个已有 Fal 全屋设计请求，每模型并发 {lim}，数据目录={BASE_DIR}")
     yield
 
 
@@ -126,9 +131,14 @@ def serve_upload_thumb(name: str, s: int = 320):
             im.draft('RGB', (s, s))
             im = im.convert('RGB')
             im.thumbnail((s, s), Image.Resampling.LANCZOS)
-            tmp = cache + '.tmp'
-            im.save(tmp, 'JPEG', quality=82)
-            os.replace(tmp, cache)
+            fd, tmp = tempfile.mkstemp(prefix='.thumb_', suffix='.jpg', dir=THUMB_DIR)
+            os.close(fd)
+            try:
+                im.save(tmp, 'JPEG', quality=82)
+                os.replace(tmp, cache)
+            finally:
+                if os.path.exists(tmp):
+                    os.remove(tmp)
         except Exception as ex:
             logger.warning(f"[缩略图] 生成失败 {name}: {ex}")
             return Response(status_code=415)
@@ -142,20 +152,24 @@ def serve_output_thumb(relpath: str, s: int = 480):
         return Response(status_code=404)
     s = max(64, min(int(s), 1600))
     try:
-        mtime = int(os.path.getmtime(src))
+        cache = output_thumb_cache_path(src, s, THUMB_DIR)
     except OSError:
         return Response(status_code=404)
-    key = hashlib.md5(f'{os.path.realpath(src)}__{mtime}__{s}'.encode('utf-8')).hexdigest()
-    cache = os.path.join(THUMB_DIR, f'out_{key}.jpg')
     if not os.path.exists(cache):
         try:
             im = Image.open(src)
             im.draft('RGB', (s, s))
             im = im.convert('RGB')
             im.thumbnail((s, s), Image.Resampling.LANCZOS)
-            tmp = cache + '.tmp'
-            im.save(tmp, 'JPEG', quality=82)
-            os.replace(tmp, cache)
+            fd, tmp = tempfile.mkstemp(prefix='.thumb_', suffix='.jpg', dir=THUMB_DIR)
+            os.close(fd)
+            try:
+                im.save(tmp, 'JPEG', quality=82)
+                os.replace(tmp, cache)
+            finally:
+                if os.path.exists(tmp):
+                    os.remove(tmp)
+            purge_output_thumbnails(src, THUMB_DIR, keep=cache)
         except Exception as ex:
             logger.warning(f"[结果缩略图] 生成失败 {relpath}: {ex}")
             return Response(status_code=415)

@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { ChevronDown, Clapperboard, Sparkles, Trash2 } from "lucide-react";
 import { api } from "@/lib/api";
-import type { GenParams, OptionsView, Swatch, OmakaseOption } from "@/lib/types";
+import type { GenParams, OptionsView, SceneOption, Swatch, OmakaseOption } from "@/lib/types";
+import { flatViewOptions, sceneSummary } from "@/lib/scene";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -64,6 +65,155 @@ function Field({
           ))}
         </SelectContent>
       </Select>
+    </div>
+  );
+}
+
+function SceneField({
+  label,
+  value,
+  onChange,
+  options,
+  groupByValue,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: SceneOption[];
+  groupByValue?: Record<string, string>;
+}) {
+  const selected = options.find((option) => option.value === value);
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <span className="text-[11.5px] font-semibold text-muted-foreground">{label}</span>
+      <Select value={value} onValueChange={(next) => onChange(next ?? "")}>
+        <SelectTrigger className="h-10 w-full rounded-[10px] bg-card text-[13px] text-foreground">
+          <SelectValue>{cleanLabel(value)}</SelectValue>
+        </SelectTrigger>
+        <SelectContent>
+          {options.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {groupByValue?.[option.value] ? `${groupByValue[option.value]} · ` : ""}{cleanLabel(option.label)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      {selected?.description && (
+        <span className="line-clamp-2 text-[10.5px] leading-relaxed text-muted-foreground">{selected.description}</span>
+      )}
+    </div>
+  );
+}
+
+function StructuredSceneControls({
+  options,
+  params,
+  onParams,
+}: {
+  options: OptionsView;
+  params: GenParams;
+  onParams: (patch: Partial<GenParams>) => void;
+}) {
+  const catalog = options.scene_catalog;
+  const cnMode = !!params.cn_mode;
+  const presetOptions = catalog.presets
+    .filter((preset) => preset.market === "all" || preset.market === (cnMode ? "国内" : "海外"))
+    .map((preset) => ({
+      value: preset.value,
+      label: preset.label,
+      description: preset.description,
+      markets: [] as ("overseas" | "cn")[],
+      compatibility: {},
+    }));
+  if (params.scene_preset === catalog.compatibility_rules.legacy_preset) {
+    presetOptions.unshift({
+      value: catalog.compatibility_rules.legacy_preset,
+      label: catalog.compatibility_rules.legacy_preset,
+      description: "从旧草稿或历史记录恢复；保留原有语义，可继续微调。",
+      markets: [],
+      compatibility: {},
+    });
+  }
+  const views = flatViewOptions(catalog);
+  const groupByValue = Object.fromEntries(
+    catalog.view_options.flatMap((group) => group.options.map((option) => [option.value, group.group])),
+  );
+  const summary = sceneSummary(params);
+
+  return (
+    <div className="mt-[22px] space-y-[13px]">
+      <SectionHeader className="mx-0.5 mb-[11px]">结构化场景 / SCENE</SectionHeader>
+      <SceneField
+        label="场景预设"
+        value={params.scene_preset || presetOptions[0]?.value || ""}
+        onChange={(scene_preset) => onParams({ scene_preset })}
+        options={presetOptions}
+      />
+      {summary && (
+        <div className="rounded-xl border border-primary/20 bg-primary-soft px-3 py-2.5">
+          <div className="text-[10.5px] font-bold text-primary">当前场景约束</div>
+          <div className="mt-1 text-[11px] leading-relaxed text-secondary-foreground">{summary}</div>
+        </div>
+      )}
+      <div className="grid grid-cols-2 gap-[11px]">
+        {!cnMode && (
+          <SceneField
+            label="物业类型"
+            value={params.property_type || catalog.property_options[0]?.value || ""}
+            onChange={(property_type) => onParams({ property_type })}
+            options={catalog.property_options.filter((option) => option.markets.includes("overseas"))}
+          />
+        )}
+        <SceneField
+          label="地段类型"
+          value={params.site_context || catalog.site_contexts[0]?.value || ""}
+          onChange={(site_context) => onParams({ site_context })}
+          options={catalog.site_contexts.filter((option) => option.markets.includes(cnMode ? "cn" : "overseas"))}
+        />
+        <SceneField
+          label="楼层关系"
+          value={params.floor_level || catalog.floor_levels[0]?.value || ""}
+          onChange={(floor_level) => onParams({ floor_level })}
+          options={catalog.floor_levels}
+        />
+        <SceneField
+          label="房间尺度"
+          value={params.room_scale || catalog.room_scales[0]?.value || ""}
+          onChange={(room_scale) => onParams({ room_scale })}
+          options={catalog.room_scales}
+        />
+        <SceneField
+          label="空间布局"
+          value={params.room_layout || catalog.room_layouts[0]?.value || ""}
+          onChange={(room_layout) => onParams({ room_layout })}
+          options={catalog.room_layouts}
+        />
+        <SceneField
+          label="窗型 / 开口"
+          value={params.window_type || catalog.window_types[0]?.value || ""}
+          onChange={(window_type) => onParams({ window_type })}
+          options={catalog.window_types}
+        />
+        <div className="col-span-2">
+          <SceneField
+            label="窗外景观"
+            value={(cnMode ? params.cn_view : params.view) || views[0]?.value || ""}
+            onChange={(value) => onParams(cnMode ? { cn_view: value } : { view: value })}
+            options={views}
+            groupByValue={groupByValue}
+          />
+        </div>
+      </div>
+      <div className="flex flex-col gap-1.5">
+        <span className="text-[11.5px] font-semibold text-muted-foreground">场景补充（可选）</span>
+        <Textarea
+          value={params.scene_notes || ""}
+          onChange={(event) => onParams({ scene_notes: event.target.value })}
+          maxLength={1000}
+          placeholder="只补充事实，不覆盖上面的物业、楼层、窗型和景观；例如：窗外树冠遮挡约三分之一，不出现地标建筑。"
+          className="min-h-20 rounded-[10px] bg-card text-[12px]"
+        />
+      </div>
     </div>
   );
 }
@@ -561,15 +711,19 @@ export function ParamsForm({
           className="mt-[14px] flex w-full items-center justify-between gap-3 rounded-xl border border-dashed border-border-strong bg-panel px-[13px] py-[11px] text-left transition-colors hover:border-primary hover:bg-primary-soft"
         >
           <span className="min-w-0">
-            <span className="block text-[12.5px] font-bold text-secondary-foreground">更多场景参数 · 12 项</span>
+            <span className="block text-[12.5px] font-bold text-secondary-foreground">更多场景约束</span>
             {!advOpen && (
               <span className="mt-0.5 block truncate text-[11px] text-muted-foreground">
-                {[cnMode ? params.cn_city : city, params.property_type, params.view, params.floor_size, params.seam_type, params.glossiness].filter(Boolean).map((value) => short(String(value))).join(" · ")}
+                {[cnMode ? params.cn_city : city, cnMode ? params.cn_unit_type : params.property_type, params.floor_level, params.window_type, cnMode ? params.cn_view : params.view].filter(Boolean).map((value) => short(String(value))).join(" · ")}
               </span>
             )}
           </span>
           <ChevronDown size={15} className={cn("flex-none text-muted-foreground transition-transform", advOpen && "rotate-180")} />
         </button>
+      )}
+
+      {advOpen && !isOmakase && !isFree && !(isPanel && panelSub.includes("替换")) && (
+        <StructuredSceneControls options={options} params={params} onParams={onParams} />
       )}
 
       {advOpen && !isOmakase && !isPanel && !isFree && (<>
@@ -591,18 +745,6 @@ export function ParamsForm({
             <Field label="大洲" value={continent} onChange={onContinent} options={options.continents} />
             <Field label="国家" value={country} onChange={onCountry} options={countries} />
             <Field label="城市" value={city} onChange={(v) => onParams({ city: v })} options={cities} />
-            <Field
-              label="物业类型"
-              value={params.property_type || options.property_types[0]}
-              onChange={(v) => onParams({ property_type: v })}
-              options={options.property_types}
-            />
-            <Field
-              label="视野"
-              value={params.view || options.views[0]}
-              onChange={(v) => onParams({ view: v })}
-              options={options.views}
-            />
             <Field
               label="家具地区风格"
               value={params.market_furniture || options.market_furniture[0]}
@@ -652,12 +794,6 @@ export function ParamsForm({
               value={params.cn_delivery || options.cn_delivery_choices[0]}
               onChange={(v) => onParams({ cn_delivery: v })}
               options={options.cn_delivery_choices}
-            />
-            <Field
-              label="视野"
-              value={params.cn_view || options.views[0]}
-              onChange={(v) => onParams({ cn_view: v })}
-              options={options.views}
             />
           </div>
           <div className="grid grid-cols-2 gap-[13px]">

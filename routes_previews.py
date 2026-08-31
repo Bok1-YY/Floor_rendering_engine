@@ -69,7 +69,10 @@ async def _preview_bg(pid: str, req: 'PreviewRequest'):
             call_gemini_generate, api_key, LITE_PREVIEW_MODEL, cpt, pnp,
             '1K', ar, rp, sref, _on_stage, should_cancel, bevel_ref)
         if img is None:
-            record_usage(p.workflow_mode, 'NB2 Lite', 'google', False, 'preview')
+            record_usage(
+                p.workflow_mode, 'NB2 Lite', 'google',
+                'uncertain' if getattr(err, 'retry_safety', '') == 'ambiguous' else 'failed',
+                'preview')
             _set(status='failed', error=err or '预览生成失败', stage=''); return
         path = save_api_result_jpg(img, 'NB2Lite预览', pnp)
         if not path:

@@ -8,34 +8,23 @@ Computes BASE_DIR independently to avoid circular imports with config.py.
 
 import os
 import logging
-import sys
+from .runtime_paths import resolve_data_dir
 
-# Keep this independent from config.py to avoid a circular import, but use the same frozen-aware rules.
-_IS_FROZEN = getattr(sys, 'frozen', False) or ('__compiled__' in globals())
-if _IS_FROZEN:
-    _exe = (os.environ.get('NUITKA_ONEFILE_BINARY')
-            or os.environ.get('NUITKA_ORIGINAL_ARGV0')
-            or sys.argv[0]
-            or sys.executable)
-    _BASE_DIR = os.path.dirname(os.path.abspath(_exe))
-else:
-    _BASE_DIR = os.path.abspath(
-        os.environ.get("FLOOR_DATA_DIR")
-        or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    )
+_BASE_DIR = resolve_data_dir(os.path.dirname(os.path.abspath(__file__)))
 
 os.makedirs(_BASE_DIR, exist_ok=True)
 
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] - %(message)s',
-    datefmt='%Y-%m-%d %H:%M:%S',
-    handlers=[
-        logging.FileHandler(
-            os.path.join(_BASE_DIR, "app_local_save.log"), encoding='utf-8'
-        ),
-        logging.StreamHandler(),
-    ],
-)
+if not logging.getLogger().handlers:
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s [%(levelname)s] - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S',
+        handlers=[
+            logging.FileHandler(
+                os.path.join(_BASE_DIR, "app_local_save.log"), encoding='utf-8'
+            ),
+            logging.StreamHandler(),
+        ],
+    )
 
 logger = logging.getLogger(__name__)

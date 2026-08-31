@@ -21,6 +21,7 @@ from .config import (
     get_deepseek_base_url, get_deepseek_model, get_omakase_enabled,
     get_omakase_gemini_model, get_usage_prices, get_pptx_branding,
     get_inpaint_provider, get_comfyui_settings, get_inpaint_models,
+    secret_runtime_status,
 )
 from .failure_kb import classify_failure
 from .models import (
@@ -132,6 +133,10 @@ def job_view(job: JobRecord) -> dict:
             'stage': run.get('stage') or '',
             'seconds': run.get('seconds'),
             'error': run.get('error') or '',
+            'failure_code': run.get('failure_code') or '',
+            'retry_safety': run.get('retry_safety') or 'safe',
+            'may_have_been_billed': bool(run.get('may_have_been_billed', False)),
+            'attempts': list(run.get('attempts') or []),
             'url': to_url(current),
             'thumb': result_thumb_url(current),
             'idx': idx,
@@ -168,6 +173,10 @@ def job_view(job: JobRecord) -> dict:
         'operation': job.operation,
         'operation_status': job.operation_status,
         'operation_error': job.operation_error,
+        'operation_failure_code': job.operation_failure_code,
+        'operation_retry_safety': job.operation_retry_safety,
+        'operation_may_have_been_billed': job.operation_may_have_been_billed,
+        'operation_attempts': list(job.operation_attempts or []),
         'panorama_resume': panorama_resume,
         'has_retry': bool(job.retry_ctx),
         'record_id': job.record_id,
@@ -192,6 +201,7 @@ def job_view(job: JobRecord) -> dict:
 def config_view() -> dict:
     cfg = load_config()
     brand = get_pptx_branding()
+    secret_status = secret_runtime_status()
     return {
         'has_gemini_key': bool((cfg.get('gemini_api_key') or '').strip()),
         'has_fal_key': bool((cfg.get('fal_api_key') or '').strip()),
@@ -223,6 +233,13 @@ def config_view() -> dict:
         'pptx_company': brand['company'],
         'pptx_contact': brand['contact'],
         'pptx_logo_url': to_url(brand['logo_path']),
+        'secret_backend': secret_status['backend'],
+        'secret_sources': {
+            'gemini': secret_status['sources']['gemini_api_key'],
+            'fal': secret_status['sources']['fal_api_key'],
+            'deepseek': secret_status['sources']['deepseek_api_key'],
+        },
+        'plaintext_secret_migration_required': secret_status['plaintext_migration_required'],
     }
 
 

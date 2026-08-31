@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import path from "node:path";
 
 const nextConfig: NextConfig = {
   // 打包成「单一程序」用：静态导出到 out/，由 FastAPI 后端直接托管，
@@ -8,6 +9,8 @@ const nextConfig: NextConfig = {
   images: { unoptimized: true },
   // /settings -> /settings/index.html，配合 StaticFiles(html=True) 深链接刷新可命中。
   trailingSlash: true,
+  // 避免桌面上其他 package-lock.json 让 Turbopack 误判 workspace 根目录。
+  turbopack: { root: path.resolve(__dirname) },
 };
 
 export default nextConfig;

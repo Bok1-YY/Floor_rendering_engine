@@ -200,7 +200,7 @@ cd web && npm ci && npm run build && cd ..
 python serve.py
 ```
 
-Enter API keys on the Settings page after first launch. See [DEVGUIDE.md](./DEVGUIDE.md) for ports, configuration, and module details.
+Enter API keys on the Settings page after first launch. Keys are stored in the current user's OS keyring rather than `engine_config.json`; re-enter them after moving the runnable to another machine. See [DEVGUIDE.md](./DEVGUIDE.md) for ports, configuration, and module details.
 
 ## Repository Guide
 

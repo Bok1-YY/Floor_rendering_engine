@@ -165,21 +165,24 @@ Floor_engine_server/
 
 ## 三、数据与配置（重要，别踩）
 
-`config.py` 里：`BASE_DIR = dirname(dirname(__file__))`。本仓库在 `test/` 下时，`BASE_DIR` 解析到 **`test/`**，于是所有运行期数据落在 `test/` 下、**与原型 `test/floor_engine/` 共享**：
+`runtime_paths.py` 是唯一数据根解析器：源码运行默认 `BASE_DIR=<项目>/data`，`FLOOR_DATA_DIR` 可显式覆盖；Nuitka onefile 使用用户双击的 exe 所在目录。
 
-| 路径（相对 `test/`） | 内容 |
+| 路径（相对 `BASE_DIR`） | 内容 |
 |---|---|
-| `output_files/` | 出图、每个素材的 `*_记录.json`、优化图、磨缝候选 |
+| `output_files/` | 出图、每个素材的 `*_记录.json`、优化图、磨缝候选；源码运行时位于 `data/` 下 |
+| `output_files/_samples/` | 400px 记录小样，按完整 SHA-256 内容寻址，跨记录复用 |
 | `output_files/.queue_state.json` | 任务队列持久化（最多 60 条，重启恢复） |
-| `engine_config.json` | **密钥**(gemini/fal)、proxy、provider、speed_profile、auto_failover、tls_verify/ca、并发等。**含敏感信息，已 gitignore，且在 `test/` 不在本仓库** |
+| `engine_config.json` | proxy、provider、speed_profile、auto_failover、tls_verify/ca、并发等非敏感配置；API Key 不再落 JSON |
 | `custom_recipes.json` | 用户保存的“我的配方”（位于仓库上级，不进入本仓库） |
 | `_ng_uploads/logo_*` | PPTX 提案使用的品牌 Logo（由程序上传和清理） |
 | `_ng_uploads/` | 上传的小样/参照图 |
 | `_ng_thumbs/` | 懒生成缩略图缓存（可随时重建，gitignore） |
+| `storage_backups/` | 存储清理前的记录备份、旧→新引用映射与清理 manifest |
+| `storage_quarantine/` | 无引用文件的30天可恢复隔离区；到期仍需人工确认才永久删除 |
 | `app_local_save.log` | 运行日志（gitignore） |
 
-- **新旧版共享同一份数据**：旧 NiceGUI(7869) 和新后端(7870) 同时跑也互不冲突，看到的是同一批历史与配置。
-- **将来迁出 `test/`**：把本仓库挪到别处，`BASE_DIR` 自动指向新位置 → 自动获得**独立**数据目录，无需改一行代码。`.gitignore` 已提前忽略这些运行期产物，防止迁出后误入库。
+- **API Key**：优先环境变量，其次系统 keyring（Windows Credential Locker/macOS Keychain/Linux Secret Service）；安全 backend 不可用时禁止新写明文。
+- **迁移项目**：移动源码目录会连同 `data/` 移动非敏感数据；系统 keyring 绑定当前用户/机器，换电脑后必须重新填 Key。
 - engine_config.json 关键字段：`gemini_api_key`/`proxy`/`fal_api_key`/`fal_queue_proxy`（SD/AuraSR 专用，默认空=忽略系统代理直连）/`image_provider`(google|fal)/`sd_enabled`（SD 实验线路，默认关）/`speed_profile`(fast|resilient)/`auto_failover`/`tls_verify`/`tls_ca_bundle`/`max_concurrent_per_model`，生成式修补组 `inpaint_provider`(fal|comfyui)/`inpaint_remove_model`/`inpaint_add_model`/`comfyui_base_url`/`comfyui_workflow_path`/`comfyui_timeout`/`inpaint_remove_prompt`，以及成本估算 `usage_prices`、PPTX 品牌字段 `pptx_company`/`pptx_contact`。前端「设置」页读写这些（经 `GET/PUT /api/config`，返回时密钥脱敏）；品牌 Logo 走独立上传端点。
 
 ---
@@ -206,16 +209,17 @@ POST /api/jobs ──秒回 job_id──▶ 后台 asyncio task(routes_jobs._run
 进程内状态全部在 `server_state.py`：`JOBS`/`PREVIEWS`/`INPAINTS` 三个 `TaskRegistry` 实例（成员管理内部加锁；单任务取消集合 + 全局取消代次是 JOBS 的方法）、`model_semaphores`(b2/pro/sd35/inpaint 各一把，lifespan 里 `init_runtime()` 建)。新任务以 `model_targets` + `model_runs` 为真源，旧 `model_filter`/B2/Pro 固定字段仅作兼容；终态由 `compute_runs_final_status` 汇总。
 
 ### 4.3 端点目录（50+ API 路由）
-- **作业** `/api/jobs`：`POST`建（`model_targets` 可多选 b2/pro/sd35）· `POST /free` 建自由多图任务 · `GET`列 · `GET {id}` · `GET {id}/stream`(SSE) · `POST {id}/cancel` · `POST cancel-all` · `POST clear-completed`(清完成) · `POST {id}/delete`(删单条) · `POST {id}/retry` · `POST {id}/sd-upscale`(仅重试 AuraSR) · `GET {id}/result?model=&idx=`(候选切换) · `POST {id}/polish`(磨缝) · `POST {id}/edit`(二改) · `POST {id}/regen?n=`(重抽/多抽)。
+- **作业** `/api/jobs`：`POST`建（`model_targets` 可多选 b2/pro/sd35）· `POST /free` 建自由多图任务 · `GET`列 · `GET {id}` · `GET {id}/stream`(SSE) · `POST {id}/cancel` · `POST cancel-all` · `POST clear-completed`(只清任务卡，保留图片/记录) · `POST {id}/delete`(删单条任务卡) · `POST {id}/retry`（ambiguous 必须 `confirm_possible_duplicate_charge=true`）· `POST {id}/sd-upscale` · `GET {id}/result?model=&idx=` · `POST {id}/polish` · `POST {id}/edit` · `POST {id}/regen?n=`。
 - **预览** `/api/preview`：`POST` 创建轻量预览 · `GET {pid}` 查询 · `POST {pid}/cancel` 取消。
-- **记录** `/api/records`：`GET`列文件 · `GET load` · `POST reveal`(解密) · `POST edit`(记录内二改) · `POST result/delete` · `POST result/favorite` · `POST result/review`(人工评审：通过/备选/淘汰、标签、备注、最佳图) · `POST delete`(删整条) · `GET export/{html,pptx,favorites-pptx}`(FileResponse 下载)。
+- **记录** `/api/records`：`GET`列文件 · `GET load`（只读）· `POST reveal`(解密) · `POST edit`(记录内二改) · `POST result/delete`（无共享引用才物理删图）· `POST result/favorite` · `POST result/review`(人工评审：通过/备选/淘汰、标签、备注、最佳图) · `POST delete`(删整条并回收无引用文件) · `GET export/{html,pptx,favorites-pptx}`(FileResponse 下载)。
+- **存储维护**：`GET /api/storage/audit` 只读扫描；`POST /api/storage/cleanup` 备份并清小样/缩略图；`POST /api/storage/orphans/quarantine` 隔离孤儿；`GET /api/storage/quarantine` 列隔离项；`POST .../{id}/restore|purge` 恢复或到期确认删除。
 - **上传** `POST /api/uploads/{floor,room,ref}`；品牌 Logo 为 `POST /api/uploads/logo` 与 `POST /api/uploads/logo/clear`。
 - **小样与配方**：`GET /api/swatches/recent` · `GET /api/recipes` · `/api/recipes/custom` 列表/新增/更新/删除。
 - **识色与校色**：`GET /api/floor/analyze`；`POST /api/color-match/segment` 用离线 MobileSAM 自动生成地板蒙版，并接受正/负画笔与上一版蒙版做增量细化；`POST /api/color-match/preview` 支持 `scope=floor_mask|global`。默认局部模式只在 mask 内校正 LAB 的 a/b 色度、保留 L 明暗并向内羽化，区外逐像素不变；旧 `global` 模式仍以 `rect` 取样并作用全图。`POST /api/jobs/{id}/color-match` 与 `/api/records/color-match` 以 PNG 落局部结果，并在旁边留存 `_mask.png` 及记录元数据。
 - **生成式修补** `/api/inpaint`：`POST /api/inpaint/segment` 复用与修补一致的三种 `target`，`strategy=scan_objects|point` 分别返回自动物件候选或点击位置区域（行优先 RLE）；两段式生成仍为 `POST /api/inpaint`（mask + n=1~3；响应含 requested_n/effective_n/notice，专职 Eraser 强制 effective_n=1）· `GET {iid}`(轮询候选) · `POST {iid}/apply`(挑中才落目标) · `POST {iid}/cancel` · `GET comfyui/ping`(后端代理探测本地实例)。
 - **评审复盘**：`GET /api/review/summary` 聚合维度统计 · `GET /api/review/gallery?filter=pass|best` 好图样本库。
 - **失败** `POST /api/failure/classify` · `GET /api/failure/rules`；**连通** `GET /api/connection/test`。
-- **配置** `GET/PUT /api/config`；**模型** `GET /api/models`；**选项** `GET /api/options`(前端下拉真源)；**用量** `GET /api/usage`；**健康** `GET /api/healthz`。
+- **配置** `GET/PUT /api/config`；`DELETE /api/config/secrets/{gemini|fal|deepseek}` 清系统密钥；**模型** `GET /api/models`；**选项** `GET /api/options`；**用量** `GET /api/usage`（含 uncertain 与成本上下限）；**健康** `GET /api/healthz`。
 - **静态/缩略图**：`GET /thumb/{uploads,outputs}`(懒生成 JPEG)；`/outputs`、`/uploads` 挂目录服原图。
 
 ### 4.4 加新端点的范式

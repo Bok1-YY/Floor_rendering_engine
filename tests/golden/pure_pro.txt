@@ -1,6 +1,26 @@
 Help me make a photo:
 
-Professional photorealistic interior architectural photography. modern detached villa, living-dining combo. Location: unspecified location. Neighborhood: modern neighborhood. View outside: natural open view. Aspect ratio 4:3, 4K resolution.
+Professional photorealistic interior architectural photography. detached family house, living-dining room. Location: unspecified location. Aspect ratio 4:3, 4K resolution.
+
+**[SCENE IDENTITY — MANDATORY]**
+**Residence**: A detached family house with honest room proportions, clear entry and garden relationships, ordinary residential ceiling height and no exaggerated sales-villa scale.
+**Location and site**: unspecified location. A suburban family neighborhood with detached or semi-detached homes, front gardens, local streets and moderate tree cover.
+
+**[ROOM PROGRAM & GEOMETRY]**
+**Room**: An integrated living-dining room. Include a readable sofa group and a dining table as two distinct but connected zones, preserve a clear circulation route, and keep both functions at residential scale; no bed or kitchen-only composition.
+**Scale**: Standard residential scale with true-to-life furniture, ordinary ceiling height and comfortable but not excessive clearances.
+**Layout**: A balanced rectilinear room with clear orthogonal walls, centered circulation and no arbitrary warped corners.
+
+**[WINDOW & OUTDOOR VIEW]**
+**Floor relationship**: A room within a low-rise house, typically ground or first upper level, with human-scale garden, street or landscape relationships and no high-rise elevation cues.
+**Window / opening**: A broad picture window with restrained framing, a wide horizontal view and physically plausible wall support.
+**View outside**: A quiet leafy residential street with mature tree canopies, sidewalks and low-rise neighboring homes, layered from near garden edge to the street and houses beyond.
+
+**[SPATIAL CONSISTENCY — NON-NEGOTIABLE]**
+The exterior exists ONLY beyond physically modeled windows or glazed doors — never printed on a wall, never floating inside the room. Match the horizon height, downward viewing angle, object scale, neighboring-building distance and privacy level to the stated floor and site. Keep window mullions, glass thickness, reflections, exterior perspective and the room's vanishing points mutually consistent. The selected lighting controls time, weather impression and color temperature; do not invent a second conflicting outdoor lighting condition.
+
+**[SCENE EXCLUSIONS]**
+No contradictory property scale, no impossible ground garden at an elevated apartment, no aerial/drone viewpoint from an interior camera, no unrelated skyline or landscape outside the selected view, and no furniture program belonging to a different room type.
 
 **[Style & Atmosphere]** 原木风 aesthetic. Authentic and inviting atmosphere.
 

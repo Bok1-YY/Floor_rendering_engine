@@ -3,6 +3,7 @@ import base64
 import json
 import os
 import asyncio
+from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
@@ -85,6 +86,29 @@ def test_queue_persistence_obfuscates_retry_prompts(tmp_path, monkeypatch):
     restored = records.load_persisted_jobs()[0]
     assert restored.retry_ctx["cpt"] == "secret b2"
     assert restored.retry_ctx["cpt_pro"] == "secret pro"
+
+
+def test_queue_v3_persists_only_model_runs_and_loads_legacy_fields(tmp_path, monkeypatch):
+    state_path = tmp_path / ".queue_state.json"
+    monkeypatch.setattr(records, "QUEUE_STATE_FILE", str(state_path))
+    legacy = new_job("oak", "now")
+    legacy.b2_path = "b2.jpg"
+    legacy.b2_paths = ["b2.jpg"]
+    legacy.b2_idx = 0
+    records.persist_jobs([legacy])
+    raw = json.loads(state_path.read_text(encoding="utf-8"))[0]
+    assert raw["_schema_version"] == 3
+    assert "b2_path" not in raw and "b2_paths" not in raw
+    assert raw["model_runs"]["b2"]["paths"] == ["b2.jpg"]
+
+    state_path.write_text(json.dumps([{
+        "job_id": "legacy", "display_name": "old", "ts": "now",
+        "model_filter": "both", "b2_path": "old.jpg", "b2_paths": ["old.jpg"],
+        "b2_idx": 0, "pro_path": None, "pro_paths": [],
+    }]), encoding="utf-8")
+    restored = records.load_persisted_jobs()[0]
+    assert restored.model_runs["b2"]["paths"] == ["old.jpg"]
+    assert restored.b2_path == "old.jpg"
 
 
 def test_record_api_response_redacts_prompt_fields(tmp_path, monkeypatch):
@@ -289,7 +313,7 @@ def test_google_and_fal_free_inputs_keep_slot_order(tmp_path, monkeypatch):
     google_parts = captured[-1]["contents"][0]["parts"]
     assert google_parts[0] == {"text": " exact prompt "}
     assert [base64.b64decode(part["inlineData"]["data"]) for part in google_parts[1:]] == [
-        open(path, "rb").read() for path in paths
+        Path(path).read_bytes() for path in paths
     ]
 
     api_mod.call_fal_generate("k", "gemini-3-pro-image", " exact prompt ", paths[0],
@@ -298,7 +322,7 @@ def test_google_and_fal_free_inputs_keep_slot_order(tmp_path, monkeypatch):
     fal_payload = captured[-1]
     assert fal_payload["prompt"] == " exact prompt "
     assert [uri.split(",", 1)[1] for uri in fal_payload["image_urls"]] == [
-        base64.b64encode(open(path, "rb").read()).decode("ascii") for path in paths
+        base64.b64encode(Path(path).read_bytes()).decode("ascii") for path in paths
     ]
 
 

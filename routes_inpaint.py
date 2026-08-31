@@ -159,7 +159,10 @@ async def _generic_inpaint_bg(iid: str, src_pil, engine_mask, blend_mask, prompt
             if out is None:
                 last_err = str(err or '生成失败')
                 if '取消' not in last_err and not should_cancel():
-                    record_usage(workflow_mode, usage_label, provider, False, operation)
+                    record_usage(
+                        workflow_mode, usage_label, provider,
+                        'uncertain' if getattr(err, 'retry_safety', '') == 'ambiguous' else 'failed',
+                        operation)
                 continue
             # 上游已经成功出图即可能产生费用；即便用户随后取消，也按成功调用记账。
             record_usage(workflow_mode, usage_label, provider, True, operation)

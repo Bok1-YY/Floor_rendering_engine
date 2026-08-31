@@ -142,6 +142,10 @@ export function JobCard({
     job.status === "running" ||
     job.pro_polishing ||
     job.operation_status === "running";
+  const ambiguousRuns = Object.values(job.model_runs || {}).filter(
+    (run) => run?.retry_safety === "ambiguous",
+  );
+  const hasAmbiguousBilling = ambiguousRuns.length > 0 || job.operation_retry_safety === "ambiguous";
   useJobStream(active ? job.job_id : null, applySnapshot);
   // 轮询兜底：SSE 断流(后端重启/流异常关闭)时，父级轮询的新快照仍能解冻卡片。
   // SSE 与轮询同源同结构，last-writer-wins，1s 周期的 SSE 会覆盖偶尔旧一拍的轮询数据。
@@ -164,6 +168,16 @@ export function JobCard({
     } catch (e) {
       toast.error((e as Error).message);
     }
+  }
+
+  async function retryFailedRuns() {
+    if (hasAmbiguousBilling && !window.confirm(
+      "上一次请求可能已经被模型接受或计费，但结果未能确认。再次生成可能产生重复费用，确认继续吗？",
+    )) return;
+    await act(
+      () => api.retryJob(job.job_id, hasAmbiguousBilling),
+      hasAmbiguousBilling ? "已确认可能重复计费并重新生成" : "已重试",
+    );
   }
 
   async function remove() {
@@ -662,6 +676,12 @@ export function JobCard({
         </div>
       )}
 
+      {hasAmbiguousBilling && (
+        <div className="mt-3 rounded-lg border border-warn/30 bg-warn-soft px-3 py-2 text-[11.5px] font-semibold text-warn">
+          结果状态不确定：请求可能已被接受或计费，系统没有自动重提。
+        </div>
+      )}
+
       <div className="mt-[11px] flex flex-wrap items-center gap-1.5">
         {active && (
           <button
@@ -682,9 +702,9 @@ export function JobCard({
           (job.status === "failed" || job.status === "partial") && (
             <button
               className={actBtn}
-              onClick={() => act(() => api.retryJob(job.job_id), "已重试")}
+              onClick={retryFailedRuns}
             >
-              重试失败线路
+              {hasAmbiguousBilling ? "再次生成（可能重复计费）" : "重试失败线路"}
             </button>
           )}
         {terminal && job.pro_url && !isFree && (

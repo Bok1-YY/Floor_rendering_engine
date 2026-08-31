@@ -14,6 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { useStorageMaintenance } from "@/hooks/useStorageMaintenance";
 
 // 移除/添加模式可选模型（provider=fal 时生效）；与后端 config.INPAINT_*_MODELS 对齐
 const REMOVE_MODELS = [
@@ -32,6 +33,17 @@ const ADD_MODELS = [
 const fieldInput =
   "h-10 w-full rounded-[10px] border-border bg-panel text-[13px] text-foreground";
 const fieldLabel = "text-[12px] font-semibold text-muted-foreground";
+const formatBytes = (value: number) => {
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  return `${(value / 1024 / 1024).toFixed(2)} MB`;
+};
+const secretSourceLabel = (source: string) => ({
+  environment: "环境变量",
+  keyring: "系统密钥环",
+  legacy: "旧明文配置",
+  missing: "未配置",
+}[source] || source);
 
 export default function SettingsPage() {
   const [cfg, setCfg] = useState<ConfigView | null>(null);
@@ -79,6 +91,12 @@ export default function SettingsPage() {
   const [pptxCompany, setPptxCompany] = useState("");
   const [pptxContact, setPptxContact] = useState("");
   const [logoUploading, setLogoUploading] = useState(false);
+  const [secretClearing, setSecretClearing] = useState("");
+  const {
+    cleanStorage, purgeQuarantineEntry, quarantineBusy, quarantineEntries,
+    quarantineOrphansNow, restoreQuarantineEntry, scanStorage, storageAudit,
+    storageCleaning, storageScanning,
+  } = useStorageMaintenance();
 
   function load() {
     api
@@ -240,6 +258,20 @@ export default function SettingsPage() {
     }
   }
 
+  async function clearSecret(provider: "gemini" | "fal" | "deepseek", label: string) {
+    if (!window.confirm(`清除当前 ${label}？环境变量提供的 Key 必须在启动环境中移除。`)) return;
+    setSecretClearing(provider);
+    try {
+      await api.clearSecret(provider);
+      toast.success(`${label} 已从系统密钥环清除`);
+      load();
+    } catch (err) {
+      toast.error((err as Error).message);
+    } finally {
+      setSecretClearing("");
+    }
+  }
+
   const cloudModels = [removeModel, addModel];
   const needsFalForInpaint = cloudModels.some((m) => m !== "gemini-mark");
   const needsGeminiForInpaint = cloudModels.includes("gemini-mark");
@@ -277,6 +309,22 @@ export default function SettingsPage() {
                 密钥 / KEYS
               </div>
 
+              <div className={cn(
+                "mb-[14px] rounded-[10px] border p-3 text-[11.5px] leading-relaxed",
+                cfg.secret_backend.available
+                  ? "border-success/30 bg-success/5 text-success"
+                  : "border-destructive/30 bg-destructive-soft text-destructive",
+              )}>
+                安全后端：{cfg.secret_backend.name} · {cfg.secret_backend.available ? "可持久化" : "仅环境变量"}
+                {cfg.secret_backend.error ? ` · ${cfg.secret_backend.error}` : ""}
+                <br />系统密钥环绑定当前用户；把程序复制到新电脑后需要重新填写 Key。
+              </div>
+              {cfg.plaintext_secret_migration_required && (
+                <div className="mb-[14px] rounded-[10px] border border-destructive/40 bg-destructive-soft p-3 text-[11.5px] font-semibold text-destructive">
+                  仍检测到旧版明文 Key。请确保系统密钥环可用并重启，迁移验证成功后 JSON 明文会被移除。
+                </div>
+              )}
+
               <div className="mb-[15px] flex flex-col gap-[7px]">
                 <span className={fieldLabel}>
                   Gemini API Key
@@ -300,6 +348,29 @@ export default function SettingsPage() {
                     {showGemini ? "隐藏" : "显示"}
                   </button>
                 </div>
+              </div>
+
+              <div className="mb-[15px] grid grid-cols-3 gap-2">
+                {([
+                  ["gemini", "Gemini", cfg.has_gemini_key, cfg.secret_sources.gemini],
+                  ["fal", "Fal", cfg.has_fal_key, cfg.secret_sources.fal],
+                  ["deepseek", "DeepSeek", !!cfg.has_deepseek_key, cfg.secret_sources.deepseek],
+                ] as const).map(([providerName, label, configured, source]) => (
+                  <div key={providerName} className="rounded-lg border border-border bg-panel p-2.5 text-[11px]">
+                    <div className="font-bold text-foreground">{label}</div>
+                    <div className="mt-0.5 text-muted-foreground">{secretSourceLabel(source)}</div>
+                    {configured && (
+                      <button
+                        type="button"
+                        disabled={secretClearing === providerName}
+                        onClick={() => clearSecret(providerName, label)}
+                        className="mt-2 rounded-md px-2 py-1 font-semibold text-destructive hover:bg-destructive-soft disabled:opacity-50"
+                      >
+                        {secretClearing === providerName ? "清除中…" : "清除 Key"}
+                      </button>
+                    )}
+                  </div>
+                ))}
               </div>
 
               <div className="mb-[15px] flex flex-col gap-[7px]">
@@ -414,6 +485,9 @@ export default function SettingsPage() {
                     <button onClick={() => setSpeed("resilient")} className={provBtn(speed === "resilient")}>
                       韧性 resilient
                     </button>
+                  </div>
+                  <div className="mt-1.5 text-[10.5px] leading-relaxed text-muted-foreground">
+                    两种策略只控制明确安全失败的重试次数；请求提交后断流一律停止，避免可能重复计费。
                   </div>
                 </div>
               </div>
@@ -693,6 +767,98 @@ export default function SettingsPage() {
               <div className="mt-[10px] text-[11px] leading-relaxed text-muted-foreground">
                 用于「用量」页的成本估算（成功张数 × 单价，失败不计）。留空则对应行显示 —。
               </div>
+            </div>
+
+            {/* 存储维护卡 */}
+            <div className="rounded-[14px] border border-border bg-card p-[20px] shadow-[0_2px_8px_rgba(120,90,60,.05)]">
+              <div className="mb-[10px] text-[11px] font-extrabold tracking-[0.1em] text-accent-foreground">
+                存储维护 / STORAGE
+              </div>
+              <div className="text-[11.5px] leading-relaxed text-muted-foreground">
+                扫描只读；清理仅合并内容完全相同的小样并清空可再生缩略图。生成结果不会批量去重或删除。
+              </div>
+              {storageAudit && (
+                <div className="mt-3 grid grid-cols-2 gap-2 text-[12px]">
+                  <div className="rounded-lg bg-panel p-3">
+                    <div className="font-bold text-foreground">小样</div>
+                    <div className="mt-1 text-muted-foreground">
+                      {storageAudit.samples.files} 个文件 · {storageAudit.samples.unique_contents} 种内容<br />
+                      重复 {storageAudit.samples.duplicate_files} 个 · {formatBytes(storageAudit.samples.duplicate_bytes)}
+                    </div>
+                  </div>
+                  <div className="rounded-lg bg-panel p-3">
+                    <div className="font-bold text-foreground">缩略图缓存</div>
+                    <div className="mt-1 text-muted-foreground">
+                      {storageAudit.thumbnails.files} 个文件 · {formatBytes(storageAudit.thumbnails.bytes)}<br />
+                      内容重复 {storageAudit.thumbnails.duplicate_files} 个
+                    </div>
+                  </div>
+                  {storageAudit.orphan_results.files > 0 && (
+                    <div className="col-span-2 rounded-lg border border-warning/30 bg-warning/5 p-3 text-muted-foreground">
+                      另发现 {storageAudit.orphan_results.files} 个未引用图片（{formatBytes(storageAudit.orphan_results.bytes)}），本次只报告，不删除。
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="mt-3 flex gap-2">
+                <button
+                  type="button"
+                  onClick={scanStorage}
+                  disabled={storageScanning || storageCleaning}
+                  className="h-9 rounded-[9px] border border-border bg-card px-3 text-[12px] font-semibold hover:bg-accent disabled:opacity-50"
+                >
+                  {storageScanning ? "扫描中…" : "扫描存储"}
+                </button>
+                <button
+                  type="button"
+                  onClick={cleanStorage}
+                  disabled={!storageAudit || storageCleaning || storageScanning || (
+                    storageAudit.samples.duplicate_files === 0 && storageAudit.samples.legacy_inline_records === 0 && storageAudit.thumbnails.files === 0
+                  )}
+                  className="h-9 rounded-[9px] bg-primary px-3 text-[12px] font-bold text-primary-foreground disabled:opacity-40"
+                >
+                  {storageCleaning ? "备份并清理中…" : "备份并清理"}
+                </button>
+                <button
+                  type="button"
+                  onClick={quarantineOrphansNow}
+                  disabled={!storageAudit?.orphan_results.paths.length || !!quarantineBusy || storageCleaning}
+                  className="h-9 rounded-[9px] border border-warn/30 bg-warn-soft px-3 text-[12px] font-bold text-warn disabled:opacity-40"
+                >
+                  {quarantineBusy === "quarantine" ? "隔离中…" : "隔离孤儿文件30天"}
+                </button>
+              </div>
+              {quarantineEntries.length > 0 && (
+                <div className="mt-4 space-y-2 border-t border-border pt-3">
+                  <div className="text-[11px] font-bold text-foreground">隔离区</div>
+                  {quarantineEntries.map((entry) => (
+                    <div key={entry.entry_id} className="flex items-center justify-between gap-3 rounded-lg bg-panel p-2.5 text-[11px]">
+                      <div className="min-w-0">
+                        <div className="truncate font-semibold text-foreground">{entry.original_relpath}</div>
+                        <div className="text-muted-foreground">
+                          {formatBytes(entry.size)} · {entry.status === "quarantined" ? `可永久删除：${entry.purge_eligible_at}` : entry.status}
+                        </div>
+                      </div>
+                      {entry.status === "quarantined" && (
+                        <div className="flex flex-none gap-1.5">
+                          <button
+                            type="button"
+                            disabled={!!quarantineBusy}
+                            onClick={() => restoreQuarantineEntry(entry)}
+                            className="rounded-md px-2 py-1 font-semibold text-secondary-foreground hover:bg-accent disabled:opacity-40"
+                          >恢复</button>
+                          <button
+                            type="button"
+                            disabled={!entry.purge_eligible || !!quarantineBusy}
+                            onClick={() => purgeQuarantineEntry(entry)}
+                            className="rounded-md px-2 py-1 font-semibold text-destructive hover:bg-destructive-soft disabled:opacity-30"
+                          >永久删除</button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* 品牌导出卡 */}

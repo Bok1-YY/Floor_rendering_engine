@@ -24,11 +24,13 @@ from .prompt_data import (
 )
 from .image_prep import prepare_swatch_png
 from .cinematic_planner import CINEMATIC_FALLBACK_DIRECTION
+from .scene_context import SCENE_CATALOG_VERSION, compile_scene_context
 from .records import (
     get_json_path, load_records_file, save_records_file,
-    img_to_b64, record_file_lock,
+    save_sample_asset, record_file_lock,
 )
 from .reveal_security import obfuscate_text
+from .storage_assets import asset_lifecycle_lock
 
 # 地板整体颜色锁定指令：强制生成图地板的整体颜色与上传小样完全一致。
 # 取代旧的"提取色码注入 + 生成后自动校色"方案，改由提示词直接、人眼可校地约束模型。
@@ -352,6 +354,19 @@ def _derive_translations(p, v):
     if not cn_mode:
         en_overseas_realism = build_overseas_realism_layer(country, city, property_type, room_type, en_style_raw)
 
+    # One deterministic scene compiler feeds every parameterized new-scene workflow.  The
+    # existing CN/overseas layers remain useful for market styling, while this block owns the
+    # hard facts: residence, site, room program, floor level, opening and exterior view.
+    scene_context = compile_scene_context(
+        p,
+        location_text=en_location,
+        property_noun=("" if cn_mode else en_property),
+        room_noun=en_room,
+    )
+    en_scene_block = scene_context.block
+    scene_summary = scene_context.summary
+    scene_corrections = list(scene_context.corrections)
+
     # 🇨🇳 国内市场专项上下文块
     en_cn_context = ""
     if cn_mode:
@@ -482,7 +497,7 @@ def _derive_translations(p, v):
     en_quality = "**[Quality Requirements]** Ultra-sharp texture details at pixel level. Physically accurate, true-to-swatch colors with clean, faithful white balance and natural, consistent tone across the entire floor."
 
     _loc = locals()
-    v.update({n: _loc[n] for n in ('_mandatory_block', '_optional_block', '_prohibitions_block', 'ar_value', 'avoid_en', 'effective_room_type', 'en_angle', 'en_atmosphere', 'en_cn_context', 'en_composition', 'en_env', 'en_floor_extra', 'en_floor_sz', 'en_floor_visibility', 'en_furniture_contrast', 'en_gloss', 'en_light_inst', 'en_light_key', 'en_light_name', 'en_location', 'en_market_furniture', 'en_overseas_realism', 'en_plank_direction', 'en_property', 'en_quality', 'en_room', 'en_seam', 'en_seam_bevel_pro', 'en_style_raw', 'en_view_trans', 'extra_cmd_en', 'floor_size', 'floor_tone', 'glossiness', 'is_pressed_bevel', 'no_sofa_note', 'seam_type') if n in _loc})
+    v.update({n: _loc[n] for n in ('_mandatory_block', '_optional_block', '_prohibitions_block', 'ar_value', 'avoid_en', 'effective_room_type', 'en_angle', 'en_atmosphere', 'en_cn_context', 'en_composition', 'en_env', 'en_floor_extra', 'en_floor_sz', 'en_floor_visibility', 'en_furniture_contrast', 'en_gloss', 'en_light_inst', 'en_light_key', 'en_light_name', 'en_location', 'en_market_furniture', 'en_overseas_realism', 'en_plank_direction', 'en_property', 'en_quality', 'en_room', 'en_scene_block', 'en_seam', 'en_seam_bevel_pro', 'en_style_raw', 'en_view_trans', 'extra_cmd_en', 'floor_size', 'floor_tone', 'glossiness', 'is_pressed_bevel', 'no_sofa_note', 'scene_context', 'scene_corrections', 'scene_summary', 'seam_type') if n in _loc})
 
 
 def _build_material_instructions(p, v):
@@ -795,6 +810,7 @@ def _compose_prompt(p, v):
     en_property = v.get('en_property')
     en_quality = v.get('en_quality')
     en_room = v.get('en_room')
+    en_scene_block = v.get('en_scene_block')
     en_style_raw = v.get('en_style_raw')
     en_view_trans = v.get('en_view_trans')
     extra_cmd_en = v.get('extra_cmd_en')
@@ -834,6 +850,8 @@ Task: Inpainting / Floor Material Replacement. Aspect Ratio: {ar_value} | Resolu
         final_prompt_en = f"""Help me make a photo:
 
 Professional photorealistic pet-friendly interior photography. {en_property}, {en_room}. Location: {en_location}. Neighborhood: {en_env}. Aspect ratio {ar_value}, {resolution} resolution.
+
+{en_scene_block}
 
 **[Style & Atmosphere]** {en_style_raw} aesthetic. {en_atmosphere}{no_sofa_note}{en_market_furniture}{en_cn_context}
 
@@ -914,6 +932,8 @@ Professional photorealistic pet-friendly interior photography. {en_property}, {e
         final_prompt_en = f"""Help me make a photo:
 
 Professional photorealistic interior architectural photography. {en_room}. Aspect ratio {ar_value}, {resolution} resolution.
+
+{en_scene_block}
 
 **[REFERENCE IMAGE — STYLE / MATERIAL / PALETTE / MOOD]** One of the attached images is a REFERENCE PHOTO of an existing room. Study it and EMULATE its overall decoration style: its material language, color palette, lighting character, furniture taste-level, and emotional mood. This reference is for STYLE ONLY — do NOT copy its geometry, camera angle, wall layout, window positions, or furniture arrangement. INVENT A BRAND NEW room: an original composition and layout that merely FEELS like it belongs to the same home and designer as the reference. Keep believable, natural residential proportions — realistic ceiling height, true-to-life furniture scale, and a coherent single-room floor plan. Do NOT reproduce the reference's exact scene.
 
@@ -998,6 +1018,8 @@ Task: Wall-Panel Texture Replacement (keep the scene, swap only the panel wood).
 
 Professional photorealistic interior architectural photography of {en_room} featuring a wall-panel (wainscoting / 木饰面) feature wall. Aspect ratio {ar_value}, {resolution} resolution.
 
+{en_scene_block}
+
 **[Style & Atmosphere]** {en_style_raw} aesthetic. {en_atmosphere}
 
 **[Feature Wall]** The hero of the space is a floor-to-ceiling wall-panel feature wall executed entirely in the uploaded wood grain, styled to suit the room. Furniture and décor stay minimal and secondary so the paneling remains the focus.
@@ -1023,6 +1045,8 @@ Professional photorealistic interior architectural photography of {en_room} feat
 
 Professional photorealistic interior architectural photography of {en_room} as a wall-panel (wainscoting / wood feature wall) scene. Aspect ratio {ar_value}, {resolution} resolution.
 
+{en_scene_block}
+
 **[REFERENCE IMAGE — STYLE / ATMOSPHERE ONLY]** One of the attached images is a REFERENCE PHOTO of an existing wall-panel space. Study its spatial type, atmosphere and how the paneling is applied, and EMULATE that overall feel — but do NOT copy its composition, camera angle, wall layout or furniture arrangement. INVENT A BRAND-NEW original scene of the SAME TYPE of space with a DIFFERENT arrangement, so it feels like it belongs to the same home and designer as the reference rather than a copy.
 
 {_p_style}
@@ -1038,7 +1062,9 @@ Professional photorealistic interior architectural photography of {en_room} as a
     else:  # 纯效果图 — SCHEMA order: Style → Composition → Lighting → Floor → Output
         final_prompt_en = f"""Help me make a photo:
 
-Professional photorealistic interior architectural photography. {en_property}, {en_room}. Location: {en_location}. Neighborhood: {en_env}. View outside: {en_view_trans}. Aspect ratio {ar_value}, {resolution} resolution.
+Professional photorealistic interior architectural photography. {en_property}, {en_room}. Location: {en_location}. Aspect ratio {ar_value}, {resolution} resolution.
+
+{en_scene_block}
 
 **[Style & Atmosphere]** {en_style_raw} aesthetic. {en_atmosphere}{no_sofa_note}{en_market_furniture}{en_cn_context}
 
@@ -1132,6 +1158,8 @@ def _persist_task_record(p, v):
     effective_room_type = v.get('effective_room_type')
     final_prompt_en = v.get('final_prompt_en')
     final_prompt_en_pro = v.get('final_prompt_en_pro')
+    scene_summary = v.get('scene_summary') or ''
+    scene_corrections = v.get('scene_corrections') or []
     floor_size = v.get('floor_size')
     floor_tone = v.get('floor_tone')
     glossiness = v.get('glossiness')
@@ -1160,21 +1188,29 @@ def _persist_task_record(p, v):
         "property_type": property_type,
         "style": style_type or "",
         "location": _loc,
+        "scene_catalog_version": SCENE_CATALOG_VERSION,
+        "scene_summary": scene_summary,
+        "scene_corrections": list(scene_corrections),
         "seam": seam_type or "",
         "params_summary": params_summary,
         "_pe": obfuscate_text(final_prompt_en),
         "_pe_pro": obfuscate_text(final_prompt_en_pro),
         "cinematic_enabled": bool(p.cinematic_enabled),
         "_schema_version": 2,
-        "sample_image_b64": img_to_b64(processed_img, max_width=400),
         "results": []
     }
     # persist=False（快速预览借用提示词逻辑）：只出 PNG + 提示词，不新建 JSON 记录，避免污染记录页。
     if persist:
-        with record_file_lock(json_path):
-            records = load_records_file(json_path)
-            records.append(new_record)
-            save_records_file(json_path, records)
+        # 与删除/维护共用生命周期锁：不能让“最后引用删除”和“新引用追加”交叉，
+        # 否则内容文件可能在新记录写入前被回收。
+        with asset_lifecycle_lock():
+            sample_file = save_sample_asset(processed_img)
+            if sample_file:
+                new_record["sample_image_file"] = sample_file
+            with record_file_lock(json_path):
+                records = load_records_file(json_path)
+                records.append(new_record)
+                save_records_file(json_path, records)
 
     _loc = locals()
     v.update({n: _loc[n] for n in ('record_id',) if n in _loc})
@@ -1185,11 +1221,15 @@ def save_task_files_html(workflow_mode, model_choice, image_path, continent, cou
                          cn_mode=False, cn_developer="── 不指定 ──", cn_city="上海",
                          cn_tier="── 不指定 ──", cn_unit_type="── 不指定 ──",
                          cn_delivery="🏆 样板间 / 展示单位",
-                         cn_room_type="客餐厅一体", cn_view="自然通透景观",
+                         cn_room_type="客餐厅一体", cn_view="带绿植的社区内院",
                          cn_space_features=None, cn_facilities=None,
                          style_ref_correction="", style_analysis_text="", scene_override="",
                          cinematic_enabled=False, cinematic_plan_text="",
-                         panel_submode="再设计", panel_size="", persist=True):
+                         panel_submode="再设计", panel_size="", persist=True,
+                         scene_preset="低密郊区独立住宅", site_context="郊区家庭社区",
+                         floor_level="独栋住宅内部楼层", room_scale="标准",
+                         room_layout="方正布局", window_type="宽幅景观窗",
+                         scene_notes="", scene_anchor="scene_preset"):
     """提示词编排入口(兼容签名,26+ 参数原样保留;golden 快照按 8 元组逐字节回归)。
 
     实际工作由五个阶段函数流水完成:图片预处理 → 翻译推导 → 材质指令 →
@@ -1220,6 +1260,9 @@ def save_task_files_html(workflow_mode, model_choice, image_path, continent, cou
         style_analysis_text=style_analysis_text, scene_override=scene_override,
         cinematic_enabled=cinematic_enabled, cinematic_plan_text=cinematic_plan_text,
         panel_submode=panel_submode, panel_size=panel_size, persist=persist,
+        scene_preset=scene_preset, site_context=site_context, floor_level=floor_level,
+        room_scale=room_scale, room_layout=room_layout, window_type=window_type,
+        scene_notes=scene_notes, scene_anchor=scene_anchor,
         json_path=json_path, base_name=base_name, png_path=png_path,
         processed_img=processed_img, msg_prefix=msg_prefix,
     )

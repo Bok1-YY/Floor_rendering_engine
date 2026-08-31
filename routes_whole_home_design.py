@@ -9,7 +9,7 @@ import time
 import uuid
 from typing import Literal, Optional
 
-import fitz
+import pymupdf
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
@@ -40,6 +40,8 @@ from .whole_home_design import (
 
 router = APIRouter()
 _TASKS: set[asyncio.Task] = set()
+MAX_DESIGN_PDF_PAGE_PIXELS = 40_000_000
+MAX_DESIGN_PDF_TOTAL_PIXELS = 240_000_000
 
 
 def _track(coro) -> asyncio.Task:
@@ -47,6 +49,10 @@ def _track(coro) -> asyncio.Task:
     _TASKS.add(task)
     task.add_done_callback(_TASKS.discard)
     return task
+
+
+def has_active_tasks() -> bool:
+    return any(not task.done() for task in tuple(_TASKS))
 
 
 class ProjectCreateRequest(BaseModel):
@@ -214,22 +220,53 @@ def upload_design_floorplan(file: UploadFile = File(...)):
         return {"kind": "image", "name": file.filename or name, "path": path,
                 "url": to_url(path), "thumb": result_thumb_url(path), "pages": []}
     pages = []
+    document = None
+    generated_paths: list[str] = []
     try:
-        document = fitz.open(destination)
+        with open(destination, "rb") as pdf_handle:
+            pdf_bytes = pdf_handle.read()
+        document = pymupdf.open(stream=pdf_bytes, filetype="pdf")
         if document.page_count < 1 or document.page_count > 60:
             raise HTTPException(400, "PDF 页数必须在 1–60 页之间")
+        total_pixels = 0
         for index in range(document.page_count):
             page = document.load_page(index)
-            pixmap = page.get_pixmap(matrix=fitz.Matrix(2.0, 2.0), alpha=False)
+            expected_pixels = max(1, int(page.rect.width * 2.0)) * max(1, int(page.rect.height * 2.0))
+            total_pixels += expected_pixels
+            if expected_pixels > MAX_DESIGN_PDF_PAGE_PIXELS or total_pixels > MAX_DESIGN_PDF_TOTAL_PIXELS:
+                raise HTTPException(413, "PDF 页面尺寸或总像素过大")
+            pixmap = page.get_pixmap(matrix=pymupdf.Matrix(2.0, 2.0), alpha=False)
             page_name = _safe_upload_name(f"{os.path.splitext(name)[0]}_p{index + 1}", "", ".png")
             page_path = os.path.join(UPLOAD_DIR, page_name)
             pixmap.save(page_path)
+            generated_paths.append(page_path)
             pages.append({"page": index + 1, "path": page_path, "url": to_url(page_path),
                           "thumb": result_thumb_url(page_path), "width": pixmap.width, "height": pixmap.height})
     except HTTPException:
+        if document is not None:
+            document.close()
+            document = None
+        for path in generated_paths + [destination]:
+            try:
+                if os.path.isfile(path):
+                    os.remove(path)
+            except OSError:
+                pass
         raise
     except Exception as exc:
+        if document is not None:
+            document.close()
+            document = None
+        for path in generated_paths + [destination]:
+            try:
+                if os.path.isfile(path):
+                    os.remove(path)
+            except OSError:
+                pass
         raise HTTPException(400, f"PDF 解析失败: {exc}") from exc
+    finally:
+        if document is not None:
+            document.close()
     return {"kind": "pdf", "name": file.filename or name, "path": destination, "pages": pages}
 
 
@@ -603,8 +640,17 @@ def _generate_one_candidate(project_id: str, candidate_id: str, preview: dict,
         row["endpoint"] = endpoint
         row["seconds"] = round(time.time() - started, 2)
         if image is None:
-            row.update(status="cancelled" if cancelled() else "failed", stage="", error=error or "模型未返回图片")
-            record_usage("全屋设计", row["model_label"], provider, False, "generate")
+            row.update(
+                status="cancelled" if cancelled() else "failed", stage="", error=error or "模型未返回图片",
+                failure_code=str(getattr(error, 'failure_code', 'provider_failure')),
+                retry_safety=str(getattr(error, 'retry_safety', 'fatal')),
+                may_have_been_billed=bool(getattr(error, 'may_have_been_billed', False)),
+                attempts=list(getattr(error, 'attempts', []) or []),
+            )
+            record_usage(
+                "全屋设计", row["model_label"], provider,
+                'uncertain' if getattr(error, 'retry_safety', '') == 'ambiguous' else 'failed',
+                "generate")
             save_project(project)
             return
         minimum_long_edge = 1800 if row["resolution"] == "2K" else 3500

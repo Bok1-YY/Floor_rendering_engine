@@ -21,11 +21,13 @@ set "APP_NAME=FloorEngine"
 set "COMPANY=YourCompany"
 set "PRODUCT=Floor Engine"
 set "VERSION=7.0.0"
+set "STAGE=.nuitka_stage\Floor_engine_server"
 
-REM go to the PARENT of this script's folder, so that
-REM "Floor_engine_server" is importable as a package
-cd /d "%~dp0.."
-set "PKG=Floor_engine_server"
+REM serve.py registers the package dynamically, so the checkout folder may
+REM have any name. Build relative to this script instead of assuming a
+REM hard-coded "Floor_engine_server" directory in the parent folder.
+cd /d "%~dp0"
+set "PKG=."
 
 echo.
 echo ============================================================
@@ -44,8 +46,23 @@ echo.
 echo ============================================================
 echo  [2/4] Preparing clean Python venv (.buildenv)
 echo ============================================================
+set "BOOTSTRAP_PY=%CD%\.venv\Scripts\python.exe"
+if not exist "%BOOTSTRAP_PY%" (
+  py -3.12 -c "import sys; assert sys.version_info[:2] == (3, 12)" >nul 2>nul || (
+    echo   [ERROR] Python 3.12 is required for the verified Nuitka build.
+    goto :fail
+  )
+  set "BOOTSTRAP_PY=py -3.12"
+)
+if exist ".buildenv\Scripts\python.exe" (
+  ".buildenv\Scripts\python.exe" -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 12) else 1)"
+  if errorlevel 1 (
+    echo   Recreating .buildenv with verified Python 3.12...
+    rmdir /s /q ".buildenv"
+  )
+)
 if not exist ".buildenv\Scripts\python.exe" (
-  python -m venv .buildenv || goto :fail
+  %BOOTSTRAP_PY% -m venv .buildenv || goto :fail
 )
 call ".buildenv\Scripts\activate.bat" || goto :fail
 python -m pip install --upgrade pip
@@ -57,6 +74,11 @@ echo.
 echo ============================================================
 echo  [3/4] Nuitka compile (first run 5-15 min, downloads compiler)
 echo ============================================================
+if exist ".nuitka_stage" rmdir /s /q ".nuitka_stage"
+mkdir "%STAGE%" || goto :fail
+copy /y ".\*.py" "%STAGE%\" >nul || goto :fail
+xcopy /e /i /y ".\providers" "%STAGE%\providers" >nul || goto :fail
+set "PYTHONPATH=%CD%\.nuitka_stage;%PYTHONPATH%"
 python -m nuitka ^
   --onefile ^
   --assume-yes-for-downloads ^
@@ -72,11 +94,16 @@ python -m nuitka ^
   --include-package=cv2 ^
   --include-package=onnxruntime ^
   --include-package=multipart ^
+  --include-package=keyring ^
+  --include-package=keyring.backends ^
+  --include-package=pymupdf ^
+  --include-package=Floor_engine_server ^
+  --include-distribution-metadata=keyring ^
   --include-package-data=certifi ^
   --include-package-data=pptx ^
-  --include-data-dir=%PKG%\web\out=%PKG%\web\out ^
-  --include-data-dir=%PKG%\assets=%PKG%\assets ^
-  %PKG%\serve.py
+  --include-data-dir=%PKG%\web\out=Floor_engine_server\web\out ^
+  --include-data-dir=%PKG%\assets=Floor_engine_server\assets ^
+  %STAGE%\serve.py
 if errorlevel 1 goto :fail
 
 echo.

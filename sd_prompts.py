@@ -9,9 +9,10 @@ import re
 
 from .models import TaskParams
 from .prompt_data import PROPERTY_TYPE_DICT, translate_zh_to_en, extract_en, extract_zh
+from .scene_context import compile_scene_context
 
 
-SD_PROMPT_COMPILER_VERSION = "sd35-v1"
+SD_PROMPT_COMPILER_VERSION = "sd35-v2"
 
 
 @dataclass(frozen=True)
@@ -83,17 +84,20 @@ def compile_sd35_prompt(
         x for x in (params.city, params.country) if _clean(x)
     )
     property_type = PROPERTY_TYPE_DICT.get(params.property_type) or _english(params.property_type)
+    scene_context = compile_scene_context(
+        params,
+        location_text=_english(location),
+        property_noun=("" if params.cn_mode else property_type),
+        room_noun=_english(room),
+    )
 
     scene = ", ".join(x for x in (
-        property_type,
-        _english(room),
-        f"located in {_english(location)}" if location else "",
+        scene_context.sd_positive,
         _english(params.style_type),
         _english(params.market_furniture),
     ) if x)
     camera = ", ".join(x for x in (
         _english(params.angle),
-        _english(params.view),
         "balanced eye-level architectural composition",
         f"the flooring occupies approximately {params.floor_coverage_min} to {params.floor_coverage_max} percent of the frame and anchors the foreground",
     ) if x)
@@ -132,6 +136,7 @@ def compile_sd35_prompt(
         "plastic wood", "fake glossy floor", "stretched wood grain", "repeating tiled texture",
         "painted-on floor pattern", "wrong plank width", "wrong installation pattern",
         "floor color shift", "orange cast", "magenta artifacts", _seam_negative(params.seam_type),
+        scene_context.sd_negative,
         *avoids, _clean(negative_addition),
     ])))
     return SDPromptBundle(positive=positive, negative=negative)

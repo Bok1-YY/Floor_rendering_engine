@@ -2,6 +2,7 @@
 """配置/选项路由 —— 配方、失败知识库、连通性、引擎配置、Omakase 场景、模型与词表选项。"""
 import asyncio
 import math
+import os
 
 from fastapi import APIRouter, HTTPException
 
@@ -12,6 +13,7 @@ from .config import (
     get_deepseek_api_key, get_deepseek_base_url, get_deepseek_model,
     get_omakase_enabled, get_omakase_gemini_model,
 )
+from .secret_store import SECRET_ENV, SecretBackendUnavailable, SecretStoreError, delete_secret
 from .custom_recipes import (
     list_custom_recipes, add_custom_recipe, update_custom_recipe, delete_custom_recipe,
 )
@@ -25,6 +27,7 @@ from .prompt_data import (
     WORKFLOW_MODES, SEAM_TYPES, GLOSSINESS, RESOLUTIONS, ASPECT_RATIOS,
 )
 from .recipes import recommend_recipes, FLOOR_RECIPES
+from .scene_context import scene_catalog
 from .server_helpers import config_view
 from .server_schemas import ConfigPatch, CustomRecipeCreate, CustomRecipeUpdate, ErrRequest, OmakaseRequest
 
@@ -108,9 +111,40 @@ def put_config(req: ConfigPatch):
             if str(k).strip():
                 clean[str(k).strip()] = f
         patch['usage_prices'] = clean
-    if not update_config(patch):
+    try:
+        saved = update_config(patch)
+    except (SecretBackendUnavailable, SecretStoreError) as exc:
+        raise HTTPException(503, {
+            'code': 'secure_secret_store_unavailable',
+            'message': f'系统安全密钥环不可用：{exc}；请改用环境变量',
+        }) from exc
+    if not saved:
         raise HTTPException(500, '配置保存失败，请检查程序目录写权限或磁盘空间')
     return config_view()
+
+
+@router.delete('/api/config/secrets/{provider}')
+def clear_provider_secret(provider: str):
+    field = {
+        'gemini': 'gemini_api_key',
+        'fal': 'fal_api_key',
+        'deepseek': 'deepseek_api_key',
+    }.get((provider or '').strip().lower())
+    if not field:
+        raise HTTPException(404, 'unknown secret provider')
+    if str(os.environ.get(SECRET_ENV[field]) or '').strip():
+        raise HTTPException(409, {
+            'code': 'secret_from_environment',
+            'message': f'{SECRET_ENV[field]} 由启动环境提供，请从环境变量中移除',
+        })
+    try:
+        delete_secret(field)
+    except (SecretBackendUnavailable, SecretStoreError) as exc:
+        raise HTTPException(503, {
+            'code': 'secure_secret_store_unavailable',
+            'message': str(exc),
+        }) from exc
+    return {'ok': True, 'provider': provider}
 
 
 
@@ -178,6 +212,7 @@ def options():
         'room_types': ROOM_TYPES,
         'property_types': PROPERTY_TYPES,
         'views': VIEWS,
+        'scene_catalog': scene_catalog(),
         'floor_tones': FLOOR_TONES,
         'styles': STYLES,
         'lightings': LIGHTINGS,
@@ -219,4 +254,3 @@ def failure_rules():
             'action': d.get('action', ''),
         })
     return [r for r in out if r['title']]
-

@@ -9,7 +9,6 @@ Logging setup     → logging_setup.py
 """
 
 import os
-import sys
 import json
 import math
 import re
@@ -19,29 +18,9 @@ import threading
 from typing import Dict, Optional, Tuple, Union
 
 # ── 路径常量 ────────────────────────────────────────────────────
-# 打包后 __file__ 位于临时解压目录(PyInstaller 的 _MEIxxx / Nuitka onefile 的 temp)，
-# 必须改用 exe 所在目录，否则 output_files/engine_config.json（含 API key）会写进临时目录、
-# 程序一关就丢。开发(源码)运行时仍用包的上级目录。
-#   PyInstaller → 设 sys.frozen；Nuitka → 设全局 __compiled__（不设 sys.frozen），两者都要认。
-#   坑：Nuitka onefile 下 sys.executable 指向缓存里解包出来的 payload（.cache/.../FloorEngine.bin），
-#   不是用户双击的那个 exe —— 直接用它会把 engine_config.json(含 key)/output_files 写进缓存目录、
-#   换版本就丢。必须拿「用户双击的那个 exe」的路径：不同 Nuitka 版本给的信号不一样，
-#   新版给 NUITKA_ONEFILE_BINARY，4.x 给 NUITKA_ORIGINAL_ARGV0；都没有再退回 argv[0]/executable。
-#   （config 在启动早期导入、期间无人 chdir，故相对 argv0 用 abspath 解析安全。）
-_IS_FROZEN = getattr(sys, 'frozen', False) or ('__compiled__' in globals())
-if _IS_FROZEN:
-    _exe = (os.environ.get('NUITKA_ONEFILE_BINARY')
-            or os.environ.get('NUITKA_ORIGINAL_ARGV0')
-            or sys.argv[0]
-            or sys.executable)
-    BASE_DIR = os.path.dirname(os.path.abspath(_exe))
-else:
-    # A standalone checkout can keep runtime data inside the project on Windows
-    # instead of writing it into the user's home directory.
-    BASE_DIR = os.path.abspath(
-        os.environ.get("FLOOR_DATA_DIR")
-        or os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    )
+from .runtime_paths import resolve_data_dir  # noqa: E402
+
+BASE_DIR = resolve_data_dir(os.path.dirname(os.path.abspath(__file__)))
 MAIN_OUTPUT_DIR = os.path.join(BASE_DIR, "output_files")
 os.makedirs(MAIN_OUTPUT_DIR, exist_ok=True)
 
@@ -57,6 +36,9 @@ os.makedirs(THUMB_DIR, exist_ok=True)
 
 # ── 日志（委托给 logging_setup，这里保持向后兼容的 logger 导出）──
 from .logging_setup import logger  # noqa: E402
+from .secret_store import (  # noqa: E402
+    SECRET_FIELDS, SecretStoreError, backend_status, resolve_secret, set_secret,
+)
 
 # ── 翻译模块 ────────────────────────────────────────────────────
 # 在线翻译后端 = deep-translator 的 GoogleTranslator（原 MyMemory 国外端点常被软路由
@@ -123,12 +105,13 @@ def is_seamless_herringbone(floor_size: str, seam_type: str) -> bool:
 
 # ── 配置文件管理 ────────────────────────────────────────────────
 
-def load_config() -> Dict[str, str]:
-    """加载 engine_config.json，不存在则返回默认空配置。"""
+def _load_config_file() -> Dict:
+    """Read only the JSON payload; never inject or persist runtime secrets."""
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
-                return json.load(f)
+                value = json.load(f)
+                return value if isinstance(value, dict) else {}
         except json.JSONDecodeError as e:
             # 损坏：改名备份留待人工抢救（里面有三把 API key）。若原样留下，
             # 下一次任何 save_* 都会用默认空配置把损坏文件整份覆盖、再无法抢救。
@@ -140,7 +123,16 @@ def load_config() -> Dict[str, str]:
                 logger.error(f"配置文件损坏且备份失败: {CONFIG_FILE} / {e} / 备份错误: {be}")
         except Exception as e:
             logger.error(f"配置读取失败: {CONFIG_FILE} / {e}")
-    return {"gemini_api_key": ""}
+    return {}
+
+
+def load_config() -> Dict[str, str]:
+    """Load non-secret JSON and inject API keys from env/keyring at runtime."""
+    cfg = _load_config_file()
+    for field in SECRET_FIELDS:
+        resolution = resolve_secret(field, str(cfg.get(field) or ''))
+        cfg[field] = resolution.value
+    return cfg
 
 
 # ── 圆弧倒角内置参考图 ──────────────────────────────────────────
@@ -163,14 +155,14 @@ def get_bevel_ref_image() -> str:
 
 
 def save_config(config: Dict[str, str]) -> bool:
-    """持久化配置到 engine_config.json。先写临时文件再原子替换：写一半崩溃/断电不会截断
-    （文件里存着 Gemini/Fal/DeepSeek 三把 key，截断即全丢）。replace 撞上正在读配置的
-    句柄（Windows 上会 PermissionError）时短重试。"""
+    """Persist only non-secret settings with atomic replacement."""
+    payload = {key: value for key, value in dict(config or {}).items()
+               if key not in SECRET_FIELDS and not str(key).startswith('_secret_')}
     tmp = CONFIG_FILE + ".tmp"
     with _config_lock:
         try:
             with open(tmp, 'w', encoding='utf-8') as f:
-                json.dump(config, f, ensure_ascii=False, indent=2)
+                json.dump(payload, f, ensure_ascii=False, indent=2)
             for _i in range(5):
                 try:
                     os.replace(tmp, CONFIG_FILE)
@@ -191,21 +183,64 @@ def save_config(config: Dict[str, str]) -> bool:
 
 
 def update_config(patch: dict) -> bool:
-    """Atomically apply a partial config update without lost concurrent writes."""
+    """Apply a partial update, routing secrets to the OS keyring first."""
     with _config_lock:
-        cfg = load_config()
-        cfg.update(patch)
+        clean_patch = dict(patch or {})
+        for field in SECRET_FIELDS:
+            if field in clean_patch:
+                value = str(clean_patch.pop(field) or '').strip()
+                if value:
+                    set_secret(field, value)
+                else:
+                    # Clearing is intentionally handled by the explicit DELETE API.
+                    raise SecretStoreError(f'use the explicit secret delete endpoint for {field}')
+        cfg = _load_config_file()
+        cfg.update(clean_patch)
         return save_config(cfg)
+
+
+def secret_runtime_status() -> dict:
+    raw = _load_config_file()
+    sources = {}
+    for field in SECRET_FIELDS:
+        sources[field] = resolve_secret(field, str(raw.get(field) or '')).source
+    return {
+        'backend': backend_status(),
+        'sources': sources,
+        'plaintext_migration_required': any(bool(str(raw.get(field) or '').strip())
+                                            for field in SECRET_FIELDS),
+    }
+
+
+def migrate_plaintext_secrets() -> bool:
+    """Move legacy plaintext keys to keyring after read-back verification."""
+    with _config_lock:
+        raw = _load_config_file()
+        pending = {field: str(raw.get(field) or '').strip() for field in SECRET_FIELDS
+                   if str(raw.get(field) or '').strip()}
+        if not pending:
+            return False
+        try:
+            for field, value in pending.items():
+                set_secret(field, value)
+        except SecretStoreError as exc:
+            logger.error(f"[密钥迁移] 系统密钥环写入失败，明文配置已保留: {exc}")
+            return False
+        cleaned = dict(raw)
+        for field in pending:
+            cleaned.pop(field, None)
+        if not save_config(cleaned):
+            logger.error("[密钥迁移] 配置清理失败，明文配置已保留")
+            return False
+        logger.info(f"[密钥迁移] 已迁移 {len(pending)} 个 API Key 到系统密钥环")
+        return True
 
 
 def save_api_key(api_key_val: str, proxy_val: str = "") -> None:
     """保存 Gemini API key 和代理设置。"""
     key = (api_key_val or "").strip()
     proxy = (proxy_val or "").strip()
-    cfg = load_config()
-    cfg["gemini_api_key"] = key
-    cfg["proxy"] = proxy
-    save_config(cfg)
+    update_config({"gemini_api_key": key, "proxy": proxy})
 
 
 def get_proxy() -> str:
@@ -217,13 +252,14 @@ def get_proxy() -> str:
 def save_provider_settings(fal_api_key_val: Optional[str] = None,
                            image_provider_val: Optional[str] = None) -> None:
     """保存 Fal API key 和生图线路选择(google / fal)。传 None 的字段不改动。"""
-    cfg = load_config()
+    patch = {}
     if fal_api_key_val is not None:
-        cfg["fal_api_key"] = (fal_api_key_val or "").strip()
+        patch["fal_api_key"] = (fal_api_key_val or "").strip()
     if image_provider_val is not None:
         prov = (image_provider_val or "").strip().lower()
-        cfg["image_provider"] = prov if prov in ("google", "fal") else "google"
-    save_config(cfg)
+        patch["image_provider"] = prov if prov in ("google", "fal") else "google"
+    if patch:
+        update_config(patch)
 
 
 def get_image_provider() -> str:
@@ -469,16 +505,17 @@ def get_omakase_gemini_model() -> str:
 
 def save_deepseek_settings(api_key=None, base_url=None, model=None, enabled=None) -> None:
     """保存 DeepSeek / Omakase 配置；传 None 的字段不改动(照 save_provider_settings 现式)。"""
-    cfg = load_config()
+    patch = {}
     if api_key is not None:
-        cfg["deepseek_api_key"] = (api_key or "").strip()
+        patch["deepseek_api_key"] = (api_key or "").strip()
     if base_url is not None:
-        cfg["deepseek_base_url"] = (base_url or "").strip()
+        patch["deepseek_base_url"] = (base_url or "").strip()
     if model is not None:
-        cfg["deepseek_model"] = (model or "").strip()
+        patch["deepseek_model"] = (model or "").strip()
     if enabled is not None:
-        cfg["omakase_enabled"] = bool(enabled)
-    save_config(cfg)
+        patch["omakase_enabled"] = bool(enabled)
+    if patch:
+        update_config(patch)
 
 
 # ── 图像生成采样旋钮（opt-in，缺省不传 → 行为与现状逐字节一致）─────────

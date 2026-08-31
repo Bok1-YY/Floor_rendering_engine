@@ -10,6 +10,7 @@ from Floor_engine_server.config import safe_upload_path, get_tls_verify
 from Floor_engine_server.records import load_records_file, save_records_file, update_result_review
 from Floor_engine_server import api as api_mod
 from Floor_engine_server.api import _verify_arg, call_image_generate
+from Floor_engine_server.providers.types import ProviderError
 
 
 # ── 1. job_id 唯一性（毫秒时间戳会撞，uuid 不会）──────────────────────────
@@ -72,8 +73,12 @@ def test_call_image_generate_reports_actual_provider_on_failover(monkeypatch):
     monkeypatch.setattr(api_mod, "load_config",
                         lambda: {"image_provider": "google", "auto_failover": True, "fal_api_key": "k"})
     # google 直连返回网络类失败 → 触发自动转线
+    safe_error = ProviderError(
+        "HTTP 503: busy", failure_code="google_retryable_http_exhausted",
+        retry_safety="safe", may_have_been_billed=False,
+    )
     monkeypatch.setattr(api_mod, "call_gemini_generate",
-                        lambda *a, **k: (None, "网络错误: connection reset"))
+                        lambda *a, **k: (None, safe_error))
     monkeypatch.setattr(api_mod, "call_fal_generate",
                         lambda *a, **k: (fake_img, None))
     img, err, provider = call_image_generate("key", "m", "p", "img.png")

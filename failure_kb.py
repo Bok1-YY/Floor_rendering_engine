@@ -60,6 +60,13 @@ import re
 #   regex   可选正则（与 subs 任一命中即匹配）
 FAILURE_RULES = [
     {
+        'key': 'billing_ambiguous',
+        'title': '⚠ 结果不确定 / 可能已计费',
+        'cause': '付费请求已经提交，但在结果完整返回前发生读超时、断流或协议中断；无法证明服务端没有执行。',
+        'action': '系统已停止自动重提。先检查历史记录；如仍需重做，点击“再次生成（可能重复计费）”并确认。',
+        'subs': ['结果状态不确定', '可能已经计费', 'possible duplicate charge'],
+    },
+    {
         'key': 'cancelled',
         'title': '↩ 已取消 / 已中断',
         'cause': '任务被手动停止，或程序重启时该任务尚未跑完被中断。',

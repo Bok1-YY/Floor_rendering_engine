@@ -201,7 +201,7 @@ cd web && npm ci && npm run build && cd ..
 python serve.py
 ```
 
-首次启动后在“设置”页填写 API Key。开发端口、配置和模块说明见 [DEVGUIDE.md](./DEVGUIDE.md)。
+首次启动后在“设置”页填写 API Key。Key 保存到当前用户的系统密钥环，不写入 `engine_config.json`；把程序复制到新电脑后需要重新填写。开发端口、配置和模块说明见 [DEVGUIDE.md](./DEVGUIDE.md)。
 
 ## Repository Guide
 

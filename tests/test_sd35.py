@@ -47,7 +47,7 @@ def test_sd_prompt_is_separate_positive_and_negative():
     assert "watermark, signature" not in bundle.positive
     assert "watermark, signature" in bundle.negative
     assert "dark grout" in bundle.negative
-    assert bundle.compiler_version == "sd35-v1"
+    assert bundle.compiler_version == "sd35-v2"
 
 
 def test_sd_prompt_uses_custom_floor_coverage():

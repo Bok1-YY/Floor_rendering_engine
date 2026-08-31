@@ -1,14 +1,38 @@
 import asyncio
+import io
 import json
 import os
 import zipfile
 
+import pymupdf
 import pytest
-from fastapi import HTTPException
+from fastapi import HTTPException, UploadFile
 from PIL import Image, ImageDraw
 
 from Floor_engine_server import routes_whole_home_design as routes
 from Floor_engine_server import whole_home_design as design
+
+
+def test_invalid_design_pdf_upload_is_removed(tmp_path, monkeypatch):
+    monkeypatch.setattr(routes, "UPLOAD_DIR", str(tmp_path))
+    upload = UploadFile(filename="broken.pdf", file=io.BytesIO(b"not a pdf"))
+    with pytest.raises(HTTPException):
+        routes.upload_design_floorplan(upload)
+    assert [path for path in tmp_path.iterdir() if path.is_file()] == []
+
+
+def test_oversized_design_pdf_cleans_source_and_partial_pages(tmp_path, monkeypatch):
+    monkeypatch.setattr(routes, "UPLOAD_DIR", str(tmp_path))
+    monkeypatch.setattr(routes, "MAX_DESIGN_PDF_PAGE_PIXELS", 1)
+    document = pymupdf.open()
+    document.new_page(width=100, height=100)
+    payload = document.tobytes()
+    document.close()
+    upload = UploadFile(filename="large.pdf", file=io.BytesIO(payload))
+    with pytest.raises(HTTPException) as exc:
+        routes.upload_design_floorplan(upload)
+    assert exc.value.status_code == 413
+    assert [path for path in tmp_path.iterdir() if path.is_file()] == []
 
 
 @pytest.fixture

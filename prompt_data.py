@@ -12,6 +12,12 @@ from .config import (
     logger, short_text, TRANSLATOR_AVAILABLE, get_proxy,
     is_seamless_herringbone,
 )
+from .scene_context import (
+    PROPERTY_OPTIONS as SCENE_PROPERTY_OPTIONS,
+    ROOM_OPTIONS as SCENE_ROOM_OPTIONS,
+    VIEW_OPTIONS as SCENE_VIEW_OPTIONS,
+    option_values as scene_option_values,
+)
 
 try:
     from deep_translator import GoogleTranslator
@@ -250,14 +256,17 @@ LOCATION_MAP = {
 }
 CONTINENTS = list(LOCATION_MAP.keys())
 
-PROPERTY_TYPES = ["现代别墅", "普通独立住宅", "联排别墅", "普通公寓", "豪华大平层"]
-PROPERTY_TYPE_DICT = {
-    "现代别墅": "modern detached villa", "普通独立住宅": "standard detached house",
-    "联排别墅": "townhouse", "普通公寓": "standard apartment", "豪华大平层": "luxury open-plan apartment",
-}
+PROPERTY_TYPES = scene_option_values(SCENE_PROPERTY_OPTIONS)
+PROPERTY_TYPE_DICT = {item["value"]: item["noun"] for item in SCENE_PROPERTY_OPTIONS}
 
-ROOM_TYPES = ["客餐厅一体", "客厅", "餐厅", "厨房", "餐厨一体", "入户区", "玄关", "独立书房", "主卧室", "儿童房", "健身区", "衣帽间", "浴室 (带浴缸)"]
-VIEWS = ["自然通透景观", "带修剪整齐草坪的私家后院", "带泳池的阳光后院", "充满园艺绿植的私家小院", "宁静干净的现代社区街道", "自然绿植与树木", "无明显窗外景观"]
+ROOM_TYPES = scene_option_values(SCENE_ROOM_OPTIONS)
+VIEWS = scene_option_values(SCENE_VIEW_OPTIONS)
+
+# All structured scene choices have deterministic local English nouns.  They must never fall
+# through to online translation: catalog labels are production parameters, not free text.
+TECH_DICT.update({item["value"]: item["noun"] for item in SCENE_ROOM_OPTIONS})
+FALLBACK_DICT.update({item["value"]: item["noun"] for item in SCENE_PROPERTY_OPTIONS})
+FALLBACK_DICT.update({item["value"]: item["noun"] for item in SCENE_VIEW_OPTIONS})
 
 STYLES = [
     "📸 Instagram 居家博主风 (IG Influencer Home) - 暖色调，极具网感。有精心布置的随意感。",
@@ -1268,9 +1277,9 @@ def build_overseas_realism_layer(country: str, city: str, property_type: str, ro
     else:
         cues.insert(0, "Render this as an authentic, internationally-styled lived-in home in a contemporary Western / European / international residential context. Unless the interior style is explicitly East-Asian, avoid Chinese or East-Asian developer-apartment, sample-flat (样板间) or show-home styling, signage, furniture conventions, or built-ins.")
 
-    if any(k in property_type for k in ["普通公寓", "豪华大平层"]):
+    if any(k in property_type for k in ["核心城区高层公寓", "标准城市公寓", "豪华大平层", "顶层公寓", "历史街区公寓"]):
         cues.append("Apartment realism: use balcony/window cues, built-in storage, compact-to-generous but believable room depth, and avoid detached-villa scale.")
-    elif any(k in property_type for k in ["现代别墅", "普通独立住宅"]):
+    elif any(k in property_type for k in ["现代花园别墅", "普通独立住宅", "半独立住宅", "乡村住宅", "海滨住宅", "湖畔"]):
         cues.append("House realism: a believable single-family home with honest, not exaggerated, room proportions and natural indoor light; avoid sales-villa showpiece scale.")
     elif "联排" in property_type:
         cues.append("Townhouse realism: use narrower-but-deeper room proportions, stair or entry cues where appropriate, and family-scale storage.")

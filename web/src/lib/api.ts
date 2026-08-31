@@ -46,6 +46,10 @@ import type {
   WholeHomeDesignPaidPreview,
   DesignFloorplanUpload,
   DesignReferenceUpload,
+  StorageAuditView,
+  StorageCleanupView,
+  AssetDeleteView,
+  QuarantineEntryView,
 } from "./types";
 
 // dev（next dev 在 :3000）用 .env.local 里的 NEXT_PUBLIC_API_BASE 指到后端 :7870；
@@ -78,6 +82,9 @@ const jsend = <T>(p: string, method: "POST" | "PUT", body?: unknown, signal?: Ab
     body: body !== undefined ? JSON.stringify(body) : undefined,
     signal,
   }).then((r) => handle<T>(r));
+
+const jdelete = <T>(p: string) =>
+  fetch(API + p, { method: "DELETE" }).then((r) => handle<T>(r));
 
 async function upload<T = Swatch>(path: string, file: File): Promise<T> {
   const fd = new FormData();
@@ -174,7 +181,10 @@ export const api = {
     jsend<{ cleared: number }>(`/api/jobs/clear-completed`, "POST"),
   deleteJob: (id: string) =>
     jsend<{ deleted: number }>(`/api/jobs/${id}/delete`, "POST"),
-  retryJob: (id: string) => jsend<JobView>(`/api/jobs/${id}/retry`, "POST"),
+  retryJob: (id: string, confirmPossibleDuplicateCharge = false) =>
+    jsend<JobView>(`/api/jobs/${id}/retry`, "POST", {
+      confirm_possible_duplicate_charge: confirmPossibleDuplicateCharge,
+    }),
   retrySdUpscale: (id: string) =>
     jsend<JobView>(`/api/jobs/${id}/sd-upscale`, "POST"),
   jobResult: (id: string, model: ModelKey, idx: number) =>
@@ -200,6 +210,22 @@ export const api = {
     jget<RecordEntry[]>(
       `/api/records/load?json_path=${encodeURIComponent(jsonPath)}`,
     ),
+  storageAudit: () => jget<StorageAuditView>(`/api/storage/audit`),
+  cleanupStorage: (snapshot_id: string) =>
+    jsend<StorageCleanupView>(`/api/storage/cleanup`, "POST", {
+      snapshot_id,
+      scopes: ["samples", "thumbnails"],
+    }),
+  quarantineOrphans: (snapshot_id: string, paths: string[]) =>
+    jsend<{ ok: boolean; entries: QuarantineEntryView[]; audit: StorageAuditView }>(
+      `/api/storage/orphans/quarantine`, "POST", { snapshot_id, paths }),
+  listQuarantine: () => jget<QuarantineEntryView[]>(`/api/storage/quarantine`),
+  restoreQuarantine: (entryId: string) =>
+    jsend<{ ok: boolean; entry: QuarantineEntryView }>(
+      `/api/storage/quarantine/${encodeURIComponent(entryId)}/restore`, "POST"),
+  purgeQuarantine: (entryId: string, confirmation_phrase: string) =>
+    jsend<{ ok: boolean; entry: QuarantineEntryView; freed_bytes: number }>(
+      `/api/storage/quarantine/${encodeURIComponent(entryId)}/purge`, "POST", { confirmation_phrase }),
   reveal: (json_path: string, record_id: string, password: string) =>
     jsend<{ text: string; ok: boolean }>(`/api/records/reveal`, "POST", {
       json_path,
@@ -231,6 +257,8 @@ export const api = {
   getConfig: () => jget<ConfigView>(`/api/config`),
   putConfig: (patch: ConfigPatch) =>
     jsend<ConfigView>(`/api/config`, "PUT", patch),
+  clearSecret: (provider: "gemini" | "fal" | "deepseek") =>
+    jdelete<{ ok: boolean; provider: string }>(`/api/config/secrets/${provider}`),
   getModels: () => jget<ModelsView>(`/api/models`),
   getOptions: () => jget<OptionsView>(`/api/options`),
 
@@ -240,7 +268,7 @@ export const api = {
   recordEdit: (body: RecordEditRequest) =>
     jsend<JobView>(`/api/records/edit`, "POST", body),
   deleteResult: (json_path: string, record_id: string, result_id: string) =>
-    jsend<{ ok: boolean }>(`/api/records/result/delete`, "POST", {
+    jsend<AssetDeleteView>(`/api/records/result/delete`, "POST", {
       json_path,
       record_id,
       result_id,
@@ -260,7 +288,7 @@ export const api = {
       reviewed_at: string;
     }>(`/api/records/result/review`, "POST", body),
   deleteRecord: (json_path: string, record_id: string) =>
-    jsend<{ ok: boolean }>(`/api/records/delete`, "POST", {
+    jsend<AssetDeleteView>(`/api/records/delete`, "POST", {
       json_path,
       record_id,
     }),

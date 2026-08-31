@@ -9,6 +9,8 @@ from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from .scene_context import normalize_scene_values
+
 
 # ── 任务提交/预览/二改 ──────────────────────────────────────
 class GenParams(BaseModel):
@@ -21,9 +23,20 @@ class GenParams(BaseModel):
     country: str = ''
     city: str = ''
     neighborhood: str = ''
-    property_type: str = '现代别墅'
+    property_type: str = '普通独立住宅'
     room_type: str = '客餐厅一体'
-    view: str = '自然通透景观'
+    view: str = '绿树成荫的住宅街道'
+    scene_preset: str = '低密郊区独立住宅'
+    site_context: str = '郊区家庭社区'
+    floor_level: str = '独栋住宅内部楼层'
+    room_scale: str = '标准'
+    room_layout: str = '方正布局'
+    window_type: str = '宽幅景观窗'
+    scene_notes: str = Field(default='', max_length=1000)
+    scene_anchor: Literal[
+        'scene_preset', 'property_type', 'cn_unit_type', 'site_context', 'floor_level',
+        'room_scale', 'room_layout', 'window_type', 'view', 'cn_view',
+    ] = 'scene_preset'
     style_type: str = ''
     lighting: str = ''
     floor_tone: str = ''
@@ -54,7 +67,7 @@ class GenParams(BaseModel):
     cn_unit_type: str = '── 不指定 ──'
     cn_delivery: str = '🏆 样板间 / 展示单位'
     cn_room_type: str = '客餐厅一体'
-    cn_view: str = '自然通透景观'
+    cn_view: str = '带绿植的社区内院'
     cn_space_features: Optional[List[str]] = None
     cn_facilities: Optional[List[str]] = None
     style_ref_correction: str = ''
@@ -69,6 +82,10 @@ class GenParams(BaseModel):
             raise ValueError('floor_coverage_min must not exceed floor_coverage_max')
         if self.film_path and (self.film_width_mm is None or self.film_repeat_length_mm is None):
             raise ValueError('原厂彩膜需要填写彩膜宽度和纵向重复周期')
+        patch, _ = normalize_scene_values(self, anchor=self.scene_anchor)
+        for key, value in patch.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
         return self
 
 
@@ -111,6 +128,10 @@ class FreeJobSubmitRequest(BaseModel):
         if not value.strip():
             raise ValueError('自由提示词不能为空')
         return value
+
+
+class RetryJobRequest(BaseModel):
+    confirm_possible_duplicate_charge: bool = False
 
 
 class PreviewRequest(BaseModel):
@@ -183,13 +204,13 @@ class ConfigPatch(BaseModel):
     comfyui_workflow_path: Optional[str] = Field(default=None, max_length=1000)
     comfyui_timeout: Optional[int] = Field(default=None, ge=60, le=3600)
     inpaint_remove_prompt: Optional[str] = Field(default=None, max_length=1000)
-    deepseek_api_key: Optional[str] = None
-    deepseek_base_url: Optional[str] = None
-    deepseek_model: Optional[str] = None
+    deepseek_api_key: Optional[str] = Field(default=None, max_length=500)
+    deepseek_base_url: Optional[str] = Field(default=None, max_length=1000)
+    deepseek_model: Optional[str] = Field(default=None, max_length=200)
     omakase_gemini_model: Optional[str] = Field(default=None, max_length=200)
     omakase_enabled: Optional[bool] = None
     # 成本估算单价：{'B2': 0.1, 'Pro': 0.5, 'B2:fal': 0.12,...}（元/张成功图）；负数拒绝
-    usage_prices: Optional[dict] = None
+    usage_prices: Optional[dict] = Field(default=None, max_length=100)
     # PPTX 导出品牌（logo 走 POST /api/uploads/logo，不在此 patch）
     pptx_company: Optional[str] = Field(default=None, max_length=200)
     pptx_contact: Optional[str] = Field(default=None, max_length=200)
@@ -230,6 +251,40 @@ class ResultReviewRequest(ResultRef):
 class RecordRef(BaseModel):
     json_path: str
     record_id: str
+
+
+class StorageCleanupRequest(BaseModel):
+    snapshot_id: str = Field(min_length=64, max_length=64, pattern=r'^[0-9a-f]{64}$')
+    scopes: List[Literal['samples', 'thumbnails']] = Field(
+        default_factory=lambda: ['samples', 'thumbnails'], min_length=2, max_length=2,
+    )
+
+    @field_validator('scopes')
+    @classmethod
+    def storage_scopes_are_fixed(cls, value):
+        if set(value) != {'samples', 'thumbnails'}:
+            raise ValueError('storage cleanup only supports samples and thumbnails')
+        return ['samples', 'thumbnails']
+
+
+class OrphanQuarantineRequest(BaseModel):
+    snapshot_id: str = Field(min_length=64, max_length=64, pattern=r'^[0-9a-f]{64}$')
+    paths: List[str] = Field(min_length=1, max_length=50)
+
+    @field_validator('paths')
+    @classmethod
+    def quarantine_paths_are_relative(cls, values):
+        cleaned = []
+        for value in values:
+            text = str(value or '').strip().replace('\\', '/')
+            if not text or text.startswith('/') or '..' in text.split('/'):
+                raise ValueError('quarantine paths must be safe output-relative paths')
+            cleaned.append(text)
+        return list(dict.fromkeys(cleaned))
+
+
+class QuarantinePurgeRequest(BaseModel):
+    confirmation_phrase: str = Field(min_length=1, max_length=20)
 
 
 class RecordEditRequest(BaseModel):

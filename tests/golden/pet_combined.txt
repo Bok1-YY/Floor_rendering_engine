@@ -2,7 +2,27 @@
 
 Help me make a photo:
 
-Professional photorealistic pet-friendly interior photography. modern detached villa, living-dining combo. Location: unspecified location. Neighborhood: modern neighborhood. Aspect ratio 4:3, 4K resolution.
+Professional photorealistic pet-friendly interior photography. detached family house, living-dining room. Location: unspecified location. Neighborhood: modern neighborhood. Aspect ratio 4:3, 4K resolution.
+
+**[SCENE IDENTITY — MANDATORY]**
+**Residence**: A detached family house with honest room proportions, clear entry and garden relationships, ordinary residential ceiling height and no exaggerated sales-villa scale.
+**Location and site**: unspecified location. A suburban family neighborhood with detached or semi-detached homes, front gardens, local streets and moderate tree cover.
+
+**[ROOM PROGRAM & GEOMETRY]**
+**Room**: An integrated living-dining room. Include a readable sofa group and a dining table as two distinct but connected zones, preserve a clear circulation route, and keep both functions at residential scale; no bed or kitchen-only composition.
+**Scale**: Standard residential scale with true-to-life furniture, ordinary ceiling height and comfortable but not excessive clearances.
+**Layout**: A balanced rectilinear room with clear orthogonal walls, centered circulation and no arbitrary warped corners.
+
+**[WINDOW & OUTDOOR VIEW]**
+**Floor relationship**: A room within a low-rise house, typically ground or first upper level, with human-scale garden, street or landscape relationships and no high-rise elevation cues.
+**Window / opening**: A broad picture window with restrained framing, a wide horizontal view and physically plausible wall support.
+**View outside**: A quiet leafy residential street with mature tree canopies, sidewalks and low-rise neighboring homes, layered from near garden edge to the street and houses beyond.
+
+**[SPATIAL CONSISTENCY — NON-NEGOTIABLE]**
+The exterior exists ONLY beyond physically modeled windows or glazed doors — never printed on a wall, never floating inside the room. Match the horizon height, downward viewing angle, object scale, neighboring-building distance and privacy level to the stated floor and site. Keep window mullions, glass thickness, reflections, exterior perspective and the room's vanishing points mutually consistent. The selected lighting controls time, weather impression and color temperature; do not invent a second conflicting outdoor lighting condition.
+
+**[SCENE EXCLUSIONS]**
+No contradictory property scale, no impossible ground garden at an elevated apartment, no aerial/drone viewpoint from an interior camera, no unrelated skyline or landscape outside the selected view, and no furniture program belonging to a different room type.
 
 **[Style & Atmosphere]** 原木风 aesthetic. Authentic and inviting atmosphere.
 
@@ -10,7 +30,7 @@ Professional photorealistic pet-friendly interior photography. modern detached v
 
 **[Overseas Real-Home Layer]**
 • Render this as an authentic, internationally-styled lived-in home in a contemporary Western / European / international residential context. Unless the interior style is explicitly East-Asian, avoid Chinese or East-Asian developer-apartment, sample-flat (样板间) or show-home styling, signage, furniture conventions, or built-ins.
-• The room should feel like a photographed lived-in modern detached villa in the selected overseas location, not a sales-gallery render.
+• The room should feel like a photographed lived-in detached family house in the selected overseas location, not a sales-gallery render.
 • Composition may include slight asymmetry, partial furniture cropping, natural object offsets, and non-matching furniture pieces that still belong to the same taste level.
 • Include 2-4 believable small domestic objects appropriate to the style: books, ceramic vase, folded throw, tray, lamp, plant, framed print, side table objects, or casual textiles.
 • Keep object density moderate: enough detail to feel real, but not cluttered or messy.

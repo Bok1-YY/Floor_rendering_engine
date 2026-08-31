@@ -4,6 +4,8 @@ import os
 
 from fastapi import APIRouter, File, HTTPException, UploadFile
 
+from . import routes_whole_home_design
+from . import server_state as state
 from .config import MAIN_OUTPUT_DIR, logger, update_config, get_usage_prices, get_pptx_branding
 from .exports import export_html_from_json, export_pptx_from_json, export_favorites_pptx
 from .records import (
@@ -11,15 +13,22 @@ from .records import (
     list_recent_floor_swatches, delete_record_entry, delete_result_image,
     toggle_result_favorite, update_result_review, safe_output_path,
     load_review_summary, collect_review_gallery,
-    migrate_record_file,
 )
 from .usage_stats import load_usage_summary
+from .storage_maintenance import (
+    audit_storage, cleanup_storage, list_quarantine, purge_quarantine,
+    quarantine_orphans, restore_quarantine,
+)
 from .server_helpers import (
     to_url, thumb_url, result_thumb_url, serve_export, PPTX_MIME,
     require_record_json_path, save_upload, remove_managed_logo,
     record_color_match_ref_path, require_upload_image_path,
 )
-from .server_schemas import FilmAnalyzeRequest, RecordRef, ResultRef, ResultReviewRequest, RevealRequest
+from .server_schemas import (
+    FilmAnalyzeRequest, RecordRef, ResultRef, ResultReviewRequest, RevealRequest,
+    StorageCleanupRequest,
+    OrphanQuarantineRequest, QuarantinePurgeRequest,
+)
 from .film_repeat_floor import build_film_contract
 
 router = APIRouter()
@@ -107,12 +116,6 @@ def list_records():
 @router.get('/api/records/load')
 def load_records(json_path: str):
     json_path = require_record_json_path(json_path)
-    # 旧版 NiceGUI 在选中文件时会执行这个幂等迁移；Next 记录页迁移时漏了。
-    # 恢复后，仅内联 base64 的旧图会转为文件引用，从而可以浏览和校色。
-    try:
-        migrate_record_file(json_path)
-    except Exception as ex:
-        logger.warning(f'[记录] 旧图文件化失败，继续读取原记录: {json_path} / {ex}')
     recs = load_records_file(json_path)
     # 结果图引用改写成 URL；内联 base64(老记录)不回传大 blob，仅标记 has_inline。
     for r in recs:
@@ -167,9 +170,11 @@ def _reject_immutable_audit_mutation(json_path: str, record_id: str) -> None:
 def delete_result(req: ResultRef):
     json_path = require_record_json_path(req.json_path)
     _reject_immutable_audit_mutation(json_path, req.record_id)
-    if not delete_result_image(json_path, req.record_id, req.result_id):
+    outcome = delete_result_image(json_path, req.record_id, req.result_id)
+    if not outcome:
         raise HTTPException(404, '未找到该效果图')
-    return {'ok': True}
+    outcome['job_cards_updated'] = state.prune_job_output_paths(outcome.pop('deleted_paths', []))
+    return outcome
 
 
 @router.post('/api/records/result/favorite')
@@ -202,9 +207,94 @@ def review_result(req: ResultReviewRequest):
 def delete_record(req: RecordRef):
     json_path = require_record_json_path(req.json_path)
     _reject_immutable_audit_mutation(json_path, req.record_id)
-    if not delete_record_entry(json_path, req.record_id):
+    outcome = delete_record_entry(json_path, req.record_id)
+    if not outcome:
         raise HTTPException(404, '未找到该记录')
-    return {'ok': True}
+    outcome['job_cards_updated'] = state.prune_job_output_paths(outcome.pop('deleted_paths', []))
+    return outcome
+
+
+def _storage_cleanup_is_busy() -> bool:
+    if any(job.status in ('queued', 'running') or job.operation_status == 'running' or job.pro_polishing
+           for job in state.JOBS.snapshot()):
+        return True
+    if any((entry or {}).get('status') not in ('done', 'failed') for entry in state.PREVIEWS.snapshot()):
+        return True
+    if any((entry or {}).get('status') not in ('done', 'failed', 'cancelled')
+           for entry in state.INPAINTS.snapshot()):
+        return True
+    return routes_whole_home_design.has_active_tasks()
+
+
+@router.get('/api/storage/audit')
+def storage_audit():
+    return audit_storage()
+
+
+@router.post('/api/storage/cleanup')
+def storage_cleanup(req: StorageCleanupRequest):
+    if _storage_cleanup_is_busy():
+        raise HTTPException(409, {
+            'code': 'storage_cleanup_busy',
+            'message': '仍有生成、预览、修补或全屋设计任务运行，请等待完成后再清理',
+        })
+    try:
+        return cleanup_storage(req.snapshot_id)
+    except RuntimeError as exc:
+        if str(exc) == 'storage_snapshot_changed':
+            raise HTTPException(409, {
+                'code': 'storage_snapshot_changed',
+                'message': '存储内容已变化，请重新扫描后再清理',
+            }) from exc
+        raise HTTPException(500, f'存储清理验证失败: {exc}') from exc
+    except Exception as exc:
+        logger.exception('[存储] 安全清理失败')
+        raise HTTPException(500, f'存储清理失败，未验证的文件不会删除: {exc}') from exc
+
+
+def _storage_runtime_http_error(exc: RuntimeError):
+    code = str(exc).split(':', 1)[0]
+    status = 409 if code in {
+        'storage_snapshot_changed', 'orphan_reference_changed', 'restore_target_exists',
+        'quarantine_retention_active', 'purge_confirmation_required',
+        'quarantine_entry_not_active',
+    } else 404 if code == 'quarantine_entry_not_found' else 400
+    raise HTTPException(status, {'code': code, 'message': str(exc)}) from exc
+
+
+@router.post('/api/storage/orphans/quarantine')
+def quarantine_storage_orphans(req: OrphanQuarantineRequest):
+    if _storage_cleanup_is_busy():
+        raise HTTPException(409, {'code': 'storage_cleanup_busy', 'message': '仍有任务运行，不能隔离文件'})
+    try:
+        return quarantine_orphans(req.snapshot_id, req.paths)
+    except RuntimeError as exc:
+        _storage_runtime_http_error(exc)
+
+
+@router.get('/api/storage/quarantine')
+def get_storage_quarantine():
+    return list_quarantine()
+
+
+@router.post('/api/storage/quarantine/{entry_id}/restore')
+def restore_storage_quarantine(entry_id: str):
+    if _storage_cleanup_is_busy():
+        raise HTTPException(409, {'code': 'storage_cleanup_busy', 'message': '仍有任务运行，不能恢复文件'})
+    try:
+        return restore_quarantine(entry_id)
+    except RuntimeError as exc:
+        _storage_runtime_http_error(exc)
+
+
+@router.post('/api/storage/quarantine/{entry_id}/purge')
+def purge_storage_quarantine(entry_id: str, req: QuarantinePurgeRequest):
+    if _storage_cleanup_is_busy():
+        raise HTTPException(409, {'code': 'storage_cleanup_busy', 'message': '仍有任务运行，不能永久删除'})
+    try:
+        return purge_quarantine(entry_id, req.confirmation_phrase)
+    except RuntimeError as exc:
+        _storage_runtime_http_error(exc)
 
 
 # ── 导出：HTML / PPTX / 收藏夹PPTX ──

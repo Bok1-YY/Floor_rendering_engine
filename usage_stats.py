@@ -79,8 +79,8 @@ def _save_usage_raw(data: dict) -> None:
         json.dump(data, f, ensure_ascii=False)
     os.replace(tmp, _USAGE_STATS_FILE)
 
-def record_usage(mode: str, model: str, provider: str, ok: bool, operation: str = 'generate') -> None:
-    """累加一次出图结果。维度: 模式 × 模型 × 线路(google/fal/local)，各计 ok/fail。
+def record_usage(mode: str, model: str, provider: str, ok, operation: str = 'generate') -> None:
+    """累加一次调用结果。ok 兼容 bool，也接受 success/failed/uncertain。
     全程吞异常——统计绝不能影响生图。"""
     try:
         mkey = _short_mode_label(mode)
@@ -94,8 +94,13 @@ def record_usage(mode: str, model: str, provider: str, ok: bool, operation: str 
             data = _load_usage_raw()
             counts = data.setdefault("counts", {})
             op = (operation or 'generate').strip().lower()
-            row = counts.setdefault(mkey, {}).setdefault(op, {}).setdefault(mdl, {}).setdefault(prov, {"ok": 0, "fail": 0})
-            row["ok" if ok else "fail"] = int(row.get("ok" if ok else "fail", 0)) + 1
+            row = counts.setdefault(mkey, {}).setdefault(op, {}).setdefault(mdl, {}).setdefault(
+                prov, {"ok": 0, "fail": 0, "uncertain": 0})
+            status = ("ok" if ok else "fail") if isinstance(ok, bool) else str(ok or '').strip().lower()
+            status = {"success": "ok", "failed": "fail"}.get(status, status)
+            if status not in ("ok", "fail", "uncertain"):
+                status = "fail"
+            row[status] = int(row.get(status, 0)) + 1
             _save_usage_raw(data)
     except Exception as ex:
         logger.debug(f"[用量] record_usage 忽略: {ex}")
@@ -108,8 +113,8 @@ def load_usage_summary(prices: Optional[dict] = None) -> dict:
     data = _load_usage_raw()
     prices = prices or {}
     rows = []
-    tot_ok = tot_fail = 0
-    tot_cost = 0.0
+    tot_ok = tot_fail = tot_uncertain = 0
+    tot_cost_min = tot_cost_max = 0.0
     has_cost = False
     unpriced_ok = 0
     for mode, operations in sorted((data.get("counts") or {}).items()):
@@ -124,22 +129,29 @@ def load_usage_summary(prices: Optional[dict] = None) -> dict:
                 for prov, c in sorted(provs.items()):
                     if not isinstance(c, dict):
                         continue
-                    ok = int(c.get("ok", 0)); fail = int(c.get("fail", 0))
-                    tot_ok += ok; tot_fail += fail
+                    ok = int(c.get("ok", 0)); fail = int(c.get("fail", 0)); uncertain = int(c.get("uncertain", 0))
+                    tot_ok += ok; tot_fail += fail; tot_uncertain += uncertain
                     price = prices.get(f"{model}:{prov}", prices.get(model))
                     # 用量页统计 API 成本；本地 ComfyUI 未配置单价时按 0，而不是误报“未计价”。
                     if price is None and prov == 'local':
                         price = 0.0
-                    cost = round(ok * price, 2) if price is not None else None
-                    if cost is not None:
-                        tot_cost += cost
+                    cost_min = round(ok * price, 2) if price is not None else None
+                    cost_max = round((ok + uncertain) * price, 2) if price is not None else None
+                    if cost_min is not None:
+                        tot_cost_min += cost_min
+                        tot_cost_max += cost_max or 0.0
                         has_cost = True
                     else:
-                        unpriced_ok += ok
+                        unpriced_ok += ok + uncertain
                     rows.append({"mode": mode, "operation": operation, "model": model,
-                                 "provider": prov, "ok": ok, "fail": fail, "cost": cost})
+                                 "provider": prov, "ok": ok, "fail": fail,
+                                 "uncertain": uncertain, "cost": cost_min,
+                                 "cost_min": cost_min, "cost_max": cost_max})
     return {"rows": rows,
-            "totals": {"ok": tot_ok, "fail": tot_fail, "total": tot_ok + tot_fail,
-                       "cost": round(tot_cost, 2) if has_cost else None,
+            "totals": {"ok": tot_ok, "fail": tot_fail, "uncertain": tot_uncertain,
+                       "total": tot_ok + tot_fail + tot_uncertain,
+                       "cost": round(tot_cost_min, 2) if has_cost else None,
+                       "cost_min": round(tot_cost_min, 2) if has_cost else None,
+                       "cost_max": round(tot_cost_max, 2) if has_cost else None,
                        "unpriced_ok": unpriced_ok,
                        "cost_complete": unpriced_ok == 0}}

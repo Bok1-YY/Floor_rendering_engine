@@ -65,6 +65,59 @@ JOBS = TaskRegistry('jobs', max_entries=MAX_RESIDENT_JOBS, is_terminal=job_is_te
                     on_persist=persist_jobs, newest_first=True)
 
 
+def prune_job_output_paths(paths) -> int:
+    """Remove explicitly deleted result paths from transient job-card candidates."""
+    targets = {
+        os.path.normcase(os.path.realpath(str(path)))
+        for path in (paths or []) if path
+    }
+    if not targets:
+        return 0
+    changed = 0
+    with JOBS.locked() as entries:
+        for job in entries.values():
+            job_changed = False
+            for slot in ('b2', 'pro', 'pro_polish'):
+                list_name = f'{slot}_paths'
+                idx_name = f'{slot}_idx'
+                path_name = f'{slot}_path'
+                values = list(getattr(job, list_name, []) or [])
+                kept = [value for value in values
+                        if os.path.normcase(os.path.realpath(str(value))) not in targets]
+                current = getattr(job, path_name, None)
+                current_deleted = bool(current and os.path.normcase(os.path.realpath(str(current))) in targets)
+                if kept != values or current_deleted:
+                    idx = max(0, min(int(getattr(job, idx_name, 0) or 0), len(kept) - 1)) if kept else 0
+                    setattr(job, list_name, kept)
+                    setattr(job, idx_name, idx)
+                    setattr(job, path_name, kept[idx] if kept else None)
+                    job_changed = True
+            for run in (job.model_runs or {}).values():
+                if not isinstance(run, dict):
+                    continue
+                values = list(run.get('paths') or [])
+                metas = list(run.get('candidate_meta') or [])
+                pairs = [
+                    (value, metas[index] if index < len(metas) else {})
+                    for index, value in enumerate(values)
+                    if os.path.normcase(os.path.realpath(str(value))) not in targets
+                ]
+                base_path = str(run.get('base_path') or '')
+                base_deleted = bool(base_path and os.path.normcase(os.path.realpath(base_path)) in targets)
+                if len(pairs) != len(values) or base_deleted:
+                    run['paths'] = [value for value, _meta in pairs]
+                    run['candidate_meta'] = [meta for _value, meta in pairs]
+                    run['index'] = max(0, min(int(run.get('index') or 0), len(pairs) - 1)) if pairs else 0
+                    if base_deleted:
+                        run['base_path'] = ''
+                    job_changed = True
+            if job_changed:
+                changed += 1
+    if changed:
+        JOBS.persist()
+    return changed
+
+
 # ── 快速预览(Nano Banana 2 Lite · 1K · 仅 Google 直连)──────────────────
 # 与 4K 队列完全解耦:不进 JOBS、不占 b2/pro 信号量、不写记录。pid → 状态快照,前端短轮询。
 MAX_PREVIEWS = 20            # 预览是临时草稿,只留最近 N 条终态

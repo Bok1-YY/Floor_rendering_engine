@@ -24,8 +24,11 @@ import importlib.util
 # on the parent directory being enumerable. This works for default Git clones,
 # renamed folders, and restricted Windows accounts.
 _PKG_DIR = os.path.dirname(os.path.abspath(__file__))
+_IS_FROZEN = getattr(sys, 'frozen', False) or ('__compiled__' in globals())
+if not _IS_FROZEN:
+    os.environ.setdefault('FLOOR_DATA_DIR', os.path.join(_PKG_DIR, 'data'))
 _PACKAGE_NAME = 'Floor_engine_server'
-if _PACKAGE_NAME not in sys.modules:
+if not _IS_FROZEN and _PACKAGE_NAME not in sys.modules:
     _spec = importlib.util.spec_from_file_location(
         _PACKAGE_NAME,
         os.path.join(_PKG_DIR, '__init__.py'),
@@ -60,7 +63,9 @@ def main():
     port = int(os.environ.get('FLOOR_API_PORT', '7870'))
     open_host = '127.0.0.1' if host == '::1' else host
     _open_browser_later(f'http://{open_host}:{port}/')
+    data_dir = os.environ.get('FLOOR_DATA_DIR') or os.path.dirname(os.path.abspath(sys.argv[0]))
     print(f'[Floor engine] 服务启动中 → http://{open_host}:{port}/  （Ctrl+C 退出）')
+    print(f'[Floor engine] 数据目录 → {os.path.abspath(data_dir)}')
     # 传 app 对象 = 单进程单 worker（_job_history/信号量是进程内状态，必须单 worker）。
     # 显式用纯 Python 的 h11 + asyncio：不依赖 uvloop/httptools/websockets 这些
     # 可选 C 扩展，Nuitka 打包最稳；本服务只用 SSE(StreamingResponse)，无 WebSocket。

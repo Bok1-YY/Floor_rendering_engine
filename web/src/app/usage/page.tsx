@@ -44,16 +44,17 @@ export default function UsagePage() {
           <>
             <div
               className={
-                hasCost ? "grid grid-cols-4 gap-[14px]" : "grid grid-cols-3 gap-[14px]"
+                hasCost ? "grid grid-cols-5 gap-[14px]" : "grid grid-cols-4 gap-[14px]"
               }
             >
               <Stat label="累计出图" value={data.totals.total} color="var(--foreground)" />
               <Stat label="成功" value={data.totals.ok} color="var(--success)" />
               <Stat label="失败" value={data.totals.fail} color="var(--destructive)" />
+              <Stat label="结果不确定" value={data.totals.uncertain} color="var(--warn)" />
               {hasCost && (
                 <Stat
-                  label={costComplete ? "估算成本 (元)" : "已计价成本 (元)"}
-                  value={`¥${data.totals.cost!.toFixed(2)}`}
+                  label={costComplete ? "成本区间 (元)" : "已计价成本区间"}
+                  value={`¥${data.totals.cost_min!.toFixed(2)}–${data.totals.cost_max!.toFixed(2)}`}
                   color="var(--accent-foreground)"
                 />
               )}
@@ -76,14 +77,15 @@ export default function UsagePage() {
             </div>
 
             <div className="mt-[14px] overflow-hidden rounded-[14px] border border-border bg-card shadow-[0_2px_8px_rgba(120,90,60,.05)]">
-              <div className="grid grid-cols-[1.2fr_1fr_1fr_1fr_.6fr_.6fr_.8fr] bg-accent px-[18px] py-[11px] text-[11.5px] font-bold tracking-wide text-accent-foreground">
+              <div className="grid grid-cols-[1.2fr_1fr_1fr_1fr_.55fr_.55fr_.65fr_1fr] bg-accent px-[18px] py-[11px] text-[11.5px] font-bold tracking-wide text-accent-foreground">
                 <span>模式</span>
                 <span>操作</span>
                 <span>模型</span>
                 <span>线路</span>
                 <span className="text-right">成功</span>
                 <span className="text-right">失败</span>
-                <span className="text-right">估算成本</span>
+                <span className="text-right">不确定</span>
+                <span className="text-right">成本区间</span>
               </div>
               {data.rows.length === 0 && (
                 <div className="px-[18px] py-6 text-center text-[13px] text-muted-foreground">
@@ -93,7 +95,7 @@ export default function UsagePage() {
               {data.rows.map((r, i) => (
                 <div
                   key={i}
-                  className="grid grid-cols-[1.2fr_1fr_1fr_1fr_.6fr_.6fr_.8fr] items-center border-t border-muted px-[18px] py-3 text-[13px] text-foreground"
+                  className="grid grid-cols-[1.2fr_1fr_1fr_1fr_.55fr_.55fr_.65fr_1fr] items-center border-t border-muted px-[18px] py-3 text-[13px] text-foreground"
                 >
                   <span>{r.mode}</span>
                   <span className="text-secondary-foreground">{r.operation}</span>
@@ -105,15 +107,20 @@ export default function UsagePage() {
                   <span className="text-right font-bold tabular-nums text-destructive">
                     {r.fail}
                   </span>
+                  <span className="text-right font-bold tabular-nums text-warn">
+                    {r.uncertain}
+                  </span>
                   <span className="text-right tabular-nums text-secondary-foreground">
-                    {r.cost != null ? `¥${r.cost.toFixed(2)}` : "—"}
+                    {r.cost_min != null && r.cost_max != null
+                      ? `¥${r.cost_min.toFixed(2)}–${r.cost_max.toFixed(2)}`
+                      : "—"}
                   </span>
                 </div>
               ))}
             </div>
 
             <div className="mt-[10px] px-1 text-[11.5px] leading-relaxed text-muted-foreground">
-              估算口径：成本 = 各行成功张数 × 设置页配置的单价（失败不计费）；未配置单价的行显示
+              估算口径：下限只计算明确成功；上限再加上“结果不确定、可能已计费”的调用。明确失败不计费；未配置单价的行显示
               —。单价在「设置 → 成本单价」中配置。
               {!costComplete && (
                 <span className="ml-1 font-semibold text-warn">

@@ -69,7 +69,8 @@ def test_local_inpaint_usage_is_not_charged_as_google(tmp_path, monkeypatch):
 
     assert summary["rows"] == [{
         "mode": "纯效果图", "operation": "inpaint", "model": "ComfyUI",
-        "provider": "local", "ok": 1, "fail": 0, "cost": 0.0,
+        "provider": "local", "ok": 1, "fail": 0, "uncertain": 0,
+        "cost": 0.0, "cost_min": 0.0, "cost_max": 0.0,
     }]
     assert summary["totals"]["cost"] == 0.0
     assert summary["totals"]["unpriced_ok"] == 0

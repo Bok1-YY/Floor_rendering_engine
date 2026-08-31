@@ -113,6 +113,17 @@ export interface ModelRunView {
   stage: string;
   seconds: number | null;
   error: string;
+  failure_code: string;
+  retry_safety: "safe" | "ambiguous" | "fatal";
+  may_have_been_billed: boolean;
+  attempts: Array<{
+    attempt: number;
+    phase: string;
+    http_status?: number | null;
+    started_at: number;
+    duration_ms: number;
+    outcome: string;
+  }>;
   url: string;
   thumb: string;
   idx: number;
@@ -158,6 +169,10 @@ export interface JobView {
   operation: string;
   operation_status: "idle" | "running" | "done" | "failed" | "cancelled";
   operation_error: string;
+  operation_failure_code: string;
+  operation_retry_safety: "safe" | "ambiguous" | "fatal";
+  operation_may_have_been_billed: boolean;
+  operation_attempts: ModelRunView["attempts"];
   panorama_resume?: {
     preview_id: string;
     preview_hash: string;
@@ -196,6 +211,14 @@ export interface GenParams {
   property_type?: string;
   room_type?: string;
   view?: string;
+  scene_preset?: string;
+  site_context?: string;
+  floor_level?: string;
+  room_scale?: string;
+  room_layout?: string;
+  window_type?: string;
+  scene_notes?: string;
+  scene_anchor?: string;
   style_type?: string;
   lighting?: string;
   floor_tone?: string;
@@ -234,6 +257,41 @@ export interface GenParams {
   cinematic_enabled?: boolean; // Gemini 电影真实感导演规划；只作用于生成新场景的 B2/Pro
   panel_submode?: string;    // 墙板模式子行为：再设计 / 替换 / 纯原创（仅墙板模式生效，其他工作流忽略）
   panel_size?: string;       // 墙板尺寸/板型（预设或自定义；仅墙板再设计/纯原创生效）
+}
+
+export interface SceneOption {
+  value: string;
+  label: string;
+  description: string;
+  markets: ("overseas" | "cn")[];
+  compatibility: Record<string, string | string[]>;
+}
+
+export interface ScenePreset {
+  value: string;
+  label: string;
+  market: "海外" | "国内" | "all";
+  description: string;
+  defaults: Partial<GenParams>;
+}
+
+export interface SceneCatalog {
+  version: string;
+  presets: ScenePreset[];
+  property_options: SceneOption[];
+  room_options: SceneOption[];
+  site_contexts: SceneOption[];
+  floor_levels: SceneOption[];
+  room_scales: SceneOption[];
+  room_layouts: SceneOption[];
+  window_types: SceneOption[];
+  view_options: { group: string; options: SceneOption[] }[];
+  compatibility_rules: {
+    policy: string;
+    custom_preset: string;
+    legacy_preset: string;
+    scene_fields: string[];
+  };
 }
 
 export interface JobSubmit {
@@ -566,6 +624,18 @@ export interface ConfigView {
   comfyui_workflow_path?: string;
   comfyui_timeout?: number;
   inpaint_remove_prompt?: string;
+  secret_backend: {
+    name: string;
+    available: boolean;
+    persistent: boolean;
+    error?: string;
+  };
+  secret_sources: {
+    gemini: "environment" | "keyring" | "legacy" | "missing";
+    fal: "environment" | "keyring" | "legacy" | "missing";
+    deepseek: "environment" | "keyring" | "legacy" | "missing";
+  };
+  plaintext_secret_migration_required: boolean;
 }
 
 export interface ConfigPatch {
@@ -630,6 +700,7 @@ export interface OptionsView {
   room_types: string[];
   property_types: string[];
   views: string[];
+  scene_catalog: SceneCatalog;
   floor_tones: string[];
   styles: string[];
   lightings: string[];
@@ -762,15 +833,21 @@ export interface UsageRow {
   provider: string;
   ok: number;
   fail: number;
+  uncertain: number;
   cost?: number | null; // 估算成本（元）；未配单价时为 null
+  cost_min?: number | null;
+  cost_max?: number | null;
 }
 export interface UsageSummary {
   rows: UsageRow[];
   totals: {
     ok: number;
     fail: number;
+    uncertain: number;
     total: number;
     cost?: number | null;
+    cost_min?: number | null;
+    cost_max?: number | null;
     unpriced_ok: number;
     cost_complete: boolean;
   };
@@ -1327,3 +1404,10 @@ export interface DesignReferenceUpload {
   thumb: string;
   sha256: string;
 }
+
+export type {
+  AssetDeleteView,
+  QuarantineEntryView,
+  StorageAuditView,
+  StorageCleanupView,
+} from "./types/storage";

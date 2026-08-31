@@ -45,6 +45,10 @@ class JobRecord:
     operation: str = 'generate'              # generate/retry/regen/polish/edit/record_edit
     operation_status: str = 'idle'           # idle/running/done/failed/cancelled
     operation_error: str = ''
+    operation_failure_code: str = ''
+    operation_retry_safety: str = 'safe'
+    operation_may_have_been_billed: bool = False
+    operation_attempts: List[dict] = field(default_factory=list)
     favorite: bool = False                   # 队列卡收藏标记（仅内存态，供「⭐仅看收藏」过滤；不持久化）
     # ── 重抽候选累积（同卡内左右切换对比）──
     # 每个图槽保存历次重抽产出的全部候选路径；*_path 始终 = *_paths[*_idx]（当前展示的那张）。
@@ -111,6 +115,10 @@ def _new_model_run(key: str) -> dict:
         'stage': '',
         'seconds': None,
         'error': '',
+        'failure_code': '',
+        'retry_safety': 'safe',
+        'may_have_been_billed': False,
+        'attempts': [],
         'paths': [],
         # 与 paths 严格按索引对齐。老记录没有该字段时由 ensure_model_runs 补空对象。
         'candidate_meta': [],
@@ -120,6 +128,47 @@ def _new_model_run(key: str) -> dict:
         'seed': None,
         'settings': {},
     }
+
+
+LEGACY_JOB_FIELDS = {
+    'b2_path', 'pro_path', 'b2_paths', 'pro_paths', 'b2_idx', 'pro_idx',
+    'b2_stage', 'pro_stage', 'b2_secs', 'pro_secs',
+    'pro_polish_path', 'pro_polish_paths', 'pro_polish_idx',
+}
+
+
+def migrate_legacy_job_payload(payload: dict) -> dict:
+    """Build canonical model_runs from v1/v2 fixed B2/Pro queue fields."""
+    data = dict(payload or {})
+    targets = list(data.get('model_targets') or targets_from_legacy(str(data.get('model_filter') or 'both')))
+    runs = dict(data.get('model_runs') or {})
+    for key in targets:
+        run = _new_model_run(key)
+        if isinstance(runs.get(key), dict):
+            run.update(runs[key])
+        if key in ('b2', 'pro'):
+            paths = list(data.get(f'{key}_paths') or run.get('paths') or [])
+            single = data.get(f'{key}_path')
+            if single and single not in paths:
+                paths.append(single)
+            if key == 'pro':
+                polish = list(data.get('pro_polish_paths') or [])
+                if data.get('pro_polish_path'):
+                    polish.append(data['pro_polish_path'])
+                for path in polish:
+                    if path and path not in paths:
+                        paths.append(path)
+            run['paths'] = paths
+            run['index'] = max(0, min(int(data.get(f'{key}_idx') or run.get('index') or 0), len(paths) - 1)) if paths else 0
+            run['stage'] = str(data.get(f'{key}_stage') or run.get('stage') or '')
+            run['seconds'] = data.get(f'{key}_secs') if data.get(f'{key}_secs') is not None else run.get('seconds')
+            if paths and run.get('status') in ('queued', 'running', ''):
+                run['status'] = 'done'
+        runs[key] = run
+    data['model_targets'] = targets
+    data['model_runs'] = runs
+    data['_schema_version'] = 3
+    return data
 
 
 def _normalize_candidate_meta(run: dict) -> None:
@@ -154,21 +203,56 @@ def ensure_model_runs(job: JobRecord) -> None:
             defaults['settings'] = dict(defaults.get('settings') or {})
             job.model_runs[key] = run = defaults
         _normalize_candidate_meta(run)
-
-    # B2/Pro 旧字段仍被既有编辑链使用；以它们为源同步到通用结构。
-    ensure_candidate_lists(job)
+    # v3 以后 model_runs 是唯一内部真相。仅当 canonical paths 为空时导入一次旧字段；
+    # 随后旧字段只作为派生兼容视图，不能反向覆盖已恢复的 model_runs。
     for key in ('b2', 'pro'):
         if key not in job.model_runs:
             continue
         run = job.model_runs[key]
-        paths = list(getattr(job, f'{key}_paths') or [])
-        run['paths'] = paths
-        run['index'] = getattr(job, f'{key}_idx')
-        run['stage'] = getattr(job, f'{key}_stage')
-        run['seconds'] = getattr(job, f'{key}_secs')
-        if getattr(job, f'{key}_path'):
+        paths = list(run.get('paths') or [])
+        if not paths:
+            paths = list(getattr(job, f'{key}_paths') or [])
+            single = getattr(job, f'{key}_path')
+            if single and single not in paths:
+                paths.append(single)
+            if key == 'pro':
+                legacy_polish = list(job.pro_polish_paths or [])
+                if job.pro_polish_path:
+                    legacy_polish.append(job.pro_polish_path)
+                for path in legacy_polish:
+                    if path and path not in paths:
+                        paths.append(path)
+                job.pro_polish_paths = []
+                job.pro_polish_path = None
+                job.pro_polish_idx = 0
+            run['paths'] = paths
+            run['index'] = getattr(job, f'{key}_idx')
+            run['stage'] = getattr(job, f'{key}_stage') or run.get('stage') or ''
+            run['seconds'] = (getattr(job, f'{key}_secs')
+                              if getattr(job, f'{key}_secs') is not None else run.get('seconds'))
+        idx = max(0, min(int(run.get('index') or 0), len(paths) - 1)) if paths else 0
+        run['index'] = idx
+        setattr(job, f'{key}_paths', list(paths))
+        setattr(job, f'{key}_idx', idx)
+        setattr(job, f'{key}_path', paths[idx] if paths else None)
+        setattr(job, f'{key}_stage', run.get('stage') or '')
+        setattr(job, f'{key}_secs', run.get('seconds'))
+        if paths and run.get('status') in ('queued', 'running', ''):
             run['status'] = 'done'
         _normalize_candidate_meta(run)
+
+
+def _sync_legacy_view(job: JobRecord, key: str) -> None:
+    if key not in ('b2', 'pro'):
+        return
+    run = job.model_runs.get(key) or {}
+    paths = list(run.get('paths') or [])
+    idx = max(0, min(int(run.get('index') or 0), len(paths) - 1)) if paths else 0
+    setattr(job, f'{key}_paths', paths)
+    setattr(job, f'{key}_idx', idx)
+    setattr(job, f'{key}_path', paths[idx] if paths else None)
+    setattr(job, f'{key}_stage', run.get('stage') or '')
+    setattr(job, f'{key}_secs', run.get('seconds'))
 
 
 def update_model_run(job: JobRecord, key: str, **values) -> dict:
@@ -177,25 +261,20 @@ def update_model_run(job: JobRecord, key: str, **values) -> dict:
     ensure_model_runs(job)
     run = job.model_runs[key]
     run.update(values)
+    _normalize_candidate_meta(run)
+    _sync_legacy_view(job, key)
     return run
 
 
 def add_model_candidate(job: JobRecord, key: str, path: str,
                         metadata: Optional[dict] = None) -> int:
-    """通用候选追加；B2/Pro 继续双写旧槽以兼容现有编辑链。"""
+    """Append to canonical model_runs and refresh derived legacy fields."""
     ensure_model_runs(job)
-    prior = job.model_runs.get(key) or _new_model_run(key)
-    prior_meta = list(prior.get('candidate_meta') or [])
-    if key in CANDIDATE_SLOTS:
-        idx = add_candidate(job, key, path)
-        ensure_model_runs(job)
-        run = job.model_runs[key]
-        paths = list(getattr(job, f'{key}_paths'))
-        metas = prior_meta + [dict(metadata or {})]
-        metas = metas[-len(paths):] if paths else []
-        run.update(paths=paths, candidate_meta=metas, index=idx, status='done')
-        return idx
-    run = update_model_run(job, key)
+    if key not in job.model_runs:
+        if key not in job.model_targets:
+            job.model_targets.append(key)
+        job.model_runs[key] = _new_model_run(key)
+    run = job.model_runs[key]
     paths = list(run.get('paths') or [])
     metas = list(run.get('candidate_meta') or [])
     paths.append(path)
@@ -205,21 +284,11 @@ def add_model_candidate(job: JobRecord, key: str, path: str,
         paths = paths[trim:]
         metas = metas[trim:]
     run.update(paths=paths, candidate_meta=metas, index=len(paths) - 1, status='done')
+    _sync_legacy_view(job, key)
     return len(paths) - 1
 
 
 def nav_model_candidate(job: JobRecord, key: str, index: int) -> tuple:
-    if key in CANDIDATE_SLOTS:
-        ensure_candidate_lists(job)
-        paths = getattr(job, f'{key}_paths')
-        if not paths:
-            return 0, 0, ''
-        idx = max(0, min(index, len(paths) - 1))
-        setattr(job, f'{key}_idx', idx)
-        setattr(job, f'{key}_path', paths[idx])
-        ensure_model_runs(job)
-        job.model_runs[key].update(index=idx, paths=list(paths))
-        return idx, len(paths), paths[idx]
     ensure_model_runs(job)
     run = job.model_runs.get(key) or {}
     paths = list(run.get('paths') or [])
@@ -227,6 +296,7 @@ def nav_model_candidate(job: JobRecord, key: str, index: int) -> tuple:
         return 0, 0, ''
     idx = max(0, min(index, len(paths) - 1))
     run['index'] = idx
+    _sync_legacy_view(job, key)
     return idx, len(paths), paths[idx]
 
 
@@ -314,50 +384,26 @@ MAX_CANDIDATES_PER_SLOT = 12
 
 
 def ensure_candidate_lists(job: JobRecord) -> None:
-    """向后兼容 + 一致性维护：列表空但有单路径(老任务/老持久化)→用单路径回填；
-    然后把 *_idx 钳进合法区间，并把 *_path 同步成 *_paths[*_idx]。多次调用幂等。"""
-    # 老记录迁移：磨缝结果旧版单独存 pro_polish_*，现已并入 Pro 候选 → 折进 pro_paths 后清空，幂等。
-    _legacy = list(job.pro_polish_paths) if job.pro_polish_paths else ([job.pro_polish_path] if job.pro_polish_path else [])
-    if _legacy:
-        for _p in _legacy:
-            if _p and _p not in job.pro_paths:
-                job.pro_paths.append(_p)
-        job.pro_polish_paths = []
-        job.pro_polish_path = None
-        job.pro_polish_idx = 0
-    for slot in CANDIDATE_SLOTS:
-        lst = getattr(job, f'{slot}_paths')
-        single = getattr(job, f'{slot}_path')
-        if not lst and single:
-            lst = [single]
-            setattr(job, f'{slot}_paths', lst)
-        if lst:
-            idx = max(0, min(getattr(job, f'{slot}_idx'), len(lst) - 1))
-            setattr(job, f'{slot}_idx', idx)
-            setattr(job, f'{slot}_path', lst[idx])
+    """Compatibility entrypoint: derive B2/Pro fields from canonical model_runs."""
+    ensure_model_runs(job)
 
 
 def add_candidate(job: JobRecord, slot: str, path: str) -> int:
-    """追加一张新候选到 job.{slot}_paths，并把当前下标/当前路径指向它(最新)。返回新下标。
-    生成出口(主生图/重试/重抽/磨缝)统一走这里，使每次成图自动并入候选列表。"""
-    lst = getattr(job, f'{slot}_paths')
-    lst.append(path)
-    if len(lst) > MAX_CANDIDATES_PER_SLOT:        # 超上限丢最旧，列表稳定在 MAX 长度
-        del lst[:len(lst) - MAX_CANDIDATES_PER_SLOT]
-    setattr(job, f'{slot}_idx', len(lst) - 1)
-    setattr(job, f'{slot}_path', path)
-    return len(lst) - 1
+    """Legacy helper routed to canonical model_runs."""
+    return add_model_candidate(job, slot, path)
 
 
 def nav_candidate(job: JobRecord, slot: str, delta: int) -> tuple:
     """左右切换：把 {slot}_idx 移动 delta(钳到边界)，同步 *_path。返回 (新下标, 总数)。"""
-    lst = getattr(job, f'{slot}_paths')
-    if not lst:
+    ensure_model_runs(job)
+    run = job.model_runs.get(slot) or {}
+    paths = list(run.get('paths') or [])
+    if not paths:
         return (0, 0)
-    idx = max(0, min(getattr(job, f'{slot}_idx') + delta, len(lst) - 1))
-    setattr(job, f'{slot}_idx', idx)
-    setattr(job, f'{slot}_path', lst[idx])
-    return (idx, len(lst))
+    idx = max(0, min(int(run.get('index') or 0) + delta, len(paths) - 1))
+    run['index'] = idx
+    _sync_legacy_view(job, slot)
+    return (idx, len(paths))
 
 
 @dataclass
@@ -379,9 +425,19 @@ class TaskParams:
     neighborhood: str = ''
 
     # ── Property & Room ──
-    property_type: str = '现代别墅'
+    property_type: str = '普通独立住宅'
     room_type: str = '客餐厅一体'
-    view: str = '自然通透景观'
+    view: str = '绿树成荫的住宅街道'
+
+    # ── Structured scene context ──
+    scene_preset: str = '低密郊区独立住宅'
+    site_context: str = '郊区家庭社区'
+    floor_level: str = '独栋住宅内部楼层'
+    room_scale: str = '标准'
+    room_layout: str = '方正布局'
+    window_type: str = '宽幅景观窗'
+    scene_notes: str = ''
+    scene_anchor: str = 'scene_preset'
 
     # ── Style ──
     style_type: str = ''
@@ -428,7 +484,7 @@ class TaskParams:
     cn_unit_type: str = '── 不指定 ──'
     cn_delivery: str = '🏆 样板间 / 展示单位'
     cn_room_type: str = '客餐厅一体'
-    cn_view: str = '自然通透景观'
+    cn_view: str = '带绿植的社区内院'
     cn_space_features: Optional[List[str]] = None
     cn_facilities: Optional[List[str]] = None
 
@@ -466,6 +522,14 @@ def task_params_to_kwargs(p: TaskParams) -> dict:
         'style_type': p.style_type,
         'room_type': p.room_type,
         'view': p.view,
+        'scene_preset': p.scene_preset,
+        'site_context': p.site_context,
+        'floor_level': p.floor_level,
+        'room_scale': p.room_scale,
+        'room_layout': p.room_layout,
+        'window_type': p.window_type,
+        'scene_notes': p.scene_notes,
+        'scene_anchor': p.scene_anchor,
         'lighting': p.lighting,
         'pet_type': p.pet_type,
         'pet_action': p.pet_action,
