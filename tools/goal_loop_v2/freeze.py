@@ -20,7 +20,7 @@ from tools.goal_loop_v2.common import atomic_write_json, read_json  # noqa: E402
 
 ALLOWED_OPERATIONS = {
     "set_outer_status", "set_junction_status", "set_opening_source_status",
-    "set_opening_effective_status", "remove_resolved_issues",
+    "set_opening_effective_status",
 }
 
 
@@ -33,8 +33,10 @@ def _rows_by_id(rows: list[dict[str, Any]], label: str) -> dict[str, dict[str, A
 
 def apply_freeze_verdict(document: Mapping[str, Any], verdict: Mapping[str, Any], *, document_file_sha256: str | None = None) -> dict[str, Any]:
     current = validate_v2_document(document)
-    if verdict.get("schema") != "goal-loop-v2-reference-freeze-verdict-v1" or verdict.get("verdict") != "accept_reference_freeze":
+    if verdict.get("schema") != "goal-loop-v2-reference-freeze-verdict-v2" or verdict.get("verdict") != "accept_reference_freeze":
         raise ValueError("unsupported or non-accepting reference-freeze verdict")
+    if "operations" in verdict:
+        raise ValueError("v2 verdict operations must be bound to individual decisions")
     if verdict.get("build_authorized") is not False:
         raise ValueError("reference-freeze verdict must not authorize build")
     if verdict.get("prior_structure_hash") != current["structure_hash"]:
@@ -57,38 +59,45 @@ def apply_freeze_verdict(document: Mapping[str, Any], verdict: Mapping[str, Any]
     result = deepcopy(current)
     junctions = _rows_by_id(result["wall_graph"]["junctions"], "junctions")
     openings = _rows_by_id(result["opening_contract"]["openings"], "openings")
-    removed: set[str] = set()
-    for index, operation in enumerate(verdict.get("operations") or []):
+    authorized_operations: list[Mapping[str, Any]] = []
+    for blocker_id, decision in decision_by_id.items():
+        operations = decision.get("authorized_operations")
+        if not isinstance(operations, list):
+            raise ValueError(f"decision {blocker_id}: authorized_operations array required")
+        if decision["decision"] == "keep_unresolved" and operations:
+            raise ValueError(f"decision {blocker_id}: unresolved blocker cannot authorize status operations")
+        if decision["decision"] == "freeze":
+            authorized_operations.extend(operations)
+
+    for index, operation in enumerate(authorized_operations):
         if not isinstance(operation, Mapping) or operation.get("operation") not in ALLOWED_OPERATIONS:
-            raise ValueError(f"operations[{index}]: unsupported")
+            raise ValueError(f"authorized_operations[{index}]: unsupported")
         name = operation["operation"]
+        if operation.get("status") != "confirmed":
+            raise ValueError(f"authorized_operations[{index}]: only confirmed promotion is supported")
         if name == "set_outer_status":
             result["outer_boundary"]["status"] = operation.get("status")
             continue
         entity_ids = operation.get("entity_ids")
         if not isinstance(entity_ids, list) or len(entity_ids) != len(set(entity_ids)):
-            raise ValueError(f"operations[{index}].entity_ids: unique array required")
+            raise ValueError(f"authorized_operations[{index}].entity_ids: unique array required")
         if name == "set_junction_status":
             target = junctions
             for entity_id in entity_ids:
                 if entity_id not in target:
-                    raise ValueError(f"operations[{index}]: unknown junction {entity_id}")
+                    raise ValueError(f"authorized_operations[{index}]: unknown junction {entity_id}")
                 target[entity_id]["status"] = operation.get("status")
         elif name == "set_opening_source_status":
             for entity_id in entity_ids:
                 if entity_id not in openings:
-                    raise ValueError(f"operations[{index}]: unknown opening {entity_id}")
+                    raise ValueError(f"authorized_operations[{index}]: unknown opening {entity_id}")
                 openings[entity_id]["source_observation"]["status"] = operation.get("status")
         elif name == "set_opening_effective_status":
             for entity_id in entity_ids:
                 if entity_id not in openings or openings[entity_id]["effective_void"] is None:
-                    raise ValueError(f"operations[{index}]: opening {entity_id} has no effective-void evidence")
+                    raise ValueError(f"authorized_operations[{index}]: opening {entity_id} has no effective-void evidence")
                 openings[entity_id]["effective_void"]["status"] = operation.get("status")
-        elif name == "remove_resolved_issues":
-            removed.update(entity_ids)
-    if removed != frozen_ids:
-        raise ValueError("remove_resolved_issues must equal the independently frozen blocker set")
-    result["unresolved_issues"] = [row for row in result["unresolved_issues"] if row["id"] not in removed]
+    result["unresolved_issues"] = [row for row in result["unresolved_issues"] if row["id"] not in frozen_ids]
     if {row["id"] for row in result["unresolved_issues"]} != remaining_ids:
         raise ValueError("frozen document remaining blocker set mismatch")
     result["structure_hash"] = compute_v2_structure_hash(result)

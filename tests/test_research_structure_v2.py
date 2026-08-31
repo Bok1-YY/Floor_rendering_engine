@@ -212,25 +212,43 @@ def test_reference_freeze_applies_exact_partition_without_authorizing_build() ->
     ]
     rehash(document)
     verdict = {
-        "schema": "goal-loop-v2-reference-freeze-verdict-v1",
+        "schema": "goal-loop-v2-reference-freeze-verdict-v2",
         "verdict": "accept_reference_freeze",
         "build_authorized": False,
         "prior_structure_hash": document["structure_hash"],
         "decisions": [
-            {"blocker_id": "ISSUE-FREEZE", "decision": "freeze"},
-            {"blocker_id": "ISSUE-KEEP", "decision": "keep_unresolved"},
+            {"blocker_id": "ISSUE-FREEZE", "decision": "freeze", "authorized_operations": [{"operation": "set_outer_status", "status": "confirmed"}]},
+            {"blocker_id": "ISSUE-KEEP", "decision": "keep_unresolved", "authorized_operations": []},
         ],
         "remaining_blocker_ids": ["ISSUE-KEEP"],
-        "operations": [
-            {"operation": "set_outer_status", "status": "confirmed"},
-            {"operation": "remove_resolved_issues", "entity_ids": ["ISSUE-FREEZE"]},
-        ],
     }
     frozen = apply_freeze_verdict(document, verdict)
     assert [row["id"] for row in frozen["unresolved_issues"]] == ["ISSUE-KEEP"]
     assert frozen["outer_boundary"]["status"] == "confirmed"
     assert assess_v2_build_readiness(frozen)["ready"] is False
 
-    verdict["operations"][0]["operation"] = "confirm_everything"
+    verdict["decisions"][0]["authorized_operations"][0]["operation"] = "confirm_everything"
     with pytest.raises(ValueError, match="unsupported"):
+        apply_freeze_verdict(document, verdict)
+
+
+def test_reference_freeze_rejects_operation_bound_to_unresolved_decision() -> None:
+    document = v2_fixture()
+    document["unresolved_issues"] = [
+        {"id": issue_id, "severity": "hard", "category": "reference", "entity_refs": [], "status": "open", "message": issue_id, "blocks_reference_freeze": True, "blocks_build": True, "evidence_refs": ["VIEW-EVIDENCE"]}
+        for issue_id in ("ISSUE-FREEZE", "ISSUE-KEEP")
+    ]
+    rehash(document)
+    verdict = {
+        "schema": "goal-loop-v2-reference-freeze-verdict-v2",
+        "verdict": "accept_reference_freeze",
+        "build_authorized": False,
+        "prior_structure_hash": document["structure_hash"],
+        "decisions": [
+            {"blocker_id": "ISSUE-FREEZE", "decision": "freeze", "authorized_operations": []},
+            {"blocker_id": "ISSUE-KEEP", "decision": "keep_unresolved", "authorized_operations": [{"operation": "set_junction_status", "entity_ids": ["J-X"], "status": "confirmed"}]},
+        ],
+        "remaining_blocker_ids": ["ISSUE-KEEP"],
+    }
+    with pytest.raises(ValueError, match="unresolved blocker cannot authorize"):
         apply_freeze_verdict(document, verdict)
