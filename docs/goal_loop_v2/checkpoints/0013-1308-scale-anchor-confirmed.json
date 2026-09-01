@@ -1,0 +1,48 @@
+{
+  "schema": "goal-loop-v2-checkpoint-v1",
+  "checkpoint_id": "0013-1308-scale-anchor-confirmed",
+  "stage": "source_scoring",
+  "status": "accepted_scale_fact_only_not_build_ready",
+  "accepted_at": "2026-09-01T10:31:13.7929211+08:00",
+  "baseline_commit": "26159ee58556da05c6dd1fdab199942210b18fa9",
+  "accepted_commit": "019ddab71f9011294c4368a7300be62dca88d12e",
+  "independent_verdict": "accept_1308_scale_anchor_application_v2",
+  "severity": {"p0": 0, "p1": 0, "p2": 0},
+  "anchor_application": {
+    "wrapper_sha256": "6cbe70a6a3c4b48edd7705a7e263167ed20f68ae1bc872d767ba9b3cc1d5181e",
+    "candidate_hash": "81cadbec164163b822fd93f76798548e5b044f1d6187f960f2b94d8f2aa98c87",
+    "result_sha256": "c0d01e5fe23ed0bc6edd9e0cabc62044c709bc08971fbfa2fe088471b87a6027",
+    "application_sha256": "b6a65fc1fe315a258e8f0e693eafd72597db219e6d3346eccb137efb097ac9c0",
+    "result_structure_hash": "c4b85e9b3a88ea03df512e4a0d3b7df3f3c8acdfc250b4741d43237e9b57f911",
+    "promoted_anchor": "SCALE-1308-CORE-WIDTH",
+    "other_anchor_count_remaining": 27,
+    "ready": false,
+    "build_authorized": false
+  },
+  "source_score": {
+    "layer_sha256": "ebe2c8bdeabd953e42c2036c5d7ec1b35fdb3b797a32e64f715a6c2db8daf040",
+    "detail_sha256": "08612bc1e419a2cd57e9f54bd62e3ab5bb05c9827751b3539484b7abc195103e",
+    "score": 40,
+    "minimum": 95,
+    "pass": ["S01_SOURCE_IDENTITY", "S03_SCALE_AND_DIMENSIONS", "S04_OUTER_BOUNDARY"],
+    "fail": ["S02_ORIENTATION_COORDINATE_CHAIN", "S05_WALL_GRAPH", "S06_OPENINGS", "S07_SPACES_ADJACENCY_REACHABILITY", "S08_PROVENANCE_UNRESOLVED"],
+    "entity_blockers": {"S02": 27, "S05": 90, "S06": 33, "S07": 37, "S08": 2, "total": 189}
+  },
+  "gemini_evidence": {
+    "current_review_directory": "C:\\Users\\1_1\\Desktop\\goal_loop_v2_1308_gemini_current_semantic_20260901",
+    "http_status": 200,
+    "post_count": 1,
+    "total_tokens": 6758,
+    "known_list_price_estimate_usd": 0.0186345,
+    "semantic_verdict": "partial",
+    "warnings": ["OP007/OP008 may duplicate one bath door", "OP001 type conflicts with current contract", "OP011 indeterminate"],
+    "build_authorized": false
+  },
+  "remaining_stable_blockers": ["B1308-SEMANTIC-ADJACENCY"],
+  "readiness": {"ready": false, "blender_executed": false, "ifc_executed": false},
+  "tests": {"anchor_focused": {"passed": 28, "failed": 0}, "backend": {"passed": 447, "skipped": 1, "failed": 0}, "diff_check": "passed", "compileall": "passed"},
+  "stage_boundary": "Only the scale anchor has been independently source-confirmed. The remaining 27 anchors, full wall graph, openings, space semantics and adjacency are not accepted; Gemini evidence is advisory/partial, and no Blender/IFC build is authorized.",
+  "budget_spent_usd": 0.1,
+  "budget_remaining_usd": 19.9,
+  "next_action": "Audit and confirm the remaining coordinate/semantic anchors, then full wall graph and openings/spaces in separate exact-hash decisions."
+}
