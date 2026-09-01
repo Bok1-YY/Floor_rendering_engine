@@ -1,0 +1,56 @@
+{
+  "schema": "op002-door-evidence-v1",
+  "sample_id": "1308",
+  "opening_id": "OP002",
+  "source_path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\data\\goal_loop_v2\\references\\1308\\canonical-raw-portrait.png",
+  "source_sha256": "b85ff7446e2d1a123e3a41dc541ea9d6e081f3978d3460d6de8ef9906119bc07",
+  "source_segment_px": [
+    [
+      965,
+      960
+    ],
+    [
+      1098,
+      960
+    ]
+  ],
+  "crop_box_px": [
+    785,
+    780,
+    1278,
+    1140
+  ],
+  "host_atom_id": "ATOM-WB006-02",
+  "host_relation": "exact_collinear_overlap",
+  "candidate_side_a_space_id": "bedroom_01",
+  "candidate_side_b_space_id": "bedroom_corridor",
+  "semantic_status": "candidate_only",
+  "traversable_status": "candidate_only",
+  "observations": [
+    "Authorized coordinate anchor is horizontal from (965,960) to (1098,960).",
+    "Current metric OP002 segment is vertical; pixel/metric registration must be resolved before build.",
+    "Wall audit supports exact host geometry for ATOM-WB006-02 only.",
+    "This packet does not prove door type, jamb ownership, height, or traversability."
+  ],
+  "artifacts": {
+    "crop_overlay": {
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\op002_door_evidence_20260901\\op002-crop-overlay.png",
+      "sha256": "4a66a7330fe7cef68dc6d0503a441ffe0d5bbc2ed8532af0e5d2d1fad22b834a",
+      "size": [
+        493,
+        360
+      ]
+    },
+    "full_overlay": {
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\op002_door_evidence_20260901\\op002-full-overlay.png",
+      "sha256": "5e48fd3e5c162473a76d4fede75f8c2cdaeef856d5558171f8aa23d85a6082ba",
+      "size": [
+        2245,
+        3043
+      ]
+    }
+  },
+  "semantic_promotion": false,
+  "build_authorized": false,
+  "ready": false
+}
