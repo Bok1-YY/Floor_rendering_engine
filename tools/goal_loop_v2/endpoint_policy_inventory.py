@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 import hashlib
+import math
 from typing import Any, Mapping
 
 from tools.fastloop_research.contract import canonical_json
@@ -31,6 +32,41 @@ def _classify(node: Mapping[str, Any]) -> str:
     return "unresolved"
 
 
+def _metadata_errors(atom: Mapping[str, Any], endpoint_index: int, node: Mapping[str, Any]) -> list[str]:
+    errors: list[str] = []
+    point = atom["centerline_m"][endpoint_index]
+    axis = node.get("axis_point_m")
+    if not isinstance(axis, list) or len(axis) != 2 or math.dist(point, axis) > 1e-5:
+        errors.append("node_axis_point_mismatch")
+    incidents = node.get("incidents", [])
+    incident_ids = [item.get("atom_id") for item in incidents]
+    if len(incident_ids) != len(set(incident_ids)):
+        errors.append("duplicate_incident_atom")
+    expected_end = "start" if endpoint_index == 0 else "end"
+    matches = [item for item in incidents if item.get("atom_id") == atom["id"] and item.get("end") == expected_end]
+    if len(matches) != 1:
+        errors.append("endpoint_incident_mismatch")
+    else:
+        contact = matches[0].get("contact_point_m")
+        if not isinstance(contact, list) or len(contact) != 2 or math.dist(point, contact) > 1e-5:
+            errors.append("incident_contact_point_mismatch")
+    allowed = {
+        "face_abutment": ("wall_face", "terminating", 1),
+        "cap": ("free_end", "terminating", 1),
+        "union": ("axis", "through", 4),
+    }
+    policy = node.get("solid_union_policy")
+    if policy not in allowed:
+        errors.append("unknown_solid_union_policy")
+    else:
+        attachment, role, count = allowed[policy]
+        if len(incidents) != count:
+            errors.append("incident_count_policy_mismatch")
+        if any(item.get("attachment") != attachment or item.get("role") != role for item in incidents):
+            errors.append("incident_role_attachment_mismatch")
+    return sorted(set(errors))
+
+
 def _derive_records(doc: Mapping[str, Any]) -> list[dict[str, Any]]:
     nodes = {row["id"]: row for row in doc["wall_graph"]["junctions"]}
     records = []
@@ -43,6 +79,7 @@ def _derive_records(doc: Mapping[str, Any]) -> list[dict[str, Any]]:
                 raise ValueError(f"missing endpoint node {node_id}")
             node = nodes[node_id]
             incident_ids = sorted(item["atom_id"] for item in node.get("incidents", []))
+            errors = _metadata_errors(atom, endpoint_index, node)
             records.append({
                 "atom_id": atom["id"],
                 "endpoint_index": endpoint_index,
@@ -54,7 +91,9 @@ def _derive_records(doc: Mapping[str, Any]) -> list[dict[str, Any]]:
                 "termination_kind": node.get("termination_kind"),
                 "incident_atom_ids": incident_ids,
                 "incident_count": len(incident_ids),
-                "policy_candidate": _classify(node),
+                "metadata_geometry_valid": not errors,
+                "validation_errors": errors,
+                "policy_candidate": _classify(node) if not errors else "unresolved",
                 "policy_confirmation": False,
             })
     return records
