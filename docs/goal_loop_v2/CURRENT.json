@@ -4,25 +4,20 @@
   "active_sample": "1308",
   "stage": "reference_freeze",
   "iteration": 0,
-  "method_id": "v21-corrected-reference-confirmation",
+  "method_id": "corrected-semantic-and-source-score-v1",
   "sample_status": {
     "1308": "running",
     "121m2": "pending"
   },
-  "last_accepted_commit": "95d6fa8a82ceb4eb4be95c9482cc9da53852c7c9",
+  "last_accepted_commit": "dc9c5bb8b5a9fc257aa78d440768d89ae21effa9",
   "last_run_id": "",
   "last_score": 0,
   "score_history": [],
-  "failure_class": "pending_reference_confirmation",
-  "next_action": "Issue and apply an independently hash-bound v2.1 reference-confirmation verdict for the corrected 1308 contract: confirm only source-supported wall terminals, both horizontal gap portals, OP001 nominal-wall clip and WB020 exclusion; then recompute semantic adjacency from scratch while preserving OP011 as unresolved. Do not start Blender/IFC while readiness is false.",
+  "failure_class": "semantic_partial_gemini_invalid_argument",
+  "next_action": "Mechanically de-duplicate OP002 versus PORTAL-WB011-WB006-01 and fit their true door axes, validate a corrected Gemini structured request offline before one new independent call, then generate a semantic-adjacency candidate from the corrected v2.1 geometry while keeping OP011 indeterminate. In parallel, produce the full S01-S08 source-contract report for all remaining candidate walls, atoms, spaces and openings; do not start Blender/IFC while readiness is false.",
   "budget_spent_usd": 0.1,
   "budget_remaining_usd": 19.9,
-  "blockers": [
-    "B1308-JUNCTION-ENDPOINTS",
-    "B1308-OP005-GAP-PORTAL-REVIEW",
-    "B1308-OP001-RETURN",
-    "B1308-SEMANTIC-ADJACENCY"
-  ],
+  "blockers": ["B1308-SEMANTIC-ADJACENCY"],
   "final_human_accepted": false,
-  "updated_at": "2026-09-01T08:18:41.1955294+08:00"
+  "updated_at": "2026-09-01T08:34:43.0197732+08:00"
 }

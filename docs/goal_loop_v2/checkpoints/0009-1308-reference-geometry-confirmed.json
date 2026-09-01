@@ -1,0 +1,67 @@
+{
+  "schema": "goal-loop-v2-checkpoint-v1",
+  "checkpoint_id": "0009-1308-reference-geometry-confirmed",
+  "stage": "reference_freeze",
+  "status": "accepted_reference_geometry_semantics_unresolved",
+  "accepted_at": "2026-09-01T08:34:43.0197732+08:00",
+  "baseline_commit": "d0833ee4b98fc5741245d54ac783d77d9a0cc547",
+  "accepted_commit": "dc9c5bb8b5a9fc257aa78d440768d89ae21effa9",
+  "independent_verdict": "accept_1308_reference_confirmation_v2",
+  "severity": {"p0": 0, "p1": 0, "p2": 0},
+  "authorization": {
+    "candidate_file_sha256": "ed311a37b8147e5aa4ea846723cf2fad164602b351cfb3dfb79d334344939de7",
+    "candidate_hash": "c7420a65b7223fbf0fbc52455a58487423914f9fa0e451e7ca1a43f7b6d9a463",
+    "wrapper_file_sha256": "7641fd1da3c7c08e391fc42290b81bd184ac3551e7b01bdbc3a56eed44ee5ac0",
+    "build_authorized": false
+  },
+  "application_artifacts": {
+    "confirmed_document_sha256": "bd771e1aedbffeeeea3e490c10673cb1e0c44572f8be882921b9278a31c1020d",
+    "application_report_sha256": "9c57306260481f214b8073933a366d1d65b939a30e4dfe302b70f5c292a2589e",
+    "source_structure_hash": "2aa0d4300e606014d71e93349a99ac323b66996bcd23432bfe81bd78fd7431f7",
+    "result_structure_hash": "1c023f94ed7b56ed4f71b52965062487e142d8638ea8433af8223feef4cde6d3"
+  },
+  "confirmed_reference_geometry": {
+    "endpoint_nodes": ["NODE-WB006-END", "NODE-WB007-END", "NODE-WB009-START", "NODE-WB011-END", "NODE-WB014-END", "NODE-WB015-START", "NODE-WB016-END", "NODE-WB017-START", "NODE-WB018-END"],
+    "branch_statuses_changed": false,
+    "atom_statuses_changed": false,
+    "gap_geometry": ["OP005", "PORTAL-WB011-WB006-01"],
+    "wall_cut_geometry": ["OP001"],
+    "excluded_features": ["EXCLUDED-WB020-DISPLAY"],
+    "resolved_source_issues": ["B1308-JUNCTION-ENDPOINTS", "B1308-OP005-GAP-PORTAL-REVIEW", "B1308-OP001-RETURN"],
+    "remaining_stable_issue": "B1308-SEMANTIC-ADJACENCY",
+    "ready": false,
+    "build_authorized": false
+  },
+  "corrected_semantic_review": {
+    "verdict": "partial",
+    "report_sha256": "ee85d590214e4a372ff8d98d1f1184a63d7f0b081604aacc36e2d3fa70494e92",
+    "synthesis_sha256": "94b1a25dba9d24438deca126b1c84231a12c63006736ab644e97241a93fd5517",
+    "corrected_overlay_sha256": "3bf617b44a4f1152ca51ba68ce7a154a25448e959417493db5dc087591957db4",
+    "gemini_call_metadata_sha256": "272da68fb8f70a5e3786e1802edf8726b15dd0acf1d265ce8e60a61bcafe9ffb",
+    "gemini_http_status": 400,
+    "gemini_error": "INVALID_ARGUMENT",
+    "gemini_candidates": 0,
+    "gemini_retries": 0,
+    "gemini_token_usage": null,
+    "supported_relations": ["OP001", "OP003", "OP004", "OP005", "OP006", "OP007", "OP008", "OP009", "OP010"],
+    "geometry_review_required": ["OP002", "PORTAL-WB011-WB006-01"],
+    "indeterminate": ["OP011"],
+    "note": "No Gemini result was fabricated. The HTTP 400 request produced no model candidate and the one-call no-retry policy was obeyed."
+  },
+  "readiness_state": {
+    "stable_source_issue_count": 1,
+    "mechanical_blocker_count": 120,
+    "ready": false,
+    "build_authorized": false
+  },
+  "tests": {
+    "independent_focused": {"passed": 6, "failed": 0},
+    "backend": {"passed": 394, "skipped": 1, "failed": 0},
+    "diff_check": "passed",
+    "compileall": "passed"
+  },
+  "stage_boundary": "This checkpoint confirms only source-supported reference geometry and evidence status. It does not confirm full wall/atom/space geometry, opening traversal/spaces, adjacency, OP002 geometry, OP011 subtype, Blender, IFC or build readiness.",
+  "budget_spent_usd": 0.1,
+  "budget_remaining_usd": 19.9,
+  "next_action": "Resolve OP002/new-portal geometry overlap, obtain a valid corrected Gemini composite review, and generate the complete source-contract score/adjudication over all walls, atoms, spaces and openings before any build."
+}
