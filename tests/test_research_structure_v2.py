@@ -103,6 +103,29 @@ def test_candidate_document_is_valid_but_not_build_ready() -> None:
     assert {"outer_boundary_not_confirmed", "ISSUE-OUTER"} <= set(readiness["blocker_ids"])
 
 
+def test_coordinate_confirmation_is_add_only_nonsemantic_anchor_metadata():
+    document = v2_fixture()
+    entry = document["source"]["anchors"][1]
+    semantic_status = entry["status"]
+    entry["coordinate_status"] = "source_confirmed_coordinate"
+    rehash(document)
+    validate_v2_document(document)
+    assert entry["status"] == semantic_status
+    assert assess_v2_build_readiness(document)["ready"] is True
+
+    scale = deepcopy(document)
+    scale["source"]["anchors"][0]["coordinate_status"] = "source_confirmed_coordinate"
+    rehash(scale)
+    with pytest.raises(V2ContractError, match="only non-scale"):
+        validate_v2_document(scale)
+
+    invalid = deepcopy(document)
+    invalid["source"]["anchors"][1]["coordinate_status"] = "source_confirmed"
+    rehash(invalid)
+    with pytest.raises(V2ContractError, match="only non-scale"):
+        validate_v2_document(invalid)
+
+
 def test_evidence_only_glazed_interface_never_creates_build_semantics() -> None:
     document = v2_fixture()
     opening = document["opening_contract"]["openings"][0]

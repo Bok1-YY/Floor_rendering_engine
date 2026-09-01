@@ -46,6 +46,12 @@ def test_v2_remains_readable_and_v21_upgrade_is_explicit():
     assert upgraded["structure_hash"] != source["structure_hash"]
 
 
+def test_v21_accepts_coordinate_status_without_promoting_anchor_semantics():
+    document=v21_fixture_with_gap();entry=next(row for row in document["source"]["anchors"] if row["id"]=="ANCHOR-ENTRY");semantic=entry["status"];entry["coordinate_status"]="source_confirmed_coordinate";_rehash(document)
+    validate_v21_document(document)
+    assert entry["status"]==semantic
+
+
 def test_candidate_gap_portal_is_document_valid_not_ready_and_never_wall_cut():
     document = v21_fixture_with_gap()
     assert validate_v21_document(document)["structure_hash"] == document["structure_hash"]

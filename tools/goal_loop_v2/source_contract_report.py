@@ -25,10 +25,10 @@ ANCHOR_CONFIRMED={"human_confirmed","source_confirmed","legacy_confirmed"}
 def _hash(value):return hashlib.sha256(canonical_json(value)).hexdigest()
 def _block(kind,entity_id,reason,evidence=None):return {"entity_type":kind,"entity_id":entity_id,"reason":reason,"evidence_refs":list(evidence or [])}
 
-def generate_source_contract_report(prior_document:Mapping[str,Any],authorized_verdict:Mapping[str,Any],actual_evidence_hashes:list[str],document:Mapping[str,Any],goal_contract:Mapping[str,Any],application:Mapping[str,Any]):
+def generate_source_contract_report(prior_document:Mapping[str,Any],authorized_verdict:Mapping[str,Any],actual_evidence_hashes:list[str],document:Mapping[str,Any],goal_contract:Mapping[str,Any],application:Mapping[str,Any],actual_evidence_files:Sequence[str|Path]|None=None):
     prior=validate_v21_document(prior_document);candidate=authorized_verdict.get("candidate") if isinstance(authorized_verdict,Mapping) else None
     validate_verdict_candidate(prior,candidate,actual_evidence_hashes)
-    recomputed_document,recomputed_application=apply_authorized_verdict(prior,authorized_verdict)
+    recomputed_document,recomputed_application=apply_authorized_verdict(prior,authorized_verdict,actual_evidence_files)
     if canonical_json(recomputed_document)!=canonical_json(document) or canonical_json(recomputed_application)!=canonical_json(application):raise ValueError("current document/application differ from authorized independent recomputation")
     provenance={"lineage_type":"reference_confirmation","prior_structure_hash":prior["structure_hash"],"authorized_candidate_hash":candidate["candidate_hash"],"actual_evidence_sha256":sorted(actual_evidence_hashes),"application_source_hash":application["source_structure_hash"],"application_result_hash":application["result_structure_hash"],"current_result_hash":recomputed_document["structure_hash"],"canonical_recomputation_equal":True}
     return _score_source_contract(recomputed_document,goal_contract,recomputed_application,provenance)
@@ -47,7 +47,7 @@ def _score_source_contract(document:Mapping[str,Any],goal_contract:Mapping[str,A
     matrix=source["canonical"]["raw_to_canonical_3x3"]
     if source["canonical"]["orientation_policy"]=="raw_identity" and matrix!=[[1,0,0],[0,1,0],[0,0,1]]:details[expected[1]].append(_block("source","orientation","raw_identity transform is not identity"))
     for anchor in source["anchors"]:
-        if anchor["status"] not in ANCHOR_CONFIRMED:details[expected[1]].append(_block("anchor",anchor["id"],f"anchor status is {anchor['status']}",[anchor.get("evidence_asset_id")]))
+        if anchor["kind"]!="scale" and anchor.get("coordinate_status")!="source_confirmed_coordinate":details[expected[1]].append(_block("anchor_coordinate",anchor["id"],f"coordinate status is {anchor.get('coordinate_status','missing')}",[anchor.get("evidence_asset_id")]))
     # S03: one authoritative scale and reproducible dimension controls.
     scales=[row for row in source["anchors"] if row["kind"]=="scale"]
     if len(scales)!=1:details[expected[2]].append(_block("scale","scale-authority",f"expected one scale, found {len(scales)}"))
@@ -160,7 +160,7 @@ def main(argv=None):
     if args.authorized_source_correction:
         authorized=json.loads(args.authorized_source_correction.read_text(encoding='utf-8'));report,detail=generate_source_contract_report_from_source_correction(prior,authorized,args.evidence,document,contract,application)
     else:
-        authorized=json.loads(args.authorized_verdict.read_text(encoding='utf-8'));evidence_hashes=[hashlib.sha256(path.read_bytes()).hexdigest() for path in args.evidence];report,detail=generate_source_contract_report(prior,authorized,evidence_hashes,document,contract,application)
+        authorized=json.loads(args.authorized_verdict.read_text(encoding='utf-8'));evidence_files=list(args.evidence);evidence_hashes=[hashlib.sha256(path.read_bytes()).hexdigest() for path in evidence_files];report,detail=generate_source_contract_report(prior,authorized,evidence_hashes,document,contract,application,evidence_files)
     args.output.write_text(json.dumps(report,ensure_ascii=False,sort_keys=True,indent=2)+"\n",encoding="utf-8");args.detail.write_text(json.dumps(detail,ensure_ascii=False,sort_keys=True,indent=2)+"\n",encoding="utf-8")
     print(json.dumps({"score":detail["weighted_score"],"hard_failures":detail["hard_failures"],"output":str(args.output),"detail":str(args.detail)},sort_keys=True));return 0
 

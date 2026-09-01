@@ -29,6 +29,7 @@ TOP_KEYS = {
 }
 STATUSES = {"confirmed", "candidate", "unresolved", "legacy_confirmed"}
 ANCHOR_STATUSES = {"human_confirmed", "source_confirmed", "source_candidate", "derived_candidate", "unresolved", "legacy_confirmed"}
+ANCHOR_COORDINATE_STATUSES = {"source_confirmed_coordinate"}
 BUILD_DISPOSITIONS = {"cut", "retain_solid", "evidence_only", "exclude_pending_resolution"}
 HASH_RE = re.compile(r"^[0-9a-f]{64}$")
 ID_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_.-]{0,95}$")
@@ -205,11 +206,16 @@ def _validate_source(source: Any, source_hash: str) -> dict[str, Any]:
         _fail("source.metric_registration.scale_anchor_id: unknown anchor")
     for anchor_id, raw in anchor_by_id.items():
         path = f"source.anchors[{anchor_id}]"
-        anchor = _exact(raw, {"id", "kind", "geometry", "measured_distance_mm", "status", "evidence_asset_id", "note"}, path)
+        anchor_keys = {"id", "kind", "geometry", "measured_distance_mm", "status", "evidence_asset_id", "note"}
+        if not isinstance(raw, Mapping) or frozenset(raw) not in {frozenset(anchor_keys), frozenset(anchor_keys | {"coordinate_status"})}:
+            _fail(f"{path}: exact anchor keys required")
+        anchor = raw
         if anchor["kind"] not in {"scale", "space", "entrance", "opening", "wall_axis", "outer_boundary", "fixed_feature", "ignore", "dimension"}:
             _fail(f"{path}.kind: unsupported")
         if anchor["status"] not in ANCHOR_STATUSES:
             _fail(f"{path}.status: unsupported anchor status")
+        if "coordinate_status" in anchor and (anchor["coordinate_status"] not in ANCHOR_COORDINATE_STATUSES or anchor["kind"] == "scale"):
+            _fail(f"{path}.coordinate_status: only non-scale coordinate confirmation is supported")
         geometry = _exact(anchor["geometry"], {"space", "primitive", "points_px"}, f"{path}.geometry")
         if geometry["space"] != "canonical_px" or geometry["primitive"] not in {"point", "segment", "polyline", "polygon", "bbox"}:
             _fail(f"{path}.geometry: unsupported")

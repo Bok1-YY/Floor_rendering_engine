@@ -14,8 +14,12 @@ from tools.goal_loop_v2.source_contract_report import generate_source_contract_r
 
 ROOT=Path(__file__).resolve().parents[1]
 
-def _inputs():
-    prior=v21_fixture_with_gap();prior["unresolved_issues"].append({"id":"ISSUE-SCORE","severity":"hard","category":"semantic","entity_refs":[],"status":"open","message":"pending","blocks_reference_freeze":True,"blocks_build":True,"evidence_refs":["VIEW-EVIDENCE"]});prior["structure_hash"]=compute_v21_structure_hash(prior)
+def _inputs(coordinate_confirmed=True):
+    prior=v21_fixture_with_gap()
+    if coordinate_confirmed:
+        for anchor in prior["source"]["anchors"]:
+            if anchor["kind"]!="scale":anchor["coordinate_status"]="source_confirmed_coordinate"
+    prior["unresolved_issues"].append({"id":"ISSUE-SCORE","severity":"hard","category":"semantic","entity_refs":[],"status":"open","message":"pending","blocks_reference_freeze":True,"blocks_build":True,"evidence_refs":["VIEW-EVIDENCE"]});prior["structure_hash"]=compute_v21_structure_hash(prior)
     decision={"id":"KEEP","issue_id":"ISSUE-SCORE","evidence_refs":["VIEW-EVIDENCE"],"decision":"keep_unresolved","allowed_entity_ids":["ISSUE-SCORE"],"operations":[]}
     candidate=build_verdict_candidate(prior,["a"*64],[decision]);authorized={"schema":"reference-confirmation-verdict-v1","candidate":candidate,"candidate_hash":candidate["candidate_hash"],"authority":"independent_reference_reviewer","verdict":"authorize_exact_reference_geometry","build_authorized":False}
     document,application=apply_authorized_verdict(prior,authorized)
@@ -34,6 +38,12 @@ def test_candidate_entities_never_count_as_confirmed_passes():
     assert next(row for row in report["checks"] if row["id"]=="S05_WALL_GRAPH")["status"]=="fail"
     assert any(item["entity_id"]=="BRANCH-EAST" and "candidate" in item["reason"] for item in detail["entity_blockers"]["S05_WALL_GRAPH"])
     assert next(row for row in report["checks"] if row["id"]=="S06_OPENINGS")["status"]=="fail"
+
+def test_s02_requires_coordinate_confirmation_not_semantic_anchor_status():
+    report,detail=generate_source_contract_report(*_inputs(coordinate_confirmed=False))
+    assert next(row for row in report["checks"] if row["id"]=="S02_ORIENTATION_COORDINATE_CHAIN")["status"]=="fail"
+    assert detail["weighted_score"]==40
+    assert any(item["entity_id"]=="ANCHOR-ENTRY" and "coordinate status" in item["reason"] for item in detail["entity_blockers"]["S02_ORIENTATION_COORDINATE_CHAIN"])
 
 def test_stale_hash_missing_graph_id_and_forged_status_chain_fail_closed():
     prior,authorized,evidence,document,contract,application=_inputs();stale=deepcopy(document);stale["outer_boundary"]["status"]="candidate"
