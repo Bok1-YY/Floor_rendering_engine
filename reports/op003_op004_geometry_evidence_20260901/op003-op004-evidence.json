@@ -1,0 +1,221 @@
+{
+  "schema": "op003-op004-geometry-evidence-v1",
+  "sample_id": "1308",
+  "source_path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\data\\goal_loop_v2\\references\\1308\\canonical-raw-portrait.png",
+  "source_sha256": "b85ff7446e2d1a123e3a41dc541ea9d6e081f3978d3460d6de8ef9906119bc07",
+  "source_document_path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\data\\goal_loop_v2\\references\\1308\\reference-coordinate-authorized-v21.json",
+  "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "registration_model": "canonical_px_to_metric_3x3",
+  "openings": [
+    {
+      "opening_id": "OP003",
+      "source_segment_m": [
+        [
+          0.014637,
+          10.341081
+        ],
+        [
+          0.93676,
+          10.341081
+        ]
+      ],
+      "source_segment_px": [
+        [
+          499.0000175572519,
+          960.0000323360332
+        ],
+        [
+          625.0000305343511,
+          960.0000323360332
+        ]
+      ],
+      "registration": {
+        "expected_pixel_segment": [
+          [
+            499.0000175572519,
+            960.0000323360332
+          ],
+          [
+            625.0000305343511,
+            960.0000323360332
+          ]
+        ],
+        "endpoint_error_px": [
+          0.0,
+          0.0
+        ],
+        "max_endpoint_error_px": 0.0,
+        "tolerance_px": 1.0
+      },
+      "host_wall_candidates": [
+        {
+          "atom_id": "ATOM-WB010-01",
+          "endpoint_distance_sum_m": 1.1102230246251565e-16,
+          "segment_m": [
+            [
+              0.014637,
+              10.341081
+            ],
+            [
+              1.3758660000000003,
+              10.341081
+            ]
+          ]
+        }
+      ],
+      "nearby_space_candidates": [
+        {
+          "space_id": "west_toilet",
+          "point_m": [
+            0.6879329999999999,
+            9.206617000000001
+          ],
+          "distance_m": 1.1344639999999995
+        },
+        {
+          "space_id": "bedroom_01",
+          "point_m": [
+            2.2065085,
+            11.5355415
+          ],
+          "distance_m": 1.7432719636684633
+        },
+        {
+          "space_id": "lift_shaft",
+          "point_m": [
+            2.217486,
+            8.883003500000001
+          ],
+          "distance_m": 1.9406826332716665
+        }
+      ],
+      "semantic_status": "candidate_only",
+      "traversable_status": "candidate_only",
+      "observations": [
+        "Pixel segment is inverse-projected from the governing metric contract.",
+        "Host and space associations are geometric candidates only; no door/window or adjacency promotion is made."
+      ],
+      "artifacts": {
+        "crop": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\op003_op004_geometry_evidence_20260901\\OP003-crop-overlay.png",
+          "sha256": "8b7c131a286ae4ee0196598ddfbf3b5db36b14604014610749761b04f44af81e",
+          "size": [
+            486,
+            360
+          ]
+        },
+        "full": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\op003_op004_geometry_evidence_20260901\\OP003-full-overlay.png",
+          "sha256": "682bc8df20dbae2b8268e9f550efd98505a96e1f8e176aa9fd05874171e42725",
+          "size": [
+            2245,
+            3043
+          ]
+        }
+      }
+    },
+    {
+      "opening_id": "OP004",
+      "source_segment_m": [
+        [
+          5.792542,
+          14.340796
+        ],
+        [
+          5.792542,
+          13.43177
+        ]
+      ],
+      "source_segment_px": [
+        [
+          1288.5000137404581,
+          410.00002743663435
+        ],
+        [
+          1288.5000137404581,
+          535.0000097987979
+        ]
+      ],
+      "registration": {
+        "expected_pixel_segment": [
+          [
+            1288.5000137404581,
+            410.00002743663435
+          ],
+          [
+            1288.5000137404581,
+            535.0000097987979
+          ]
+        ],
+        "endpoint_error_px": [
+          0.0,
+          0.0
+        ],
+        "max_endpoint_error_px": 0.0,
+        "tolerance_px": 1.0
+      },
+      "host_wall_candidates": [
+        {
+          "atom_id": "ATOM-WB007-01",
+          "endpoint_distance_sum_m": 0.0,
+          "segment_m": [
+            [
+              5.792542,
+              15.220733
+            ],
+            [
+              5.792542,
+              11.315557
+            ]
+          ]
+        }
+      ],
+      "nearby_space_candidates": [
+        {
+          "space_id": "north_toilet",
+          "point_m": [
+            5.108268000000001,
+            13.996431000000001
+          ],
+          "distance_m": 0.6842739999999994
+        },
+        {
+          "space_id": "bedroom_02",
+          "point_m": [
+            7.475782000000001,
+            13.305571
+          ],
+          "distance_m": 1.687964183625056
+        }
+      ],
+      "semantic_status": "candidate_only",
+      "traversable_status": "candidate_only",
+      "observations": [
+        "Pixel segment is inverse-projected from the governing metric contract.",
+        "Host and space associations are geometric candidates only; no door/window or adjacency promotion is made."
+      ],
+      "artifacts": {
+        "crop": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\op003_op004_geometry_evidence_20260901\\OP004-crop-overlay.png",
+          "sha256": "f4898f970091c7fa6e804ce3056fa5af33067f60369614dedfffd64d9907c46d",
+          "size": [
+            360,
+            485
+          ]
+        },
+        "full": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\op003_op004_geometry_evidence_20260901\\OP004-full-overlay.png",
+          "sha256": "46be459f80d66f563577fc0a917659d95c46c479c568c605f19ca2e5f35a8e53",
+          "size": [
+            2245,
+            3043
+          ]
+        }
+      }
+    }
+  ],
+  "semantic_promotion": false,
+  "build_authorized": false,
+  "ready": false
+}
