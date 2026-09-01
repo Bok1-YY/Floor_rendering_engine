@@ -1,0 +1,54 @@
+{
+  "schema": "goal-loop-v2-checkpoint-v1",
+  "checkpoint_id": "0012-1308-source-score-baseline",
+  "stage": "source_scoring",
+  "status": "accepted_authorized_lineage_source_baseline_not_build_ready",
+  "accepted_at": "2026-09-01T10:07:25.6335316+08:00",
+  "baseline_commit": "df3eecaeb3a36bd2584e565b2e0bb374504b7717",
+  "accepted_commit": "a8617d719ea2262e1f7cde5f47e17e629da1df83",
+  "independent_verdict": "accept_1308_current_source_score",
+  "severity": {"p0": 0, "p1": 0, "p2": 0},
+  "lineage": {
+    "prior_document_structure_hash": "1c023f94ed7b56ed4f71b52965062487e142d8638ea8433af8223feef4cde6d3",
+    "authorized_wrapper_sha256": "3f8bcc323424cd656ed23bd385be1015040ba23c4ce61305a05c924e21a4887b",
+    "current_result_structure_hash": "b9131ada224ac50487bb9612b544ae7f9bf77b42ed242d993a0cfb5b2c8a5a45",
+    "source_score_layer_sha256": "3f273fefab0bc9d7952701dedf64c282e10851fe16bf941a1f8edb491c14460c",
+    "source_score_detail_sha256": "3b8d9addfecda9a918659b9ef3aaef656b5107c28e2ffebed42ff9d461421d22",
+    "canonical_recomputation_equal": true
+  },
+  "score": {
+    "source_contract_score": 25,
+    "minimum_required": 95,
+    "passed": ["S01_SOURCE_IDENTITY", "S04_OUTER_BOUNDARY"],
+    "failed": ["S02_ORIENTATION_COORDINATE_CHAIN", "S03_SCALE_AND_DIMENSIONS", "S05_WALL_GRAPH", "S06_OPENINGS", "S07_SPACES_ADJACENCY_REACHABILITY", "S08_PROVENANCE_UNRESOLVED"],
+    "entity_blockers": {"S01": 0, "S02": 28, "S03": 1, "S04": 0, "S05": 90, "S06": 33, "S07": 37, "S08": 2, "total": 191}
+  },
+  "what_is_proven": [
+    "Source/correction/application/result lineage is independently replayable and resistant to joint rehash forgery.",
+    "The 1308 source image identity/orientation policy and selected outer boundary are valid.",
+    "OP002 is the single source-supported door in the disputed area; old horizontal OP002/OP005/PORTAL interpretations are retained as rejected evidence, not active doors.",
+    "OP011 remains indeterminate and no build portal is authorized."
+  ],
+  "what_is_not_proven": [
+    "28 anchors/scale are not source-confirmed.",
+    "21 branches, 35 atoms, and most junctions are not full-length source-confirmed.",
+    "Opening overall statuses, non-OP011 semantics and adjacency have not been promoted into a build-ready contract.",
+    "No Blender or IFC artifact exists or is authorized."
+  ],
+  "gemini_diagnostic": {
+    "minimal_access_test_report": "C:\\Users\\1_1\\Desktop\\goal_loop_v2_1308_gemini_minimal_20260901",
+    "http_status": 200,
+    "candidate_returned": true,
+    "local_semantic_validation": "failed on false duplicate PORTAL side mapping; independent synthesis partial",
+    "known_list_price_estimate_usd": 0.02379,
+    "actual_currency_observable": false,
+    "note": "This call predates the final OP002 dedup result and is diagnostic only; it is not a semantic freeze verdict."
+  },
+  "remaining_stable_blockers": ["B1308-SEMANTIC-ADJACENCY"],
+  "readiness": {"ready": false, "blender_executed": false, "ifc_executed": false},
+  "tests": {"source_score_focused": {"passed": 11, "failed": 0}, "backend": {"passed": 430, "skipped": 1, "failed": 0}, "diff_check": "passed", "compileall": "passed"},
+  "stage_boundary": "This checkpoint accepts a trusted but low source score baseline. It does not authorize any geometry or semantic promotion, does not close OP011, and does not start Blender/IFC.",
+  "budget_spent_usd": 0.1,
+  "budget_remaining_usd": 19.9,
+  "next_action": "Independently promote the remaining source-contract layers in small bounded decisions, starting with all wall/atom/space geometry and a corrected semantic adjacency candidate; require fresh hashes and dual review before each promotion."
+}

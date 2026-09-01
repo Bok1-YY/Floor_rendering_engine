@@ -9,15 +9,15 @@
     "1308": "running",
     "121m2": "pending"
   },
-  "last_accepted_commit": "2a8b87f15b9262657c0b1f24af5af3405b4f86ec",
+  "last_accepted_commit": "a8617d719ea2262e1f7cde5f47e17e629da1df83",
   "last_run_id": "",
   "last_score": 0,
   "score_history": [],
   "failure_class": "semantic_partial_and_source_score_baseline",
-  "next_action": "Regenerate the S01-S08 source score against the authorized OP002-deduplicated result, then resolve the remaining OP002 semantic geometry/portal overlap with fresh source evidence and one minimal valid Gemini composite call. Keep OP011 indeterminate and do not start Blender/IFC until all source and artifact gates are satisfied.",
+  "next_action": "Use the trusted 25/100 source baseline to drive the next promotion loop: independently confirm orientation/scale, all wall atoms/junctions, and opening/space semantics on the deduplicated result; keep OP011 indeterminate, require a second valid Gemini composite only as corroboration, and do not start Blender/IFC until the source score reaches 95 and artifact gates pass.",
   "budget_spent_usd": 0.1,
   "budget_remaining_usd": 19.9,
   "blockers": ["B1308-SEMANTIC-ADJACENCY"],
   "final_human_accepted": false,
-  "updated_at": "2026-09-01T09:57:55.2260382+08:00"
+  "updated_at": "2026-09-01T10:07:25.6335316+08:00"
 }
