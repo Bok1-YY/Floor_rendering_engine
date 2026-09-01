@@ -15,10 +15,10 @@ ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path: sys.path.insert(0, str(ROOT))
 
 from tools.fastloop_research.contract import canonical_json
-from tools.fastloop_research.v21_contract import compute_v21_structure_hash, validate_v21_document, assess_v21_build_readiness, v21_mapping_metadata
+from tools.fastloop_research.v21_contract import compute_v21_structure_hash, validate_v21_document, assess_v21_build_readiness, v21_mapping_metadata, _segment_atom_overlap_length
 
 
-ALLOWED = {"rehost_opening_as_gap_portal", "add_gap_portal_opening", "exclude_linear_feature", "clip_effective_void", "classify_endpoint"}
+ALLOWED = {"rehost_opening_as_gap_portal", "add_gap_portal_opening", "exclude_linear_feature", "clip_effective_void", "classify_endpoint", "deduplicate_rehost_opening"}
 
 
 def _hash(value: Any) -> str:
@@ -48,7 +48,55 @@ def apply_source_corrections(document, evidence, manifest):
     source_replacements: set[str] = set()
     for operation in manifest["operations"]:
         kind, payload = operation["operation"], operation["payload"]
-        if kind == "rehost_opening_as_gap_portal":
+        if kind == "deduplicate_rehost_opening":
+            expected_keys={"primary_opening_id","new_primary_opening","primary_history","expected_demotions","demotions","wall_restore","approved_artifact_sha256","source_evidence_refs"}
+            if set(payload)!=expected_keys:raise ValueError("invalid deduplicate/rehost payload")
+            primary=openings[payload["primary_opening_id"]]
+            dedup_contract=evidence.get("deduplication_contract") if isinstance(evidence,Mapping) else None
+            if not isinstance(dedup_contract,Mapping) or set(dedup_contract)!={"primary_opening_id","expected_demotions","protected_opening_ids"}:raise ValueError("source evidence lacks exact deduplication contract")
+            expected_demotions=payload["expected_demotions"]
+            if not isinstance(expected_demotions,list) or len(expected_demotions)!=len(set(expected_demotions)) or set(expected_demotions)!=set(dedup_contract["expected_demotions"]) or payload["primary_opening_id"]!=dedup_contract["primary_opening_id"] or payload["primary_opening_id"] in expected_demotions or set(expected_demotions)&set(dedup_contract["protected_opening_ids"]):raise ValueError("deduplication expected-demotion identity mismatch")
+            if any(opening_id not in openings for opening_id in expected_demotions):raise ValueError("deduplication expected demotion does not exist")
+            if operation["prior_payload_sha256"]!=_hash(primary):raise ValueError("deduplicate primary prior hash mismatch")
+            approved={value for value in (evidence.get("approved_external_artifacts") or {}).values() if isinstance(value,str)}
+            if payload["approved_artifact_sha256"] not in approved:raise ValueError("deduplicate artifact is not approved by evidence")
+            def validate_external_history(history,current):
+                former={"source_observation":history["former_source_observation"],"host":history["former_host"],"effective_void":history["former_effective_void"],"jamb_before":history["former_jamb_before"],"jamb_after":history["former_jamb_after"]}
+                if history["origin"]!="external_artifact" or history["captured_from_structure_hash"] is not None or history["captured_from_artifact_sha256"] not in approved or history["captured_payload_sha256"]!=_hash(former) or history["status"]!="rejected_by_source_evidence" or any(value is None for value in former.values()) or history["former_source_observation"]!=current["source_observation"]:raise ValueError("deduplicate requires complete approved external rejected history")
+            validate_external_history(payload["primary_history"],primary)
+            replacement=deepcopy(payload["new_primary_opening"])
+            if replacement["id"]!=primary["id"] or replacement["status"]!="candidate":raise ValueError("deduplicate replacement primary identity/status invalid")
+            owner_id=(replacement.get("host") or {}).get("owning_wall_atom_id");owner_atom=next((row for row in result["wall_graph"]["atoms"] if row["id"]==owner_id),None)
+            if replacement.get("build_disposition")!="cut" or owner_atom is None or _segment_atom_overlap_length(replacement["effective_void"]["segment_m"],owner_atom)<float(replacement["effective_void"]["width_m"])-0.001:raise ValueError("deduplicate replacement primary has wrong wall-cut axis/host")
+            source_segment=replacement["source_observation"]["nominal_segment_m"];effective_segment=replacement["effective_void"]["segment_m"]
+            if max(math.dist(source_segment[index],effective_segment[index]) for index in (0,1))>0.001 or abs(float(replacement["source_observation"]["nominal_width_m"])-float(replacement["effective_void"]["width_m"]))>0.001:raise ValueError("deduplicate replacement source/effective axis mismatch")
+            replacement["superseded_interpretations"]=[*deepcopy(primary["superseded_interpretations"]),deepcopy(payload["primary_history"])]
+            openings[primary["id"]]=replacement
+            seen_demotions=set()
+            for demotion in payload["demotions"]:
+                if set(demotion)!={"opening_id","history","evidence_observation","requires_restored_wall_overlap"} or demotion["opening_id"]==primary["id"] or demotion["opening_id"] in seen_demotions:raise ValueError("invalid duplicate demotion")
+                duplicate=openings[demotion["opening_id"]];validate_external_history(demotion["history"],duplicate);seen_demotions.add(duplicate["id"])
+                duplicate["superseded_interpretations"].append(deepcopy(demotion["history"]))
+                duplicate.update(source_observation=deepcopy(demotion["evidence_observation"]),build_disposition="evidence_only",build_kind=None,host=None,effective_void=None,swing_direction=None,traversable=False,side_a_space_id=None,side_b_space_id=None,jamb_before=None,jamb_after=None,status="candidate")
+            if len(seen_demotions)!=len(payload["demotions"]):raise ValueError("duplicate demotion coverage incomplete")
+            if seen_demotions!=set(expected_demotions):raise ValueError("deduplication demotions do not exactly cover expected set")
+            restore=payload["wall_restore"]
+            if set(restore)!={"branch_id","atom_id","node_id","endpoint_index","prior_branch_sha256","old_point_m","new_point_m"}:raise ValueError("invalid wall restore payload")
+            branch=next(row for row in result["wall_graph"]["branches"] if row["id"]==restore["branch_id"])
+            atom=next(row for row in result["wall_graph"]["atoms"] if row["id"]==restore["atom_id"])
+            node=next(row for row in result["wall_graph"]["junctions"] if row["id"]==restore["node_id"])
+            index=int(restore["endpoint_index"])
+            if restore["prior_branch_sha256"]!=_hash(branch) or branch["centerline_m"][index]!=restore["old_point_m"] or atom["branch_id"]!=branch["id"] or atom["start_node_id" if index==0 else "end_node_id"]!=node["id"]:raise ValueError("wall restore prior topology/hash mismatch")
+            branch["centerline_m"][index]=deepcopy(restore["new_point_m"]);atom["centerline_m"][index]=deepcopy(restore["new_point_m"]);node["axis_point_m"]=deepcopy(restore["new_point_m"])
+            incident=next(row for row in node["incidents"] if row["atom_id"]==atom["id"] and row["end"]==("start" if index==0 else "end"));incident["contact_point_m"]=deepcopy(restore["new_point_m"]);node["status"]="candidate";branch["status"]="candidate";atom["status"]="candidate"
+            active=[row for row in [openings[primary["id"]],*[openings[item] for item in seen_demotions]] if row["build_disposition"] in {"cut","place_in_preexisting_gap"}]
+            if len(active)!=1 or active[0]["id"]!=primary["id"]:raise ValueError("deduplicate did not leave exactly one active opening")
+            for demotion in payload["demotions"]:
+                if demotion["requires_restored_wall_overlap"]:
+                    observation=demotion["history"]["former_source_observation"]
+                    if _segment_atom_overlap_length(observation["nominal_segment_m"],atom)<float(observation["nominal_width_m"])-0.001:raise ValueError("rejected portal is not covered by restored continuous wall")
+            source_replacements.add(primary["id"]);source_replacements.update(seen_demotions)
+        elif kind == "rehost_opening_as_gap_portal":
             if set(payload)!={"opening_id","source_observation_sha256","approved_artifact_sha256","new_source_observation","issue_update","superseded_interpretation","build_kind","host","effective_void","jamb_before","jamb_after","swing_direction"}:raise ValueError("invalid rehost payload")
             opening = openings[payload["opening_id"]]
             if operation["prior_payload_sha256"] != _hash(opening) or payload["source_observation_sha256"] != _hash(opening["source_observation"]): raise ValueError("rehost prior opening/source hash mismatch")
@@ -124,7 +172,7 @@ def apply_source_corrections(document, evidence, manifest):
     result["adjacency_truth"]["status"] = "unresolved"
     result["adjacency_truth"]["entrance_opening_id"] = None
     for edge in result["adjacency_truth"]["edges"]: edge["status"] = "candidate"
-    if adjacency_before == result["adjacency_truth"]: raise ValueError("source correction failed to invalidate adjacency")
+    if result["adjacency_truth"]["status"]!="unresolved" or result["adjacency_truth"]["entrance_opening_id"] is not None or any(edge["status"]!="candidate" for edge in result["adjacency_truth"]["edges"]): raise ValueError("source correction failed to invalidate adjacency")
     result["structure_hash"] = compute_v21_structure_hash(result)
     result = validate_v21_document(result)
     readiness = assess_v21_build_readiness(result)
