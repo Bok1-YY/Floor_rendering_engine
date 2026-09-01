@@ -1,0 +1,51 @@
+{
+  "schema": "goal-loop-v2-checkpoint-v1",
+  "checkpoint_id": "0014-1308-source-promotion-baseline",
+  "stage": "source_scoring",
+  "status": "accepted_scale_only_semantics_conflicted_not_build_ready",
+  "accepted_at": "2026-09-01T10:35:24.4414457+08:00",
+  "baseline_commit": "9ca26ac8aed0a1d7fcd911b1533b8af52dc44adb",
+  "accepted_commit": "9ca26ac8aed0a1d7fcd911b1533b8af52dc44adb",
+  "independent_verdict": "accept_1308_scale_anchor_application_v2",
+  "source_score": {
+    "score": 40,
+    "minimum": 95,
+    "reference_hash": "c4b85e9b3a88ea03df512e4a0d3b7df3f3c8acdfc250b4741d43237e9b57f911",
+    "layer_sha256": "ebe2c8bdeabd953e42c2036c5d7ec1b35fdb3b797a32e64f715a6c2db8daf040",
+    "detail_sha256": "08612bc1e419a2cd57e9f54bd62e3ab5bb05c9827751b3539484b7abc195103e",
+    "passed": ["S01_SOURCE_IDENTITY", "S03_SCALE_AND_DIMENSIONS", "S04_OUTER_BOUNDARY"],
+    "failed": ["S02_ORIENTATION_COORDINATE_CHAIN", "S05_WALL_GRAPH", "S06_OPENINGS", "S07_SPACES_ADJACENCY_REACHABILITY", "S08_PROVENANCE_UNRESOLVED"],
+    "entity_blockers": {"S02": 27, "S05": 90, "S06": 33, "S07": 37, "S08": 2, "total": 189}
+  },
+  "scale_application": {
+    "wrapper_sha256": "6cbe70a6a3c4b48edd7705a7e263167ed20f68ae1bc872d767ba9b3cc1d5181e",
+    "result_sha256": "c0d01e5fe23ed0bc6edd9e0cabc62044c709bc08971fbfa2fe088471b87a6027",
+    "application_sha256": "b6a65fc1fe315a258e8f0e693eafd72597db219e6d3346eccb137efb097ac9c0",
+    "promoted_anchor": "SCALE-1308-CORE-WIDTH",
+    "other_anchors_remaining": 27
+  },
+  "semantic_evidence": {
+    "current_gemini_synthesis_sha256": "f5c7a857c963a1dffabd1466f4b93660ef5a359615a1fe5d10b3ffa0aa153cf4",
+    "current_gemini_response_sha256": "acb0a85fd6e7a81fe212b3078c778bf1c644203317aa9ccf102f298301fe4964",
+    "current_gemini_tokens_sha256": "f582c8eeb01287b37838438cf397c29e16d6412677021768f348292603a94f30",
+    "current_gemini_http_status": 200,
+    "current_gemini_post_count": 1,
+    "current_gemini_total_tokens": 6758,
+    "current_gemini_verdict": "partial",
+    "current_findings": ["OP007 and OP008 may be one bath door", "OP001 type needs source confirmation", "OP011 indeterminate"]
+  },
+  "source_conflict": {
+    "arbiter_verdict": "one_real_door_plus_false_duplicate_portal",
+    "arbiter_report_sha256": "7578d72e225ff52dee9985a6acd03a9511858eefc30206de23d64f58675990db",
+    "arbiter_json_sha256": "78c35a22bb96ca52007ed2e27b7e2181c0af7fe6ae1d2ed827be941a2c83672",
+    "active_pending_result_sha256": "c0d01e5fe23ed0bc6edd9e0cabc62044c709bc08971fbfa2fe088471b87a6027",
+    "status": "resolved_by_authorized_dedup",
+    "required_next_correction": "Do not reopen the source geometry dedup. Recompute semantic openings/adjacency on the deduplicated result and preserve OP011 as indeterminate."
+  },
+  "build_state": {"ready": false, "build_authorized": false, "blender_executed": false, "ifc_executed": false},
+  "tests": {"anchor_and_confirmation_focused": {"passed": 28, "failed": 0}, "backend": {"passed": 447, "skipped": 1, "failed": 0}, "diff_check": "passed", "compileall": "passed"},
+  "stage_boundary": "This is a source-promotion baseline, not a full source pass. Only the scale anchor is confirmed; semantic and wall/opening graph conflicts remain. No Blender/IFC execution is authorized.",
+  "budget_spent_usd": 0.1,
+  "budget_remaining_usd": 19.9,
+  "next_action": "Create a fresh source-locked semantic/geometry correction for OP002 versus OP005/PORTAL and re-run S01-S08 on its new hash before promoting any additional anchor or wall entity."
+}
