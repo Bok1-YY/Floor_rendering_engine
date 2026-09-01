@@ -11,3 +11,13 @@ This validates the backend/plugin loading path only. It does not validate
 floorplan interpretation, wall ownership, opening semantics, adjacency, or
 source provenance, so Bonsai remains downstream-only and cannot bypass
 S06/S07/S08.
+
+A second isolated smoke test created and independently reopened an IFC4 model
+with one project/site/building/storey, wall, space, opening, and door. Read-back
+confirmed four aggregate relations, one spatial containment relation, one
+wall-opening void relation, one opening-door fill relation, unique GlobalIds,
+and geometry reconstruction for all four products. Both fresh Blender
+processes exited 0. Artifact SHA-256:
+`0F49E2EC469248BD335E4B60DF67B27963A0829E6E61125B0ED9878E508429BF`.
+This used IfcOpenShell API inside the verified Blender/Bonsai dependency
+environment; it did not exercise Bonsai UI operators.
