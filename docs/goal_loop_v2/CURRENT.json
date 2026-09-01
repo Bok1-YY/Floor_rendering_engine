@@ -4,25 +4,25 @@
   "active_sample": "1308",
   "stage": "reference_freeze",
   "iteration": 0,
-  "method_id": "gap-between-branches-source-correction-v2",
+  "method_id": "v21-corrected-reference-confirmation",
   "sample_status": {
     "1308": "running",
     "121m2": "pending"
   },
-  "last_accepted_commit": "ff598140a67b22627630fac85e2c06467ca97fce",
+  "last_accepted_commit": "95d6fa8a82ceb4eb4be95c9482cc9da53852c7c9",
   "last_run_id": "",
   "last_score": 0,
   "score_history": [],
-  "failure_class": "source_contract_contradiction",
-  "next_action": "Implement generic gap-between-branches portals and evidence-only nonstructural linear elements, then correct the 1308 source contract: rehost OP005 horizontally between WB006 and WB009, add the missing WB011-to-WB006 portal, demote WB020 from full-height walls, and clip OP001 effective void while preserving its nominal evidence. Recompute adjacency from scratch; do not start Blender/IFC while readiness is false.",
+  "failure_class": "pending_reference_confirmation",
+  "next_action": "Issue and apply an independently hash-bound v2.1 reference-confirmation verdict for the corrected 1308 contract: confirm only source-supported wall terminals, both horizontal gap portals, OP001 nominal-wall clip and WB020 exclusion; then recompute semantic adjacency from scratch while preserving OP011 as unresolved. Do not start Blender/IFC while readiness is false.",
   "budget_spent_usd": 0.1,
   "budget_remaining_usd": 19.9,
   "blockers": [
     "B1308-JUNCTION-ENDPOINTS",
-    "B1308-CROSSING-JAMB",
+    "B1308-OP005-GAP-PORTAL-REVIEW",
     "B1308-OP001-RETURN",
     "B1308-SEMANTIC-ADJACENCY"
   ],
   "final_human_accepted": false,
-  "updated_at": "2026-09-01T07:40:55.3409105+08:00"
+  "updated_at": "2026-09-01T08:18:41.1955294+08:00"
 }

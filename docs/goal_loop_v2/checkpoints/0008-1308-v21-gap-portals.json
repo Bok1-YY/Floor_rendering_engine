@@ -1,0 +1,60 @@
+{
+  "schema": "goal-loop-v2-checkpoint-v1",
+  "checkpoint_id": "0008-1308-v21-gap-portals",
+  "stage": "reference_freeze",
+  "status": "accepted_corrected_v21_contract_not_build_ready",
+  "accepted_at": "2026-09-01T08:18:41.1955294+08:00",
+  "baseline_commit": "6de51ae021442ce4bb1d9b3455effab23757fb7d",
+  "accepted_commit": "95d6fa8a82ceb4eb4be95c9482cc9da53852c7c9",
+  "independent_verdict": "accept_1308_v21_gap_portal_phase_v2",
+  "severity": {"p0": 0, "p1": 0, "p2": 0},
+  "runtime_artifacts": {
+    "v21_base_sha256": "a56ba2d756a2937e721af0afa9c4255ab1dd28ce3be89343358de2e524f894e2",
+    "correction_evidence_sha256": "4f50dc126875f0f6de2d76f658ab1314d5ddc9e415d28e4bff2c15dac5973d4d",
+    "correction_manifest_sha256": "6f2f603e70b037c26ff0aa054396003befad80b87ea65715f6913069334634f6",
+    "corrected_document_sha256": "879abc694f5cd1d80bb934475771f0cdcdc227c07de6a34ab860a52b5930af40",
+    "application_report_sha256": "6609c1857fbe9d0ab6919e2f422bf059bb1b1a8c7c30a3e7d54bd728b27392c1",
+    "base_structure_hash": "d9460bb96f4212074a31dad91b0cc087c1eea2068de272f5e39980974b21c501",
+    "result_structure_hash": "2aa0d4300e606014d71e93349a99ac323b66996bcd23432bfe81bd78fd7431f7"
+  },
+  "accepted_capabilities": [
+    "Existing v2 documents remain independently readable; v2 to v2.1 is explicit and changes the structure hash.",
+    "A preexisting-gap door has no owning wall cut, exactly two finite atom-face terminals, terminal-bound jambs and host-independent effective clearance.",
+    "Gap readiness recomputes clearance against every finite wall rectangle, rejects bridge atoms, requires at least 50 mm actual support on both jambs, traversable door semantics, distinct spaces and exactly one matching confirmed adjacency.",
+    "Rejected interpretations preserve former source observation, host, effective void and both jambs with active-document or external-artifact provenance and an all-five payload hash.",
+    "Excluded linear evidence is hash-bound but forbidden from structural wall, opening, Blender-wall and IFC-building-element sets.",
+    "Mapping metadata distinguishes wall-cut openings, gap portals and excluded linear evidence without executing Blender or IFC."
+  ],
+  "accepted_1308_source_result": {
+    "op005_active_source": "Horizontal candidate gap from nominal WB006 east face to canonicalized WB009 start; width 0.9243300223463686 m.",
+    "op005_rejected_history": "Old vertical source/crossing interpretation is preserved with external artifact SHA-256 8ba728ccc02f6cb564f127e2afff79111892e0a177ff014b752271cff688d71c and rejected_by_source_evidence status.",
+    "new_gap_portal": "PORTAL-WB011-WB006-01 spans WB011 end cap to WB006 west side face; width 0.9023738882681574 m.",
+    "op001_effective_clip": "Nominal source observation is unchanged; candidate effective width 0.9316480000000009 m derives from clip_to_jamb_face using nominal_wall_solid.",
+    "wb020": "Removed from structural branches, atoms and junctions; preserved only as EXCLUDED-WB020-DISPLAY joinery evidence.",
+    "wb009_registration": "Canonical [1236,826] px maps to [5.408324022346369,11.315557244655583] m; prior drift is removed.",
+    "op011_unchanged": true,
+    "adjacency_invalidated": true,
+    "ready": false,
+    "build_authorized": false
+  },
+  "issue_transition": {
+    "superseded": ["B1308-CROSSING-JAMB"],
+    "replacement_open": ["B1308-OP005-GAP-PORTAL-REVIEW"]
+  },
+  "remaining_1308_blockers": [
+    "B1308-JUNCTION-ENDPOINTS",
+    "B1308-OP005-GAP-PORTAL-REVIEW",
+    "B1308-OP001-RETURN",
+    "B1308-SEMANTIC-ADJACENCY"
+  ],
+  "tests": {
+    "independent_focused": {"passed": 16, "failed": 0},
+    "backend": {"passed": 388, "skipped": 1, "failed": 0},
+    "diff_check": "passed",
+    "compileall": "passed"
+  },
+  "stage_boundary": "This checkpoint accepts the corrected v2.1 evidence contract and its fail-closed mapping/readiness rules. All corrected portals, wall terminals and semantic edges remain candidate/unresolved; no Blender or IFC artifact has been generated or authorized.",
+  "budget_spent_usd": 0.1,
+  "budget_remaining_usd": 19.9,
+  "next_action": "Independently confirm the corrected v2.1 source geometry and then rebuild adjacency from the two real gap portals plus the remaining openings, while retaining OP011 subtype and dry-balcony reachability as unresolved."
+}
