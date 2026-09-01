@@ -1,0 +1,81 @@
+{
+  "schema": "op002-door-evidence-v2",
+  "sample_id": "1308",
+  "opening_id": "OP002",
+  "source_path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\data\\goal_loop_v2\\references\\1308\\canonical-raw-portrait.png",
+  "source_sha256": "b85ff7446e2d1a123e3a41dc541ea9d6e081f3978d3460d6de8ef9906119bc07",
+  "source_document_path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\data\\goal_loop_v2\\references\\1308\\reference-coordinate-authorized-v21.json",
+  "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "registration_model": "canonical_px_to_metric_3x3",
+  "metric_segment_m": [
+    [
+      4.423994413407822,
+      10.690147268408552
+    ],
+    [
+      4.423994413407822,
+      9.802937767220904
+    ]
+  ],
+  "source_segment_px": [
+    [
+      1101.5000000000002,
+      911.9999999999998
+    ],
+    [
+      1101.5000000000002,
+      1033.9999999999998
+    ]
+  ],
+  "registration_validation": {
+    "expected_pixel_segment": [
+      [
+        1101.5000000000002,
+        911.9999999999998
+      ],
+      [
+        1101.5000000000002,
+        1033.9999999999998
+      ]
+    ],
+    "endpoint_error_px": [
+      0.0,
+      0.0
+    ],
+    "max_endpoint_error_px": 0.0,
+    "tolerance_px": 1.0
+  },
+  "host_atom_id": "ATOM-WB006-02",
+  "host_relation": "exact_collinear_overlap",
+  "candidate_side_a_space_id": "bedroom_01",
+  "candidate_side_b_space_id": "bedroom_corridor",
+  "semantic_status": "candidate_only",
+  "traversable_status": "candidate_only",
+  "observations": [
+    "Pixel segment is inverse-projected from governing metric OP002; no axis reinterpretation was applied.",
+    "This evidence supersedes the stale horizontal pixel packet for registration purposes only.",
+    "This packet does not promote door type, jamb, height, adjacency, or build authorization."
+  ],
+  "artifacts": {
+    "crop_overlay": {
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\op002_vertical_evidence_20260901\\op002-vertical-crop-overlay.png",
+      "sha256": "2759c46dfcd4f901d8c768c6026163e5f6e00b434fce4e3888f72c9e4c76290c",
+      "size": [
+        360,
+        482
+      ]
+    },
+    "full_overlay": {
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\op002_vertical_evidence_20260901\\op002-vertical-full-overlay.png",
+      "sha256": "616b154f883554ab8aeab6a7d2b9b81e29d8f6143f996807a8624a58659332c0",
+      "size": [
+        2245,
+        3043
+      ]
+    }
+  },
+  "semantic_promotion": false,
+  "build_authorized": false,
+  "ready": false
+}
