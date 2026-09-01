@@ -1,0 +1,33 @@
+{
+  "schema": "exterior-boundary-opening-search-v1",
+  "source": {
+    "path": "data/goal_loop_v2/references/1308/reference-coordinate-authorized-v21.json",
+    "structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1"
+  },
+  "boundary_status": "confirmed",
+  "intersection_rule": "inclusive_segment_intersection_metric",
+  "result": {
+    "intersecting_opening_ids": [],
+    "entrance_opening_id": null,
+    "root_status": "unresolved",
+    "semantic_promotion": false,
+    "build_authorized": false
+  },
+  "near_boundary_leads": [
+    {"opening_id": "OP003", "minimum_endpoint_distance_m": 0.014637, "intersection": false},
+    {"opening_id": "OP010", "minimum_endpoint_distance_m": 0.5825047181, "intersection": false}
+  ],
+  "openings": [
+    {"id":"OP001","intersection":false,"minimum_endpoint_distance_m":3.432346},
+    {"id":"OP002","intersection":false,"minimum_endpoint_distance_m":4.4239944134},
+    {"id":"OP003","intersection":false,"minimum_endpoint_distance_m":0.014637},
+    {"id":"OP004","intersection":false,"minimum_endpoint_distance_m":0.967204},
+    {"id":"OP005","intersection":false,"minimum_endpoint_distance_m":3.7616759777},
+    {"id":"OP006","intersection":false,"minimum_endpoint_distance_m":3.377458},
+    {"id":"OP007","intersection":false,"minimum_endpoint_distance_m":1.350251},
+    {"id":"OP008","intersection":false,"minimum_endpoint_distance_m":1.134358},
+    {"id":"OP009","intersection":false,"minimum_endpoint_distance_m":1.05447},
+    {"id":"OP010","intersection":false,"minimum_endpoint_distance_m":0.5825047181},
+    {"id":"OP011","intersection":false,"minimum_endpoint_distance_m":0.764777}
+  ]
+}
