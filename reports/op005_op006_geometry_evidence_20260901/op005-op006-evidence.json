@@ -1,0 +1,190 @@
+{
+  "schema": "op005-op006-geometry-evidence-v1",
+  "sample_id": "1308",
+  "source_path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\data\\goal_loop_v2\\references\\1308\\canonical-raw-portrait.png",
+  "source_sha256": "b85ff7446e2d1a123e3a41dc541ea9d6e081f3978d3460d6de8ef9906119bc07",
+  "source_document_path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\data\\goal_loop_v2\\references\\1308\\reference-coordinate-authorized-v21.json",
+  "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "registration_model": "canonical_px_to_metric_3x3",
+  "openings": [
+    {
+      "opening_id": "OP005",
+      "source_segment_m": [
+        [
+          4.483994,
+          11.315557244655583
+        ],
+        [
+          5.408324022346369,
+          11.315557244655583
+        ]
+      ],
+      "source_segment_px": [
+        [
+          1109.698416793893,
+          825.9999999999998
+        ],
+        [
+          1236.0,
+          825.9999999999998
+        ]
+      ],
+      "registration": {
+        "expected_pixel_segment": [
+          [
+            1109.698416793893,
+            825.9999999999998
+          ],
+          [
+            1236.0,
+            825.9999999999998
+          ]
+        ],
+        "endpoint_error_px": [
+          0.0,
+          0.0
+        ],
+        "max_endpoint_error_px": 0.0,
+        "tolerance_px": 1.0
+      },
+      "host_wall_candidates": [],
+      "nearby_space_candidates": [
+        {
+          "space_id": "bedroom_corridor",
+          "point_m": [
+            5.108268000000001,
+            10.20761
+          ],
+          "distance_m": 1.1079472446555823
+        }
+      ],
+      "semantic_status": "candidate_only",
+      "traversable_status": "candidate_only",
+      "observations": [
+        "Pixel segment is inverse-projected from the governing metric contract.",
+        "Host and space associations are geometric candidates only; no door/window or adjacency promotion is made."
+      ],
+      "artifacts": {
+        "crop": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\op005_op006_geometry_evidence_20260901\\OP005-crop-overlay.png",
+          "sha256": "b9a2a50ea0aa347a14dfbeeb6a2f0b6765eac9b384f7dcf72531a0b90ec492c4",
+          "size": [
+            487,
+            360
+          ]
+        },
+        "full": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\op005_op006_geometry_evidence_20260901\\OP005-full-overlay.png",
+          "sha256": "2faf2df9723ea6974405366ae800e4736aefa2f269ff95c915f457f2f49acbb6",
+          "size": [
+            2245,
+            3043
+          ]
+        }
+      }
+    },
+    {
+      "opening_id": "OP006",
+      "source_segment_m": [
+        [
+          5.792542,
+          11.221019
+        ],
+        [
+          5.792542,
+          10.290176
+        ]
+      ],
+      "source_segment_px": [
+        [
+          1288.5000137404581,
+          838.9999350013063
+        ],
+        [
+          1288.5000137404581,
+          966.9999686438462
+        ]
+      ],
+      "registration": {
+        "expected_pixel_segment": [
+          [
+            1288.5000137404581,
+            838.9999350013063
+          ],
+          [
+            1288.5000137404581,
+            966.9999686438462
+          ]
+        ],
+        "endpoint_error_px": [
+          0.0,
+          0.0
+        ],
+        "max_endpoint_error_px": 0.0,
+        "tolerance_px": 1.0
+      },
+      "host_wall_candidates": [
+        {
+          "atom_id": "ATOM-WB007-02",
+          "endpoint_distance_sum_m": 3.204560172775933e-08,
+          "segment_m": [
+            [
+              5.792542,
+              11.315557
+            ],
+            [
+              5.792541899441341,
+              7.801266508838006
+            ]
+          ]
+        }
+      ],
+      "nearby_space_candidates": [
+        {
+          "space_id": "bedroom_corridor",
+          "point_m": [
+            5.108268000000001,
+            10.20761
+          ],
+          "distance_m": 0.6892372968956332
+        },
+        {
+          "space_id": "bedroom_03",
+          "point_m": [
+            7.475782000000001,
+            9.53023
+          ],
+          "distance_m": 1.8468391431080302
+        }
+      ],
+      "semantic_status": "candidate_only",
+      "traversable_status": "candidate_only",
+      "observations": [
+        "Pixel segment is inverse-projected from the governing metric contract.",
+        "Host and space associations are geometric candidates only; no door/window or adjacency promotion is made."
+      ],
+      "artifacts": {
+        "crop": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\op005_op006_geometry_evidence_20260901\\OP006-crop-overlay.png",
+          "sha256": "9daae6ba7c9e068ddfb78c527565d5b4fd4c70010ab60e1869898e4a1f90f54f",
+          "size": [
+            360,
+            488
+          ]
+        },
+        "full": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\op005_op006_geometry_evidence_20260901\\OP006-full-overlay.png",
+          "sha256": "d1484ae9a96f21466f3c5b0e483e483cbb31b9ee2e60145345ec85c1d7ae55e8",
+          "size": [
+            2245,
+            3043
+          ]
+        }
+      }
+    }
+  ],
+  "semantic_promotion": false,
+  "build_authorized": false,
+  "ready": false
+}
