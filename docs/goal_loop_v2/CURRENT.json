@@ -9,15 +9,15 @@
     "1308": "running",
     "121m2": "pending"
   },
-  "last_accepted_commit": "019ddab71f9011294c4368a7300be62dca88d12e",
+  "last_accepted_commit": "5c3681e6118df0458dd337db0dfe9ed6b9a82213",
   "last_run_id": "",
   "last_score": 0,
   "score_history": [],
   "failure_class": "semantic_partial_and_source_score_baseline",
-  "next_action": "Resolve the semantic geometry conflicts exposed by independent raw/Gemini review (OP007 versus OP008, OP001 door type, and the single OP002 door identity), then promote the 27 non-scale anchors and full wall graph in separate exact-hash decisions. Keep OP011 indeterminate; recompute S01-S08 after each accepted hash and do not start Blender/IFC below source score 95.",
+  "next_action": "Run the full wall graph source audit and independent semantic adjudication on the coordinate-confirmed result; reconcile OP007/OP008 and OP001 warnings while keeping OP011 indeterminate, then recompute S01-S08 before any Blender/IFC build.",
   "budget_spent_usd": 0.1,
   "budget_remaining_usd": 19.9,
   "blockers": ["B1308-SEMANTIC-ADJACENCY"],
   "final_human_accepted": false,
-  "updated_at": "2026-09-01T10:35:24.4414457+08:00"
+  "updated_at": "2026-09-01T11:31:21.9518181+08:00"
 }

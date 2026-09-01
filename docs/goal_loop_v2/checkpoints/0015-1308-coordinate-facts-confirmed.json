@@ -1,0 +1,48 @@
+{
+  "schema": "goal-loop-v2-checkpoint-v1",
+  "checkpoint_id": "0015-1308-coordinate-facts-confirmed",
+  "stage": "source_scoring",
+  "status": "accepted_coordinate_layer_only_not_build_ready",
+  "accepted_at": "2026-09-01T11:31:21.9518181+08:00",
+  "baseline_commit": "9ca26ac8aed0a1d7fcd911b1533b8af52dc44adb",
+  "accepted_commit": "5c3681e6118df0458dd337db0dfe9ed6b9a82213",
+  "independent_verdict": "accept_1308_coordinate_score_sync_v1",
+  "severity": {"p0": 0, "p1": 0, "p2": 0},
+  "coordinate_authorization": {
+    "wrapper_sha256": "ae2b41b60901514d035b576b74e262a79b018e5a233679f5dba6304b09c1cd5b",
+    "candidate_hash": "9adeffaaa1a14ec5b6c9364b375bb0454185ae9241caa4b674e3ef01317b13a0",
+    "result_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+    "application_sha256": "b8035a9a287e8837673d1fd5c3b84d56d4cb15df7009821057fd1541d6fa9e5d",
+    "result_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+    "promoted_coordinate_anchor_count": 27,
+    "scale_anchor_already_confirmed": true,
+    "semantic_anchor_count_remaining": 0,
+    "ready": false,
+    "build_authorized": false
+  },
+  "source_score": {
+    "layer_sha256": "b66603d18335c8b798a7363b872d9f30eaa4a983dc0258e6bd3870ad0970073c",
+    "detail_sha256": "41a99bc4048a7af360286869274c970471354dcf78c73e09a6fab32199a1d539",
+    "score": 45,
+    "minimum": 95,
+    "passed": ["S01_SOURCE_IDENTITY", "S02_ORIENTATION_COORDINATE_CHAIN", "S03_SCALE_AND_DIMENSIONS", "S04_OUTER_BOUNDARY"],
+    "failed": ["S05_WALL_GRAPH", "S06_OPENINGS", "S07_SPACES_ADJACENCY_REACHABILITY", "S08_PROVENANCE_UNRESOLVED"],
+    "entity_blockers": {"S05": 90, "S06": 33, "S07": 37, "S08": 2, "total": 162}
+  },
+  "semantic_evidence": {
+    "current_gemini_review_directory": "C:\\Users\\1_1\\Desktop\\goal_loop_v2_1308_gemini_current_semantic_20260901",
+    "http_status": 200,
+    "post_count": 1,
+    "tokens": 6758,
+    "verdict": "partial",
+    "warnings": ["OP007/OP008 may be one bath door", "OP001 type needs source confirmation", "OP011 indeterminate"],
+    "independent_op002_arbiter": "one_real_door_plus_false_duplicate_portal",
+    "semantic_build_authorized": false
+  },
+  "readiness": {"ready": false, "blender_executed": false, "ifc_executed": false},
+  "tests": {"coordinate_focused": {"passed": 28, "failed": 0}, "backend": {"passed": 459, "skipped": 1, "failed": 0}, "diff_check": "passed", "compileall": "passed"},
+  "stage_boundary": "This checkpoint confirms only all 27 coordinate anchor locations plus the scale fact. It does not confirm full wall/atom geometry, opening semantics, space adjacency, OP011 subtype or Blender/IFC readiness.",
+  "budget_spent_usd": 0.1,
+  "budget_remaining_usd": 19.9,
+  "next_action": "Run the full wall graph source audit and an independent semantic adjudication candidate on the coordinate-confirmed result; preserve all semantic conflicts as blockers."
+}
