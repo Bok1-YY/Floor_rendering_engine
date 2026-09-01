@@ -24,6 +24,18 @@ def _authorize(candidate):
     return {"schema":"reference-confirmation-verdict-v1","candidate":candidate,"candidate_hash":candidate["candidate_hash"],"authority":"independent_reference_reviewer","verdict":"authorize_exact_reference_geometry","build_authorized":False}
 
 
+def _authorize_source_fact(candidate):
+    wrapper=_authorize(candidate);wrapper["verdict"]="authorize_exact_source_fact";return wrapper
+
+
+def _anchor_document():
+    document=_document();next(row for row in document["source"]["anchors"] if row["id"]=="ANCHOR-SCALE")["status"]="source_candidate";document["structure_hash"]=compute_v21_structure_hash(document);return document
+
+
+def _anchor_decision(status="source_confirmed"):
+    return {"id":"DECIDE-SCALE","issue_id":"S03_SCALE_AND_DIMENSIONS","evidence_refs":["INDEPENDENT-SCALE-AUDIT"],"decision":"confirm_source_fact","allowed_entity_ids":["ANCHOR-SCALE"],"operations":[{"operation":"confirm_source_anchor","anchor_id":"ANCHOR-SCALE","status":status}]}
+
+
 def test_pending_candidate_cannot_apply_until_exact_independent_authorization():
     document=_document();candidate=_candidate(document)
     with pytest.raises(ValueError):apply_authorized_verdict(document,candidate)
@@ -80,3 +92,35 @@ def test_nine_endpoint_classification_operations_promote_nodes_only():
     result,_=apply_authorized_verdict(document,_authorize(build_verdict_candidate(document,["a"*64],[decision])))
     assert next(row for row in result["wall_graph"]["branches"] if row["id"]=="BRANCH-EAST")["status"]==branch_before
     assert next(row for row in result["wall_graph"]["atoms"] if row["id"]=="WALL-EAST")["status"]==atom_before
+
+
+def test_source_anchor_confirmation_changes_only_one_anchor_status():
+    document=_anchor_document();candidate=build_verdict_candidate(document,["b"*64],[_anchor_decision()]);result,report=apply_authorized_verdict(document,_authorize_source_fact(candidate))
+    scale=next(row for row in result["source"]["anchors"] if row["id"]=="ANCHOR-SCALE")
+    assert scale["status"]=="source_confirmed"
+    assert report["promotion_ids"]==["ANCHOR-SCALE"] and report["ready"] is False
+    restored=deepcopy(result);restored["structure_hash"]=document["structure_hash"];next(row for row in restored["source"]["anchors"] if row["id"]=="ANCHOR-SCALE")["status"]="source_candidate"
+    assert restored==document
+
+
+@pytest.mark.parametrize("status",["confirmed","resolved","source_candidate","unresolved"])
+def test_source_anchor_confirmation_rejects_invalid_target_status(status):
+    with pytest.raises(ValueError,match="schema/status"):
+        build_verdict_candidate(_anchor_document(),["b"*64],[_anchor_decision(status)])
+
+
+def test_source_anchor_confirmation_rejects_semantic_mutation_and_wrong_issue_routing():
+    document=_anchor_document();semantic=deepcopy(_anchor_decision());semantic["operations"][0]["side_a_space_id"]="SPACE-LIVING"
+    with pytest.raises(ValueError):build_verdict_candidate(document,["b"*64],[semantic])
+    wrong_issue=deepcopy(_anchor_decision());wrong_issue["issue_id"]="S02_ORIENTATION_COORDINATE_CHAIN"
+    with pytest.raises(ValueError,match="wrong source score issue"):build_verdict_candidate(document,["b"*64],[wrong_issue])
+    geometry_route=deepcopy(_anchor_decision());geometry_route["decision"]="confirm_geometry";geometry_route["issue_id"]="ISSUE-GEOMETRY"
+    with pytest.raises(ValueError,match="requires source-fact"):build_verdict_candidate(document,["b"*64],[geometry_route])
+
+
+def test_source_anchor_candidate_and_wrapper_are_exact_hash_bound():
+    document=_anchor_document();candidate=build_verdict_candidate(document,["b"*64],[_anchor_decision()]);wrapper=_authorize(candidate)
+    stale=deepcopy(document);stale["adjacency_truth"]["status"]="unresolved";stale["structure_hash"]=compute_v21_structure_hash(stale)
+    with pytest.raises(ValueError,match="stale"):apply_authorized_verdict(stale,wrapper)
+    forged=deepcopy(wrapper);forged["candidate_hash"]="f"*64
+    with pytest.raises(ValueError,match="authorized candidate hash mismatch"):apply_authorized_verdict(document,forged)

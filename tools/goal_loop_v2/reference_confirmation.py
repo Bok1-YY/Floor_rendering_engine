@@ -15,7 +15,8 @@ if str(ROOT) not in sys.path:sys.path.insert(0,str(ROOT))
 from tools.fastloop_research.contract import canonical_json
 from tools.fastloop_research.v21_contract import compute_v21_structure_hash,validate_v21_document,assess_v21_build_readiness
 
-ALLOWED={"confirm_endpoint_classification","confirm_gap_geometry","confirm_wall_cut_geometry","confirm_excluded_feature","resolve_issue","supersede_issue"}
+ALLOWED={"confirm_endpoint_classification","confirm_gap_geometry","confirm_wall_cut_geometry","confirm_excluded_feature","confirm_source_anchor","resolve_issue","supersede_issue"}
+SOURCE_ANCHOR_ISSUES={"S02_ORIENTATION_COORDINATE_CHAIN","S03_SCALE_AND_DIMENSIONS"}
 
 def _hash(value):return hashlib.sha256(canonical_json(value)).hexdigest()
 
@@ -38,14 +39,29 @@ def _validate_candidate(doc,candidate,verify_hash=True):
     if not isinstance(candidate["evidence_hashes"],list) or not candidate["evidence_hashes"] or len(set(candidate["evidence_hashes"]))!=len(candidate["evidence_hashes"]) or any(not isinstance(value,str) or len(value)!=64 or any(ch not in "0123456789abcdef" for ch in value) for value in candidate["evidence_hashes"]):raise ValueError("candidate evidence hashes invalid")
     if not isinstance(candidate["decisions"],list) or not candidate["decisions"]:raise ValueError("candidate decisions required")
     issues={row["id"] for row in doc["unresolved_issues"]}
-    decision_ids=set()
+    anchors={row["id"]:row for row in doc["source"]["anchors"]}
+    decision_ids=set();anchor_targets=set()
     for decision in candidate["decisions"]:
         if not isinstance(decision,Mapping) or set(decision)!={"id","issue_id","evidence_refs","decision","allowed_entity_ids","operations"}:raise ValueError("invalid embedded decision")
-        if decision["id"] in decision_ids or decision["issue_id"] not in issues or not decision["evidence_refs"] or not decision["allowed_entity_ids"] or len(set(decision["allowed_entity_ids"]))!=len(decision["allowed_entity_ids"]):raise ValueError("decision identity/issue/evidence invalid")
+        anchor_decision=decision["decision"]=="confirm_source_fact"
+        issue_valid=decision["issue_id"] in issues or (anchor_decision and decision["issue_id"] in SOURCE_ANCHOR_ISSUES)
+        if decision["id"] in decision_ids or not issue_valid or not decision["evidence_refs"] or not decision["allowed_entity_ids"] or len(set(decision["allowed_entity_ids"]))!=len(decision["allowed_entity_ids"]):raise ValueError("decision identity/issue/evidence invalid")
         decision_ids.add(decision["id"])
         if decision["decision"]=="keep_unresolved" and decision["operations"]:raise ValueError("keep-unresolved decision cannot authorize operations")
-        if decision["decision"] not in {"confirm_geometry","resolve_source_issue","supersede_source_issue","keep_unresolved"}:raise ValueError("unsupported decision")
-        for operation in decision["operations"]:_validate_operation(operation,set(decision["allowed_entity_ids"]),decision["issue_id"])
+        if decision["decision"] not in {"confirm_geometry","confirm_source_fact","resolve_source_issue","supersede_source_issue","keep_unresolved"}:raise ValueError("unsupported decision")
+        if anchor_decision and (not decision["operations"] or any(op.get("operation")!="confirm_source_anchor" for op in decision["operations"] if isinstance(op,Mapping))):raise ValueError("source-fact decision may contain source-anchor operations only")
+        decision_anchor_targets=set()
+        for operation in decision["operations"]:
+            _validate_operation(operation,set(decision["allowed_entity_ids"]),decision["issue_id"])
+            if operation["operation"]=="confirm_source_anchor":
+                if not anchor_decision:raise ValueError("source-anchor operation requires source-fact decision")
+                anchor=anchors.get(operation["anchor_id"])
+                if anchor is None or anchor["status"]!="source_candidate":raise ValueError("source-anchor target must be an existing source candidate")
+                expected_issue="S03_SCALE_AND_DIMENSIONS" if anchor["kind"]=="scale" else "S02_ORIENTATION_COORDINATE_CHAIN"
+                if decision["issue_id"]!=expected_issue:raise ValueError("source-anchor decision is bound to the wrong source score issue")
+                if anchor["id"] in anchor_targets:raise ValueError("source anchor may be promoted at most once per candidate")
+                anchor_targets.add(anchor["id"]);decision_anchor_targets.add(anchor["id"])
+        if anchor_decision and set(decision["allowed_entity_ids"])!=decision_anchor_targets:raise ValueError("source-fact decision allowlist must exactly equal anchor targets")
 
 def validate_verdict_candidate(source_document,candidate,actual_evidence_hashes=None):
     doc=validate_v21_document(source_document);_validate_candidate(doc,candidate,verify_hash=True)
@@ -59,10 +75,12 @@ def _validate_operation(op,allowed,issue_id):
       "confirm_gap_geometry":{"operation","opening_id","status"},
       "confirm_wall_cut_geometry":{"operation","opening_id","status"},
       "confirm_excluded_feature":{"operation","feature_id","status"},
+      "confirm_source_anchor":{"operation","anchor_id","status"},
       "resolve_issue":{"operation","issue_id","status"},
       "supersede_issue":{"operation","issue_id","status"},
     }
-    if set(op)!=schemas[op["operation"]] or op["status"] not in {"confirmed","resolved","superseded"}:raise ValueError("operation exact schema/status mismatch")
+    valid_statuses={"source_confirmed","human_confirmed"} if op["operation"]=="confirm_source_anchor" else {"confirmed","resolved","superseded"}
+    if set(op)!=schemas[op["operation"]] or op["status"] not in valid_statuses:raise ValueError("operation exact schema/status mismatch")
     if op["operation"]=="confirm_endpoint_classification" and op["promotion_scope"]!="node_status_only":raise ValueError("endpoint classification may confirm node status only")
     targets={value for key,value in op.items() if key.endswith("_id") and key not in {"issue_id"}}
     if not targets<=allowed:raise ValueError("operation targets entity outside decision allowlist")
@@ -71,17 +89,22 @@ def _validate_operation(op,allowed,issue_id):
 def apply_authorized_verdict(document,authorized):
     doc=validate_v21_document(document)
     keys={"schema","candidate","candidate_hash","authority","verdict","build_authorized"}
-    if not isinstance(authorized,Mapping) or set(authorized)!=keys or authorized["schema"]!="reference-confirmation-verdict-v1" or authorized["authority"]!="independent_reference_reviewer" or authorized["verdict"]!="authorize_exact_reference_geometry" or authorized["build_authorized"] is not False:raise ValueError("invalid independently authorized verdict")
+    allowed_verdicts={"authorize_exact_reference_geometry","authorize_exact_source_fact"}
+    if not isinstance(authorized,Mapping) or set(authorized)!=keys or authorized["schema"]!="reference-confirmation-verdict-v1" or authorized["authority"]!="independent_reference_reviewer" or authorized["verdict"] not in allowed_verdicts or authorized["build_authorized"] is not False:raise ValueError("invalid independently authorized verdict")
     candidate=authorized["candidate"]
     _validate_candidate(doc,candidate,verify_hash=True)
     if authorized["candidate_hash"]!=candidate["candidate_hash"]:raise ValueError("authorized candidate hash mismatch")
-    result=deepcopy(doc);branches={r["id"]:r for r in result["wall_graph"]["branches"]};atoms={r["id"]:r for r in result["wall_graph"]["atoms"]};nodes={r["id"]:r for r in result["wall_graph"]["junctions"]};openings={r["id"]:r for r in result["opening_contract"]["openings"]};features={r["id"]:r for r in result["source"]["excluded_linear_features"]};issues={r["id"]:r for r in result["unresolved_issues"]}
+    decisions=candidate["decisions"];operations=[op for decision in decisions for op in decision["operations"]]
+    if authorized["verdict"]=="authorize_exact_source_fact":
+        if not operations or any(decision["decision"]!="confirm_source_fact" for decision in decisions) or any(op["operation"]!="confirm_source_anchor" or op["status"]!="source_confirmed" for op in operations):raise ValueError("source-fact wrapper may authorize source-confirmed anchor operations only")
+    elif any(decision["decision"]=="confirm_source_fact" for decision in decisions) or any(op["operation"]=="confirm_source_anchor" for op in operations):raise ValueError("reference-geometry wrapper cannot authorize source facts")
+    result=deepcopy(doc);branches={r["id"]:r for r in result["wall_graph"]["branches"]};atoms={r["id"]:r for r in result["wall_graph"]["atoms"]};nodes={r["id"]:r for r in result["wall_graph"]["junctions"]};openings={r["id"]:r for r in result["opening_contract"]["openings"]};features={r["id"]:r for r in result["source"]["excluded_linear_features"]};anchors={r["id"]:r for r in result["source"]["anchors"]};issues={r["id"]:r for r in result["unresolved_issues"]}
     def semantic_fingerprint(row):
         host=deepcopy(row["host"])
         if host:
             for terminal in host.get("gap_terminals",[]):terminal.pop("status",None)
         return {"build_disposition":row["build_disposition"],"build_kind":row["build_kind"],"host":host,"swing_direction":row["swing_direction"],"traversable":row["traversable"],"side_a_space_id":row["side_a_space_id"],"side_b_space_id":row["side_b_space_id"],"status":row["status"]}
-    adjacency_before=deepcopy(result["adjacency_truth"]);semantic_before={oid:semantic_fingerprint(row) for oid,row in openings.items()};branch_status_before={key:row["status"] for key,row in branches.items()};atom_status_before={key:row["status"] for key,row in atoms.items()}
+    adjacency_before=deepcopy(result["adjacency_truth"]);semantic_before={oid:semantic_fingerprint(row) for oid,row in openings.items()};branch_status_before={key:row["status"] for key,row in branches.items()};atom_status_before={key:row["status"] for key,row in atoms.items()};anchors_before=deepcopy(result["source"]["anchors"]);anchor_status_before={key:row["status"] for key,row in anchors.items()};promoted_anchor_ids=set()
     promotions=[]
     for decision in candidate["decisions"]:
       for op in decision["operations"]:
@@ -104,6 +127,8 @@ def apply_authorized_verdict(document,authorized):
             feature=features[op["feature_id"]];feature["status"]="confirmed"
             for attachment in feature["attachments"]:attachment["status"]="confirmed"
             promotions.append(feature["id"])
+        elif kind=="confirm_source_anchor":
+            anchor=anchors[op["anchor_id"]];anchor["status"]=op["status"];promoted_anchor_ids.add(anchor["id"]);promotions.append(anchor["id"])
         elif kind=="resolve_issue":issues[op["issue_id"]].update(status="resolved",blocks_reference_freeze=False,blocks_build=False);promotions.append(op["issue_id"])
         elif kind=="supersede_issue":issues[op["issue_id"]].update(status="superseded",blocks_reference_freeze=False,blocks_build=False);promotions.append(op["issue_id"])
     if result["adjacency_truth"]!=adjacency_before:raise ValueError("reference geometry verdict changed adjacency")
@@ -111,6 +136,10 @@ def apply_authorized_verdict(document,authorized):
     for oid,before in semantic_before.items():
         after=semantic_fingerprint(openings[oid])
         if after!=before:raise ValueError("reference geometry verdict changed opening semantic/build fields")
+    anchors_probe=deepcopy(result["source"]["anchors"])
+    for row in anchors_probe:
+        if row["id"] in promoted_anchor_ids:row["status"]=anchor_status_before[row["id"]]
+    if anchors_probe!=anchors_before:raise ValueError("source-anchor confirmation changed non-status anchor facts")
     result["structure_hash"]=compute_v21_structure_hash(result);result=validate_v21_document(result);readiness=assess_v21_build_readiness(result)
     if readiness["ready"]:raise ValueError("reference geometry confirmation must remain not build-ready")
     return result,{"schema":"reference-confirmation-application-v1","candidate_hash":candidate["candidate_hash"],"source_structure_hash":doc["structure_hash"],"result_structure_hash":result["structure_hash"],"promotion_ids":sorted(set(promotions)),"ready":False,"remaining_blockers":readiness["blocker_ids"]}
