@@ -1,0 +1,60 @@
+{
+  "schema": "op001-entrance-evidence-v1",
+  "sample_id": "1308",
+  "opening_id": "OP001",
+  "source_segment_m": [
+    [
+      3.432346,
+      5.62869
+    ],
+    [
+      4.39838,
+      5.62869
+    ]
+  ],
+  "source_segment_px": [
+    [
+      965.9999496183207,
+      1607.999970603606
+    ],
+    [
+      1098.0000152671755,
+      1607.999970603606
+    ]
+  ],
+  "crop_box_px": [
+    705,
+    1347,
+    1358,
+    1867
+  ],
+  "source_sha256": "b85ff7446e2d1a123e3a41dc541ea9d6e081f3978d3460d6de8ef9906119bc07",
+  "nearest_host_candidate": "ATOM-WB016-02",
+  "nearest_host_midpoint_distance_m": 0.015638,
+  "nearest_host_segment_distance_m": 0.011283,
+  "length_m": 0.9660340000000005,
+  "closed_wall_break_proven": false,
+  "door_swing_or_jamb_proven": true,
+  "visual_observation": "crop visibly contains a dashed door swing and vertical door/jamb line at the right end; exact opening endpoints and host-wall cut remain unproven",
+  "conclusion": "candidate_only; visual door-swing evidence is present, but exact closed wall break, endpoint ownership, and traversable side-space relation are not fully proven",
+  "semantic_promotion": false,
+  "build_authorized": false,
+  "artifacts": {
+    "op001-crop-overlay": {
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\op001_entrance_evidence_20260901\\op001-crop-overlay.png",
+      "sha256": "7946d93e0981eb481510eab9c1784184d393959ed2e111984aef207141bf6702",
+      "size": [
+        653,
+        520
+      ]
+    },
+    "op001-full-overlay": {
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\op001_entrance_evidence_20260901\\op001-full-overlay.png",
+      "sha256": "cd50ea82cd06c2d731a7e5b74ff0a46033262035999cd0486a6cbfd02b946dc3",
+      "size": [
+        2245,
+        3043
+      ]
+    }
+  }
+}
