@@ -4,7 +4,7 @@
   "active_sample": "1308",
   "stage": "reference_freeze",
   "iteration": 0,
-  "method_id": "corrected-semantic-and-source-score-v1",
+  "method_id": "op002-portal-dedup-v1",
   "sample_status": {
     "1308": "running",
     "121m2": "pending"
@@ -13,11 +13,11 @@
   "last_run_id": "",
   "last_score": 0,
   "score_history": [],
-  "failure_class": "semantic_partial_gemini_invalid_argument",
-  "next_action": "Mechanically de-duplicate OP002 versus PORTAL-WB011-WB006-01 and fit their true door axes, validate a corrected Gemini structured request offline before one new independent call, then generate a semantic-adjacency candidate from the corrected v2.1 geometry while keeping OP011 indeterminate. In parallel, produce the full S01-S08 source-contract report for all remaining candidate walls, atoms, spaces and openings; do not start Blender/IFC while readiness is false.",
+  "failure_class": "source_contract_conflict_op002_portal",
+  "next_action": "Apply an independently reviewed source correction for the OP002/PORTAL conflict: retain one vertical WB006 wall-cut door at the measured source axis, demote the synthetic horizontal OP005 and duplicate PORTAL interpretations into rejected evidence history, restore the continuous WB011 wall, and invalidate all old adjacency/reachability. Preserve OP011 as indeterminate and do not start Blender/IFC.",
   "budget_spent_usd": 0.1,
   "budget_remaining_usd": 19.9,
-  "blockers": ["B1308-SEMANTIC-ADJACENCY"],
+  "blockers": ["B1308-OP002-PORTAL-DEDUP", "B1308-SEMANTIC-ADJACENCY"],
   "final_human_accepted": false,
-  "updated_at": "2026-09-01T08:34:43.0197732+08:00"
+  "updated_at": "2026-09-01T09:33:54.1059140+08:00"
 }

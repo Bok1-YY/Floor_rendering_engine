@@ -1,0 +1,39 @@
+{
+  "schema": "goal-loop-v2-checkpoint-v1",
+  "checkpoint_id": "0010-1308-op002-portal-conflict",
+  "stage": "reference_freeze",
+  "status": "accepted_source_conflict_requires_dedup_correction",
+  "accepted_at": "2026-09-01T09:33:54.1059140+08:00",
+  "baseline_commit": "92fb44819b661e55e0c4ddb088d4c3ffa04cbb45",
+  "accepted_commit": "92fb44819b661e55e0c4ddb088d4c3ffa04cbb45",
+  "independent_verdict": "one_real_door_plus_false_duplicate_portal",
+  "severity": {"p0": 0, "p1": 0, "p2": 0},
+  "audit_artifacts": {
+    "op002_portal_report_sha256": "dad5d5533accd1162c19b61cc539285c246a32bb3620be7fafd239b0a4205fa1",
+    "op002_portal_audit_json_sha256": "83930ae4aedeb56b5f45cd60c8d9037980073437c42a40e8d5106dcc484a1260",
+    "op002_arbiter_report_sha256": "7578d72e225ff52dee9985a6acd03a9511858eefc30206de23d64f58675990db",
+    "op002_arbiter_json_sha256": "78c35a22bb96ca52007ed2e27b7e2181c0af7fe6ae1d2ed827be941a2c83672"
+  },
+  "accepted_source_findings": {
+    "real_door_count": 1,
+    "real_opening_id": "OP002",
+    "real_host_wall": "WB006",
+    "real_axis_px": [[1101.5, 912.0], [1101.5, 1034.0]],
+    "real_axis_m": [[4.423994, 10.690147], [4.423994, 9.802938]],
+    "real_width_m": 0.887210,
+    "real_sides": ["bedroom_01", "bedroom_corridor"],
+    "real_swing": "west_into_bedroom_01",
+    "false_duplicate_portal": "PORTAL-WB011-WB006-01 lies in continuous filled WB011 wall band y=1035..1057 px with no independent leaf/arc; remove from active topology and preserve as rejected evidence.",
+    "false_op005_locator": "Current horizontal OP005 chord crosses the same single swing field; active OP002 source locator must be replaced by the vertical WB006 axis with old bytes preserved in rejected history.",
+    "wb011": "Restore continuous wall; do not create a WB011-to-WB006 portal.",
+    "adjacency": "Invalidate old portal/reachability result and recompute from the single corrected OP002 door plus other source-supported openings.",
+    "op011": "Unchanged; kitchen↔dry_balcony subtype/portal/reachability remains indeterminate."
+  },
+  "supersedes": [
+    {"checkpoint": "0009-1308-reference-geometry-confirmed", "claim": "PORTAL-WB011-WB006-01 is a source-supported gap door", "reason": "Three independent high-resolution source audits found continuous wall fill and one shared OP002 swing field."},
+    {"checkpoint": "0008-1308-v21-gap-portals", "claim": "OP005 horizontal gap portal and WB011 portal are active source geometry", "reason": "Their host/direction is contradicted by the source plan."}
+  ],
+  "remaining_1308_blockers": ["B1308-OP002-PORTAL-DEDUP", "B1308-SEMANTIC-ADJACENCY"],
+  "build_state": {"ready": false, "build_authorized": false, "blender_executed": false, "ifc_executed": false},
+  "next_action": "Implement generic deduplicate/rehost opening correction with complete rejected source-observation history, restore WB011 wall, fit the vertical OP002 wall-cut effective void, and rerun source score/semantic review from the new structure hash."
+}
