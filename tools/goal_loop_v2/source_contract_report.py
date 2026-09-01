@@ -19,6 +19,7 @@ from tools.fastloop_research.v21_contract import validate_v21_document,assess_v2
 from tools.goal_loop_v2.reference_confirmation import apply_authorized_verdict,validate_verdict_candidate
 from tools.goal_loop_v2.source_correction import apply_authorized_source_correction
 from tools.goal_loop_v2.wall_2d_fact import validate_authorized_wall_2d_fact
+from tools.goal_loop_v2.offframe_entrance_policy import validate_policy
 
 CONFIRMED={"confirmed","legacy_confirmed"}
 ANCHOR_CONFIRMED={"human_confirmed","source_confirmed","legacy_confirmed"}
@@ -34,8 +35,12 @@ def generate_source_contract_report(prior_document:Mapping[str,Any],authorized_v
     provenance={"lineage_type":"reference_confirmation","prior_structure_hash":prior["structure_hash"],"authorized_candidate_hash":candidate["candidate_hash"],"actual_evidence_sha256":sorted(actual_evidence_hashes),"application_source_hash":application["source_structure_hash"],"application_result_hash":application["result_structure_hash"],"current_result_hash":recomputed_document["structure_hash"],"canonical_recomputation_equal":True}
     return _score_source_contract(recomputed_document,goal_contract,recomputed_application,provenance,wall_2d_fact)
 
-def _score_source_contract(document:Mapping[str,Any],goal_contract:Mapping[str,Any],application:Mapping[str,Any],provenance:Mapping[str,Any],wall_2d_fact:Mapping[str,Any]|None=None):
+def _score_source_contract(document:Mapping[str,Any],goal_contract:Mapping[str,Any],application:Mapping[str,Any],provenance:Mapping[str,Any],wall_2d_fact:Mapping[str,Any]|None=None,offframe_policy:Mapping[str,Any]|None=None):
     doc=validate_v21_document(document)
+    # An off-frame entrance is explicitly research-only.  Validate its binding,
+    # but never let it satisfy S06/S07/S08 or alter the score/readiness.
+    if offframe_policy is not None:
+        validate_policy(offframe_policy, doc)
     scoring=goal_contract["score_contract"];weights=scoring["source_contract"]["checks"]
     expected=["S01_SOURCE_IDENTITY","S02_ORIENTATION_COORDINATE_CHAIN","S03_SCALE_AND_DIMENSIONS","S04_OUTER_BOUNDARY","S05_WALL_GRAPH","S06_OPENINGS","S07_SPACES_ADJACENCY_REACHABILITY","S08_PROVENANCE_UNRESOLVED"]
     if set(weights)!=set(expected):raise ValueError("goal source score check IDs drift")
@@ -113,6 +118,8 @@ def _score_source_contract(document:Mapping[str,Any],goal_contract:Mapping[str,A
     report={"schema":"goal-loop-v2-score-layer-v1","layer":"source_contract",**identity,"checks":checks}
     sidecar={"schema":"goal-loop-v2-source-contract-detail-v1",**identity,"weighted_score":score,"maximum_score":sum(weights.values()),"minimum_required":scoring["source_contract"]["minimum"],"hard_failures":[row["id"] for row in checks if row["status"]=="fail"],"entity_blockers":details,"entity_counts":{"anchors":len(source["anchors"]),"branches":len(doc["wall_graph"]["branches"]),"atoms":len(doc["wall_graph"]["atoms"]),"junctions":len(doc["wall_graph"]["junctions"]),"openings":len(doc["opening_contract"]["openings"]),"spaces":len(doc["spaces"]),"adjacency_edges":len(adjacency["edges"]),"unresolved_issues":len(doc["unresolved_issues"]),"assumptions":len(doc["assumptions"]["items"])}}
     sidecar["provenance_chain"]=deepcopy(dict(provenance))
+    if offframe_policy is not None:
+        sidecar["offframe_policy"]={"candidate_hash":offframe_policy["candidate_hash"],"research_only":True,"score_effect":"none","build_authorized":False}
     return report,sidecar
 
 def _read_json_file(path:Path,label:str):
