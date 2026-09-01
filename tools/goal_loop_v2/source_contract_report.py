@@ -9,7 +9,7 @@ import json
 import re
 from pathlib import Path
 import sys
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 ROOT=Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:sys.path.insert(0,str(ROOT))
@@ -17,6 +17,7 @@ if str(ROOT) not in sys.path:sys.path.insert(0,str(ROOT))
 from tools.fastloop_research.contract import canonical_json
 from tools.fastloop_research.v21_contract import validate_v21_document,assess_v21_build_readiness
 from tools.goal_loop_v2.reference_confirmation import apply_authorized_verdict,validate_verdict_candidate
+from tools.goal_loop_v2.source_correction import apply_authorized_source_correction
 
 CONFIRMED={"confirmed","legacy_confirmed"}
 ANCHOR_CONFIRMED={"human_confirmed","source_confirmed","legacy_confirmed"}
@@ -29,6 +30,10 @@ def generate_source_contract_report(prior_document:Mapping[str,Any],authorized_v
     validate_verdict_candidate(prior,candidate,actual_evidence_hashes)
     recomputed_document,recomputed_application=apply_authorized_verdict(prior,authorized_verdict)
     if canonical_json(recomputed_document)!=canonical_json(document) or canonical_json(recomputed_application)!=canonical_json(application):raise ValueError("current document/application differ from authorized independent recomputation")
+    provenance={"lineage_type":"reference_confirmation","prior_structure_hash":prior["structure_hash"],"authorized_candidate_hash":candidate["candidate_hash"],"actual_evidence_sha256":sorted(actual_evidence_hashes),"application_source_hash":application["source_structure_hash"],"application_result_hash":application["result_structure_hash"],"current_result_hash":recomputed_document["structure_hash"],"canonical_recomputation_equal":True}
+    return _score_source_contract(recomputed_document,goal_contract,recomputed_application,provenance)
+
+def _score_source_contract(document:Mapping[str,Any],goal_contract:Mapping[str,Any],application:Mapping[str,Any],provenance:Mapping[str,Any]):
     doc=validate_v21_document(document)
     scoring=goal_contract["score_contract"];weights=scoring["source_contract"]["checks"]
     expected=["S01_SOURCE_IDENTITY","S02_ORIENTATION_COORDINATE_CHAIN","S03_SCALE_AND_DIMENSIONS","S04_OUTER_BOUNDARY","S05_WALL_GRAPH","S06_OPENINGS","S07_SPACES_ADJACENCY_REACHABILITY","S08_PROVENANCE_UNRESOLVED"]
@@ -37,7 +42,7 @@ def generate_source_contract_report(prior_document:Mapping[str,Any],authorized_v
     # S01: immutable file/pixel/structure identity and confirmation lineage.
     source=doc["source"]
     if doc["source_hash"]!=source["original"]["file_sha256"]:details[expected[0]].append(_block("source","original","source_hash differs from original file hash"))
-    if application.get("ready") is not False:details[expected[0]].append(_block("provenance","reference-confirmation","geometry application improperly claimed ready"))
+    if application.get("ready") is not False:details[expected[0]].append(_block("provenance",str(provenance.get("lineage_type","unknown")),"lineage application improperly claimed ready"))
     # S02: canonical orientation, affine registration, and every source anchor.
     matrix=source["canonical"]["raw_to_canonical_3x3"]
     if source["canonical"]["orientation_policy"]=="raw_identity" and matrix!=[[1,0,0],[0,1,0],[0,0,1]]:details[expected[1]].append(_block("source","orientation","raw_identity transform is not identity"))
@@ -103,16 +108,59 @@ def generate_source_contract_report(prior_document:Mapping[str,Any],authorized_v
     identity={"sample_id":matches[0],"source_hash":doc["source_hash"],"reference_hash":doc["structure_hash"],"scoring_version":scoring["scoring_version"]}
     report={"schema":"goal-loop-v2-score-layer-v1","layer":"source_contract",**identity,"checks":checks}
     sidecar={"schema":"goal-loop-v2-source-contract-detail-v1",**identity,"weighted_score":score,"maximum_score":sum(weights.values()),"minimum_required":scoring["source_contract"]["minimum"],"hard_failures":[row["id"] for row in checks if row["status"]=="fail"],"entity_blockers":details,"entity_counts":{"anchors":len(source["anchors"]),"branches":len(doc["wall_graph"]["branches"]),"atoms":len(doc["wall_graph"]["atoms"]),"junctions":len(doc["wall_graph"]["junctions"]),"openings":len(doc["opening_contract"]["openings"]),"spaces":len(doc["spaces"]),"adjacency_edges":len(adjacency["edges"]),"unresolved_issues":len(doc["unresolved_issues"]),"assumptions":len(doc["assumptions"]["items"])}}
-    sidecar["provenance_chain"]={"prior_structure_hash":prior["structure_hash"],"authorized_candidate_hash":candidate["candidate_hash"],"actual_evidence_sha256":sorted(actual_evidence_hashes),"application_source_hash":application["source_structure_hash"],"application_result_hash":application["result_structure_hash"],"current_result_hash":doc["structure_hash"],"canonical_recomputation_equal":True}
+    sidecar["provenance_chain"]=deepcopy(dict(provenance))
     return report,sidecar
+
+def _read_json_file(path:Path,label:str):
+    try:return json.loads(path.read_bytes().decode("utf-8"))
+    except (OSError,UnicodeError,json.JSONDecodeError) as exc:raise ValueError(f"{label} is not readable JSON: {path}") from exc
+
+def _validate_source_correction_evidence_files(authorized_wrapper:Mapping[str,Any],actual_evidence_files:Sequence[str|Path]):
+    exact=authorized_wrapper.get("exact_inputs") if isinstance(authorized_wrapper,Mapping) else None
+    descriptor=exact.get("evidence") if isinstance(exact,Mapping) else None
+    if not isinstance(descriptor,Mapping):raise ValueError("authorized source-correction wrapper lacks exact evidence descriptor")
+    supplied=[]
+    for raw_path in actual_evidence_files:
+        path=Path(raw_path).expanduser().resolve()
+        try:payload=path.read_bytes()
+        except OSError as exc:raise ValueError(f"actual source-correction evidence is not readable: {path}") from exc
+        digest=hashlib.sha256(payload).hexdigest()
+        value=_read_json_file(path,"actual source-correction evidence")
+        supplied.append((digest,_hash(value)))
+    expected=[(descriptor.get("file_sha256"),descriptor.get("canonical_sha256"))]
+    if sorted(supplied)!=sorted(expected):raise ValueError("actual source-correction evidence files do not exactly match authorized wrapper")
+    return [row[0] for row in supplied]
+
+def generate_source_contract_report_from_source_correction(source_document:Mapping[str,Any],authorized_wrapper:Mapping[str,Any],actual_evidence_files:Sequence[str|Path],document:Mapping[str,Any],goal_contract:Mapping[str,Any],application:Mapping[str,Any]):
+    """Replay an independently authorized source correction before scoring S01-S08.
+
+    The wrapper remains the authority boundary.  The explicit source document,
+    evidence bytes, result and application are separate caller-provided facts so
+    a jointly edited runtime chain cannot pass merely by recalculating JSON hashes.
+    """
+    source=validate_v21_document(source_document)
+    recomputed_document,recomputed_application=apply_authorized_source_correction(authorized_wrapper)
+    exact=authorized_wrapper["exact_inputs"]
+    exact_source=_read_json_file(Path(exact["source_document"]["path"]).expanduser().resolve(),"authorized source document")
+    if canonical_json(source)!=canonical_json(exact_source):raise ValueError("explicit source document differs from authorized wrapper source bytes")
+    actual_hashes=_validate_source_correction_evidence_files(authorized_wrapper,actual_evidence_files)
+    if canonical_json(recomputed_document)!=canonical_json(document):raise ValueError("current source-correction result differs from authorized independent recomputation")
+    if canonical_json(recomputed_application)!=canonical_json(application):raise ValueError("current source-correction application differs from authorized independent recomputation")
+    provenance={"lineage_type":"authorized_source_correction","prior_structure_hash":source["structure_hash"],"authorized_wrapper_canonical_sha256":_hash(authorized_wrapper),"actual_evidence_sha256":sorted(actual_hashes),"source_document_file_sha256":exact["source_document"]["file_sha256"],"manifest_file_sha256":exact["manifest"]["file_sha256"],"manifest_canonical_sha256":exact["manifest"]["canonical_sha256"],"result_candidate_file_sha256":exact["result_candidate"]["file_sha256"],"application_source_hash":recomputed_application["source_structure_hash"],"application_result_hash":recomputed_application["result_structure_hash"],"current_result_hash":recomputed_document["structure_hash"],"canonical_recomputation_equal":True}
+    return _score_source_contract(recomputed_document,goal_contract,recomputed_application,provenance)
 
 def main(argv=None):
     p=argparse.ArgumentParser(description=__doc__)
-    for name in ("prior-document","authorized-verdict","document","goal-contract","application"):p.add_argument(f"--{name}",required=True,type=Path)
+    p.add_argument("--prior-document","--source-document",dest="prior_document",required=True,type=Path)
+    lineage=p.add_mutually_exclusive_group(required=True);lineage.add_argument("--authorized-verdict",type=Path);lineage.add_argument("--authorized-source-correction",type=Path)
+    for name in ("document","goal-contract","application"):p.add_argument(f"--{name}",required=True,type=Path)
     p.add_argument("--evidence",required=True,type=Path,action="append")
     p.add_argument("--output",required=True,type=Path);p.add_argument("--detail",required=True,type=Path);args=p.parse_args(argv)
-    prior=json.loads(args.prior_document.read_text(encoding='utf-8'));authorized=json.loads(args.authorized_verdict.read_text(encoding='utf-8'));document=json.loads(args.document.read_text(encoding='utf-8'));contract=json.loads(args.goal_contract.read_text(encoding='utf-8'));application=json.loads(args.application.read_text(encoding='utf-8'));evidence_hashes=[hashlib.sha256(path.read_bytes()).hexdigest() for path in args.evidence]
-    report,detail=generate_source_contract_report(prior,authorized,evidence_hashes,document,contract,application)
+    prior=json.loads(args.prior_document.read_text(encoding='utf-8'));document=json.loads(args.document.read_text(encoding='utf-8'));contract=json.loads(args.goal_contract.read_text(encoding='utf-8'));application=json.loads(args.application.read_text(encoding='utf-8'))
+    if args.authorized_source_correction:
+        authorized=json.loads(args.authorized_source_correction.read_text(encoding='utf-8'));report,detail=generate_source_contract_report_from_source_correction(prior,authorized,args.evidence,document,contract,application)
+    else:
+        authorized=json.loads(args.authorized_verdict.read_text(encoding='utf-8'));evidence_hashes=[hashlib.sha256(path.read_bytes()).hexdigest() for path in args.evidence];report,detail=generate_source_contract_report(prior,authorized,evidence_hashes,document,contract,application)
     args.output.write_text(json.dumps(report,ensure_ascii=False,sort_keys=True,indent=2)+"\n",encoding="utf-8");args.detail.write_text(json.dumps(detail,ensure_ascii=False,sort_keys=True,indent=2)+"\n",encoding="utf-8")
     print(json.dumps({"score":detail["weighted_score"],"hard_failures":detail["hard_failures"],"output":str(args.output),"detail":str(args.detail)},sort_keys=True));return 0
 
