@@ -1,0 +1,51 @@
+{
+  "schema": "goal-loop-v2-checkpoint-v1",
+  "checkpoint_id": "0011-1308-op002-dedup-authorized",
+  "stage": "reference_freeze",
+  "status": "accepted_op002_dedup_not_semantic_or_build_ready",
+  "accepted_at": "2026-09-01T09:57:55.2260382+08:00",
+  "baseline_commit": "77cb1548731f6bf5f623d02d95a6a7d2b552b3f1",
+  "accepted_commit": "2a8b87f15b9262657c0b1f24af5af3405b4f86ec",
+  "independent_verdict": "accept_1308_authorized_dedup_application",
+  "severity": {"p0": 0, "p1": 0, "p2": 0},
+  "authorization": {
+    "wrapper_sha256": "3f8bcc323424cd656ed23bd385be1015040ba23c4ce61305a05c924e21a4887b",
+    "authorized_application_report_sha256": "d5924f71b92f8cf4db51f9e54649ff9c5e19be730f08d093dd0c11ada424108a",
+    "authorized_result_sha256": "2694679d619ae81caaee771fbf95a125a019b75e2949bba5e0e7537cd566887e",
+    "result_structure_hash": "b9131ada224ac50487bb9612b544ae7f9bf77b42ed242d993a0cfb5b2c8a5a45",
+    "build_authorized": false
+  },
+  "dedup_state": {
+    "active_real_opening": "OP002",
+    "active_host": "ATOM-WB006-02",
+    "active_axis_px": [[1101.5, 912.0], [1101.5, 1034.0]],
+    "active_width_m": 0.8872095011876482,
+    "evidence_only_demotions": ["OP005", "PORTAL-WB011-WB006-01"],
+    "wb011_restored_continuous": true,
+    "old_adjacency_invalidated": true,
+    "op011_unchanged": true
+  },
+  "remaining_source_work": {
+    "stable_issue": "B1308-SEMANTIC-ADJACENCY",
+    "semantic_geometry_recheck": ["OP002", "OP005", "PORTAL-WB011-WB006-01"],
+    "op011": "indeterminate subtype, portal and dry-balcony reachability",
+    "source_score_baseline": "25/100 report is tied to the prior result and must be regenerated after dedup; it is not an acceptance claim for the current result.",
+    "current_readiness_blockers": 116
+  },
+  "independent_conflict_evidence": {
+    "arbiter_report_sha256": "7578d72e225ff52dee9985a6acd03a9511858eefc30206de23d64f58675990db",
+    "arbiter_json_sha256": "78c35a22bb96ca52007ed2e27b7e2181c0af7fe6ae1d2ed827be941a2c83672",
+    "op002_audit_report_sha256": "dad5d5533accd1162c19b61cc539285c246a32bb3620be7fafd239b0a4205fa1",
+    "op002_audit_json_sha256": "83930ae4aedeb56b5f45cd60c8d9037980073437c42a40e8d5106dcc484a1260"
+  },
+  "tests": {
+    "dedup_and_authorized_focused": {"passed": 26, "failed": 0},
+    "backend": {"passed": 423, "skipped": 1, "failed": 0},
+    "diff_check": "passed",
+    "compileall": "passed"
+  },
+  "stage_boundary": "This checkpoint accepts the exact authorized source correction that removes the false duplicate portal and restores the one-real-door interpretation. It does not accept semantic adjacency, OP002/OP005 geometry review as final beyond the arbiter evidence, OP011 subtype, full source score, Blender, IFC or build readiness.",
+  "budget_spent_usd": 0.1,
+  "budget_remaining_usd": 19.9,
+  "next_action": "Regenerate source score for the authorized dedup result, then perform an independent OP002/OP005/portal semantic geometry review and valid minimal Gemini composite isolation."
+}

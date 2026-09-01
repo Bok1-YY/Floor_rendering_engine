@@ -4,20 +4,20 @@
   "active_sample": "1308",
   "stage": "reference_freeze",
   "iteration": 0,
-  "method_id": "op002-portal-dedup-v1",
+  "method_id": "semantic-adjacency-and-source-score-v2",
   "sample_status": {
     "1308": "running",
     "121m2": "pending"
   },
-  "last_accepted_commit": "92fb44819b661e55e0c4ddb088d4c3ffa04cbb45",
+  "last_accepted_commit": "2a8b87f15b9262657c0b1f24af5af3405b4f86ec",
   "last_run_id": "",
   "last_score": 0,
   "score_history": [],
-  "failure_class": "source_contract_conflict_op002_portal",
-  "next_action": "Apply an independently reviewed source correction for the OP002/PORTAL conflict: retain one vertical WB006 wall-cut door at the measured source axis, demote the synthetic horizontal OP005 and duplicate PORTAL interpretations into rejected evidence history, restore the continuous WB011 wall, and invalidate all old adjacency/reachability. Preserve OP011 as indeterminate and do not start Blender/IFC.",
+  "failure_class": "semantic_partial_and_source_score_baseline",
+  "next_action": "Regenerate the S01-S08 source score against the authorized OP002-deduplicated result, then resolve the remaining OP002 semantic geometry/portal overlap with fresh source evidence and one minimal valid Gemini composite call. Keep OP011 indeterminate and do not start Blender/IFC until all source and artifact gates are satisfied.",
   "budget_spent_usd": 0.1,
   "budget_remaining_usd": 19.9,
-  "blockers": ["B1308-OP002-PORTAL-DEDUP", "B1308-SEMANTIC-ADJACENCY"],
+  "blockers": ["B1308-SEMANTIC-ADJACENCY"],
   "final_human_accepted": false,
-  "updated_at": "2026-09-01T09:33:54.1059140+08:00"
+  "updated_at": "2026-09-01T09:57:55.2260382+08:00"
 }
