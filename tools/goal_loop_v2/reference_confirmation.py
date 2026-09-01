@@ -35,6 +35,8 @@ def _validate_candidate(doc,candidate,verify_hash=True):
     if not isinstance(candidate,Mapping) or set(candidate)!=keys or candidate["schema"]!="reference-confirmation-verdict-candidate-v1" or candidate["status"]!="pending_independent_review" or candidate["build_authorized"] is not False:raise ValueError("invalid pending reference-confirmation candidate")
     if candidate["source_document_hash"]!=doc["structure_hash"] or candidate["source_document_content_sha256"]!=_hash(doc):raise ValueError("candidate has stale source document hash")
     if verify_hash and candidate["candidate_hash"]!=compute_candidate_hash(candidate):raise ValueError("candidate hash drift")
+    if not isinstance(candidate["evidence_hashes"],list) or not candidate["evidence_hashes"] or len(set(candidate["evidence_hashes"]))!=len(candidate["evidence_hashes"]) or any(not isinstance(value,str) or len(value)!=64 or any(ch not in "0123456789abcdef" for ch in value) for value in candidate["evidence_hashes"]):raise ValueError("candidate evidence hashes invalid")
+    if not isinstance(candidate["decisions"],list) or not candidate["decisions"]:raise ValueError("candidate decisions required")
     issues={row["id"] for row in doc["unresolved_issues"]}
     decision_ids=set()
     for decision in candidate["decisions"]:
@@ -44,6 +46,11 @@ def _validate_candidate(doc,candidate,verify_hash=True):
         if decision["decision"]=="keep_unresolved" and decision["operations"]:raise ValueError("keep-unresolved decision cannot authorize operations")
         if decision["decision"] not in {"confirm_geometry","resolve_source_issue","supersede_source_issue","keep_unresolved"}:raise ValueError("unsupported decision")
         for operation in decision["operations"]:_validate_operation(operation,set(decision["allowed_entity_ids"]),decision["issue_id"])
+
+def validate_verdict_candidate(source_document,candidate,actual_evidence_hashes=None):
+    doc=validate_v21_document(source_document);_validate_candidate(doc,candidate,verify_hash=True)
+    if actual_evidence_hashes is not None and sorted(candidate["evidence_hashes"])!=sorted(actual_evidence_hashes):raise ValueError("candidate evidence hashes differ from actual approved evidence bytes")
+    return deepcopy(dict(candidate))
 
 def _validate_operation(op,allowed,issue_id):
     if not isinstance(op,Mapping) or op.get("operation") not in ALLOWED:raise ValueError("unsupported confirmation operation")
@@ -108,4 +115,4 @@ def apply_authorized_verdict(document,authorized):
     if readiness["ready"]:raise ValueError("reference geometry confirmation must remain not build-ready")
     return result,{"schema":"reference-confirmation-application-v1","candidate_hash":candidate["candidate_hash"],"source_structure_hash":doc["structure_hash"],"result_structure_hash":result["structure_hash"],"promotion_ids":sorted(set(promotions)),"ready":False,"remaining_blockers":readiness["blocker_ids"]}
 
-__all__=["build_verdict_candidate","compute_candidate_hash","apply_authorized_verdict"]
+__all__=["build_verdict_candidate","compute_candidate_hash","validate_verdict_candidate","apply_authorized_verdict"]
