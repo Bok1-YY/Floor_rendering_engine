@@ -179,14 +179,43 @@ def apply_source_corrections(document, evidence, manifest):
     if readiness["ready"]: raise ValueError("pending source correction must not become build-ready")
     return result, {"schema": "source-correction-application-v1", "source_structure_hash": original["structure_hash"], "result_structure_hash": result["structure_hash"], "manifest_hash": _hash(manifest), "operation_ids": [row["id"] for row in manifest["operations"]], "adjacency_invalidated": True, "ready": False, "mapping_metadata": v21_mapping_metadata(result)}
 
+def apply_authorized_source_correction(wrapper):
+    wrapper_keys={"schema","authority","verdict","application_authorized","build_authorized","scope","exact_inputs","constraints"}
+    if not isinstance(wrapper,Mapping) or set(wrapper)!=wrapper_keys or wrapper.get("schema")!="goal-loop-v2-authorized-source-correction-v1" or wrapper.get("authority")!="independent_reference_reviewer" or wrapper.get("verdict")!="authorize_exact_source_correction" or wrapper.get("application_authorized") is not False or wrapper.get("build_authorized") is not False:raise ValueError("invalid authorized source-correction wrapper")
+    exact=wrapper["exact_inputs"]
+    if not isinstance(exact,Mapping) or set(exact)!={"source_document","evidence","manifest","result_candidate"}:raise ValueError("authorized wrapper exact_inputs mismatch")
+    descriptor_keys={"source_document":{"path","file_sha256","structure_hash"},"evidence":{"path","file_sha256","canonical_sha256"},"manifest":{"path","file_sha256","canonical_sha256"},"result_candidate":{"path","file_sha256","structure_hash"}}
+    values={};file_hashes={}
+    for name,keys in descriptor_keys.items():
+        descriptor=exact[name]
+        if not isinstance(descriptor,Mapping) or set(descriptor)!=keys:raise ValueError(f"authorized wrapper {name} descriptor mismatch")
+        path=Path(descriptor["path"]).expanduser().resolve()
+        if not path.is_file():raise ValueError(f"authorized wrapper {name} path missing")
+        payload=path.read_bytes();digest=hashlib.sha256(payload).hexdigest();file_hashes[name]=digest
+        if digest!=descriptor["file_sha256"]:raise ValueError(f"authorized wrapper {name} byte hash mismatch")
+        try:value=json.loads(payload.decode("utf-8"))
+        except (UnicodeError,json.JSONDecodeError) as exc:raise ValueError(f"authorized wrapper {name} JSON invalid") from exc
+        if "canonical_sha256" in descriptor and _hash(value)!=descriptor["canonical_sha256"]:raise ValueError(f"authorized wrapper {name} canonical hash mismatch")
+        if "structure_hash" in descriptor and (not isinstance(value,Mapping) or value.get("structure_hash")!=descriptor["structure_hash"]):raise ValueError(f"authorized wrapper {name} structure hash mismatch")
+        values[name]=value
+    recomputed,inner_report=apply_source_corrections(values["source_document"],values["evidence"],values["manifest"])
+    if canonical_json(recomputed)!=canonical_json(values["result_candidate"]):raise ValueError("authorized source correction result differs from exact result candidate")
+    if inner_report.get("ready") is not False or assess_v21_build_readiness(recomputed)["ready"] is not False:raise ValueError("authorized source correction must remain not build-ready")
+    report={"schema":"authorized-source-correction-application-v1","authorized_wrapper_canonical_sha256":_hash(wrapper),"source_structure_hash":values["source_document"]["structure_hash"],"result_structure_hash":recomputed["structure_hash"],"exact_input_file_sha256":file_hashes,"canonical_result_equal":True,"ready":False,"inner_application":inner_report}
+    return recomputed,report
+
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    for name in ("document", "evidence", "manifest"): parser.add_argument(f"--{name}", required=True, type=Path)
+    for name in ("document", "evidence", "manifest"): parser.add_argument(f"--{name}", type=Path)
+    parser.add_argument("--authorized-wrapper",type=Path)
     parser.add_argument("--output-document", required=True, type=Path); parser.add_argument("--report", required=True, type=Path)
     args = parser.parse_args(argv)
-    document, evidence, manifest = [json.loads(getattr(args,name).read_text(encoding="utf-8")) for name in ("document","evidence","manifest")]
-    result, report = apply_source_corrections(document,evidence,manifest)
+    if args.authorized_wrapper:
+        wrapper=json.loads(args.authorized_wrapper.read_text(encoding="utf-8"));result,report=apply_authorized_source_correction(wrapper)
+    else:
+        if not all((args.document,args.evidence,args.manifest)):parser.error("--document, --evidence and --manifest are required without --authorized-wrapper")
+        document, evidence, manifest = [json.loads(getattr(args,name).read_text(encoding="utf-8")) for name in ("document","evidence","manifest")];result, report = apply_source_corrections(document,evidence,manifest)
     args.output_document.write_text(json.dumps(result,ensure_ascii=False,sort_keys=True,indent=2)+"\n",encoding="utf-8")
     args.report.write_text(json.dumps(report,ensure_ascii=False,sort_keys=True,indent=2)+"\n",encoding="utf-8")
     print(json.dumps(report,sort_keys=True)); return 0
