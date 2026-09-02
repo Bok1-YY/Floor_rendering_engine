@@ -1,0 +1,43 @@
+{
+  "schema": "research-wall-layer-reference-manifest-v1",
+  "sample_id": "1308",
+  "branch_id": "1308-source-wall-layer-v001",
+  "primary_source": {
+    "path": "data/goal_loop_v2/references/1308/reference-coordinate-authorized-v21.json",
+    "file_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+    "structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1"
+  },
+  "reference_image": {
+    "path": "data/goal_loop_v2/references/1308/canonical-raw-portrait.png",
+    "file_sha256": "b85ff7446e2d1a123e3a41dc541ea9d6e081f3978d3460d6de8ef9906119bc07",
+    "role": "top_orthographic_source"
+  },
+  "expected_structural_parts": {
+    "wall_atom_count": 35,
+    "wall_atom_ids_exact": true
+  },
+  "coordinate_contract": {
+    "unit": "m",
+    "source_xy_to_blender_xy": "identity",
+    "blender_up_axis": "+Z",
+    "source_centerline_bbox_m": [-0.058547, -0.07272200000000062, 9.159022, 15.311636]
+  },
+  "assumptions": {
+    "wall_height_m": 2.8,
+    "wall_height_status": "unverified_research_default",
+    "opening_policy": "no_opening_cuts_in_wall_layer_v001"
+  },
+  "validation_thresholds": {
+    "wall_atom_count_exact": true,
+    "wall_endpoint_error_m_max": 0.000001,
+    "wall_thickness_error_m_max": 0.000001,
+    "wall_height_error_m_max": 0.000001,
+    "top_projection_visual_review_required": true,
+    "northeast_axon_visual_review_required": true,
+    "northwest_axon_visual_review_required": true
+  },
+  "research_only": true,
+  "faithful_functional_bim": false,
+  "not_for_construction": true,
+  "build_authorized": false
+}

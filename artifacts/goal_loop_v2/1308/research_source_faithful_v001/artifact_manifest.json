@@ -1,0 +1,57 @@
+{
+  "schema": "blender-research-wall-layer-artifact-manifest-v1",
+  "sample_id": "1308",
+  "branch_id": "1308-source-wall-layer-v001",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+  "blender_version": "5.2.0 LTS",
+  "wall_object_count": 35,
+  "opening_cuts": 0,
+  "artifacts": [
+    {
+      "kind": "checkpoint_blend",
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\artifacts\\goal_loop_v2\\1308\\research_source_faithful_v001\\1308_research_wall_layer_checkpoint_v000.blend",
+      "bytes": 96863,
+      "sha256": "a7a773bc0ef2017f725c55c36f5305a3f991d8517bf2a9a6b2fb59c3dc2b5392"
+    },
+    {
+      "kind": "blender_source",
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\artifacts\\goal_loop_v2\\1308\\research_source_faithful_v001\\1308_research_wall_layer_v001.blend",
+      "bytes": 117946,
+      "sha256": "4357010f124314954ec1a38316a6364a2474311441f87d96cd0a30b5839bb09d"
+    },
+    {
+      "kind": "portable_glb",
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\artifacts\\goal_loop_v2\\1308\\research_source_faithful_v001\\1308_research_wall_layer_v001.glb",
+      "bytes": 55588,
+      "sha256": "204699044d6d37753210a3a1a19be466e52fcecd7ff062073460f79dffc87372"
+    },
+    {
+      "kind": "render_top",
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\artifacts\\goal_loop_v2\\1308\\research_source_faithful_v001\\1308_wall_layer_top.png",
+      "bytes": 750171,
+      "sha256": "ee14f3e36ef3ce3d8f64e83e8c28241c547a32e059ac0e5bcb4f6cf2a452cc21"
+    },
+    {
+      "kind": "render_northeast",
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\artifacts\\goal_loop_v2\\1308\\research_source_faithful_v001\\1308_wall_layer_northeast.png",
+      "bytes": 952003,
+      "sha256": "e5a57348d9fca95201bc1800f8c4ba809bfe4b8540086e05542158e3641bcbaf"
+    },
+    {
+      "kind": "render_northwest",
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\artifacts\\goal_loop_v2\\1308\\research_source_faithful_v001\\1308_wall_layer_northwest.png",
+      "bytes": 955194,
+      "sha256": "c562bd4335c6e7d18870f0aa77fc2a005382eeecf4b116c0ae5c67267fc19408"
+    },
+    {
+      "kind": "structural_validation",
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\artifacts\\goal_loop_v2\\1308\\research_source_faithful_v001\\wall_layer_structural_validation.json",
+      "bytes": 15751,
+      "sha256": "ba34057821b66476a57114f621c9e0ba2592ad16715f920629c03f23f14ddc6e"
+    }
+  ],
+  "research_only": true,
+  "not_for_construction": true,
+  "formal_build_authorized": false
+}

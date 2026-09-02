@@ -1,0 +1,31 @@
+{
+  "schema": "isolated-research-gray-branch-v1",
+  "branch_id": "1308-source-wall-layer-v001",
+  "branch_kind": "source_faithful_wall_geometry_research",
+  "parent_source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "source_connectivity_candidate_hash": "748489439400876d7d8d97ecb82ab05e6248969f8cd4ceaa5219d872c58f30be",
+  "scope": [
+    "wall_atom_centerlines",
+    "wall_thickness",
+    "research_wall_height",
+    "top_and_two_axonometric_validation_views"
+  ],
+  "excluded": [
+    "opening_cuts",
+    "door_leafs",
+    "windows",
+    "furniture",
+    "materials_beyond_neutral_gray",
+    "lighting_design",
+    "semantic_adjacency",
+    "IFC_authority"
+  ],
+  "source_mutation_authorized": false,
+  "application_authorized": false,
+  "semantic_promotion": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "research_only": true,
+  "not_for_construction": true,
+  "faithful_reconstruction": false
+}
