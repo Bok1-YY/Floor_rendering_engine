@@ -1,0 +1,307 @@
+{
+  "schema": "source-root-policy-candidate-v2",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+  "input_bindings": {
+    "exterior_root_search": {
+      "file_sha256": "38b97b78897fbafce7cbca73254d72360720ca44df8aa32ee7b51b54ff52cacc",
+      "candidate_hash": "dfc5ff48f69a2e6fa539a96c4cb968ee2f54750bfcac6688f03b3f90bca3bc8f"
+    },
+    "op001_unit_scope": {
+      "file_sha256": "bf0d8118ebe1584d4d33586e884332a58144f96e9c3d7826098566ec31f7a117",
+      "candidate_hash": "052125fe3027f9ee3025c72a9755b71d7a25b4f43125cae29cb80354b2c4a858"
+    },
+    "unit_scope_reachability_v3": {
+      "file_sha256": "65822f1374559b8168430b89fd659b4db96ec632fbad4cf832f6706fe93d3f20",
+      "candidate_hash": "338422f1e49b58f985d280e2f50c541b79ec53a7a38b5737391bfb0718b77966",
+      "tier_d_unreachable_scope_space_ids": [
+        "bedroom_02",
+        "dry_balcony",
+        "north_toilet"
+      ],
+      "reachability_confirmation": false
+    },
+    "live_gates": {
+      "file_sha256": "91cd797a9d060a1397175ff6b7c7fe4d021b6872949cd44da326d5c3221ff282",
+      "source_score": 65,
+      "hard_failures": [
+        "S06_OPENINGS",
+        "S07_SPACES_ADJACENCY_REACHABILITY",
+        "S08_PROVENANCE_UNRESOLVED"
+      ],
+      "blocker_counts": {
+        "S01_SOURCE_IDENTITY": 0,
+        "S02_ORIENTATION_COORDINATE_CHAIN": 0,
+        "S03_SCALE_AND_DIMENSIONS": 0,
+        "S04_OUTER_BOUNDARY": 0,
+        "S05_WALL_GRAPH": 0,
+        "S06_OPENINGS": 33,
+        "S07_SPACES_ADJACENCY_REACHABILITY": 37,
+        "S08_PROVENANCE_UNRESOLVED": 2
+      }
+    }
+  },
+  "selection_contract": {
+    "allowed_modes": [
+      "in_frame_exterior_root",
+      "unit_scope_root",
+      "off_frame_root_hypothesis"
+    ],
+    "mutually_exclusive": true,
+    "default_selected_mode": null,
+    "recommendation_is_selection": false,
+    "human_selection_creates_confirmation": false,
+    "human_selection_creates_graph_edge": false,
+    "candidate_submission_button_zh": "提交 root 策略候选"
+  },
+  "recommended_policy_mode": "unit_scope_root",
+  "recommendation_explanation_zh": "图内没有楼栋外部 opening；OP001 只支持 common-core 与 lobby 的单位范围假设。此推荐不会自动选择策略，也不会确认外部入口、通行、邻接、评分或构建。",
+  "selected_policy_mode": null,
+  "human_decision": {
+    "status": "pending",
+    "policy_mode": null,
+    "operator_id": null,
+    "timestamp": null,
+    "rationale": null,
+    "reason_codes": [],
+    "evidence_acknowledgements": []
+  },
+  "modes": {
+    "in_frame_exterior_root": {
+      "label_zh": "楼栋外部 opening 新证据",
+      "status": "disabled_no_source_crossing",
+      "selectable_for_candidate_submission": false,
+      "risk_class": "evidence_required",
+      "current_evidence": {
+        "actual_crossing_ids": [],
+        "boundary_touch_ids": [],
+        "near_miss_id": "OP003",
+        "near_miss_distance_m": 0.014637,
+        "near_miss_is_crossing": false
+      },
+      "required_evidence": [
+        "source_registered opening segment with actual outer-boundary crossing",
+        "bounded outside region and bounded inside space",
+        "confirmed host/effective void/jamb",
+        "independent traversability proof and path trace",
+        "human/source authority and independent verifier"
+      ],
+      "disabled_reason_zh": "当前没有 opening 与已确认外边界形成真实穿越；OP003 只是 near-miss。",
+      "result_authority": "candidate_until_full_geometry_and_traversability_gate",
+      "policy_selected": false,
+      "human_authorized": false,
+      "building_exterior_root_confirmation": false,
+      "unit_root_confirmation": false,
+      "off_frame_root_confirmation": false,
+      "root_confirmation": false,
+      "entrance_confirmation": false,
+      "outside_side_confirmation": false,
+      "traversability_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "reachability_confirmation": false,
+      "graph_edge_admitted": false,
+      "source_application_authorized": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false
+    },
+    "unit_scope_root": {
+      "label_zh": "单位范围 root 假设",
+      "status": "recommended_available_for_candidate_submission",
+      "selectable_for_candidate_submission": true,
+      "risk_class": "human_policy_required",
+      "current_evidence": {
+        "opening_id": "OP001",
+        "source_kind": "entrance_symbol",
+        "source_status": "confirmed",
+        "host_atom_id": "ATOM-WB016-02",
+        "effective_void_record_status": "confirmed",
+        "source_traversable_value": false,
+        "common_side_space_id": "common_core_circulation",
+        "private_unit_side_space_id": "lobby",
+        "building_outer_boundary_intersection": false,
+        "unit_root_candidate": "hypothesis",
+        "entry_label_is_source_pixel_context_only": true,
+        "record_fields_are_policy_confirmations": false
+      },
+      "required_evidence": [
+        "explicit human unit-scope policy selection",
+        "bounded common-core and private-unit side acceptance",
+        "independent OP001 traversability and barrier-removal proof",
+        "independent adjacency/edge gate"
+      ],
+      "warning_zh": "只表示 common-core 到 private-unit 的范围假设，不是楼栋室外入口，也不确认通行或邻接。",
+      "result_authority": "unit_scope_policy_candidate_only_not_building_exterior",
+      "policy_selected": false,
+      "human_authorized": false,
+      "building_exterior_root_confirmation": false,
+      "unit_root_confirmation": false,
+      "off_frame_root_confirmation": false,
+      "root_confirmation": false,
+      "entrance_confirmation": false,
+      "outside_side_confirmation": false,
+      "traversability_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "reachability_confirmation": false,
+      "graph_edge_admitted": false,
+      "source_application_authorized": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false
+    },
+    "off_frame_root_hypothesis": {
+      "label_zh": "图外 root 假设（仅研究）",
+      "status": "available_for_hypothesis_submission",
+      "selectable_for_candidate_submission": true,
+      "risk_class": "human_policy_and_hypothesis_only",
+      "current_evidence": {
+        "opening_id": null,
+        "source_support": "not_observed_in_current_frame",
+        "source_fact": false,
+        "hypothesis_only": true
+      },
+      "required_evidence": [
+        "explicit human rationale for incomplete source frame",
+        "adjacent plan sheet or source frame extension for later promotion",
+        "registered exterior segment and full edge evidence for later promotion"
+      ],
+      "warning_zh": "只记录图幅可能不完整；不创建 opening、root geometry、graph edge 或 IFC 元素。",
+      "result_authority": "hypothesis_only_no_opening_no_graph_edge",
+      "policy_selected": false,
+      "human_authorized": false,
+      "building_exterior_root_confirmation": false,
+      "unit_root_confirmation": false,
+      "off_frame_root_confirmation": false,
+      "root_confirmation": false,
+      "entrance_confirmation": false,
+      "outside_side_confirmation": false,
+      "traversability_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "reachability_confirmation": false,
+      "graph_edge_admitted": false,
+      "source_application_authorized": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false
+    }
+  },
+  "ui_spec_zh": {
+    "title": "1308 root（范围起点假设）策略选择",
+    "notice": "当前没有任何 opening 穿过已确认的楼栋外边界。以下是三种待人工选择的解释策略，不是入口确认，也不授权切墙、邻接、通行、评分或正式建模。",
+    "current_facts": [
+      "楼栋外边界已确认，但未发现 opening 穿越它。",
+      "OP003 距西侧边界 0.014637 m，是 near-miss，不是接触或穿越。",
+      "OP001 位于楼栋内部；ENTRY 文字只是图像上下文。",
+      "OP009/OP010 是阳台方向内部接口，不是楼栋外部入口。",
+      "GATE 是场地/地块标签，不是 apartment opening。"
+    ],
+    "default_prompt": "请选择一种策略（默认不选）",
+    "recommendation_banner": "系统推荐：单位范围 root 假设（未确认；不等于楼栋外部入口）",
+    "options": {
+      "in_frame_exterior_root": {
+        "label": "提交楼栋外部 opening 新证据（进入待审）",
+        "disabled": true,
+        "disabled_reason": "当前没有 opening 与已确认外边界形成真实穿越；OP003 只是 near-miss。"
+      },
+      "unit_scope_root": {
+        "label": "提交单位范围 root 假设",
+        "disabled": false,
+        "warning": "只表示 common-core 到 private-unit 的范围假设，不是楼栋室外入口，也不确认通行或邻接。",
+        "helper_text": "提交后仍为待审核候选，不会改变模型或评分。"
+      },
+      "off_frame_root_hypothesis": {
+        "label": "提交图外 root 假设（不生成 opening）",
+        "disabled": false,
+        "warning": "只记录图幅可能不完整；不创建 opening、root geometry、graph edge 或 IFC 元素。",
+        "rationale_required": true,
+        "rationale_placeholder": "请说明为什么当前图幅不足以观察外部 root。"
+      }
+    },
+    "primary_button": "提交 root 策略候选",
+    "primary_button_disabled_until_human_selection": true,
+    "success_title": "Root 策略候选已记录（不是入口确认）",
+    "success_statement": "本次没有确认任何入口。",
+    "forbidden_ambiguous_labels": [
+      "确认入口",
+      "已确认楼栋入口",
+      "补充入口",
+      "创建入口"
+    ]
+  },
+  "score_and_gate_impact": {
+    "source_score_before": 65,
+    "source_score_after": 65,
+    "hard_failures_before": [
+      "S06_OPENINGS",
+      "S07_SPACES_ADJACENCY_REACHABILITY",
+      "S08_PROVENANCE_UNRESOLVED"
+    ],
+    "hard_failures_after": [
+      "S06_OPENINGS",
+      "S07_SPACES_ADJACENCY_REACHABILITY",
+      "S08_PROVENANCE_UNRESOLVED"
+    ],
+    "blocker_counts_before": {
+      "S01_SOURCE_IDENTITY": 0,
+      "S02_ORIENTATION_COORDINATE_CHAIN": 0,
+      "S03_SCALE_AND_DIMENSIONS": 0,
+      "S04_OUTER_BOUNDARY": 0,
+      "S05_WALL_GRAPH": 0,
+      "S06_OPENINGS": 33,
+      "S07_SPACES_ADJACENCY_REACHABILITY": 37,
+      "S08_PROVENANCE_UNRESOLVED": 2
+    },
+    "blocker_counts_after": {
+      "S01_SOURCE_IDENTITY": 0,
+      "S02_ORIENTATION_COORDINATE_CHAIN": 0,
+      "S03_SCALE_AND_DIMENSIONS": 0,
+      "S04_OUTER_BOUNDARY": 0,
+      "S05_WALL_GRAPH": 0,
+      "S06_OPENINGS": 33,
+      "S07_SPACES_ADJACENCY_REACHABILITY": 37,
+      "S08_PROVENANCE_UNRESOLVED": 2
+    },
+    "blocker_count_delta": {
+      "S01_SOURCE_IDENTITY": 0,
+      "S02_ORIENTATION_COORDINATE_CHAIN": 0,
+      "S03_SCALE_AND_DIMENSIONS": 0,
+      "S04_OUTER_BOUNDARY": 0,
+      "S05_WALL_GRAPH": 0,
+      "S06_OPENINGS": 0,
+      "S07_SPACES_ADJACENCY_REACHABILITY": 0,
+      "S08_PROVENANCE_UNRESOLVED": 0
+    },
+    "policy_packet_creation_changes_score": false,
+    "policy_recommendation_changes_score": false,
+    "human_unit_scope_selection_changes_score": false,
+    "off_frame_hypothesis_changes_score": false
+  },
+  "automatic_model_authority": false,
+  "building_exterior_root_confirmation": false,
+  "unit_root_confirmation": false,
+  "off_frame_root_confirmation": false,
+  "root_confirmation": false,
+  "entrance_confirmation": false,
+  "outside_side_confirmation": false,
+  "traversability_confirmation": false,
+  "pair_confirmation": false,
+  "adjacency_confirmation": false,
+  "reachability_confirmation": false,
+  "graph_edge_admitted": false,
+  "source_application_authorized": false,
+  "source_correction_authorized": false,
+  "semantic_promotion": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "ready": false,
+  "candidate_hash": "b16e3aa63a985dd0534db476cf949bf10e2c3dbe76e4e6da38fe9be0a0cd4514"
+}

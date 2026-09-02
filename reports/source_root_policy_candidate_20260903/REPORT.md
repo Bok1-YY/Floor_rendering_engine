@@ -1,0 +1,3 @@
+# Source root policy candidate v2
+
+No policy is selected. The system recommends the unit-scope hypothesis because OP001 has source-bound common-core/lobby evidence while no opening crosses the confirmed building outer boundary. Recommendation is not selection; human selection is not confirmation; confirmation is not graph-edge admission. In-frame exterior evidence is currently disabled, unit-scope submission remains building-exterior false, and an off-frame submission remains hypothesis-only with no opening or graph edge. S06/S07/S08, their blocker counts, the 65/100 source score, source data, and Blender/IFC authorization are unchanged.
