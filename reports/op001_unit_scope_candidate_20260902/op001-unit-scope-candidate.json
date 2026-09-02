@@ -1,0 +1,277 @@
+{
+  "schema": "op001-unit-scope-candidate-v1",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "opening_id": "OP001",
+  "source_snapshot": {
+    "kind": "entrance_symbol",
+    "observation_status": "confirmed",
+    "active_status": "candidate",
+    "host": {
+      "gap_terminals": [],
+      "mode": "wall_cut",
+      "owning_wall_atom_id": "ATOM-WB016-02",
+      "wall_cut_policy": "subtract_effective_void"
+    },
+    "effective_void": {
+      "derivation": {
+        "evidence_refs": [
+          "EVIDENCE-ENDPOINT-AUDIT"
+        ],
+        "governing_geometry": "nominal_wall_solid",
+        "method": "clip_to_jamb_face"
+      },
+      "head_m": 2.1,
+      "host_cut_scope": "owning_wall_atom_only",
+      "segment_m": [
+        [
+          3.432346,
+          5.62869
+        ],
+        [
+          4.363994000000001,
+          5.62869
+        ]
+      ],
+      "sill_m": 0.0,
+      "status": "confirmed",
+      "width_m": 0.9316480000000009
+    },
+    "jamb_before": {
+      "effective_support_m": 1.251452,
+      "evidence_refs": [
+        "EVIDENCE-ENDPOINT-AUDIT"
+      ],
+      "face_distance_m": 1.251452,
+      "junction_id": null,
+      "mode": "same_wall_solid",
+      "status": "confirmed",
+      "supporting_atom_ids": [
+        "ATOM-WB016-02"
+      ],
+      "terminal_id": null
+    },
+    "jamb_after": {
+      "effective_support_m": 0.12,
+      "evidence_refs": [
+        "EVIDENCE-ENDPOINT-AUDIT"
+      ],
+      "face_distance_m": 0.0,
+      "junction_id": "NODE-WB006-END",
+      "mode": "return_wall_face",
+      "status": "confirmed",
+      "supporting_atom_ids": [
+        "ATOM-WB006-02"
+      ],
+      "terminal_id": null
+    },
+    "traversable": false
+  },
+  "registration": {
+    "expected_pixel_segment": [
+      [
+        965.9999496183207,
+        1607.999970603606
+      ],
+      [
+        1098.0000152671755,
+        1607.999970603606
+      ]
+    ],
+    "endpoint_error_px": [
+      0.0,
+      0.0
+    ],
+    "max_endpoint_error_px": 0.0,
+    "tolerance_px": 1.0
+  },
+  "segment_m": [
+    [
+      3.432346,
+      5.62869
+    ],
+    [
+      4.39838,
+      5.62869
+    ]
+  ],
+  "building_scope_fact": {
+    "intersects_confirmed_outer_boundary": false,
+    "building_exterior_root_confirmation": false
+  },
+  "unit_scope_hypothesis": {
+    "common_side_space_id": "common_core_circulation",
+    "common_side_role": "external_to_private_unit_candidate",
+    "unit_side_space_id": "lobby",
+    "unit_side_role": "flat_101_interior_candidate",
+    "entry_label_visible_candidate": true,
+    "flat_101_label_visible_candidate": true,
+    "door_swing_visible_candidate": true,
+    "unit_root_candidate": true
+  },
+  "scope_geometries": {
+    "common": {
+      "label": "COMMON",
+      "space_ids": [
+        "common_core_circulation"
+      ],
+      "polygons": [
+        {
+          "exterior": [
+            [
+              0.096341,
+              5.68869
+            ],
+            [
+              0.096341,
+              7.99033501
+            ],
+            [
+              3.095698332,
+              7.990335392
+            ],
+            [
+              3.095698317,
+              8.108512
+            ],
+            [
+              3.122765,
+              8.108512
+            ],
+            [
+              3.122765,
+              9.655671012
+            ],
+            [
+              4.363994179,
+              9.655671259
+            ],
+            [
+              4.363994412,
+              5.708376485
+            ],
+            [
+              2.180623509,
+              5.68869
+            ],
+            [
+              0.096341,
+              5.68869
+            ]
+          ],
+          "holes": []
+        }
+      ],
+      "polygon_hash": "79f576cbda978f78674c510cdd5a36d0f8a1fc6cf67c492188830a70ad1e4b81"
+    },
+    "unit": {
+      "label": "UNIT",
+      "space_ids": [
+        "lobby"
+      ],
+      "polygons": [
+        {
+          "exterior": [
+            [
+              1.410251,
+              3.5614290505947266
+            ],
+            [
+              1.410251,
+              4.194242186
+            ],
+            [
+              2.120894,
+              4.19424228
+            ],
+            [
+              2.120894,
+              3.412899340941696
+            ],
+            [
+              1.410251,
+              3.5614290505947266
+            ]
+          ],
+          "holes": []
+        },
+        {
+          "exterior": [
+            [
+              5.448906699606406,
+              7.141868742807237
+            ],
+            [
+              4.805356959693232,
+              2.851826475976375
+            ],
+            [
+              2.240894,
+              3.387818442152341
+            ],
+            [
+              2.240894,
+              5.569228554
+            ],
+            [
+              4.39892086,
+              5.588686524
+            ],
+            [
+              4.398019175,
+              5.688689785
+            ],
+            [
+              4.483994413,
+              5.68868979
+            ],
+            [
+              4.48399430875878,
+              7.457812435029438
+            ],
+            [
+              5.448906699606406,
+              7.141868742807237
+            ]
+          ],
+          "holes": []
+        }
+      ],
+      "polygon_hash": "ac99f688983f042febccb5452b4627416780ff25b2059b4aba3b302ff03f5868"
+    }
+  },
+  "artifact_bindings": {
+    "full": {
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\op001_unit_scope_candidate_20260902\\OP001-unit-scope-full.png",
+      "bytes": 1613761,
+      "sha256": "3d850c66661c2f4de2ee81a6d4ca82f51ac573df165cf6f5c24421e6c31e30d3"
+    },
+    "crop": {
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\op001_unit_scope_candidate_20260902\\OP001-unit-scope-crop.png",
+      "bytes": 429413,
+      "sha256": "735926387044f91d7bc8f9b90860532d2aefd33f74804e77dc2559a7b45fa461"
+    }
+  },
+  "evidence_chain": {
+    "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+    "source_image_sha256": "b85ff7446e2d1a123e3a41dc541ea9d6e081f3978d3460d6de8ef9906119bc07",
+    "op001_evidence_sha256": "a0c3e4b445eef8ebd4502f4cfde468caf7b4ad9301cb2e4f9a2173deb8760c6f",
+    "target_aware_wall_hash": "fd4e8b2b787715800fadcbd3bf4867b27a990baf8ae3d3c8a348834eb3dc9aed",
+    "semantic_partition_hash": "cc2f512bc8db5c6516548e5a747251789290071a4277888d553dfe3c8369b5aa"
+  },
+  "remaining_blockers": [
+    "UNIT_SCOPE_SOURCE_AUTHORITY_PENDING",
+    "SIDE_SPACE_CONFIRMATION_PENDING",
+    "TRAVERSABILITY_PENDING",
+    "ADJACENCY_PENDING",
+    "HUMAN_ACCEPTANCE_PENDING"
+  ],
+  "unit_scope_confirmation": false,
+  "pair_confirmation": false,
+  "traversability_confirmation": false,
+  "adjacency_confirmation": false,
+  "semantic_promotion": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "ready": false,
+  "candidate_hash": "052125fe3027f9ee3025c72a9755b71d7a25b4f43125cae29cb80354b2c4a858"
+}
