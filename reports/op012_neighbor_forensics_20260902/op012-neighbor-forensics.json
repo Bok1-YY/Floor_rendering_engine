@@ -1,0 +1,155 @@
+{
+  "schema": "op012-neighbor-registration-forensics-v1",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "segments": {
+    "active_op005": {
+      "segment_m": [
+        [
+          4.483994,
+          11.315557244655583
+        ],
+        [
+          5.408324022346369,
+          11.315557244655583
+        ]
+      ],
+      "segment_px": [
+        [
+          1109.698416793893,
+          825.9999999999998
+        ],
+        [
+          1236.0,
+          825.9999999999998
+        ]
+      ],
+      "registration": {
+        "expected_pixel_segment": [
+          [
+            1109.698416793893,
+            825.9999999999998
+          ],
+          [
+            1236.0,
+            825.9999999999998
+          ]
+        ],
+        "endpoint_error_px": [
+          0.0,
+          0.0
+        ],
+        "max_endpoint_error_px": 0.0,
+        "tolerance_px": 1.0
+      }
+    },
+    "historical_op012": {
+      "segment_m": [
+        [
+          5.792542,
+          12.231856
+        ],
+        [
+          5.792542,
+          11.264652
+        ]
+      ],
+      "segment_px": [
+        [
+          1288.5000137404581,
+          699.9999425137182
+        ],
+        [
+          1288.5000137404581,
+          832.9999699503528
+        ]
+      ],
+      "registration": {
+        "expected_pixel_segment": [
+          [
+            1288.5000137404581,
+            699.9999425137182
+          ],
+          [
+            1288.5000137404581,
+            832.9999699503528
+          ]
+        ],
+        "endpoint_error_px": [
+          0.0,
+          0.0
+        ],
+        "max_endpoint_error_px": 0.0,
+        "tolerance_px": 1.0
+      }
+    },
+    "active_op006": {
+      "segment_m": [
+        [
+          5.792542,
+          11.221019
+        ],
+        [
+          5.792542,
+          10.290176
+        ]
+      ],
+      "segment_px": [
+        [
+          1288.5000137404581,
+          838.9999350013063
+        ],
+        [
+          1288.5000137404581,
+          966.9999686438462
+        ]
+      ],
+      "registration": {
+        "expected_pixel_segment": [
+          [
+            1288.5000137404581,
+            838.9999350013063
+          ],
+          [
+            1288.5000137404581,
+            966.9999686438462
+          ]
+        ],
+        "endpoint_error_px": [
+          0.0,
+          0.0
+        ],
+        "max_endpoint_error_px": 0.0,
+        "tolerance_px": 1.0
+      }
+    }
+  },
+  "relationships": {
+    "op012_lower_to_op006_start_px": 5.999965050953506,
+    "op012_lower_to_op005_hinge_px": 52.96462047493722,
+    "op012_x_minus_op005_hinge_x_px": 52.500013740458144,
+    "op006_same_x_as_op012_px": 0.0
+  },
+  "historical_rejection_reason": "host_direction_conflicts_with_source_door_swing",
+  "historical_payload_sha256": "e2e94bac1f375202270bd63f0b9600097d9d921ff40d2eddcbdbc2a600871690",
+  "pixel_interpretation_candidate": {
+    "op005_swing_hinge_matches_active_op005_endpoint": true,
+    "op012_lower_is_adjacent_to_op006_start": true,
+    "op012_distinct_swing_not_established": true,
+    "fal_neighbor_swing_misattribution_possible": true
+  },
+  "artifact_binding": {
+    "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\op012_neighbor_forensics_20260902\\op012-neighbor-tight.png",
+    "bytes": 30479,
+    "sha256": "35a4394a8ef60cb486aa590d07929c510e0260e2d49d800fb3a65699e4c15fef"
+  },
+  "evidence_chain": {
+    "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+    "source_image_sha256": "b85ff7446e2d1a123e3a41dc541ea9d6e081f3978d3460d6de8ef9906119bc07"
+  },
+  "recovery_confirmation": false,
+  "semantic_promotion": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "ready": false,
+  "candidate_hash": "12ba0a2ca4cdd34bfeaf06351ff3ed19e9f3cb3763d5153adb40a06d01923995"
+}
