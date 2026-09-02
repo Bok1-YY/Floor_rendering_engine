@@ -1,7 +1,7 @@
 # Non-applying 2D correction-candidate registry — 2026-09-02
 
-- Registry candidate: `444e271b4717d70d02497b1513972c1997f91eef06cc260caec579036e988a3f`.
-- Registry file: `dd883dc82e58af0381af6c9f83f9747bfa7f2d6a910f121be521be07afd8a91d`.
+- Registry candidate: `40fb086ebea80bbb84cae29d88cb7a686ade2ebcd511b9f231b4173de9cff7ed`.
+- Registry file: `83aebfbc38674596aae421588045322e4d040498f18faed5647335fe3069d60d`.
 - Exact candidates: OP002, OP004, OP009.
 
 All three bind an exact 2D host, registered segment/width, directed side assignment and sufficient measured jamb. They remain non-applying and retain vertical policy, traversability, adjacency, source application and human-acceptance blockers. OP009 additionally retains its glazed-interface/access-door type conflict.

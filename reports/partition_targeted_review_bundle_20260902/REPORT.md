@@ -1,12 +1,12 @@
-# OP002 / OP010 partition-targeted review bundle — 2026-09-02
+# OP002 partition-targeted review bundle after jamb-policy migration — 2026-09-02
 
-- Candidate hash: `30eae4474c9f54579ff8429019c88224d250ffe77a4b1a175380281a48be4d53`.
-- File SHA-256: `9b766527254df40761163c2adfea9010b30c244c3bf113f36d8ae26d00fffa0e`.
-- fal-reported total cost: `$0.0006773`.
+- Candidate hash: `df9b0e7c3f4e902c106d9652d894cc316c39249b6a5a323dea14824b11bbdedb`.
+- File SHA-256: `c0f96325ea7c0460c1f22edbb6d224f326387b7cffc0186ce426cbb33e5521c4`.
+- fal-reported migrated OP002 cost: `$0.0003299`.
 
 OP002 passed the strict visual geometry protocol: visible opening yes, host alignment agree, opposite-face geometry agree, visual door, high confidence. It proceeds only as a correction-review candidate.
 
-OP010 returned a fenced Markdown JSON response after HTTP 200. The strict parser rejects it, stores no parsed result, and keeps the review-protocol blocker. The apparent text inside the fence is not manually extracted or promoted.
+OP010 is explicitly excluded from the migrated review set: its prior Flash and Pro responses both returned fenced Markdown JSON, and the policy-only jamb migration did not change its visual method. Those responses remain rejected and are not manually extracted or repeated.
 
 `cut_confirmation=false`  
 `pair_confirmation=false`  

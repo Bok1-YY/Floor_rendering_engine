@@ -2,7 +2,7 @@
   "adjacency_confirmation": false,
   "all_visual_geometry_agree": true,
   "build_authorized": false,
-  "candidate_hash": "77b7fbce555e424e75e3aadbe10b8bbf17074a04039ce5d7fc7970d79d538156",
+  "candidate_hash": "962e3cb311b161a6932b50e1035b310caa498f46849d45a353c0db91b3ba8946",
   "covered_opening_ids": [
     "OP004",
     "OP009"
@@ -15,9 +15,9 @@
     {
       "adjacency_confirmation": false,
       "build_authorized": false,
-      "cost_usd": 0.0003287,
+      "cost_usd": 0.0003299,
       "cut_confirmation": false,
-      "geometry_packet_hash": "e8c906b611ca190fd9df93716ff047362abff1a1dafa43e660eae735a9e6440b",
+      "geometry_packet_hash": "12c94e9cc7f259d2c087246a361d6dbb285469a5811c76776cd849413b143679",
       "image_bindings": [
         {
           "bytes": 1616543,
@@ -31,7 +31,7 @@
         }
       ],
       "jamb_support": {
-        "candidate_minimum_m": 0.12,
+        "candidate_minimum_m": 0.05,
         "candidate_sufficient": true,
         "host_parameters": [
           0.225325824,
@@ -39,7 +39,8 @@
         ],
         "jamb_after_m": 2.116213,
         "jamb_before_m": 0.879937,
-        "minimum_jamb_m": 0.879937
+        "minimum_jamb_m": 0.879937,
+        "policy_source": "opening_contract.minimum_jamb_support_m"
       },
       "merged_group": [
         "bedroom_02",
@@ -55,8 +56,8 @@
         "segment_on_visible_opening": "yes",
         "visual_kind": "door"
       },
-      "result_canonical_sha256": "d5b1b71c250ab4e8c6333984a83c345d5f74771faa97ff72e6edef9a7c612888",
-      "result_file_sha256": "6bb9acd4db3f9d998f9eb7295d9711e445bd72da640404842a1dea6f38dd2f6f",
+      "result_canonical_sha256": "0b7c362c5768ba5f4cfa6cb51b3b52a1d24d6a3fac32ddc4702d31afc8f19723",
+      "result_file_sha256": "8ef3bd167f604249038eb7747f9fdc41c6bcca9460e3f62da45f476028bc9d02",
       "score_effect": "none",
       "semantic_promotion": false,
       "visual_geometry_agreement": true
@@ -64,9 +65,9 @@
     {
       "adjacency_confirmation": false,
       "build_authorized": false,
-      "cost_usd": 0.0003337,
+      "cost_usd": 0.0003349,
       "cut_confirmation": false,
-      "geometry_packet_hash": "e8c906b611ca190fd9df93716ff047362abff1a1dafa43e660eae735a9e6440b",
+      "geometry_packet_hash": "12c94e9cc7f259d2c087246a361d6dbb285469a5811c76776cd849413b143679",
       "image_bindings": [
         {
           "bytes": 1606759,
@@ -80,7 +81,7 @@
         }
       ],
       "jamb_support": {
-        "candidate_minimum_m": 0.12,
+        "candidate_minimum_m": 0.05,
         "candidate_sufficient": true,
         "host_parameters": [
           0.333889783,
@@ -88,7 +89,8 @@
         ],
         "jamb_after_m": 1.44905,
         "jamb_before_m": 1.463687,
-        "minimum_jamb_m": 1.44905
+        "minimum_jamb_m": 1.44905,
+        "policy_source": "opening_contract.minimum_jamb_support_m"
       },
       "merged_group": [
         "bedroom_01",
@@ -104,8 +106,8 @@
         "segment_on_visible_opening": "yes",
         "visual_kind": "glazed_interface"
       },
-      "result_canonical_sha256": "3b17aeb44bbd75eb3fd65b9265941706816a41a06b04b73ecec3d855cdda62cb",
-      "result_file_sha256": "c54e24ad1096828aa405ed3e4a9a0cf620b1fc019e9cfba8db69f41d63245ca2",
+      "result_canonical_sha256": "f36f14d354115d9dda1a9dfdfa97f54144ef646d49665204fc5bc4fd1771e9d6",
+      "result_file_sha256": "0cf19ab70d03e911b767d643b6cd26936b45e8d459ee0d007432af3f01ec724e",
       "score_effect": "none",
       "semantic_promotion": false,
       "visual_geometry_agreement": true
@@ -115,7 +117,7 @@
   "score_effect": "none",
   "semantic_promotion": false,
   "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
-  "targeted_evidence_candidate_hash": "e8c906b611ca190fd9df93716ff047362abff1a1dafa43e660eae735a9e6440b",
-  "targeted_evidence_file_sha256": "a585e805e7c8d6ed324a00fe90fab14b22b29767c616814e7547ea0e89e56068",
-  "total_cost_usd": 0.0006624
+  "targeted_evidence_candidate_hash": "12c94e9cc7f259d2c087246a361d6dbb285469a5811c76776cd849413b143679",
+  "targeted_evidence_file_sha256": "7eace845e4310ad0524455f4f63c0e72e1f2af8bb0115fddab04c00eced62e13",
+  "total_cost_usd": 0.0006648
 }

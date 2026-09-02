@@ -1,7 +1,7 @@
 {
   "application_authorized": false,
   "build_authorized": false,
-  "candidate_hash": "444e271b4717d70d02497b1513972c1997f91eef06cc260caec579036e988a3f",
+  "candidate_hash": "40fb086ebea80bbb84cae29d88cb7a686ade2ebcd511b9f231b4173de9cff7ed",
   "candidates": [
     {
       "application_authorized": false,
@@ -13,7 +13,7 @@
       "host_atom_id": "ATOM-WB006-02",
       "minimum_jamb_m": 1.999857732,
       "opening_id": "OP002",
-      "packet_hash": "73089032f97e108ad759d27b662e7d19a68e5d98ca644b51b5924ae353f14466",
+      "packet_hash": "1cbed5d19d70c4948c840a3be01873a6777a560735bc9b68dccab897cb192370",
       "remaining_blockers": [
         "SOURCE_APPLICATION_REVIEW",
         "VERTICAL_POLICY_PENDING",
@@ -33,8 +33,8 @@
         ]
       ],
       "semantic_promotion": false,
-      "source_candidate_file_sha256": "2846644a6b6f8cbb596579da59467c0e588187c7b29e2e797409539f0371b4d4",
-      "source_candidate_hash": "a2b868370a82eaf7fde8e70e24840ccad0be25f0c6c783bf9677bd212a3a2130",
+      "source_candidate_file_sha256": "67865114524b11a086942dafea17616b6bda135e5dbd08ad9b457a47ebe227d7",
+      "source_candidate_hash": "0208c650a316f20fc412e75b44584759db6c1f50b9b1f35d48fed692f92aa931",
       "visual_advisory": "door",
       "width_m": 0.8872095011876482
     },
@@ -53,7 +53,7 @@
       "host_atom_id": "ATOM-WB007-01",
       "minimum_jamb_m": 0.879937,
       "opening_id": "OP004",
-      "packet_hash": "bdc1ed691dbfb799ebe2e6ed70bf3a9eb9fb897fe48f944099d344cb4bdf0b6c",
+      "packet_hash": "cadd3f0eaeaf51d8d4bc44466ac5960c0c67812dea9f7c496aa1bb26744702bd",
       "remaining_blockers": [
         "SOURCE_APPLICATION_REVIEW",
         "VERTICAL_POLICY_PENDING",
@@ -73,8 +73,8 @@
         ]
       ],
       "semantic_promotion": false,
-      "source_candidate_file_sha256": "a31e82ca1c4e58f1ac132129765509cbf57a4aa2d89f12c235e57041dd6f4244",
-      "source_candidate_hash": "0043b67b78ffa2db2a7f75e2822d54027ab25d906bfd6060f0af36c2067560c9",
+      "source_candidate_file_sha256": "f9cffb7389ec874a8a289c22c44a92394bad10eb4982f78a7f979793969f7623",
+      "source_candidate_hash": "09d7bdc3029ec7bc893f5383c06909f652625b379d2b2b31d16878c720fbb8b4",
       "visual_advisory": "door",
       "width_m": 0.909026
     },
@@ -93,7 +93,7 @@
       "host_atom_id": "ATOM-WB005-01",
       "minimum_jamb_m": 1.44905,
       "opening_id": "OP009",
-      "packet_hash": "a6d4371a7525ec945d6715c7e756fcb44b83af4d1d306e27651464b57d19a052",
+      "packet_hash": "40a80585724254976fe9b4c216a68be1b1e53ddc6af7295ec737d2cd298a704f",
       "remaining_blockers": [
         "SOURCE_APPLICATION_REVIEW",
         "VERTICAL_POLICY_PENDING",
@@ -114,8 +114,8 @@
         ]
       ],
       "semantic_promotion": false,
-      "source_candidate_file_sha256": "a31e82ca1c4e58f1ac132129765509cbf57a4aa2d89f12c235e57041dd6f4244",
-      "source_candidate_hash": "0043b67b78ffa2db2a7f75e2822d54027ab25d906bfd6060f0af36c2067560c9",
+      "source_candidate_file_sha256": "f9cffb7389ec874a8a289c22c44a92394bad10eb4982f78a7f979793969f7623",
+      "source_candidate_hash": "09d7bdc3029ec7bc893f5383c06909f652625b379d2b2b31d16878c720fbb8b4",
       "visual_advisory": "glazed_interface",
       "width_m": 1.471006
     }
