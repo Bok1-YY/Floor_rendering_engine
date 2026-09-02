@@ -21,3 +21,8 @@ The merged multi-anchor component contains `bedroom_01`, `bedroom_corridor`,
 OP002 connecting `bedroom_01` to the already open main component, while also
 absorbing the pre-existing unlabeled pocket. It does not prove the semantic
 space pair or authorize adjacency/build.
+
+Independent read-only reproduction accepted the report. It measured the two
+boundaries at `0.2430263013573909 µm` and `0.27840782218860394 µm`, and
+confirmed identical topology/anchor groups at `0.3 µm`, `1 µm`, and `50 µm`
+for exact and ±4 px endpoint perturbations.
