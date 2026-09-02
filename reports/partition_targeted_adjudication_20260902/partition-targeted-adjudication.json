@@ -1,5 +1,5 @@
 {
-  "schema": "partition-targeted-adjudication-evidence-v1",
+  "schema": "partition-targeted-adjudication-evidence-v2",
   "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
   "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
   "target_aware_wall_candidate_hash": "fd4e8b2b787715800fadcbd3bf4867b27a990baf8ae3d3c8a348834eb3dc9aed",
@@ -17,6 +17,39 @@
     {
       "opening_id": "OP002",
       "host_atom_id": "ATOM-WB006-02",
+      "host_centerline_m": [
+        [
+          4.423994,
+          12.690005
+        ],
+        [
+          4.423994413407822,
+          5.688689786747744
+        ]
+      ],
+      "host_thickness_m": 0.12,
+      "host_face_segments_m": [
+        [
+          [
+            4.483994,
+            12.69000500354283
+          ],
+          [
+            4.483994413407822,
+            5.688689790290574
+          ]
+        ],
+        [
+          [
+            4.363994000000001,
+            12.69000499645717
+          ],
+          [
+            4.363994413407823,
+            5.688689783204914
+          ]
+        ]
+      ],
       "registered_segment_m": [
         [
           4.423994413407822,
@@ -27,6 +60,24 @@
           9.802937767220904
         ]
       ],
+      "registration": {
+        "expected_pixel_segment": [
+          [
+            1101.5000000000002,
+            911.9999999999998
+          ],
+          [
+            1101.5000000000002,
+            1033.9999999999998
+          ]
+        ],
+        "endpoint_error_px": [
+          0.0,
+          0.0
+        ],
+        "max_endpoint_error_px": 0.0,
+        "tolerance_px": 1.0
+      },
       "directed_side_assignment": {
         "side_a": "bedroom_corridor",
         "side_b": "bedroom_01"
@@ -94,108 +145,122 @@
           }
         ]
       },
-      "non_public_anchor_ids": [
-        "bedroom_01"
-      ],
-      "pre_cut_anchor_groups": [
-        [
-          "bath"
-        ],
-        [
+      "non_public_face": {
+        "space_ids": [
           "bedroom_01"
         ],
-        [
-          "bedroom_02"
-        ],
-        [
-          "bedroom_03"
-        ],
-        [
-          "bedroom_corridor",
-          "kitchen",
-          "living_hall",
-          "lobby"
-        ],
-        [
-          "common_core_circulation"
-        ],
-        [
-          "dry_balcony"
-        ],
-        [
-          "front_balcony"
-        ],
-        [
-          "lift_shaft"
-        ],
-        [
-          "north_toilet"
-        ],
-        [
-          "rear_balcony"
-        ],
-        [
-          "wc"
-        ],
-        [
-          "west_toilet"
+        "polygon_hash": "2494d8124c40323618cd0d7e3c9fb9e298d61223e34b9d604215c480e0a41951",
+        "polygon": [
+          [
+            0.096341,
+            10.401081
+          ],
+          [
+            0.096341,
+            14.19353
+          ],
+          [
+            4.363994,
+            14.19353
+          ],
+          [
+            4.363994,
+            12.690005
+          ],
+          [
+            4.398379,
+            12.690005
+          ],
+          [
+            4.398379,
+            12.690004998
+          ],
+          [
+            4.363994,
+            12.690004996
+          ],
+          [
+            4.363994135,
+            10.401081
+          ],
+          [
+            1.375866,
+            10.401081
+          ],
+          [
+            0.096341,
+            10.401081
+          ]
         ]
-      ],
-      "post_cut_anchor_groups": [
-        [
-          "bath"
+      },
+      "jamb_support": {
+        "host_parameters": [
+          0.285640293,
+          0.412360699
         ],
-        [
-          "bedroom_01",
-          "bedroom_corridor",
-          "kitchen",
-          "living_hall",
-          "lobby"
-        ],
-        [
-          "bedroom_02"
-        ],
-        [
-          "bedroom_03"
-        ],
-        [
-          "common_core_circulation"
-        ],
-        [
-          "dry_balcony"
-        ],
-        [
-          "front_balcony"
-        ],
-        [
-          "lift_shaft"
-        ],
-        [
-          "north_toilet"
-        ],
-        [
-          "rear_balcony"
-        ],
-        [
-          "wc"
-        ],
-        [
-          "west_toilet"
-        ]
-      ],
+        "jamb_before_m": 1.999857732,
+        "jamb_after_m": 4.11424798,
+        "minimum_jamb_m": 1.999857732,
+        "threshold_m": 0.12,
+        "sufficient": true
+      },
       "jamb_classification": "sufficient",
-      "jamb_threshold_m": 0.12,
       "sensitivity_stable": true,
+      "artifact_bindings": {
+        "full": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\partition_targeted_adjudication_20260902\\OP002-full.png",
+          "bytes": 1615040,
+          "sha256": "ee6d0fd9fad9c3e801c2ddd4bcb481f1162a7e0d27b8013125c889e3046b04c6"
+        },
+        "crop": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\partition_targeted_adjudication_20260902\\OP002-crop.png",
+          "bytes": 610090,
+          "sha256": "87b68d468555b96b7aa1b38ac56fb1380e3ba6a9da5338d27f84e33c5de4d3b9"
+        }
+      },
       "cut_confirmation": false,
       "pair_confirmation": false,
       "adjacency_confirmation": false,
       "semantic_promotion": false,
-      "build_authorized": false,
-      "artifact_bindings": []
+      "score_effect": "none",
+      "build_authorized": false
     },
     {
       "opening_id": "OP006",
       "host_atom_id": "ATOM-WB007-02",
+      "host_centerline_m": [
+        [
+          5.792542,
+          11.315557
+        ],
+        [
+          5.792541899441341,
+          7.801266508838006
+        ]
+      ],
+      "host_thickness_m": 0.12,
+      "host_face_segments_m": [
+        [
+          [
+            5.852542,
+            11.315556998283148
+          ],
+          [
+            5.8525418994413405,
+            7.801266507121154
+          ]
+        ],
+        [
+          [
+            5.7325420000000005,
+            11.315557001716853
+          ],
+          [
+            5.732541899441341,
+            7.801266510554859
+          ]
+        ]
+      ],
       "registered_segment_m": [
         [
           5.792542,
@@ -206,6 +271,24 @@
           10.290176
         ]
       ],
+      "registration": {
+        "expected_pixel_segment": [
+          [
+            1288.5000137404581,
+            838.9999350013063
+          ],
+          [
+            1288.5000137404581,
+            966.9999686438462
+          ]
+        ],
+        "endpoint_error_px": [
+          0.0,
+          0.0
+        ],
+        "max_endpoint_error_px": 0.0,
+        "tolerance_px": 1.0
+      },
       "directed_side_assignment": {
         "side_a": "bedroom_03",
         "side_b": "bedroom_corridor"
@@ -273,108 +356,102 @@
           }
         ]
       },
-      "non_public_anchor_ids": [
-        "bedroom_03"
-      ],
-      "pre_cut_anchor_groups": [
-        [
-          "bath"
-        ],
-        [
-          "bedroom_01"
-        ],
-        [
-          "bedroom_02"
-        ],
-        [
+      "non_public_face": {
+        "space_ids": [
           "bedroom_03"
         ],
-        [
-          "bedroom_corridor",
-          "kitchen",
-          "living_hall",
-          "lobby"
-        ],
-        [
-          "common_core_circulation"
-        ],
-        [
-          "dry_balcony"
-        ],
-        [
-          "front_balcony"
-        ],
-        [
-          "lift_shaft"
-        ],
-        [
-          "north_toilet"
-        ],
-        [
-          "rear_balcony"
-        ],
-        [
-          "wc"
-        ],
-        [
-          "west_toilet"
+        "polygon_hash": "45b31926bde3c5866b6bccf2ad8a73824de7624ef5a7d1c51b80eb29466b4c8c",
+        "polygon": [
+          [
+            5.852541899,
+            7.803018411
+          ],
+          [
+            5.852541998,
+            11.255556584
+          ],
+          [
+            9.059022,
+            11.255556994
+          ],
+          [
+            9.059022,
+            7.801291307
+          ],
+          [
+            5.852541899,
+            7.803018411
+          ]
         ]
-      ],
-      "post_cut_anchor_groups": [
-        [
-          "bath"
+      },
+      "jamb_support": {
+        "host_parameters": [
+          0.02690102,
+          0.291774685
         ],
-        [
-          "bedroom_01"
-        ],
-        [
-          "bedroom_02"
-        ],
-        [
-          "bedroom_03",
-          "bedroom_corridor",
-          "kitchen",
-          "living_hall",
-          "lobby"
-        ],
-        [
-          "common_core_circulation"
-        ],
-        [
-          "dry_balcony"
-        ],
-        [
-          "front_balcony"
-        ],
-        [
-          "lift_shaft"
-        ],
-        [
-          "north_toilet"
-        ],
-        [
-          "rear_balcony"
-        ],
-        [
-          "wc"
-        ],
-        [
-          "west_toilet"
-        ]
-      ],
+        "jamb_before_m": 0.094538,
+        "jamb_after_m": 2.488909491,
+        "minimum_jamb_m": 0.094538,
+        "threshold_m": 0.12,
+        "sufficient": false
+      },
       "jamb_classification": "insufficient",
-      "jamb_threshold_m": 0.12,
       "sensitivity_stable": true,
+      "artifact_bindings": {
+        "full": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\partition_targeted_adjudication_20260902\\OP006-full.png",
+          "bytes": 1618181,
+          "sha256": "48f1dd689f9c7d36b186affc50a2c56b66f124b2aae97b150aba245601841e33"
+        },
+        "crop": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\partition_targeted_adjudication_20260902\\OP006-crop.png",
+          "bytes": 237851,
+          "sha256": "3e97f287ee354988448fefd25cddba5b4b299ed54940170759f16603c56dad7b"
+        }
+      },
       "cut_confirmation": false,
       "pair_confirmation": false,
       "adjacency_confirmation": false,
       "semantic_promotion": false,
-      "build_authorized": false,
-      "artifact_bindings": []
+      "score_effect": "none",
+      "build_authorized": false
     },
     {
       "opening_id": "OP007",
       "host_atom_id": "ATOM-WB019-01",
+      "host_centerline_m": [
+        [
+          1.350251,
+          4.225153
+        ],
+        [
+          1.350251,
+          3.207044
+        ]
+      ],
+      "host_thickness_m": 0.12,
+      "host_face_segments_m": [
+        [
+          [
+            1.4102510000000001,
+            4.225153
+          ],
+          [
+            1.4102510000000001,
+            3.207044
+          ]
+        ],
+        [
+          [
+            1.290251,
+            4.225153
+          ],
+          [
+            1.290251,
+            3.207044
+          ]
+        ]
+      ],
       "registered_segment_m": [
         [
           1.350251,
@@ -385,6 +462,24 @@
           3.272494
         ]
       ],
+      "registration": {
+        "expected_pixel_segment": [
+          [
+            681.4999458015268,
+            1827.9999725633656
+          ],
+          [
+            681.4999458015268,
+            1932.0000084922917
+          ]
+        ],
+        "endpoint_error_px": [
+          0.0,
+          0.0
+        ],
+        "max_endpoint_error_px": 0.0,
+        "tolerance_px": 1.0
+      },
       "directed_side_assignment": {
         "side_a": "lobby",
         "side_b": "wc"
@@ -461,108 +556,102 @@
           }
         ]
       },
-      "non_public_anchor_ids": [
-        "wc"
-      ],
-      "pre_cut_anchor_groups": [
-        [
-          "bath"
-        ],
-        [
-          "bedroom_01"
-        ],
-        [
-          "bedroom_02"
-        ],
-        [
-          "bedroom_03"
-        ],
-        [
-          "bedroom_corridor",
-          "kitchen",
-          "living_hall",
-          "lobby"
-        ],
-        [
-          "common_core_circulation"
-        ],
-        [
-          "dry_balcony"
-        ],
-        [
-          "front_balcony"
-        ],
-        [
-          "lift_shaft"
-        ],
-        [
-          "north_toilet"
-        ],
-        [
-          "rear_balcony"
-        ],
-        [
+      "non_public_face": {
+        "space_ids": [
           "wc"
         ],
-        [
-          "west_toilet"
+        "polygon_hash": "cfcc8668f54c32908d20c369ab12b004597f07d52dc662735c2f2c59cae8126e",
+        "polygon": [
+          [
+            0.096341,
+            3.274316
+          ],
+          [
+            0.096341,
+            4.194242011
+          ],
+          [
+            1.290251,
+            4.19424217
+          ],
+          [
+            1.290251,
+            3.274316
+          ],
+          [
+            0.096341,
+            3.274316
+          ]
         ]
-      ],
-      "post_cut_anchor_groups": [
-        [
-          "bath"
+      },
+      "jamb_support": {
+        "host_parameters": [
+          0.192856561,
+          0.935714152
         ],
-        [
-          "bedroom_01"
-        ],
-        [
-          "bedroom_02"
-        ],
-        [
-          "bedroom_03"
-        ],
-        [
-          "bedroom_corridor",
-          "kitchen",
-          "living_hall",
-          "lobby",
-          "wc"
-        ],
-        [
-          "common_core_circulation"
-        ],
-        [
-          "dry_balcony"
-        ],
-        [
-          "front_balcony"
-        ],
-        [
-          "lift_shaft"
-        ],
-        [
-          "north_toilet"
-        ],
-        [
-          "rear_balcony"
-        ],
-        [
-          "west_toilet"
-        ]
-      ],
+        "jamb_before_m": 0.196349,
+        "jamb_after_m": 0.06545,
+        "minimum_jamb_m": 0.06545,
+        "threshold_m": 0.12,
+        "sufficient": false
+      },
       "jamb_classification": "insufficient",
-      "jamb_threshold_m": 0.12,
       "sensitivity_stable": true,
+      "artifact_bindings": {
+        "full": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\partition_targeted_adjudication_20260902\\OP007-full.png",
+          "bytes": 1619453,
+          "sha256": "0679c77e757faf2c2ce4935518a3da4c6404b81f7a5f0b7e5915bb389942626e"
+        },
+        "crop": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\partition_targeted_adjudication_20260902\\OP007-crop.png",
+          "bytes": 307091,
+          "sha256": "b173483edf8af6feb78046d53a3fc7dfae010856d264f22286e5f8f471569e65"
+        }
+      },
       "cut_confirmation": false,
       "pair_confirmation": false,
       "adjacency_confirmation": false,
       "semantic_promotion": false,
-      "build_authorized": false,
-      "artifact_bindings": []
+      "score_effect": "none",
+      "build_authorized": false
     },
     {
       "opening_id": "OP010",
       "host_atom_id": "ATOM-WB003-03",
+      "host_centerline_m": [
+        [
+          0.764777,
+          0.003636
+        ],
+        [
+          9.104134,
+          0.003636
+        ]
+      ],
+      "host_thickness_m": 0.2,
+      "host_face_segments_m": [
+        [
+          [
+            0.764777,
+            0.103636
+          ],
+          [
+            9.104134,
+            0.103636
+          ]
+        ],
+        [
+          [
+            0.764777,
+            -0.096364
+          ],
+          [
+            9.104134,
+            -0.096364
+          ]
+        ]
+      ],
       "registered_segment_m": [
         [
           5.452235,
@@ -573,6 +662,24 @@
           0.003636
         ]
       ],
+      "registration": {
+        "expected_pixel_segment": [
+          [
+            1242.0000496183206,
+            2381.5000143715706
+          ],
+          [
+            1444.9999870229008,
+            2381.5000143715706
+          ]
+        ],
+        "endpoint_error_px": [
+          0.0,
+          0.0
+        ],
+        "max_endpoint_error_px": 0.0,
+        "tolerance_px": 1.0
+      },
       "directed_side_assignment": {
         "side_a": "kitchen",
         "side_b": "front_balcony"
@@ -640,104 +747,65 @@
           }
         ]
       },
-      "non_public_anchor_ids": [
-        "front_balcony"
-      ],
-      "pre_cut_anchor_groups": [
-        [
-          "bath"
-        ],
-        [
-          "bedroom_01"
-        ],
-        [
-          "bedroom_02"
-        ],
-        [
-          "bedroom_03"
-        ],
-        [
-          "bedroom_corridor",
-          "kitchen",
-          "living_hall",
-          "lobby"
-        ],
-        [
-          "common_core_circulation"
-        ],
-        [
-          "dry_balcony"
-        ],
-        [
+      "non_public_face": {
+        "space_ids": [
           "front_balcony"
         ],
-        [
-          "lift_shaft"
-        ],
-        [
-          "north_toilet"
-        ],
-        [
-          "rear_balcony"
-        ],
-        [
-          "wc"
-        ],
-        [
-          "west_toilet"
+        "polygon_hash": "6ed9ae2fb083015b2f5dd3fd6bb82ede872a3290c7640499373dbc9030fb24e0",
+        "polygon": [
+          [
+            7.52037037,
+            -2.070434532
+          ],
+          [
+            2.425925926,
+            -2.070434532
+          ],
+          [
+            2.425925926,
+            -0.096364
+          ],
+          [
+            7.52037037,
+            -0.096364
+          ],
+          [
+            7.52037037,
+            -2.070434532
+          ]
         ]
-      ],
-      "post_cut_anchor_groups": [
-        [
-          "bath"
+      },
+      "jamb_support": {
+        "host_parameters": [
+          0.56208866,
+          0.740236927
         ],
-        [
-          "bedroom_01"
-        ],
-        [
-          "bedroom_02"
-        ],
-        [
-          "bedroom_03"
-        ],
-        [
-          "bedroom_corridor",
-          "front_balcony",
-          "kitchen",
-          "living_hall",
-          "lobby"
-        ],
-        [
-          "common_core_circulation"
-        ],
-        [
-          "dry_balcony"
-        ],
-        [
-          "lift_shaft"
-        ],
-        [
-          "north_toilet"
-        ],
-        [
-          "rear_balcony"
-        ],
-        [
-          "wc"
-        ],
-        [
-          "west_toilet"
-        ]
-      ],
+        "jamb_before_m": 4.687458,
+        "jamb_after_m": 2.166257,
+        "minimum_jamb_m": 2.166257,
+        "threshold_m": 0.12,
+        "sufficient": true
+      },
       "jamb_classification": "sufficient",
-      "jamb_threshold_m": 0.12,
       "sensitivity_stable": true,
+      "artifact_bindings": {
+        "full": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\partition_targeted_adjudication_20260902\\OP010-full.png",
+          "bytes": 1614354,
+          "sha256": "0ef665a05fe14fef1a5d61fa3ea98fa0a85b0351d58feaf5b162778355b7505a"
+        },
+        "crop": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\partition_targeted_adjudication_20260902\\OP010-crop.png",
+          "bytes": 492687,
+          "sha256": "9c86e3e77e79d304f21e64c283311a65806555e233585533357f8beca867b555"
+        }
+      },
       "cut_confirmation": false,
       "pair_confirmation": false,
       "adjacency_confirmation": false,
       "semantic_promotion": false,
-      "build_authorized": false,
-      "artifact_bindings": []
+      "score_effect": "none",
+      "build_authorized": false
     }
   ],
   "pair_confirmation": false,
@@ -746,5 +814,5 @@
   "score_effect": "none",
   "build_authorized": false,
   "ready": false,
-  "candidate_hash": "92ef7a612715826e50761a73a9d42c47a02bd58f888bcf243ccb0bdb63b3a14b"
+  "candidate_hash": "e191c94900bd8372ad48bdbabdb5456ffab1b19f6c2ef42349320d19ba6f0903"
 }
