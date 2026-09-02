@@ -1,0 +1,176 @@
+{
+  "schema": "partition-resolved-cut-pair-candidate-v1",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+  "target_aware_wall_candidate_hash": "fd4e8b2b787715800fadcbd3bf4867b27a990baf8ae3d3c8a348834eb3dc9aed",
+  "cut_matrix_file_sha256": "8feb38e0e1169b9fe0750578836dacd4073c5461014d9af3755f8c0e7317e0fa",
+  "cut_matrix_candidate_hash": "ffe9dc923fd998ab28e984d75951b913f21af8e15f0c45cb9d4a42de6ef8f613",
+  "partition_file_sha256": "ea324b82e533c2346883d440ec0bec71b7e2ea8509853c73b6a3fa15547ce6a3",
+  "partition_candidate_hash": "cc2f512bc8db5c6516548e5a747251789290071a4277888d553dfe3c8369b5aa",
+  "public_anchor_ids": [
+    "bedroom_corridor",
+    "kitchen",
+    "living_hall",
+    "lobby"
+  ],
+  "opening_ids": [
+    "OP002",
+    "OP006",
+    "OP007",
+    "OP008",
+    "OP010"
+  ],
+  "openings": [
+    {
+      "opening_id": "OP002",
+      "host_atom_id": "ATOM-WB006-02",
+      "merged_group": [
+        "bedroom_01",
+        "bedroom_corridor",
+        "kitchen",
+        "living_hall",
+        "lobby"
+      ],
+      "public_cell_id": "bedroom_corridor",
+      "public_side": "left",
+      "public_sign": 1,
+      "non_public_anchor_ids": [
+        "bedroom_01"
+      ],
+      "directed_side_assignment": {
+        "side_a": "bedroom_corridor",
+        "side_b": "bedroom_01"
+      },
+      "classification": "unique_pair_candidate",
+      "sensitivity_stable": true,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false
+    },
+    {
+      "opening_id": "OP006",
+      "host_atom_id": "ATOM-WB007-02",
+      "merged_group": [
+        "bedroom_03",
+        "bedroom_corridor",
+        "kitchen",
+        "living_hall",
+        "lobby"
+      ],
+      "public_cell_id": "bedroom_corridor",
+      "public_side": "right",
+      "public_sign": -1,
+      "non_public_anchor_ids": [
+        "bedroom_03"
+      ],
+      "directed_side_assignment": {
+        "side_a": "bedroom_03",
+        "side_b": "bedroom_corridor"
+      },
+      "classification": "unique_pair_candidate",
+      "sensitivity_stable": true,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false
+    },
+    {
+      "opening_id": "OP007",
+      "host_atom_id": "ATOM-WB019-01",
+      "merged_group": [
+        "bedroom_corridor",
+        "kitchen",
+        "living_hall",
+        "lobby",
+        "wc"
+      ],
+      "public_cell_id": "lobby",
+      "public_side": "left",
+      "public_sign": 1,
+      "non_public_anchor_ids": [
+        "wc"
+      ],
+      "directed_side_assignment": {
+        "side_a": "lobby",
+        "side_b": "wc"
+      },
+      "classification": "unique_pair_candidate",
+      "sensitivity_stable": true,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false
+    },
+    {
+      "opening_id": "OP008",
+      "host_atom_id": "ATOM-WB018-01",
+      "merged_group": [
+        "bath",
+        "bedroom_corridor",
+        "kitchen",
+        "living_hall",
+        "lobby",
+        "wc"
+      ],
+      "public_cell_id": "lobby",
+      "public_side": "right",
+      "public_sign": -1,
+      "non_public_anchor_ids": [
+        "bath",
+        "wc"
+      ],
+      "directed_side_assignment": null,
+      "classification": "group_ambiguous",
+      "sensitivity_stable": true,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false
+    },
+    {
+      "opening_id": "OP010",
+      "host_atom_id": "ATOM-WB003-03",
+      "merged_group": [
+        "bedroom_corridor",
+        "front_balcony",
+        "kitchen",
+        "living_hall",
+        "lobby"
+      ],
+      "public_cell_id": "kitchen",
+      "public_side": "left",
+      "public_sign": 1,
+      "non_public_anchor_ids": [
+        "front_balcony"
+      ],
+      "directed_side_assignment": {
+        "side_a": "kitchen",
+        "side_b": "front_balcony"
+      },
+      "classification": "unique_pair_candidate",
+      "sensitivity_stable": true,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false
+    }
+  ],
+  "pair_confirmation": false,
+  "adjacency_confirmation": false,
+  "semantic_promotion": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "ready": false,
+  "candidate_hash": "5fb410dcee736042652f2a8b290305737b3e4e10178e7263b9ef8e998400dae2"
+}
