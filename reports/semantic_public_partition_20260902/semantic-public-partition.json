@@ -1,0 +1,882 @@
+{
+  "schema": "semantic-public-partition-candidate-v2",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "wall_candidate_hash": "fd4e8b2b787715800fadcbd3bf4867b27a990baf8ae3d3c8a348834eb3dc9aed",
+  "cut_matrix_hash": "ffe9dc923fd998ab28e984d75951b913f21af8e15f0c45cb9d4a42de6ef8f613",
+  "public_face_space_ids": [
+    "bedroom_corridor",
+    "kitchen",
+    "living_hall",
+    "lobby"
+  ],
+  "public_face_hash": "49ac7d8446ae1701bd9e0576ba71924e0ba0d536a22ed6bc578da420cc9ed7a8",
+  "public_face_area_m2": 58.164448082,
+  "cells": [
+    {
+      "space_id": "bedroom_corridor",
+      "polygons": [
+        {
+          "exterior": [
+            [
+              5.448906699606406,
+              7.141868742807237
+            ],
+            [
+              4.48399430875878,
+              7.457812435029438
+            ],
+            [
+              4.483994004,
+              12.630005
+            ],
+            [
+              5.732542,
+              12.630005
+            ],
+            [
+              5.732542,
+              11.37555668
+            ],
+            [
+              5.348324127,
+              11.375557349
+            ],
+            [
+              5.348323918,
+              11.255557349
+            ],
+            [
+              5.732541998,
+              11.25555668
+            ],
+            [
+              5.732541899,
+              7.801265511
+            ],
+            [
+              5.737684972,
+              7.80126551
+            ],
+            [
+              5.737621314,
+              7.683080293
+            ],
+            [
+              7.340923728573136,
+              7.682216707693454
+            ],
+            [
+              5.448906699606406,
+              7.141868742807237
+            ]
+          ],
+          "holes": []
+        }
+      ],
+      "polygon_hash": "83af109ea3b15b42718c37f9cc21f6af240f69730cc1e633a643e9f5e12b3109",
+      "area_m2": 7.012878075,
+      "anchor_covered": true
+    },
+    {
+      "space_id": "lobby",
+      "polygons": [
+        {
+          "exterior": [
+            [
+              1.410251,
+              3.5614290505947266
+            ],
+            [
+              1.410251,
+              4.194242186
+            ],
+            [
+              2.120894,
+              4.19424228
+            ],
+            [
+              2.120894,
+              3.412899340941696
+            ],
+            [
+              1.410251,
+              3.5614290505947266
+            ]
+          ],
+          "holes": []
+        },
+        {
+          "exterior": [
+            [
+              5.448906699606406,
+              7.141868742807237
+            ],
+            [
+              4.805356959693232,
+              2.851826475976375
+            ],
+            [
+              2.240894,
+              3.387818442152341
+            ],
+            [
+              2.240894,
+              5.569228554
+            ],
+            [
+              4.39892086,
+              5.588686524
+            ],
+            [
+              4.398019175,
+              5.688689785
+            ],
+            [
+              4.483994413,
+              5.68868979
+            ],
+            [
+              4.48399430875878,
+              7.457812435029438
+            ],
+            [
+              5.448906699606406,
+              7.141868742807237
+            ]
+          ],
+          "holes": []
+        }
+      ],
+      "polygon_hash": "ac99f688983f042febccb5452b4627416780ff25b2059b4aba3b302ff03f5868",
+      "area_m2": 8.853339249,
+      "anchor_covered": true
+    },
+    {
+      "space_id": "kitchen",
+      "polygons": [
+        {
+          "exterior": [
+            [
+              2.120894,
+              3.412899340941696
+            ],
+            [
+              2.120894,
+              3.207044
+            ],
+            [
+              2.240894,
+              3.207044
+            ],
+            [
+              2.240894,
+              3.387818442152341
+            ],
+            [
+              4.805356959693232,
+              2.851826475976375
+            ],
+            [
+              6.665357479599173,
+              0.103636
+            ],
+            [
+              0.824777,
+              0.103636
+            ],
+            [
+              0.824777,
+              3.154316
+            ],
+            [
+              1.339275,
+              3.154316
+            ],
+            [
+              1.339275,
+              3.207044
+            ],
+            [
+              1.410251,
+              3.207044
+            ],
+            [
+              1.410251,
+              3.5614290505947266
+            ],
+            [
+              2.120894,
+              3.412899340941696
+            ]
+          ],
+          "holes": []
+        }
+      ],
+      "polygon_hash": "e6b5ca73bf92d6f684dd3599792572a1e8e9bc1b3875506be989b0ed38def319",
+      "area_m2": 14.857442143,
+      "anchor_covered": true
+    },
+    {
+      "space_id": "living_hall",
+      "polygons": [
+        {
+          "exterior": [
+            [
+              4.805356959693232,
+              2.851826475976375
+            ],
+            [
+              5.448906699606406,
+              7.141868742807237
+            ],
+            [
+              7.340923728573136,
+              7.682216707693454
+            ],
+            [
+              9.059022,
+              7.68129129
+            ],
+            [
+              9.059022,
+              0.103636
+            ],
+            [
+              6.665357479599173,
+              0.103636
+            ],
+            [
+              4.805356959693232,
+              2.851826475976375
+            ]
+          ],
+          "holes": []
+        }
+      ],
+      "polygon_hash": "006dae9bbfd9ce156d951e7304b71f421ebeaf81156e6e4b0e6bcccbd44e6eb1",
+      "area_m2": 27.440788615,
+      "anchor_covered": true
+    }
+  ],
+  "partition_diagnostics": {
+    "maximum_pairwise_overlap_m2": 0.0,
+    "union_symmetric_difference_m2": 0.0,
+    "all_anchors_covered": true
+  },
+  "opening_side_candidates": [
+    {
+      "opening_id": "OP002",
+      "host_atom_id": "ATOM-WB006-02",
+      "host_half_thickness_m": 0.06,
+      "sides": [
+        {
+          "sign": -1,
+          "side": "right",
+          "samples": [
+            {
+              "epsilon_m": 0.001,
+              "offset_from_centerline_m": 0.061,
+              "point_m": [
+                4.362994413407822,
+                10.246542517814728
+              ],
+              "inside_public_face": false,
+              "cell_ids": [],
+              "tie": false
+            },
+            {
+              "epsilon_m": 0.01,
+              "offset_from_centerline_m": 0.07,
+              "point_m": [
+                4.353994413407822,
+                10.246542517814728
+              ],
+              "inside_public_face": false,
+              "cell_ids": [],
+              "tie": false
+            },
+            {
+              "epsilon_m": 0.05,
+              "offset_from_centerline_m": 0.11,
+              "point_m": [
+                4.313994413407822,
+                10.246542517814728
+              ],
+              "inside_public_face": false,
+              "cell_ids": [],
+              "tie": false
+            },
+            {
+              "epsilon_m": 0.1,
+              "offset_from_centerline_m": 0.16,
+              "point_m": [
+                4.263994413407822,
+                10.246542517814728
+              ],
+              "inside_public_face": false,
+              "cell_ids": [],
+              "tie": false
+            }
+          ],
+          "stable_public_cell_id": null,
+          "boundary_or_tie_instability": false
+        },
+        {
+          "sign": 1,
+          "side": "left",
+          "samples": [
+            {
+              "epsilon_m": 0.001,
+              "offset_from_centerline_m": 0.061,
+              "point_m": [
+                4.484994413407822,
+                10.246542517814728
+              ],
+              "inside_public_face": true,
+              "cell_ids": [
+                "bedroom_corridor"
+              ],
+              "tie": false
+            },
+            {
+              "epsilon_m": 0.01,
+              "offset_from_centerline_m": 0.07,
+              "point_m": [
+                4.4939944134078225,
+                10.246542517814728
+              ],
+              "inside_public_face": true,
+              "cell_ids": [
+                "bedroom_corridor"
+              ],
+              "tie": false
+            },
+            {
+              "epsilon_m": 0.05,
+              "offset_from_centerline_m": 0.11,
+              "point_m": [
+                4.5339944134078225,
+                10.246542517814728
+              ],
+              "inside_public_face": true,
+              "cell_ids": [
+                "bedroom_corridor"
+              ],
+              "tie": false
+            },
+            {
+              "epsilon_m": 0.1,
+              "offset_from_centerline_m": 0.16,
+              "point_m": [
+                4.583994413407822,
+                10.246542517814728
+              ],
+              "inside_public_face": true,
+              "cell_ids": [
+                "bedroom_corridor"
+              ],
+              "tie": false
+            }
+          ],
+          "stable_public_cell_id": "bedroom_corridor",
+          "boundary_or_tie_instability": false
+        }
+      ]
+    },
+    {
+      "opening_id": "OP006",
+      "host_atom_id": "ATOM-WB007-02",
+      "host_half_thickness_m": 0.06,
+      "sides": [
+        {
+          "sign": -1,
+          "side": "right",
+          "samples": [
+            {
+              "epsilon_m": 0.001,
+              "offset_from_centerline_m": 0.061,
+              "point_m": [
+                5.731542,
+                10.7555975
+              ],
+              "inside_public_face": true,
+              "cell_ids": [
+                "bedroom_corridor"
+              ],
+              "tie": false
+            },
+            {
+              "epsilon_m": 0.01,
+              "offset_from_centerline_m": 0.07,
+              "point_m": [
+                5.722542,
+                10.7555975
+              ],
+              "inside_public_face": true,
+              "cell_ids": [
+                "bedroom_corridor"
+              ],
+              "tie": false
+            },
+            {
+              "epsilon_m": 0.05,
+              "offset_from_centerline_m": 0.11,
+              "point_m": [
+                5.682542,
+                10.7555975
+              ],
+              "inside_public_face": true,
+              "cell_ids": [
+                "bedroom_corridor"
+              ],
+              "tie": false
+            },
+            {
+              "epsilon_m": 0.1,
+              "offset_from_centerline_m": 0.16,
+              "point_m": [
+                5.632542,
+                10.7555975
+              ],
+              "inside_public_face": true,
+              "cell_ids": [
+                "bedroom_corridor"
+              ],
+              "tie": false
+            }
+          ],
+          "stable_public_cell_id": "bedroom_corridor",
+          "boundary_or_tie_instability": false
+        },
+        {
+          "sign": 1,
+          "side": "left",
+          "samples": [
+            {
+              "epsilon_m": 0.001,
+              "offset_from_centerline_m": 0.061,
+              "point_m": [
+                5.853542,
+                10.7555975
+              ],
+              "inside_public_face": false,
+              "cell_ids": [],
+              "tie": false
+            },
+            {
+              "epsilon_m": 0.01,
+              "offset_from_centerline_m": 0.07,
+              "point_m": [
+                5.862542,
+                10.7555975
+              ],
+              "inside_public_face": false,
+              "cell_ids": [],
+              "tie": false
+            },
+            {
+              "epsilon_m": 0.05,
+              "offset_from_centerline_m": 0.11,
+              "point_m": [
+                5.902542,
+                10.7555975
+              ],
+              "inside_public_face": false,
+              "cell_ids": [],
+              "tie": false
+            },
+            {
+              "epsilon_m": 0.1,
+              "offset_from_centerline_m": 0.16,
+              "point_m": [
+                5.952542,
+                10.7555975
+              ],
+              "inside_public_face": false,
+              "cell_ids": [],
+              "tie": false
+            }
+          ],
+          "stable_public_cell_id": null,
+          "boundary_or_tie_instability": false
+        }
+      ]
+    },
+    {
+      "opening_id": "OP007",
+      "host_atom_id": "ATOM-WB019-01",
+      "host_half_thickness_m": 0.06,
+      "sides": [
+        {
+          "sign": -1,
+          "side": "right",
+          "samples": [
+            {
+              "epsilon_m": 0.001,
+              "offset_from_centerline_m": 0.061,
+              "point_m": [
+                1.2892510000000001,
+                3.650649
+              ],
+              "inside_public_face": false,
+              "cell_ids": [],
+              "tie": false
+            },
+            {
+              "epsilon_m": 0.01,
+              "offset_from_centerline_m": 0.07,
+              "point_m": [
+                1.280251,
+                3.650649
+              ],
+              "inside_public_face": false,
+              "cell_ids": [],
+              "tie": false
+            },
+            {
+              "epsilon_m": 0.05,
+              "offset_from_centerline_m": 0.11,
+              "point_m": [
+                1.240251,
+                3.650649
+              ],
+              "inside_public_face": false,
+              "cell_ids": [],
+              "tie": false
+            },
+            {
+              "epsilon_m": 0.1,
+              "offset_from_centerline_m": 0.16,
+              "point_m": [
+                1.1902510000000002,
+                3.650649
+              ],
+              "inside_public_face": false,
+              "cell_ids": [],
+              "tie": false
+            }
+          ],
+          "stable_public_cell_id": null,
+          "boundary_or_tie_instability": false
+        },
+        {
+          "sign": 1,
+          "side": "left",
+          "samples": [
+            {
+              "epsilon_m": 0.001,
+              "offset_from_centerline_m": 0.061,
+              "point_m": [
+                1.411251,
+                3.650649
+              ],
+              "inside_public_face": true,
+              "cell_ids": [
+                "lobby"
+              ],
+              "tie": false
+            },
+            {
+              "epsilon_m": 0.01,
+              "offset_from_centerline_m": 0.07,
+              "point_m": [
+                1.4202510000000002,
+                3.650649
+              ],
+              "inside_public_face": true,
+              "cell_ids": [
+                "lobby"
+              ],
+              "tie": false
+            },
+            {
+              "epsilon_m": 0.05,
+              "offset_from_centerline_m": 0.11,
+              "point_m": [
+                1.4602510000000002,
+                3.650649
+              ],
+              "inside_public_face": true,
+              "cell_ids": [
+                "lobby"
+              ],
+              "tie": false
+            },
+            {
+              "epsilon_m": 0.1,
+              "offset_from_centerline_m": 0.16,
+              "point_m": [
+                1.510251,
+                3.650649
+              ],
+              "inside_public_face": true,
+              "cell_ids": [
+                "lobby"
+              ],
+              "tie": false
+            }
+          ],
+          "stable_public_cell_id": "lobby",
+          "boundary_or_tie_instability": false
+        }
+      ]
+    },
+    {
+      "opening_id": "OP008",
+      "host_atom_id": "ATOM-WB018-01",
+      "host_half_thickness_m": 0.06,
+      "sides": [
+        {
+          "sign": -1,
+          "side": "right",
+          "samples": [
+            {
+              "epsilon_m": 0.001,
+              "offset_from_centerline_m": 0.061,
+              "point_m": [
+                1.6100560000000002,
+                4.193242
+              ],
+              "inside_public_face": true,
+              "cell_ids": [
+                "lobby"
+              ],
+              "tie": false
+            },
+            {
+              "epsilon_m": 0.01,
+              "offset_from_centerline_m": 0.07,
+              "point_m": [
+                1.6100560000000002,
+                4.184241999999999
+              ],
+              "inside_public_face": true,
+              "cell_ids": [
+                "lobby"
+              ],
+              "tie": false
+            },
+            {
+              "epsilon_m": 0.05,
+              "offset_from_centerline_m": 0.11,
+              "point_m": [
+                1.6100560000000002,
+                4.144241999999999
+              ],
+              "inside_public_face": true,
+              "cell_ids": [
+                "lobby"
+              ],
+              "tie": false
+            },
+            {
+              "epsilon_m": 0.1,
+              "offset_from_centerline_m": 0.16,
+              "point_m": [
+                1.6100560000000002,
+                4.0942419999999995
+              ],
+              "inside_public_face": true,
+              "cell_ids": [
+                "lobby"
+              ],
+              "tie": false
+            }
+          ],
+          "stable_public_cell_id": "lobby",
+          "boundary_or_tie_instability": false
+        },
+        {
+          "sign": 1,
+          "side": "left",
+          "samples": [
+            {
+              "epsilon_m": 0.001,
+              "offset_from_centerline_m": 0.061,
+              "point_m": [
+                1.6100560000000002,
+                4.315242
+              ],
+              "inside_public_face": false,
+              "cell_ids": [],
+              "tie": false
+            },
+            {
+              "epsilon_m": 0.01,
+              "offset_from_centerline_m": 0.07,
+              "point_m": [
+                1.6100560000000002,
+                4.324242
+              ],
+              "inside_public_face": false,
+              "cell_ids": [],
+              "tie": false
+            },
+            {
+              "epsilon_m": 0.05,
+              "offset_from_centerline_m": 0.11,
+              "point_m": [
+                1.6100560000000002,
+                4.364242
+              ],
+              "inside_public_face": false,
+              "cell_ids": [],
+              "tie": false
+            },
+            {
+              "epsilon_m": 0.1,
+              "offset_from_centerline_m": 0.16,
+              "point_m": [
+                1.6100560000000002,
+                4.414242
+              ],
+              "inside_public_face": false,
+              "cell_ids": [],
+              "tie": false
+            }
+          ],
+          "stable_public_cell_id": null,
+          "boundary_or_tie_instability": false
+        }
+      ]
+    },
+    {
+      "opening_id": "OP010",
+      "host_atom_id": "ATOM-WB003-03",
+      "host_half_thickness_m": 0.1,
+      "sides": [
+        {
+          "sign": -1,
+          "side": "right",
+          "samples": [
+            {
+              "epsilon_m": 0.001,
+              "offset_from_centerline_m": 0.101,
+              "point_m": [
+                6.195056,
+                -0.097364
+              ],
+              "inside_public_face": false,
+              "cell_ids": [],
+              "tie": false
+            },
+            {
+              "epsilon_m": 0.01,
+              "offset_from_centerline_m": 0.11,
+              "point_m": [
+                6.195056,
+                -0.106364
+              ],
+              "inside_public_face": false,
+              "cell_ids": [],
+              "tie": false
+            },
+            {
+              "epsilon_m": 0.05,
+              "offset_from_centerline_m": 0.15,
+              "point_m": [
+                6.195056,
+                -0.14636400000000002
+              ],
+              "inside_public_face": false,
+              "cell_ids": [],
+              "tie": false
+            },
+            {
+              "epsilon_m": 0.1,
+              "offset_from_centerline_m": 0.2,
+              "point_m": [
+                6.195056,
+                -0.196364
+              ],
+              "inside_public_face": false,
+              "cell_ids": [],
+              "tie": false
+            }
+          ],
+          "stable_public_cell_id": null,
+          "boundary_or_tie_instability": false
+        },
+        {
+          "sign": 1,
+          "side": "left",
+          "samples": [
+            {
+              "epsilon_m": 0.001,
+              "offset_from_centerline_m": 0.101,
+              "point_m": [
+                6.195056,
+                0.104636
+              ],
+              "inside_public_face": true,
+              "cell_ids": [
+                "kitchen"
+              ],
+              "tie": false
+            },
+            {
+              "epsilon_m": 0.01,
+              "offset_from_centerline_m": 0.11,
+              "point_m": [
+                6.195056,
+                0.113636
+              ],
+              "inside_public_face": true,
+              "cell_ids": [
+                "kitchen"
+              ],
+              "tie": false
+            },
+            {
+              "epsilon_m": 0.05,
+              "offset_from_centerline_m": 0.15,
+              "point_m": [
+                6.195056,
+                0.15363600000000002
+              ],
+              "inside_public_face": true,
+              "cell_ids": [
+                "kitchen"
+              ],
+              "tie": false
+            },
+            {
+              "epsilon_m": 0.1,
+              "offset_from_centerline_m": 0.2,
+              "point_m": [
+                6.195056,
+                0.203636
+              ],
+              "inside_public_face": true,
+              "cell_ids": [
+                "kitchen"
+              ],
+              "tie": false
+            }
+          ],
+          "stable_public_cell_id": "kitchen",
+          "boundary_or_tie_instability": false
+        }
+      ]
+    }
+  ],
+  "epsilon_sensitivity_m": [
+    0.001,
+    0.01,
+    0.05,
+    0.1
+  ],
+  "research_only": true,
+  "room_polygon_confirmation": false,
+  "pair_confirmation": false,
+  "adjacency_confirmation": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "ready": false,
+  "candidate_hash": "cc2f512bc8db5c6516548e5a747251789290071a4277888d553dfe3c8369b5aa",
+  "cut_matrix_binding": {
+    "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\candidate_opening_cut_impact_20260902\\candidate-opening-cut-impact.json",
+    "file_sha256": "8feb38e0e1169b9fe0750578836dacd4073c5461014d9af3755f8c0e7317e0fa",
+    "canonical_sha256": "b56a4447b4fbf3d905159065e72314dfbfe29efeb001f5a31271f0d0b4b07e4e"
+  }
+}
