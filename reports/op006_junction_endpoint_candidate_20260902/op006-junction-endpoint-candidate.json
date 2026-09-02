@@ -1,0 +1,140 @@
+{
+  "schema": "op006-junction-endpoint-candidate-v1",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "opening_id": "OP006",
+  "base_packet_hash": "ce7b033dd7e5af5e9516881ecf4f1382e1124302ef41a5529a6598726ab49b0c",
+  "host_atom_id": "ATOM-WB007-02",
+  "host_start_node_id": "J-007",
+  "registered_segment_m": [
+    [
+      5.792542,
+      11.221019
+    ],
+    [
+      5.792542,
+      10.290176
+    ]
+  ],
+  "directed_side_assignment": {
+    "side_a": "bedroom_03",
+    "side_b": "bedroom_corridor"
+  },
+  "same_wall_support": {
+    "upper_to_junction_m": 0.094538,
+    "lower_to_host_end_m": 2.488909491,
+    "minimum_support_m": 0.094538,
+    "governing_minimum_m": 0.05,
+    "sufficient": true,
+    "mode": "same_wall_solid_to_confirmed_junction",
+    "crossing_wall_jamb_claim": false
+  },
+  "junction_context": {
+    "junction_id": "J-007",
+    "kind": "X",
+    "status": "confirmed",
+    "axis_point_m": [
+      5.792542,
+      11.315557
+    ],
+    "solid_union_policy": "union",
+    "incident_atoms": [
+      {
+        "atom_id": "ATOM-WB007-01",
+        "endpoint": "end",
+        "branch_id": "WB007",
+        "thickness_m": 0.12,
+        "attachment": "axis",
+        "role": "through",
+        "contact_point_m": [
+          5.792542,
+          11.315557
+        ]
+      },
+      {
+        "atom_id": "ATOM-WB007-02",
+        "endpoint": "start",
+        "branch_id": "WB007",
+        "thickness_m": 0.12,
+        "attachment": "axis",
+        "role": "through",
+        "contact_point_m": [
+          5.792542,
+          11.315557
+        ]
+      },
+      {
+        "atom_id": "ATOM-WB009-01",
+        "endpoint": "end",
+        "branch_id": "WB009",
+        "thickness_m": 0.12,
+        "attachment": "axis",
+        "role": "through",
+        "contact_point_m": [
+          5.792542,
+          11.315557
+        ]
+      },
+      {
+        "atom_id": "ATOM-WB009-02",
+        "endpoint": "start",
+        "branch_id": "WB009",
+        "thickness_m": 0.12,
+        "attachment": "axis",
+        "role": "through",
+        "contact_point_m": [
+          5.792542,
+          11.315557
+        ]
+      }
+    ]
+  },
+  "advisory_evidence": {
+    "type_review": {
+      "confidence": "high",
+      "opening_id": "OP006",
+      "review_status": "agree",
+      "side_a": "known",
+      "side_b": "known",
+      "swing": "right",
+      "visual_kind": "door"
+    },
+    "room_pair_review": {
+      "confidence": "high",
+      "opening_id": "OP006",
+      "review_status": "agree",
+      "side_a_label": "A1",
+      "side_b_label": "B1"
+    },
+    "targeted_review_status": "bare_json_protocol_failed",
+    "targeted_result_file_sha256": "04a22f83b58f24d3d1d6e684e99b2f451c9fe031b672420aee68e29208550f1a",
+    "targeted_result_canonical_sha256": "3f0749948631108bad4ddbdb418f6cccdd192919fc3fb5482f158da7c9fba9d8",
+    "targeted_parsed": null
+  },
+  "evidence_chain": {
+    "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+    "registered_evidence_sha256": "fe271884087318eed168d5fac718806f720197ea83108285465b0acdafcb38b9",
+    "target_aware_wall_hash": "fd4e8b2b787715800fadcbd3bf4867b27a990baf8ae3d3c8a348834eb3dc9aed",
+    "pair_candidate_hash": "5fb410dcee736042652f2a8b290305737b3e4e10178e7263b9ef8e998400dae2",
+    "targeted_evidence_hash": "a064c9da05a7fbe150dd1eef2f5466df6dff217e45e50a163ab56a92e91e9cf9",
+    "targeted_review_bundle_hash": "e6ca564a7d5cfc697c392a1f9ea8e14c63d11d6b759cd0f93b5731932c7d971f",
+    "type_bundle_hash": "6193c1f2f25e95ed77416ed4ff18a89492e64d23d0eb72660d0351365d4e4323",
+    "room_pair_bundle_hash": "d5ce610645e5ca81d6d93cb547107b4b45c9a65f5813aabd5cec81f7966718b4"
+  },
+  "remaining_blockers": [
+    "SOURCE_HOST_EFFECTIVE_VOID_APPLICATION_PENDING",
+    "TARGETED_REVIEW_PROTOCOL_FAILED",
+    "VERTICAL_POLICY_PENDING",
+    "TRAVERSABILITY_PENDING",
+    "ADJACENCY_PENDING",
+    "HUMAN_ACCEPTANCE_PENDING"
+  ],
+  "endpoint_ownership_confirmation": false,
+  "effective_void_confirmation": false,
+  "pair_confirmation": false,
+  "adjacency_confirmation": false,
+  "semantic_promotion": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "ready": false,
+  "candidate_hash": "0c8844f167c3da712ccba4d788ac8a1a7539dc9064c084524e1494e8ba548372"
+}
