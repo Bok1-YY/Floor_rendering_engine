@@ -35,7 +35,50 @@
         "tolerance_px": 1.0
       },
       "host_atom_id": "ATOM-WB010-01",
+      "host_centerline_m": [
+        [
+          0.014637,
+          10.341081
+        ],
+        [
+          1.3758660000000003,
+          10.341081
+        ]
+      ],
       "host_thickness_m": 0.12,
+      "host_face_segments_m": [
+        [
+          [
+            0.014637,
+            10.401081000000001
+          ],
+          [
+            1.3758660000000003,
+            10.401081000000001
+          ]
+        ],
+        [
+          [
+            0.014637,
+            10.281081
+          ],
+          [
+            1.3758660000000003,
+            10.281081
+          ]
+        ]
+      ],
+      "jamb_support": {
+        "host_parameters": [
+          0.0,
+          0.67741945
+        ],
+        "jamb_before_m": 0,
+        "jamb_after_m": 0.439106,
+        "minimum_jamb_m": 0,
+        "candidate_minimum_m": 0.12,
+        "candidate_sufficient": false
+      },
       "merged_group": [
         "bedroom_01",
         "west_toilet"
@@ -93,49 +136,29 @@
         {
           "label": "F-B",
           "space_ids": [
-            "bedroom_01"
+            "west_toilet"
           ],
-          "polygon_hash": "2494d8124c40323618cd0d7e3c9fb9e298d61223e34b9d604215c480e0a41951",
+          "polygon_hash": "45ac25ef50966584e52e42d5e428fb4ffa3854db95be9bc82aaeaaaed1594866",
           "polygon": [
             [
               0.096341,
-              10.401081
+              8.11033501
             ],
             [
               0.096341,
-              14.19353
+              10.281081
             ],
             [
-              4.363994,
-              14.19353
+              1.315866,
+              10.281081
             ],
             [
-              4.363994,
-              12.690005
-            ],
-            [
-              4.398379,
-              12.690005
-            ],
-            [
-              4.398379,
-              12.690004998
-            ],
-            [
-              4.363994,
-              12.690004996
-            ],
-            [
-              4.363994135,
-              10.401081
-            ],
-            [
-              1.375866,
-              10.401081
+              1.315866,
+              8.110335166
             ],
             [
               0.096341,
-              10.401081
+              8.11033501
             ]
           ]
         }
@@ -186,11 +209,11 @@
       "artifacts": {
         "crop": {
           "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\targeted_cut_adjudication_20260902\\OP003-crop.png",
-          "sha256": "d50a437ad67de74d752c241ef499a2c10208eeae940ab993d5e831c493151d93"
+          "sha256": "3705ed68f2c583dec68813a7f0ebbd3be26fc3a95ec19002327e89999e28acd7"
         },
         "full": {
           "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\targeted_cut_adjudication_20260902\\OP003-full.png",
-          "sha256": "20cb190833bf0dafe2b09b7c153b9de679a4dd8a0f5405a46781ec85db1fb9d4"
+          "sha256": "39ff517f607de0d43286ca29f251df3916470955f5c1ae7c676370982e716b76"
         }
       },
       "cut_confirmation": false,
@@ -229,7 +252,50 @@
         "tolerance_px": 1.0
       },
       "host_atom_id": "ATOM-WB007-01",
+      "host_centerline_m": [
+        [
+          5.792542,
+          15.220733
+        ],
+        [
+          5.792542,
+          11.315557
+        ]
+      ],
       "host_thickness_m": 0.12,
+      "host_face_segments_m": [
+        [
+          [
+            5.852542,
+            15.220733
+          ],
+          [
+            5.852542,
+            11.315557
+          ]
+        ],
+        [
+          [
+            5.7325420000000005,
+            15.220733
+          ],
+          [
+            5.7325420000000005,
+            11.315557
+          ]
+        ]
+      ],
+      "jamb_support": {
+        "host_parameters": [
+          0.225325824,
+          0.45810048
+        ],
+        "jamb_before_m": 0.879937,
+        "jamb_after_m": 2.116213,
+        "minimum_jamb_m": 0.879937,
+        "candidate_minimum_m": 0.12,
+        "candidate_sufficient": true
+      },
       "merged_group": [
         "bedroom_02",
         "north_toilet"
@@ -238,29 +304,29 @@
         {
           "label": "F-A",
           "space_ids": [
-            "north_toilet"
+            "bedroom_02"
           ],
-          "polygon_hash": "d774f16acb9e854027d76802183628b7a03f875372c90d8090d5792a432f222c",
+          "polygon_hash": "8938048c817dc5b2eda27478094e8c7b05b3910d815e5b26d5a0a4263b1b1716",
           "polygon": [
             [
-              4.483994,
-              12.750005
+              5.852542,
+              11.375556584
             ],
             [
-              4.483994,
+              5.852542,
               15.211636
             ],
             [
-              5.732542,
+              9.059022,
               15.211636
             ],
             [
-              5.732542,
-              12.750005
+              9.059022,
+              11.375556994
             ],
             [
-              4.483994,
-              12.750005
+              5.852542,
+              11.375556584
             ]
           ]
         },
@@ -340,11 +406,11 @@
       "artifacts": {
         "crop": {
           "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\targeted_cut_adjudication_20260902\\OP004-crop.png",
-          "sha256": "ee2700de3a4a7eeb0ebb52b2230ce0c47dd2602450556c222e0980efbd1e09b0"
+          "sha256": "de7834e129894afe5058967930e4818dcde17d04d233bff58cb86058566f7f61"
         },
         "full": {
           "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\targeted_cut_adjudication_20260902\\OP004-full.png",
-          "sha256": "5214822e8442a9bf6ddd1cb4bc81635075df71ad4fe7ad92bc7001659303488d"
+          "sha256": "a86a0b61ba0e64cb1f1c2470b697af67394dbbaf2399498a6bf178a8ce0942ba"
         }
       },
       "cut_confirmation": false,
@@ -383,7 +449,50 @@
         "tolerance_px": 1.0
       },
       "host_atom_id": "ATOM-WB005-01",
+      "host_centerline_m": [
+        [
+          0.014637,
+          14.25353
+        ],
+        [
+          4.39838,
+          14.25353
+        ]
+      ],
       "host_thickness_m": 0.12,
+      "host_face_segments_m": [
+        [
+          [
+            0.014637,
+            14.31353
+          ],
+          [
+            4.39838,
+            14.31353
+          ]
+        ],
+        [
+          [
+            0.014637,
+            14.193529999999999
+          ],
+          [
+            4.39838,
+            14.193529999999999
+          ]
+        ]
+      ],
+      "jamb_support": {
+        "host_parameters": [
+          0.333889783,
+          0.669449144
+        ],
+        "jamb_before_m": 1.463687,
+        "jamb_after_m": 1.44905,
+        "minimum_jamb_m": 1.44905,
+        "candidate_minimum_m": 0.12,
+        "candidate_sufficient": true
+      },
       "merged_group": [
         "bedroom_01",
         "rear_balcony"
@@ -441,49 +550,29 @@
         {
           "label": "F-B",
           "space_ids": [
-            "bedroom_01"
+            "rear_balcony"
           ],
-          "polygon_hash": "2494d8124c40323618cd0d7e3c9fb9e298d61223e34b9d604215c480e0a41951",
+          "polygon_hash": "07cbff9866dfec1cc12b86795b5fe0c1be4913890af58655bb8cb8a816ba1e9f",
           "polygon": [
             [
               0.096341,
-              10.401081
+              14.31353
             ],
             [
               0.096341,
-              14.19353
+              15.211636
             ],
             [
               4.363994,
-              14.19353
+              15.211636
             ],
             [
               4.363994,
-              12.690005
-            ],
-            [
-              4.398379,
-              12.690005
-            ],
-            [
-              4.398379,
-              12.690004998
-            ],
-            [
-              4.363994,
-              12.690004996
-            ],
-            [
-              4.363994135,
-              10.401081
-            ],
-            [
-              1.375866,
-              10.401081
+              14.31353
             ],
             [
               0.096341,
-              10.401081
+              14.31353
             ]
           ]
         }
@@ -534,11 +623,11 @@
       "artifacts": {
         "crop": {
           "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\targeted_cut_adjudication_20260902\\OP009-crop.png",
-          "sha256": "99efcb9d25bfe05750a405489d54482c7f614a63e791894afdb54b6f0fe900a0"
+          "sha256": "a6a762f92d5b46855181a9aec66043eb2a8c400c9a1364bc0b29c2a0ac14419e"
         },
         "full": {
           "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\targeted_cut_adjudication_20260902\\OP009-full.png",
-          "sha256": "43189db2bc304d65d7642582d5393447545483816e4bee81be917d6cb5c2f610"
+          "sha256": "b936ce5149c385f61cf90a078f12f8f1ce34704ee107062f14a8a4c080875c5a"
         }
       },
       "cut_confirmation": false,
@@ -551,5 +640,5 @@
   "adjacency_confirmation": false,
   "build_authorized": false,
   "ready": false,
-  "candidate_hash": "96b71d57b4ac93292d417dbaf8aec1e45ef98a7ad2b3934d010d490b86802e4e"
+  "candidate_hash": "e8c906b611ca190fd9df93716ff047362abff1a1dafa43e660eae735a9e6440b"
 }
