@@ -1,0 +1,46 @@
+"""OP003 return-wall-face and clipped effective-void research candidate."""
+from __future__ import annotations
+from copy import deepcopy
+import hashlib,json,math,sys
+from pathlib import Path
+from typing import Any,Mapping
+from PIL import Image,ImageDraw
+
+ROOT=Path(__file__).resolve().parents[2]
+if str(ROOT) not in sys.path:sys.path.insert(0,str(ROOT))
+from tools.fastloop_research.contract import canonical_json
+from tools.fastloop_research.v21_contract import validate_v21_document
+from tools.goal_loop_v2.jamb_policy import minimum_jamb_support_m
+from tools.goal_loop_v2.registration import _inverse,_apply,validate_pixel_metric_segment
+
+SOURCE=ROOT/'data/goal_loop_v2/references/1308/reference-coordinate-authorized-v21.json';IMAGE=ROOT/'data/goal_loop_v2/references/1308/canonical-raw-portrait.png';TARGETED=ROOT/'reports/targeted_cut_adjudication_20260902/targeted-cut-adjudication.json';TYPE_BUNDLE=ROOT/'reports/fal_openrouter_review_bundle_20260902/fal-review-bundle.json';PAIR_BUNDLE=ROOT/'reports/fal_room_pair_trial_20260902/fal-room-pair-bundle.json';OUT=ROOT/'reports/op003_return_wall_candidate_20260902'
+def _hash(v:Any)->str:return hashlib.sha256(canonical_json(v)).hexdigest()
+def _file_hash(p)->str:return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+def _wall_faces(atom):
+ a,b=atom['centerline_m'];dx,dy=b[0]-a[0],b[1]-a[1];length=math.hypot(dx,dy);nx,ny=-dy/length,dx/length;half=atom['thickness_m']/2;return [[[a[0]+nx*half,a[1]+ny*half],[b[0]+nx*half,b[1]+ny*half]],[[a[0]-nx*half,a[1]-ny*half],[b[0]-nx*half,b[1]-ny*half]]]
+def _draw(image,box,inv,nominal,effective,host,return_atom,return_face_local,faces):
+ dr=ImageDraw.Draw(image);offset=(box[0],box[1]);px=lambda p:(lambda q:(q[0]-offset[0],q[1]-offset[1]))(_apply(inv,p));dr.line([px(p) for p in host['centerline_m']],fill=(120,20,200),width=5)
+ for line in _wall_faces(host):dr.line([px(p) for p in line],fill=(20,100,255),width=5)
+ dr.line([px(p) for p in return_atom['centerline_m']],fill=(80,80,80),width=4);dr.line([px(p) for p in return_face_local],fill=(0,220,80),width=7)
+ for index,face in enumerate(faces):
+  poly=[px(p) for p in face['polygon']];color=(0,220,220) if index==0 else (255,170,0);dr.line(poly,fill=color,width=5);dr.text(poly[0],face['label'],fill=color,stroke_width=2,stroke_fill=(0,0,0))
+ dr.line([px(p) for p in nominal],fill=(255,40,40),width=9);dr.line([px(p) for p in effective],fill=(255,0,255),width=5);dr.text(px(effective[0]),'RETURN',fill=(0,255,100),stroke_width=2,stroke_fill=(0,0,0))
+def _directed(document,segment,pair):
+ a,b=segment;dx,dy=b[0]-a[0],b[1]-a[1];length=math.hypot(dx,dy);normal=(-dy/length,dx/length);mid=((a[0]+b[0])/2,(a[1]+b[1])/2);spaces={x['id']:x for x in document['spaces']};signed={sid:round((spaces[sid]['point_m'][0]-mid[0])*normal[0]+(spaces[sid]['point_m'][1]-mid[1])*normal[1],9) for sid in pair};positive=[x for x in pair if signed[x]>0];negative=[x for x in pair if signed[x]<0]
+ if len(positive)!=1 or len(negative)!=1:raise ValueError('OP003 pair does not straddle source segment')
+ return {'side_a':positive[0],'side_b':negative[0],'signed_normal_offsets_m':signed,'contract':'side_a=left_of_p0_to_p1'}
+def build_op003_return_wall_candidate(document:Mapping[str,Any],*,_skip_validate=False):
+ doc=validate_v21_document(document);opening=next(x for x in doc['opening_contract']['openings'] if x['id']=='OP003');host=next(x for x in doc['wall_graph']['atoms'] if x['id']=='ATOM-WB010-01');return_atom=next(x for x in doc['wall_graph']['atoms'] if x['id']=='ATOM-WB004-01');target=json.loads(TARGETED.read_text());row=next(x for x in target['openings'] if x['opening_id']=='OP003');nominal=opening['source_observation']['nominal_segment_m'];faces=_wall_faces(return_atom);start=nominal[0];return_face=min(faces,key=lambda line:min(math.dist(start,p) for p in line));rx=return_face[0][0];contact=[rx,start[1]];effective=[contact,deepcopy(nominal[1])];return_clip=math.dist(start,contact);after=math.dist(effective[1],host['centerline_m'][1]);minimum=minimum_jamb_support_m(doc);pair=row['merged_group'];types=json.loads(TYPE_BUNDLE.read_text());type_row=next(x for x in types['reviews'] if x['opening_id']=='OP003');pairs=json.loads(PAIR_BUNDLE.read_text());pair_review=next(x for x in pairs['reviews'] if x['opening_id']=='OP003');metric=doc['source']['metric_registration']['canonical_px_to_metric_3x3'];inv=_inverse(metric);pixels=[list(_apply(inv,p)) for p in nominal];registration=validate_pixel_metric_segment(metric,pixels,nominal,1.0);low_y=min(p[1] for p in return_face);high_y=max(p[1] for p in return_face);return_face_local=[[rx,min(high_y,start[1]+.5)],[rx,max(low_y,start[1]-.5)]];source_image=Image.open(IMAGE).convert('RGB');all_points=[*nominal,*effective,*host['centerline_m'],*return_face_local,*[p for face in row['pre_cut_faces'] for p in face['polygon']]];all_px=[_apply(inv,p) for p in all_points];pad=100;box=(max(0,int(min(p[0] for p in all_px)-pad)),max(0,int(min(p[1] for p in all_px)-pad)),min(source_image.width,int(max(p[0] for p in all_px)+pad)),min(source_image.height,int(max(p[1] for p in all_px)+pad)));crop=source_image.crop(box);_draw(crop,box,inv,nominal,effective,host,return_atom,return_face_local,row['pre_cut_faces']);full=source_image.copy();_draw(full,(0,0,source_image.width,source_image.height),inv,nominal,effective,host,return_atom,return_face_local,row['pre_cut_faces']);OUT.mkdir(parents=True,exist_ok=True);cp=OUT/'OP003-return-crop.png';fp=OUT/'OP003-return-full.png';crop.save(cp);full.save(fp)
+ result={'schema':'op003-return-wall-candidate-v1','source_structure_hash':doc['structure_hash'],'opening_id':'OP003','nominal_segment_m':deepcopy(nominal),'registration':registration,'host_atom_id':host['id'],'return_atom_id':return_atom['id'],'selected_return_face_m':return_face,'return_contact_point_m':contact,'effective_segment_candidate_m':effective,'effective_width_candidate_m':round(math.dist(*effective),9),'return_clip_distance_m':round(return_clip,9),'jamb_support':{'before':{'mode':'return_wall_face_candidate','supporting_atom_id':return_atom['id'],'effective_support_m':return_atom['thickness_m'],'confirmation':False},'after':{'mode':'same_wall_solid','supporting_atom_id':host['id'],'effective_support_m':round(after,9),'confirmation':False},'governing_minimum_m':minimum,'scalar_supports_sufficient':min(return_atom['thickness_m'],after)>=minimum},'directed_side_assignment':_directed(doc,nominal,pair),'stable_cut_pair':deepcopy(pair),'advisory_evidence':{'type_review':deepcopy(type_row['parsed']),'room_pair_review':deepcopy(pair_review['parsed']),'room_pair_conflicts_with_geometry':pair_review['advisory_pair_candidate']!=pair,'main_visual_door_and_return_candidate':True},'artifact_bindings':{'full':{'path':str(fp.resolve()),'bytes':fp.stat().st_size,'sha256':_file_hash(fp)},'crop':{'path':str(cp.resolve()),'bytes':cp.stat().st_size,'sha256':_file_hash(cp)}},'evidence_chain':{'source_document_sha256':_file_hash(SOURCE),'targeted_evidence_hash':target['candidate_hash'],'type_bundle_hash':types['candidate_hash'],'room_pair_bundle_hash':pairs['candidate_hash']},'remaining_blockers':['RETURN_FACE_SOURCE_AUTHORITY_PENDING','EFFECTIVE_VOID_CONFIRMATION_PENDING','ROOM_PAIR_VLM_CONFLICT','TARGETED_RETURN_REVIEW_PENDING','VERTICAL_POLICY_PENDING','TRAVERSABILITY_PENDING','ADJACENCY_PENDING','HUMAN_ACCEPTANCE_PENDING'],'return_face_confirmation':False,'effective_void_confirmation':False,'pair_confirmation':False,'cut_confirmation':False,'adjacency_confirmation':False,'semantic_promotion':False,'score_effect':'none','build_authorized':False,'ready':False,'candidate_hash':'0'*64};result['candidate_hash']=_hash({k:v for k,v in result.items() if k!='candidate_hash'})
+ return result if _skip_validate else validate_op003_return_wall_candidate(doc,result)
+def validate_op003_return_wall_candidate(document,candidate):
+ doc=validate_v21_document(document)
+ if candidate.get('schema')!='op003-return-wall-candidate-v1' or candidate.get('opening_id')!='OP003':raise ValueError('OP003 return candidate schema/identity drift')
+ for key in ('return_face_confirmation','effective_void_confirmation','pair_confirmation','cut_confirmation','adjacency_confirmation','semantic_promotion','build_authorized','ready'):
+  if candidate.get(key) is not False:raise ValueError('OP003 return candidate was promoted')
+ if candidate!=build_op003_return_wall_candidate(doc,_skip_validate=True):raise ValueError('OP003 return/source geometry drift')
+ return deepcopy(dict(candidate))
+def main():
+ doc=json.loads(SOURCE.read_text());result=build_op003_return_wall_candidate(doc);OUT.mkdir(parents=True,exist_ok=True);(OUT/'op003-return-wall-candidate.json').write_text(json.dumps(result,indent=2)+'\n');(OUT/'REPORT.md').write_text('# OP003 return-wall candidate\n\nThe source nominal opening starts inside the 200 mm WB004-01 exterior wall. Clipping the effective segment to the east return face produces a 0.840419 m candidate void; return and same-wall supports exceed the source 50 mm minimum. Candidate-only; return face, pair, traversal, adjacency and build remain unconfirmed.\n');print(result['candidate_hash'])
+if __name__=='__main__':main()
+__all__=['build_op003_return_wall_candidate','validate_op003_return_wall_candidate']

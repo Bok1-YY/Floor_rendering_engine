@@ -1,0 +1,148 @@
+{
+  "schema": "op003-return-wall-candidate-v1",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "opening_id": "OP003",
+  "nominal_segment_m": [
+    [
+      0.014637,
+      10.341081
+    ],
+    [
+      0.93676,
+      10.341081
+    ]
+  ],
+  "registration": {
+    "expected_pixel_segment": [
+      [
+        499.0000175572519,
+        960.0000323360332
+      ],
+      [
+        625.0000305343511,
+        960.0000323360332
+      ]
+    ],
+    "endpoint_error_px": [
+      0.0,
+      0.0
+    ],
+    "max_endpoint_error_px": 0.0,
+    "tolerance_px": 1.0
+  },
+  "host_atom_id": "ATOM-WB010-01",
+  "return_atom_id": "ATOM-WB004-01",
+  "selected_return_face_m": [
+    [
+      0.09634100000000001,
+      15.293456
+    ],
+    [
+      0.09634100000000001,
+      0.0036359999999984183
+    ]
+  ],
+  "return_contact_point_m": [
+    0.09634100000000001,
+    10.341081
+  ],
+  "effective_segment_candidate_m": [
+    [
+      0.09634100000000001,
+      10.341081
+    ],
+    [
+      0.93676,
+      10.341081
+    ]
+  ],
+  "effective_width_candidate_m": 0.840419,
+  "return_clip_distance_m": 0.081704,
+  "jamb_support": {
+    "before": {
+      "mode": "return_wall_face_candidate",
+      "supporting_atom_id": "ATOM-WB004-01",
+      "effective_support_m": 0.2,
+      "confirmation": false
+    },
+    "after": {
+      "mode": "same_wall_solid",
+      "supporting_atom_id": "ATOM-WB010-01",
+      "effective_support_m": 0.439106,
+      "confirmation": false
+    },
+    "governing_minimum_m": 0.05,
+    "scalar_supports_sufficient": true
+  },
+  "directed_side_assignment": {
+    "side_a": "bedroom_01",
+    "side_b": "west_toilet",
+    "signed_normal_offsets_m": {
+      "bedroom_01": 1.1944605,
+      "west_toilet": -1.134464
+    },
+    "contract": "side_a=left_of_p0_to_p1"
+  },
+  "stable_cut_pair": [
+    "bedroom_01",
+    "west_toilet"
+  ],
+  "advisory_evidence": {
+    "type_review": {
+      "confidence": "high",
+      "opening_id": "OP003",
+      "review_status": "agree",
+      "side_a": "unknown",
+      "side_b": "known",
+      "swing": "right",
+      "visual_kind": "door"
+    },
+    "room_pair_review": {
+      "confidence": "high",
+      "opening_id": "OP003",
+      "review_status": "agree",
+      "side_a_label": "A2",
+      "side_b_label": "B1"
+    },
+    "room_pair_conflicts_with_geometry": true,
+    "main_visual_door_and_return_candidate": true
+  },
+  "artifact_bindings": {
+    "full": {
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\op003_return_wall_candidate_20260902\\OP003-return-full.png",
+      "bytes": 1610325,
+      "sha256": "5cd599dcf2ebad9986befc9d7594d11d08999de0ba58c76d995881ec9125f813"
+    },
+    "crop": {
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\op003_return_wall_candidate_20260902\\OP003-return-crop.png",
+      "bytes": 360879,
+      "sha256": "1210acc2874d9491d9d5b38c9a4200146535f013bf6e59b572835345cc473a8b"
+    }
+  },
+  "evidence_chain": {
+    "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+    "targeted_evidence_hash": "12c94e9cc7f259d2c087246a361d6dbb285469a5811c76776cd849413b143679",
+    "type_bundle_hash": "6193c1f2f25e95ed77416ed4ff18a89492e64d23d0eb72660d0351365d4e4323",
+    "room_pair_bundle_hash": "d5ce610645e5ca81d6d93cb547107b4b45c9a65f5813aabd5cec81f7966718b4"
+  },
+  "remaining_blockers": [
+    "RETURN_FACE_SOURCE_AUTHORITY_PENDING",
+    "EFFECTIVE_VOID_CONFIRMATION_PENDING",
+    "ROOM_PAIR_VLM_CONFLICT",
+    "TARGETED_RETURN_REVIEW_PENDING",
+    "VERTICAL_POLICY_PENDING",
+    "TRAVERSABILITY_PENDING",
+    "ADJACENCY_PENDING",
+    "HUMAN_ACCEPTANCE_PENDING"
+  ],
+  "return_face_confirmation": false,
+  "effective_void_confirmation": false,
+  "pair_confirmation": false,
+  "cut_confirmation": false,
+  "adjacency_confirmation": false,
+  "semantic_promotion": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "ready": false,
+  "candidate_hash": "20d7e64237fe9fecdf6c22029608f6a5dfe9b49d8263bf6097cbe792731d474f"
+}
