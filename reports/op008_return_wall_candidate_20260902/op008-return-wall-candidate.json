@@ -1,0 +1,233 @@
+{
+  "schema": "op008-return-wall-candidate-v1",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "opening_id": "OP008",
+  "registration": {
+    "expected_pixel_segment": [
+      [
+        652.0000625954199,
+        1797.000038541939
+      ],
+      [
+        781.9999740458015,
+        1797.000038541939
+      ]
+    ],
+    "endpoint_error_px": [
+      0.0,
+      0.0
+    ],
+    "max_endpoint_error_px": 0.0,
+    "tolerance_px": 1.0
+  },
+  "nominal_segment_m": [
+    [
+      1.134358,
+      4.254242
+    ],
+    [
+      2.085754,
+      4.254242
+    ]
+  ],
+  "host_atom_id": "ATOM-WB018-01",
+  "return_atom_id": "ATOM-WB017-02",
+  "return_face_m": [
+    [
+      2.120894,
+      5.62869
+    ],
+    [
+      2.120894,
+      3.207044
+    ]
+  ],
+  "return_contact_point_m": [
+    2.120894,
+    4.254242
+  ],
+  "face_distance_m": 0.03514,
+  "face_abutment_record": {
+    "atom_id": "ATOM-WB018-01",
+    "endpoint_index": 1,
+    "node_id": "NODE-WB018-END",
+    "point_m": [
+      2.1208938568156426,
+      4.254242280285036
+    ],
+    "outward_unit": [
+      0.9999999999999911,
+      1.330725809449566e-07
+    ],
+    "target_status": "resolved_unique_candidate",
+    "target_atom_id": "ATOM-WB017-02",
+    "face_gap_m": 1.4318435725968592e-07,
+    "tied_target_atom_ids": [
+      "ATOM-WB017-02"
+    ],
+    "target_confirmation": false
+  },
+  "jamb_support": {
+    "before": {
+      "mode": "same_wall_solid",
+      "effective_support_m": 1.119721,
+      "confirmation": false
+    },
+    "after": {
+      "mode": "return_wall_face_candidate",
+      "same_wall_margin_m": 0.03514,
+      "return_effective_support_m": 0.12,
+      "confirmation": false
+    },
+    "governing_minimum_m": 0.05,
+    "scalar_supports_sufficient": true
+  },
+  "directed_side_assignment": {
+    "side_a": "bath",
+    "side_b": "lobby",
+    "contract": "side_a=left/north_of_p0_to_p1; side_b=right/south"
+  },
+  "side_samples": [
+    {
+      "side": "left/north",
+      "space_id": "bath",
+      "samples": [
+        {
+          "epsilon_m": 0.001,
+          "point_m": [
+            1.6100560000000002,
+            4.315242
+          ],
+          "inside_expected_geometry": true
+        },
+        {
+          "epsilon_m": 0.01,
+          "point_m": [
+            1.6100560000000002,
+            4.324242
+          ],
+          "inside_expected_geometry": true
+        },
+        {
+          "epsilon_m": 0.05,
+          "point_m": [
+            1.6100560000000002,
+            4.364242
+          ],
+          "inside_expected_geometry": true
+        },
+        {
+          "epsilon_m": 0.1,
+          "point_m": [
+            1.6100560000000002,
+            4.414242
+          ],
+          "inside_expected_geometry": true
+        }
+      ],
+      "stable": true
+    },
+    {
+      "side": "right/south",
+      "space_id": "lobby",
+      "samples": [
+        {
+          "epsilon_m": 0.001,
+          "point_m": [
+            1.6100560000000002,
+            4.193242
+          ],
+          "inside_expected_geometry": true
+        },
+        {
+          "epsilon_m": 0.01,
+          "point_m": [
+            1.6100560000000002,
+            4.184241999999999
+          ],
+          "inside_expected_geometry": true
+        },
+        {
+          "epsilon_m": 0.05,
+          "point_m": [
+            1.6100560000000002,
+            4.144241999999999
+          ],
+          "inside_expected_geometry": true
+        },
+        {
+          "epsilon_m": 0.1,
+          "point_m": [
+            1.6100560000000002,
+            4.0942419999999995
+          ],
+          "inside_expected_geometry": true
+        }
+      ],
+      "stable": true
+    }
+  ],
+  "geometry_bindings": {
+    "bath_face_hash": "825e43b398b0c1229c8a0bde6c308fbc15a6321ad6afe728fe0dd7d06194f860",
+    "lobby_cell_hash": "ac99f688983f042febccb5452b4627416780ff25b2059b4aba3b302ff03f5868"
+  },
+  "advisory_evidence": {
+    "type_review": {
+      "confidence": "high",
+      "opening_id": "OP008",
+      "review_status": "agree",
+      "side_a": "known",
+      "side_b": "known",
+      "swing": "right",
+      "visual_kind": "door"
+    },
+    "room_pair_review": {
+      "confidence": "high",
+      "opening_id": "OP008",
+      "review_status": "agree",
+      "side_a_label": "A1",
+      "side_b_label": "B1"
+    },
+    "room_pair_conflicts_with_geometry": true,
+    "main_visual_bath_to_lobby_door_candidate": true
+  },
+  "artifact_bindings": {
+    "full": {
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\op008_return_wall_candidate_20260902\\OP008-return-full.png",
+      "bytes": 1620626,
+      "sha256": "464f62ee376a473cf615c80ea558222b4a5d006758c52a9dcec71663517a9dbd"
+    },
+    "crop": {
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\op008_return_wall_candidate_20260902\\OP008-return-crop.png",
+      "bytes": 309287,
+      "sha256": "0cfcd8e116c8a9aa65ae350dd4fb260201367e1b79bd4b5e0d4b0e4f0133a785"
+    }
+  },
+  "evidence_chain": {
+    "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+    "target_aware_wall_hash": "fd4e8b2b787715800fadcbd3bf4867b27a990baf8ae3d3c8a348834eb3dc9aed",
+    "face_abutment_hash": "6f58ecadf64bc9eab025a2f8f8c5bd3047effe3f299a94b6fb4b224533d3c100",
+    "semantic_partition_hash": "cc2f512bc8db5c6516548e5a747251789290071a4277888d553dfe3c8369b5aa",
+    "type_bundle_hash": "6193c1f2f25e95ed77416ed4ff18a89492e64d23d0eb72660d0351365d4e4323",
+    "room_pair_bundle_hash": "d5ce610645e5ca81d6d93cb547107b4b45c9a65f5813aabd5cec81f7966718b4"
+  },
+  "remaining_blockers": [
+    "RETURN_FACE_SOURCE_AUTHORITY_PENDING",
+    "ROOM_PAIR_VLM_CONFLICT",
+    "TARGETED_RETURN_REVIEW_PENDING",
+    "EFFECTIVE_VOID_CONFIRMATION_PENDING",
+    "VERTICAL_POLICY_PENDING",
+    "TRAVERSABILITY_PENDING",
+    "ADJACENCY_PENDING",
+    "HUMAN_ACCEPTANCE_PENDING"
+  ],
+  "return_face_confirmation": false,
+  "pair_confirmation": false,
+  "cut_confirmation": false,
+  "adjacency_confirmation": false,
+  "semantic_promotion": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "ready": false,
+  "candidate_hash": "8874478d117abf5823006f09c20be82c7a96dfeb8c694314aa8615e9c74e835f"
+}
