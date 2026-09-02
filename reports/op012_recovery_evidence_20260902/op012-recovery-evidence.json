@@ -1,0 +1,145 @@
+{
+  "schema": "op012-quarantined-recovery-evidence-v1",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "opening_id": "OP012",
+  "active_op005_preserved": {
+    "segment_m": [
+      [
+        4.483994,
+        11.315557244655583
+      ],
+      [
+        5.408324022346369,
+        11.315557244655583
+      ]
+    ],
+    "status": "candidate",
+    "mutated": false
+  },
+  "historical_provenance": {
+    "rejected_history_id": "HISTORY-OP005-REJECTED-HOST",
+    "rejected_reason_code": "host_direction_conflicts_with_source_door_swing",
+    "rejected_artifact_sha256": "8ba728ccc02f6cb564f127e2afff79111892e0a177ff014b752271cff688d71c",
+    "rejected_payload_sha256": "e2e94bac1f375202270bd63f0b9600097d9d921ff40d2eddcbdbc2a600871690",
+    "legacy_history_id": "HISTORY-OP005-V2",
+    "legacy_payload_sha256": "0fd6ce3ff3c58ee3fbd48973c134f0cb07fdc9c616c3821dc92a26d198105272"
+  },
+  "nominal_segment_m": [
+    [
+      5.792542,
+      12.231856
+    ],
+    [
+      5.792542,
+      11.264652
+    ]
+  ],
+  "effective_segment_m": [
+    [
+      5.792542,
+      12.231856
+    ],
+    [
+      5.792542,
+      11.375556946
+    ]
+  ],
+  "nominal_width_m": 0.96,
+  "effective_width_m": 0.8562990540000008,
+  "registration": {
+    "expected_pixel_segment": [
+      [
+        1288.5000137404581,
+        699.9999425137182
+      ],
+      [
+        1288.5000137404581,
+        832.9999699503528
+      ]
+    ],
+    "endpoint_error_px": [
+      0.0,
+      0.0
+    ],
+    "max_endpoint_error_px": 0.0,
+    "tolerance_px": 1.0
+  },
+  "host_hypothesis": {
+    "effective_owner_atom_id": "ATOM-WB007-01",
+    "nominal_continuation_atom_id": "ATOM-WB007-02",
+    "junction_id": "J-007",
+    "junction_kind": "X",
+    "junction_status": "confirmed",
+    "nominal_crosses_junction_candidate": true,
+    "effective_ends_before_junction_m": 0.059999946,
+    "host_face_segments_m": [
+      [
+        [
+          5.852542,
+          15.220733
+        ],
+        [
+          5.852542,
+          11.315557
+        ]
+      ],
+      [
+        [
+          5.7325420000000005,
+          15.220733
+        ],
+        [
+          5.7325420000000005,
+          11.315557
+        ]
+      ]
+    ],
+    "confirmation": false
+  },
+  "jamb_hypothesis": {
+    "same_wall_support_m": 2.988877,
+    "crossing_support_m": 0.110904946,
+    "supporting_cross_atom_ids": [
+      "ATOM-WB009-01"
+    ],
+    "governing_minimum_m": 0.05,
+    "scalar_supports_sufficient": true,
+    "crossing_wall_jamb_confirmation": false
+  },
+  "artifact_bindings": {
+    "full": {
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\op012_recovery_evidence_20260902\\OP012-full.png",
+      "bytes": 1620637,
+      "sha256": "c51923734aa18455d71740ff32cabc9c6743c352bf96965606c61a6fc50302fe"
+    },
+    "crop": {
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\op012_recovery_evidence_20260902\\OP012-crop.png",
+      "bytes": 90578,
+      "sha256": "89f94df4b67ee25cda3377cfdea8395aa549ac27720d781a832b7a8599fec776"
+    }
+  },
+  "evidence_chain": {
+    "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+    "source_image_sha256": "b85ff7446e2d1a123e3a41dc541ea9d6e081f3978d3460d6de8ef9906119bc07"
+  },
+  "remaining_blockers": [
+    "FRESH_VISUAL_SWING_REVIEW_PENDING",
+    "DISTINCT_OPENING_ID_SOURCE_AUTHORITY_PENDING",
+    "CLOSED_WALL_BREAK_PENDING",
+    "HOST_ACROSS_JUNCTION_PENDING",
+    "ROOM_PAIR_PENDING",
+    "TRAVERSABILITY_PENDING",
+    "HUMAN_ACCEPTANCE_PENDING"
+  ],
+  "recovery_confirmation": false,
+  "host_confirmation": false,
+  "effective_void_confirmation": false,
+  "pair_confirmation": false,
+  "cut_confirmation": false,
+  "adjacency_confirmation": false,
+  "semantic_promotion": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "ready": false,
+  "candidate_hash": "1d50cef6473114a9587eb967b61feec485d6fe9633fb8c05f0efbc238f42804f"
+}
