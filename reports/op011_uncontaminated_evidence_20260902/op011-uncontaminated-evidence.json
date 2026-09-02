@@ -1,0 +1,78 @@
+{
+  "schema": "op011-uncontaminated-evidence-v1",
+  "opening_id": "OP011",
+  "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "source_image_sha256": "b85ff7446e2d1a123e3a41dc541ea9d6e081f3978d3460d6de8ef9906119bc07",
+  "host_scope_candidate_sha256": "f644b6d597f33eff4b318e637d9a5cee2a590989e3d022f8dcebb67a8d4d6f65",
+  "host_scope_candidate_hash": "3e4c17518633c2300379e488820fde3c0d3bea70b14b6b054a73bc720b4a29cf",
+  "registered_segment_m": [
+    [
+      0.764777,
+      3.134322
+    ],
+    [
+      0.764777,
+      2.341651
+    ]
+  ],
+  "registered_segment_px": [
+    [
+      601.5000633587787,
+      1951.0000124118108
+    ],
+    [
+      601.5000633587787,
+      2060.0000421348313
+    ]
+  ],
+  "registration": {
+    "expected_pixel_segment": [
+      [
+        601.5000633587787,
+        1951.0000124118108
+      ],
+      [
+        601.5000633587787,
+        2060.0000421348313
+      ]
+    ],
+    "endpoint_error_px": [
+      0.0,
+      0.0
+    ],
+    "max_endpoint_error_px": 0.0,
+    "tolerance_px": 1.0
+  },
+  "crop_box_px": [
+    481,
+    1831,
+    721,
+    2180
+  ],
+  "original_image_size": [
+    2245,
+    3043
+  ],
+  "locator_min_clearance_px": 30,
+  "source_pixels_untouched": true,
+  "artifacts": {
+    "raw_crop": {
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\op011_uncontaminated_evidence_20260902\\OP011-raw-crop.png",
+      "bytes": 62447,
+      "sha256": "f5e08608c7f8058870c3b49f9e15828f794d738320d68b6aa6468ec9345438c8"
+    },
+    "locator": {
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\op011_uncontaminated_evidence_20260902\\OP011-locator.png",
+      "bytes": 1619648,
+      "sha256": "d7d0f08a5a490668d5199d50bc8b92b8f0533e7e5595b20558b0d209b02cc192"
+    }
+  },
+  "semantic_promotion": false,
+  "traversability_confirmation": false,
+  "adjacency_confirmation": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "ready": false,
+  "candidate_hash": "bf81c69e8ee10178d96426cf7c8c0932aa73827ac61271717ab6264fb36e7319"
+}

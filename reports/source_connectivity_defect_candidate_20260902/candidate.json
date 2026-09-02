@@ -1,0 +1,188 @@
+{
+  "schema": "source-connectivity-defect-candidate-v2",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "bindings": {
+    "source": {
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\data\\goal_loop_v2\\references\\1308\\reference-coordinate-authorized-v21.json",
+      "file_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+      "candidate_hash": null
+    },
+    "unit_scope_v3": {
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\unit_scope_reachability_v3_20260902\\unit-scope-reachability-v3.json",
+      "file_sha256": "65822f1374559b8168430b89fd659b4db96ec632fbad4cf832f6706fe93d3f20",
+      "candidate_hash": "338422f1e49b58f985d280e2f50c541b79ec53a7a38b5737391bfb0718b77966"
+    },
+    "correction_registry": {
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\correction_candidate_registry_20260902\\correction-candidate-registry.json",
+      "file_sha256": "efbfecf27c3e0556485ed9852ee7aa10c9acfec315076c926a74067df7869648",
+      "candidate_hash": "2d776f3a8df6d15269bd36c7fc37372ce81ae460667a8481ef990bdbc8ca5d93"
+    },
+    "op011_host_scope": {
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\op011_host_scope_candidate_20260902\\op011-host-scope-candidate.json",
+      "file_sha256": "f644b6d597f33eff4b318e637d9a5cee2a590989e3d022f8dcebb67a8d4d6f65",
+      "candidate_hash": "3e4c17518633c2300379e488820fde3c0d3bea70b14b6b054a73bc720b4a29cf"
+    },
+    "op011_contamination": {
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\op011_overlay_contamination_20260902\\bundle.json",
+      "file_sha256": "25fe8444db372de153b3fcf74bda859f48fc7c1b80466c6034ca9ad4d7bd82a5",
+      "candidate_hash": "25e47b07ec32be573df3a133f130bab1be0d49649f48c3a592410bbf65bc4e36"
+    },
+    "op012_forensics": {
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\op012_neighbor_forensics_20260902\\op012-neighbor-forensics.json",
+      "file_sha256": "d965682f51c98b01b567cc836f4cd26987d3d72c30fdc0f34fdfd4a941f7a57a",
+      "candidate_hash": "12ba0a2ca4cdd34bfeaf06351ff3ed19e9f3cb3763d5153adb40a06d01923995"
+    },
+    "op012_recovery_review": {
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\op012_recovery_review_20260902\\op012-recovery-review-conflict.json",
+      "file_sha256": "3e2e1258d21bcd43e25c1588b2c974d69a9f213906c0804e69bf828d14fa86ab",
+      "candidate_hash": "5271681d673bb524308d5a188a6f96b15be48bb0f1cbb9f3479b160970371c7f"
+    }
+  },
+  "scope_space_ids": [
+    "bath",
+    "bedroom_01",
+    "bedroom_02",
+    "bedroom_03",
+    "bedroom_corridor",
+    "common_core_circulation",
+    "dry_balcony",
+    "front_balcony",
+    "kitchen",
+    "living_hall",
+    "lobby",
+    "north_toilet",
+    "rear_balcony",
+    "wc",
+    "west_toilet"
+  ],
+  "reachable_space_ids": [
+    "bath",
+    "bedroom_01",
+    "bedroom_03",
+    "bedroom_corridor",
+    "common_core_circulation",
+    "front_balcony",
+    "kitchen",
+    "living_hall",
+    "lobby",
+    "rear_balcony",
+    "wc",
+    "west_toilet"
+  ],
+  "unreachable_space_ids": [
+    "bedroom_02",
+    "dry_balcony",
+    "north_toilet"
+  ],
+  "candidate_edges": [
+    {
+      "opening_id": "OP004",
+      "authority": "validated_correction_registry",
+      "relation": [
+        "bedroom_02",
+        "north_toilet"
+      ],
+      "internal_to_unreachable": true,
+      "crosses_reachable_component": false,
+      "listed_in_candidate_graph": true,
+      "confirmed_admitted": false,
+      "application_authorized": false,
+      "remaining_blockers": [
+        "SOURCE_APPLICATION_REVIEW",
+        "VERTICAL_POLICY_PENDING",
+        "TRAVERSABILITY_PENDING",
+        "ADJACENCY_PENDING",
+        "HUMAN_ACCEPTANCE_PENDING"
+      ],
+      "confirmation": false
+    },
+    {
+      "opening_id": "OP011",
+      "authority": "validated_host_scope_with_clean_review_conflict",
+      "relation": [
+        "kitchen",
+        "dry_balcony"
+      ],
+      "internal_to_unreachable": false,
+      "crosses_reachable_component": true,
+      "listed_in_candidate_graph": false,
+      "confirmed_admitted": false,
+      "clean_provider_disagreement": true,
+      "review_decision": "unresolved_source_visual_ambiguity",
+      "traversability_confirmation": false,
+      "remaining_blockers": [
+        "HOST_SOURCE_AUTHORITY_PENDING",
+        "GLAZED_SUBTYPE_CONFLICT",
+        "TRAVERSABILITY_PENDING",
+        "TARGETED_TYPE_REVIEW_PENDING",
+        "EFFECTIVE_VOID_PENDING",
+        "ADJACENCY_PENDING",
+        "HUMAN_ACCEPTANCE_PENDING"
+      ],
+      "confirmation": false
+    },
+    {
+      "opening_id": "OP012",
+      "authority": "validated_rejected_history_quarantine",
+      "listed_in_candidate_graph": false,
+      "confirmed_admitted": false,
+      "counted_for_components": false,
+      "recovery_confirmation": false,
+      "review_decision": "quarantined_review_conflict",
+      "distinct_swing_established": false,
+      "confirmation": false
+    }
+  ],
+  "unreachable_components": [
+    {
+      "component_id": "UNREACHABLE-01",
+      "space_ids": [
+        "bedroom_02",
+        "north_toilet"
+      ],
+      "internal_candidate_opening_ids": [
+        "OP004"
+      ],
+      "boundary_candidate_opening_ids": [],
+      "confirmed_boundary_opening_ids": [],
+      "classification": "candidate_internal_edge_only_no_root_crossing",
+      "confirmation": false
+    },
+    {
+      "component_id": "UNREACHABLE-02",
+      "space_ids": [
+        "dry_balcony"
+      ],
+      "internal_candidate_opening_ids": [],
+      "boundary_candidate_opening_ids": [
+        "OP011"
+      ],
+      "confirmed_boundary_opening_ids": [],
+      "classification": "candidate_boundary_edge_present_but_no_connectivity_edge_admitted",
+      "confirmation": false
+    }
+  ],
+  "modes": {
+    "source_faithful_wall_geometry": "research_candidate_only_not_authorized",
+    "functional_bim_connectivity": "blocked_by_source_ambiguity",
+    "design_repair_branch": "requires_separate_source_or_human_policy_not_applied"
+  },
+  "faithful_complete_functional_reconstruction_possible": false,
+  "missing_evidence": [
+    "CONFIRMED_UNIT_ROOT",
+    "OP004_SOURCE_APPLICATION_AND_TRAVERSABILITY",
+    "OP011_CLEAN_SOURCE_VISUAL_CONSENSUS",
+    "OP012_FRESH_SOURCE_RECOVERY_AUTHORITY",
+    "CONFIRMED_CONNECTIVITY_FOR_ALL_SCOPE_SPACES"
+  ],
+  "source_mutation_authorized": false,
+  "root_confirmation": false,
+  "reachability_confirmation": false,
+  "pair_confirmation": false,
+  "adjacency_confirmation": false,
+  "semantic_promotion": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "ready": false,
+  "candidate_hash": "748489439400876d7d8d97ecb82ab05e6248969f8cd4ceaa5219d872c58f30be"
+}
