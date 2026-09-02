@@ -1,0 +1,107 @@
+{
+  "schema": "fal-clean-subtype-review-v1",
+  "opening_id": "OP007",
+  "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+  "model": "google/gemini-2.5-flash",
+  "request_contract_sha256": "d99f4f1e403006fd6b31b200073b70c29b01baa2e6f0850080c70af338cb875d",
+  "prompt_sha256": "908ebe26277b4bb99ac0b0320dd26e4ec2aaba3a437eecdc63761eff6c9c0a12",
+  "system_sha256": "8d50f1afd3271bc704629f18626028fda4f7bc5ae9cf701f2cd2f2b3fd328cc1",
+  "evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+  "evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "host_atom_id": "ATOM-WB019-01",
+  "source_segment_m": [
+    [
+      1.350251,
+      4.028804
+    ],
+    [
+      1.350251,
+      3.272494
+    ]
+  ],
+  "image_bindings": [
+    {
+      "role": "raw_crop",
+      "semantic_authority": true,
+      "filename": "OP007-raw-crop.png",
+      "bytes": 32665,
+      "sha256": "c6be613d107324422411b9b2f843e41e0ad4df9f1a2cdb4841432bc742050521"
+    },
+    {
+      "role": "locator",
+      "semantic_authority": false,
+      "filename": "OP007-locator.png",
+      "bytes": 1621102,
+      "sha256": "65ca3d054e1ea348009adddc024614dda6b11b3d6125a48a75adac0b3a172d45"
+    }
+  ],
+  "http_status": 200,
+  "parsed": {
+    "opening_id": "OP007",
+    "visual_kind": "door",
+    "wall_break_visible": "yes",
+    "swing_arc_visible": "yes",
+    "sliding_track_visible": "no",
+    "confidence": "high"
+  },
+  "validation_error": null,
+  "transport_error": null,
+  "usable_advisory": true,
+  "usage": {
+    "prompt_tokens": 711,
+    "completion_tokens": 70,
+    "total_tokens": 781,
+    "cost": 0.0003883,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0
+    }
+  },
+  "raw_response": {
+    "id": "gen-1788376882-ltESnmIpreb8336WFr6R",
+    "object": "chat.completion",
+    "created": 1788376882,
+    "model": "google/gemini-2.5-flash",
+    "provider": "Google",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choices": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "STOP",
+        "message": {
+          "role": "assistant",
+          "content": "{\n  \"opening_id\": \"OP007\",\n  \"visual_kind\": \"door\",\n  \"wall_break_visible\": \"yes\",\n  \"swing_arc_visible\": \"yes\",\n  \"sliding_track_visible\": \"no\",\n  \"confidence\": \"high\"\n}",
+          "refusal": null,
+          "reasoning": null
+        }
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 711,
+      "completion_tokens": 70,
+      "total_tokens": 781,
+      "cost": 0.0003883,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0
+      }
+    }
+  },
+  "raw_response_sha256": "34bcc30faee29856e55dd00c4ba79c2caecd0b2991b54d65bb3d73572f23f4fa",
+  "visual_subtype_candidate_only": true,
+  "vertical_parameters_reviewed": false,
+  "source_subtype_confirmation": false,
+  "effective_void_confirmation": false,
+  "traversability_confirmation": false,
+  "pair_confirmation": false,
+  "adjacency_confirmation": false,
+  "source_correction_authorized": false,
+  "semantic_promotion": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "ready": false
+}

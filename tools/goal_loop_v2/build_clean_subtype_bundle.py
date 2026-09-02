@@ -18,9 +18,12 @@ from tools.goal_loop_v2.build_opening_xy_clean_evidence import (
     EXPECTED_INCLUDED,
     validate as validate_evidence,
 )
-from tools.goal_loop_v2.fal_clean_subtype_review import parse
+from tools.goal_loop_v2.fal_clean_subtype_review import OP001_RISK_CONTEXT, parse
+from tools.goal_loop_v2.op001_unit_scope_candidate import validate_op001_unit_scope_candidate
 
 EVIDENCE = ROOT / "reports/opening_xy_clean_evidence_20260902/evidence.json"
+SOURCE_DOCUMENT = ROOT / "data/goal_loop_v2/references/1308/reference-coordinate-authorized-v21.json"
+OP001_UNIT_SCOPE = ROOT / "reports/op001_unit_scope_candidate_20260902/op001-unit-scope-candidate.json"
 FAIL_CLOSED = (
     "source_subtype_confirmation",
     "effective_void_confirmation",
@@ -67,6 +70,8 @@ def _kind_specific_cue(parsed: Mapping[str, Any]) -> bool:
     kind = parsed["visual_kind"]
     if kind == "door":
         return parsed["swing_arc_visible"] == "yes" or parsed["sliding_track_visible"] == "yes"
+    if kind == "glazed_interface_or_sliding_access":
+        return parsed["sliding_track_visible"] == "yes" or parsed["wall_break_visible"] == "yes"
     if kind in {"window_or_fixed_glazing", "open_passage", "wall_gap"}:
         return parsed["wall_break_visible"] == "yes"
     return False
@@ -97,6 +102,7 @@ def _validate_selected(
         or selected.get("image_bindings") != _expected_bindings(row)
         or selected.get("visual_subtype_candidate_only") is not True
         or selected.get("vertical_parameters_reviewed") is not False
+        or (opening_id == "OP001" and selected.get("risk_context") != OP001_RISK_CONTEXT)
     ):
         raise ValueError(f"{opening_id} selected result identity/evidence drift")
     raw_response = selected.get("raw_response")
@@ -171,6 +177,43 @@ def build(
         "ready": False,
         "candidate_hash": "0" * 64,
     }
+    if opening_id == "OP001":
+        source_document = json.loads(SOURCE_DOCUMENT.read_text(encoding="utf-8"))
+        unit_scope = json.loads(OP001_UNIT_SCOPE.read_text(encoding="utf-8"))
+        validate_op001_unit_scope_candidate(source_document, unit_scope)
+        if (
+            unit_scope.get("source_structure_hash") != evidence["source_structure_hash"]
+            or unit_scope.get("opening_id") != "OP001"
+            or unit_scope.get("building_scope_fact", {}).get("intersects_confirmed_outer_boundary") is not False
+            or unit_scope["building_scope_fact"].get("building_exterior_root_confirmation") is not False
+            or unit_scope.get("unit_scope_hypothesis", {}).get("unit_root_candidate") is not True
+            or unit_scope.get("unit_scope_confirmation") is not False
+            or unit_scope.get("traversability_confirmation") is not False
+            or unit_scope.get("adjacency_confirmation") is not False
+        ):
+            raise ValueError("OP001 unit-root quarantine evidence drift")
+        result.update(
+            {
+                "op001_entry_root_risk_context": {
+                    "risk_context": OP001_RISK_CONTEXT,
+                    "entry_label_is_source_pixel_context_only": True,
+                    "unit_scope_candidate_file_sha256": _file_hash(OP001_UNIT_SCOPE),
+                    "unit_scope_candidate_hash": unit_scope["candidate_hash"],
+                    "building_exterior_intersection": unit_scope["building_scope_fact"][
+                        "intersects_confirmed_outer_boundary"
+                    ],
+                    "unit_root_hypothesis": unit_scope["unit_scope_hypothesis"]["unit_root_candidate"],
+                    "unit_root_confirmation": unit_scope["unit_scope_confirmation"],
+                    "building_exterior_root_confirmation": unit_scope["building_scope_fact"][
+                        "building_exterior_root_confirmation"
+                    ],
+                    "root_confirmation": False,
+                },
+                "root_confirmation": False,
+                "building_exterior_root_confirmation": False,
+                "unit_root_confirmation": False,
+            }
+        )
     result["candidate_hash"] = _candidate_hash(
         {key: value for key, value in result.items() if key != "candidate_hash"}
     )
@@ -207,6 +250,15 @@ def validate(
         or actual.get("vertical_parameters_reviewed") is not False
     ):
         raise ValueError(f"{opening_id} subtype bundle scope drift")
+    if opening_id == "OP001" and (
+        actual.get("root_confirmation") is not False
+        or actual.get("building_exterior_root_confirmation") is not False
+        or actual.get("unit_root_confirmation") is not False
+        or actual.get("op001_entry_root_risk_context", {}).get("entry_label_is_source_pixel_context_only") is not True
+        or actual["op001_entry_root_risk_context"].get("unit_root_hypothesis") is not True
+        or actual["op001_entry_root_risk_context"].get("root_confirmation") is not False
+    ):
+        raise ValueError("OP001 subtype bundle root quarantine drift")
     payload = {key: value for key, value in actual.items() if key != "candidate_hash"}
     if actual.get("candidate_hash") != _candidate_hash(payload):
         raise ValueError(f"{opening_id} subtype bundle candidate hash drift")
@@ -246,6 +298,13 @@ def main(argv: list[str] | None = None) -> int:
         "parameters, room pair, traversability, adjacency, source correction, score, or formal build.\n",
         encoding="utf-8",
     )
+    if args.opening_id == "OP001":
+        with (args.out / "REPORT.md").open("a", encoding="utf-8") as stream:
+            stream.write(
+                "\nENTRY/root quarantine: the bound unit-scope candidate does not intersect the confirmed building "
+                "outer boundary. Unit root is a hypothesis only; unit-root, building-exterior-root, generic-root, "
+                "traversability, and adjacency confirmations all remain false.\n"
+            )
     (args.out / "REVIEW_CARD_ZH.md").write_text(
         f"# {args.opening_id} 干净原图视觉类型试点\n\n"
         f"Gemini 只依据无标注原始裁剪图给出视觉候选：{parsed['visual_kind']}；墙体断开 "

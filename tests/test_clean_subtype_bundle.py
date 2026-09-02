@@ -13,6 +13,7 @@ from tools.goal_loop_v2 import build_clean_subtype_bundle as target
 
 ROOT = Path(__file__).resolve().parents[1]
 OP004_RESULT = ROOT / "reports/op004_clean_subtype_20260903/selected-result.json"
+OP001_RESULT = ROOT / "reports/op001_clean_subtype_20260903/selected-result.json"
 
 
 @pytest.fixture(scope="module")
@@ -102,3 +103,45 @@ def test_selected_result_raw_locator_order_is_fail_closed(tmp_path: Path) -> Non
     path.write_text(json.dumps(selected), encoding="utf-8")
     with pytest.raises(ValueError, match="identity/evidence"):
         target.build("OP004", result_path=path)
+
+
+def test_op001_bundle_requires_entry_risk_quarantine() -> None:
+    result = target.build("OP001", result_path=OP001_RESULT)
+    assert result["visual_subtype_candidate"] == "door"
+    assert result["accepted_for_layer3a_visual_subtype_research"] is True
+    assert result["selected_result"]["canonical_result"]["risk_context"] == target.OP001_RISK_CONTEXT
+    assert result["traversability_confirmation"] is False
+    assert result["pair_confirmation"] is False
+    assert result["root_confirmation"] is False
+    assert result["building_exterior_root_confirmation"] is False
+    assert result["unit_root_confirmation"] is False
+    risk = result["op001_entry_root_risk_context"]
+    assert risk["entry_label_is_source_pixel_context_only"] is True
+    assert risk["building_exterior_intersection"] is False
+    assert risk["unit_root_hypothesis"] is True
+    assert risk["unit_root_confirmation"] is False
+    assert risk["building_exterior_root_confirmation"] is False
+    assert risk["root_confirmation"] is False
+
+
+def test_op001_missing_risk_context_is_rejected(tmp_path: Path) -> None:
+    selected = json.loads(OP001_RESULT.read_text(encoding="utf-8"))
+    selected["risk_context"] = None
+    path = tmp_path / "selected-result.json"
+    path.write_text(json.dumps(selected), encoding="utf-8")
+    with pytest.raises(ValueError, match="identity/evidence"):
+        target.build("OP001", result_path=path)
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["root_confirmation", "building_exterior_root_confirmation", "unit_root_confirmation"],
+)
+def test_op001_rehashed_root_promotion_is_rejected(field: str) -> None:
+    candidate = target.build("OP001", result_path=OP001_RESULT)
+    candidate[field] = True
+    candidate["candidate_hash"] = target._candidate_hash(
+        {key: item for key, item in candidate.items() if key != "candidate_hash"}
+    )
+    with pytest.raises(ValueError):
+        target.validate(candidate, "OP001", result_path=OP001_RESULT)

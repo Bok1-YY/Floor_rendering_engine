@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 import requests
 
-from tools.goal_loop_v2.fal_clean_subtype_review import execute, parse
+from tools.goal_loop_v2.fal_clean_subtype_review import OP001_RISK_CONTEXT, execute, parse
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -157,3 +157,36 @@ def test_parser_is_dynamic_and_strict() -> None:
     assert parse(json.dumps(_parsed()), "OP004") == _parsed()
     with pytest.raises(ValueError, match="schema/id"):
         parse(json.dumps(_parsed("OP003")), "OP004")
+    glazed = {
+        **_parsed(),
+        "visual_kind": "glazed_interface_or_sliding_access",
+        "swing_arc_visible": "no",
+        "sliding_track_visible": "yes",
+    }
+    assert parse(json.dumps(glazed), "OP004") == glazed
+
+
+def test_op001_risk_context_is_bound_into_request(tmp_path: Path, monkeypatch) -> None:
+    config, output, _ = _inputs(tmp_path)
+    raw = {
+        "choices": [{"message": {"content": json.dumps(_parsed("OP001"))}}],
+        "usage": {"cost": 0.0005},
+    }
+    seen = {}
+
+    def post(*args, **kwargs):
+        seen.update(kwargs)
+        return Response(raw)
+
+    monkeypatch.setattr(requests, "post", post)
+    result = execute(
+        config,
+        EVIDENCE,
+        output,
+        "OP001",
+        "google/gemini-2.5-flash",
+        OP001_RISK_CONTEXT,
+    )
+    prompt = seen["json"]["messages"][1]["content"][0]["text"]
+    assert OP001_RISK_CONTEXT in prompt
+    assert result["risk_context"] == OP001_RISK_CONTEXT

@@ -1,0 +1,108 @@
+{
+  "schema": "fal-clean-subtype-review-v1",
+  "opening_id": "OP001",
+  "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+  "model": "google/gemini-2.5-flash",
+  "request_contract_sha256": "66f72cae5a341ee3eb95451f430363f759632cdfe196141196a4b69851576922",
+  "prompt_sha256": "08a146e009c2649a6ff505f814dd7337b11ccc082f473effa281125e96a188c6",
+  "system_sha256": "8d50f1afd3271bc704629f18626028fda4f7bc5ae9cf701f2cd2f2b3fd328cc1",
+  "evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+  "evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "host_atom_id": "ATOM-WB016-02",
+  "source_segment_m": [
+    [
+      3.432346,
+      5.62869
+    ],
+    [
+      4.363994000000001,
+      5.62869
+    ]
+  ],
+  "image_bindings": [
+    {
+      "role": "raw_crop",
+      "semantic_authority": true,
+      "filename": "OP001-raw-crop.png",
+      "bytes": 41299,
+      "sha256": "9e7719d5f015e8b922b7cb4d5308247359ad0d34e8198e76199a3c10a56fbc2f"
+    },
+    {
+      "role": "locator",
+      "semantic_authority": false,
+      "filename": "OP001-locator.png",
+      "bytes": 1620665,
+      "sha256": "d89af868e29a9b2c01c188279af4ccafbe6d395bd713ffcdee1e69df6b73b98e"
+    }
+  ],
+  "http_status": 200,
+  "parsed": {
+    "opening_id": "OP001",
+    "visual_kind": "door",
+    "wall_break_visible": "yes",
+    "swing_arc_visible": "yes",
+    "sliding_track_visible": "no",
+    "confidence": "high"
+  },
+  "validation_error": null,
+  "transport_error": null,
+  "usable_advisory": true,
+  "usage": {
+    "prompt_tokens": 755,
+    "completion_tokens": 70,
+    "total_tokens": 825,
+    "cost": 0.0004015,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0
+    }
+  },
+  "raw_response": {
+    "id": "gen-1788377763-gsynXOy2ZFvpa5b5MOBg",
+    "object": "chat.completion",
+    "created": 1788377763,
+    "model": "google/gemini-2.5-flash",
+    "provider": "Google",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choices": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "STOP",
+        "message": {
+          "role": "assistant",
+          "content": "{\n  \"opening_id\": \"OP001\",\n  \"visual_kind\": \"door\",\n  \"wall_break_visible\": \"yes\",\n  \"swing_arc_visible\": \"yes\",\n  \"sliding_track_visible\": \"no\",\n  \"confidence\": \"high\"\n}",
+          "refusal": null,
+          "reasoning": null
+        }
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 755,
+      "completion_tokens": 70,
+      "total_tokens": 825,
+      "cost": 0.0004015,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0
+      }
+    }
+  },
+  "raw_response_sha256": "3924518e5aa7f309b83baa95d2c7f136de41c3c0306d24fe6ccaaa378941a3ab",
+  "risk_context": "The visible ENTRY text/symbol is not proof of a building exterior root, unit root, room identity, traversability, adjacency, or authorized entrance semantics. Treat it only as source-pixel context.",
+  "visual_subtype_candidate_only": true,
+  "vertical_parameters_reviewed": false,
+  "source_subtype_confirmation": false,
+  "effective_void_confirmation": false,
+  "traversability_confirmation": false,
+  "pair_confirmation": false,
+  "adjacency_confirmation": false,
+  "source_correction_authorized": false,
+  "semantic_promotion": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "ready": false
+}

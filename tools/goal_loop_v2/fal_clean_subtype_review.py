@@ -31,9 +31,14 @@ FIELDS = (
 VISUAL_KINDS = (
     "door",
     "window_or_fixed_glazing",
+    "glazed_interface_or_sliding_access",
     "open_passage",
     "wall_gap",
     "unknown",
+)
+OP001_RISK_CONTEXT = (
+    "The visible ENTRY text/symbol is not proof of a building exterior root, unit root, room identity, "
+    "traversability, adjacency, or authorized entrance semantics. Treat it only as source-pixel context."
 )
 
 
@@ -76,6 +81,7 @@ def execute(
     output_path: str | Path,
     opening_id: str,
     model: str = MODEL,
+    risk_context: str | None = None,
 ) -> dict[str, Any]:
     import requests
 
@@ -133,6 +139,9 @@ def execute(
         "effective void, source correction, score, BIM truth, build authorization, or construction validity. "
         f"The opening_id value must be exactly {opening_id} with no suffix or prefix. Return only strict JSON."
     )
+    normalized_risk_context = str(risk_context or "").strip() or None
+    if normalized_risk_context:
+        prompt += " Special risk boundary: " + normalized_risk_context
     system_prompt = (
         "Return only the requested JSON object. Treat raw_crop as the sole semantic authority and locator as "
         "navigation-only. Never promote a visual subtype into architectural truth."
@@ -175,6 +184,7 @@ def execute(
     }
     contract = {
         "opening_id": opening_id,
+        "risk_context": normalized_risk_context,
         "model": selected_model,
         "prompt_sha256": _sha(prompt.encode("utf-8")),
         "system_sha256": _sha(system_prompt.encode("utf-8")),
@@ -242,6 +252,7 @@ def execute(
         "usage": raw_response.get("usage") if isinstance(raw_response, dict) else None,
         "raw_response": raw_response,
         "raw_response_sha256": _canonical_hash(raw_response) if raw_response is not None else None,
+        "risk_context": normalized_risk_context,
         "visual_subtype_candidate_only": True,
         "vertical_parameters_reviewed": False,
         "source_subtype_confirmation": False,
@@ -271,6 +282,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--opening-id", required=True)
     parser.add_argument("--model", default=MODEL)
+    parser.add_argument("--risk-context")
     args = parser.parse_args(argv)
     result = execute(
         args.config,
@@ -278,6 +290,7 @@ def main(argv: list[str] | None = None) -> int:
         args.output,
         args.opening_id,
         args.model,
+        args.risk_context,
     )
     print(
         json.dumps(
@@ -296,4 +309,4 @@ if __name__ == "__main__":
     raise SystemExit(main())
 
 
-__all__ = ["FIELDS", "VISUAL_KINDS", "parse", "execute"]
+__all__ = ["FIELDS", "VISUAL_KINDS", "OP001_RISK_CONTEXT", "parse", "execute"]
