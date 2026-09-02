@@ -1,0 +1,1597 @@
+{
+  "schema": "room-pair-composite-evidence-v1",
+  "sample_id": "1308",
+  "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "source_image_sha256": "b85ff7446e2d1a123e3a41dc541ea9d6e081f3978d3460d6de8ef9906119bc07",
+  "registration_model": "canonical_px_to_metric_3x3",
+  "openings": [
+    {
+      "opening_id": "OP001",
+      "source_segment_m": [
+        [
+          3.432346,
+          5.62869
+        ],
+        [
+          4.39838,
+          5.62869
+        ]
+      ],
+      "source_segment_px": [
+        [
+          965.9999496183207,
+          1607.999970603606
+        ],
+        [
+          1098.0000152671755,
+          1607.999970603606
+        ]
+      ],
+      "registration": {
+        "expected_pixel_segment": [
+          [
+            965.9999496183207,
+            1607.999970603606
+          ],
+          [
+            1098.0000152671755,
+            1607.999970603606
+          ]
+        ],
+        "endpoint_error_px": [
+          0.0,
+          0.0
+        ],
+        "max_endpoint_error_px": 0.0,
+        "tolerance_px": 1.0
+      },
+      "anchor_map": [
+        {
+          "label": "A1",
+          "space_id": "common_core_circulation",
+          "point_m": [
+            3.742086,
+            7.998365
+          ],
+          "point_px": [
+            1008.3232015267176,
+            1282.146438136922
+          ],
+          "side_id": "left_of_directed_segment",
+          "rank": 1
+        },
+        {
+          "label": "A2",
+          "space_id": "lift_shaft",
+          "point_m": [
+            2.217486,
+            8.8830035
+          ],
+          "point_px": [
+            799.9999954198474,
+            1160.4999759929449
+          ],
+          "side_id": "left_of_directed_segment",
+          "rank": 2
+        },
+        {
+          "label": "A3",
+          "space_id": "west_toilet",
+          "point_m": [
+            0.687933,
+            9.206617
+          ],
+          "point_px": [
+            591.0000053435115,
+            1115.9999487196237
+          ],
+          "side_id": "left_of_directed_segment",
+          "rank": 3
+        },
+        {
+          "label": "B1",
+          "space_id": "lobby",
+          "point_m": [
+            3.3609915,
+            4.871315
+          ],
+          "point_px": [
+            956.2499835877863,
+            1712.1464544682517
+          ],
+          "side_id": "right_of_directed_segment",
+          "rank": 1
+        },
+        {
+          "label": "B2",
+          "space_id": "bath",
+          "point_m": [
+            1.101425,
+            4.9451025
+          ],
+          "point_px": [
+            647.5000572519084,
+            1701.9999501894436
+          ],
+          "side_id": "right_of_directed_segment",
+          "rank": 2
+        },
+        {
+          "label": "B3",
+          "space_id": "living_hall",
+          "point_m": [
+            6.778701,
+            4.358624
+          ],
+          "point_px": [
+            1423.2499839694656,
+            1782.6464907238046
+          ],
+          "side_id": "right_of_directed_segment",
+          "rank": 3
+        }
+      ],
+      "artifacts": {
+        "crop": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\room_pair_composites_20260902\\OP001-room-pair-crop.png",
+          "sha256": "ce532f339a55e2f870132887a75168044b023c3b356c12f450d6822eeb30772f",
+          "size": [
+            1132,
+            967
+          ]
+        },
+        "full": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\room_pair_composites_20260902\\OP001-room-pair-full.png",
+          "sha256": "ef85c7d0d16468113bfc7dc4a83c5132a2be72ec71de1591a7c8f2ab81d51b81",
+          "size": [
+            2245,
+            3043
+          ]
+        }
+      },
+      "pair_selected": false,
+      "semantic_promotion": false,
+      "adjacency_confirmation": false,
+      "build_authorized": false
+    },
+    {
+      "opening_id": "OP002",
+      "source_segment_m": [
+        [
+          4.423994413407822,
+          10.690147268408552
+        ],
+        [
+          4.423994413407822,
+          9.802937767220904
+        ]
+      ],
+      "source_segment_px": [
+        [
+          1101.5000000000002,
+          911.9999999999998
+        ],
+        [
+          1101.5000000000002,
+          1033.9999999999998
+        ]
+      ],
+      "registration": {
+        "expected_pixel_segment": [
+          [
+            1101.5000000000002,
+            911.9999999999998
+          ],
+          [
+            1101.5000000000002,
+            1033.9999999999998
+          ]
+        ],
+        "endpoint_error_px": [
+          0.0,
+          0.0
+        ],
+        "max_endpoint_error_px": 0.0,
+        "tolerance_px": 1.0
+      },
+      "anchor_map": [
+        {
+          "label": "A1",
+          "space_id": "bedroom_corridor",
+          "point_m": [
+            5.108268,
+            10.20761
+          ],
+          "point_px": [
+            1194.999978625954,
+            978.353602691403
+          ],
+          "side_id": "left_of_directed_segment",
+          "rank": 1
+        },
+        {
+          "label": "A2",
+          "space_id": "bedroom_03",
+          "point_m": [
+            7.475782,
+            9.53023
+          ],
+          "point_px": [
+            1518.499983206107,
+            1071.499990201202
+          ],
+          "side_id": "left_of_directed_segment",
+          "rank": 2
+        },
+        {
+          "label": "A3",
+          "space_id": "north_toilet",
+          "point_m": [
+            5.108268,
+            13.996431
+          ],
+          "point_px": [
+            1194.999978625954,
+            457.35358929971267
+          ],
+          "side_id": "left_of_directed_segment",
+          "rank": 3
+        },
+        {
+          "label": "B1",
+          "space_id": "common_core_circulation",
+          "point_m": [
+            3.742086,
+            7.998365
+          ],
+          "point_px": [
+            1008.3232015267176,
+            1282.146438136922
+          ],
+          "side_id": "right_of_directed_segment",
+          "rank": 1
+        },
+        {
+          "label": "B2",
+          "space_id": "bedroom_01",
+          "point_m": [
+            2.2065085,
+            11.5355415
+          ],
+          "point_px": [
+            798.5000164122138,
+            795.7500093088579
+          ],
+          "side_id": "right_of_directed_segment",
+          "rank": 2
+        },
+        {
+          "label": "B3",
+          "space_id": "lift_shaft",
+          "point_m": [
+            2.217486,
+            8.8830035
+          ],
+          "point_px": [
+            799.9999954198474,
+            1160.4999759929449
+          ],
+          "side_id": "right_of_directed_segment",
+          "rank": 3
+        }
+      ],
+      "artifacts": {
+        "crop": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\room_pair_composites_20260902\\OP002-room-pair-crop.png",
+          "sha256": "2ea08754ee659222865cc580228be072318f31eecb68d28868ffe5be6695e3b3",
+          "size": [
+            1020,
+            1125
+          ]
+        },
+        "full": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\room_pair_composites_20260902\\OP002-room-pair-full.png",
+          "sha256": "5b93285c74756867a8940ab1461e27056fbb4b0e5dd9f141f8c90ff42c86803d",
+          "size": [
+            2245,
+            3043
+          ]
+        }
+      },
+      "pair_selected": false,
+      "semantic_promotion": false,
+      "adjacency_confirmation": false,
+      "build_authorized": false
+    },
+    {
+      "opening_id": "OP003",
+      "source_segment_m": [
+        [
+          0.014637,
+          10.341081
+        ],
+        [
+          0.93676,
+          10.341081
+        ]
+      ],
+      "source_segment_px": [
+        [
+          499.0000175572519,
+          960.0000323360332
+        ],
+        [
+          625.0000305343511,
+          960.0000323360332
+        ]
+      ],
+      "registration": {
+        "expected_pixel_segment": [
+          [
+            499.0000175572519,
+            960.0000323360332
+          ],
+          [
+            625.0000305343511,
+            960.0000323360332
+          ]
+        ],
+        "endpoint_error_px": [
+          0.0,
+          0.0
+        ],
+        "max_endpoint_error_px": 0.0,
+        "tolerance_px": 1.0
+      },
+      "anchor_map": [
+        {
+          "label": "A1",
+          "space_id": "bedroom_01",
+          "point_m": [
+            2.2065085,
+            11.5355415
+          ],
+          "point_px": [
+            798.5000164122138,
+            795.7500093088579
+          ],
+          "side_id": "left_of_directed_segment",
+          "rank": 1
+        },
+        {
+          "label": "A2",
+          "space_id": "rear_balcony",
+          "point_m": [
+            2.2065085,
+            14.784401
+          ],
+          "point_px": [
+            798.5000164122138,
+            348.99999314084107
+          ],
+          "side_id": "left_of_directed_segment",
+          "rank": 2
+        },
+        {
+          "label": "A3",
+          "space_id": "north_toilet",
+          "point_m": [
+            5.108268,
+            13.996431
+          ],
+          "point_px": [
+            1194.999978625954,
+            457.35358929971267
+          ],
+          "side_id": "left_of_directed_segment",
+          "rank": 3
+        },
+        {
+          "label": "B1",
+          "space_id": "west_toilet",
+          "point_m": [
+            0.687933,
+            9.206617
+          ],
+          "point_px": [
+            591.0000053435115,
+            1115.9999487196237
+          ],
+          "side_id": "right_of_directed_segment",
+          "rank": 1
+        },
+        {
+          "label": "B2",
+          "space_id": "lift_shaft",
+          "point_m": [
+            2.217486,
+            8.8830035
+          ],
+          "point_px": [
+            799.9999954198474,
+            1160.4999759929449
+          ],
+          "side_id": "right_of_directed_segment",
+          "rank": 2
+        },
+        {
+          "label": "B3",
+          "space_id": "common_core_circulation",
+          "point_m": [
+            3.742086,
+            7.998365
+          ],
+          "point_px": [
+            1008.3232015267176,
+            1282.146438136922
+          ],
+          "side_id": "right_of_directed_segment",
+          "rank": 3
+        }
+      ],
+      "artifacts": {
+        "crop": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\room_pair_composites_20260902\\OP003-room-pair-crop.png",
+          "sha256": "e87d0ac00b90a7758381e7207a412cb3cc57b36efe2e7ce5ef02b992c54ccd09",
+          "size": [
+            995,
+            1234
+          ]
+        },
+        "full": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\room_pair_composites_20260902\\OP003-room-pair-full.png",
+          "sha256": "76e6a1cb2689480d9d6e09094c88e077f199544d4f267368e2d07603e712316f",
+          "size": [
+            2245,
+            3043
+          ]
+        }
+      },
+      "pair_selected": false,
+      "semantic_promotion": false,
+      "adjacency_confirmation": false,
+      "build_authorized": false
+    },
+    {
+      "opening_id": "OP004",
+      "source_segment_m": [
+        [
+          5.792542,
+          14.340796
+        ],
+        [
+          5.792542,
+          13.43177
+        ]
+      ],
+      "source_segment_px": [
+        [
+          1288.5000137404581,
+          410.00002743663435
+        ],
+        [
+          1288.5000137404581,
+          535.0000097987979
+        ]
+      ],
+      "registration": {
+        "expected_pixel_segment": [
+          [
+            1288.5000137404581,
+            410.00002743663435
+          ],
+          [
+            1288.5000137404581,
+            535.0000097987979
+          ]
+        ],
+        "endpoint_error_px": [
+          0.0,
+          0.0
+        ],
+        "max_endpoint_error_px": 0.0,
+        "tolerance_px": 1.0
+      },
+      "anchor_map": [
+        {
+          "label": "A1",
+          "space_id": "bedroom_02",
+          "point_m": [
+            7.475782,
+            13.305571
+          ],
+          "point_px": [
+            1518.499983206107,
+            552.3536088973085
+          ],
+          "side_id": "left_of_directed_segment",
+          "rank": 1
+        },
+        {
+          "label": "A2",
+          "space_id": "bedroom_03",
+          "point_m": [
+            7.475782,
+            9.53023
+          ],
+          "point_px": [
+            1518.499983206107,
+            1071.499990201202
+          ],
+          "side_id": "left_of_directed_segment",
+          "rank": 2
+        },
+        {
+          "label": "A3",
+          "space_id": "living_hall",
+          "point_m": [
+            6.778701,
+            4.358624
+          ],
+          "point_px": [
+            1423.2499839694656,
+            1782.6464907238046
+          ],
+          "side_id": "left_of_directed_segment",
+          "rank": 3
+        },
+        {
+          "label": "B1",
+          "space_id": "north_toilet",
+          "point_m": [
+            5.108268,
+            13.996431
+          ],
+          "point_px": [
+            1194.999978625954,
+            457.35358929971267
+          ],
+          "side_id": "right_of_directed_segment",
+          "rank": 1
+        },
+        {
+          "label": "B2",
+          "space_id": "bedroom_corridor",
+          "point_m": [
+            5.108268,
+            10.20761
+          ],
+          "point_px": [
+            1194.999978625954,
+            978.353602691403
+          ],
+          "side_id": "right_of_directed_segment",
+          "rank": 2
+        },
+        {
+          "label": "B3",
+          "space_id": "rear_balcony",
+          "point_m": [
+            2.2065085,
+            14.784401
+          ],
+          "point_px": [
+            798.5000164122138,
+            348.99999314084107
+          ],
+          "side_id": "right_of_directed_segment",
+          "rank": 3
+        }
+      ],
+      "artifacts": {
+        "crop": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\room_pair_composites_20260902\\OP004-room-pair-crop.png",
+          "sha256": "a8aea88772089a235cdbbb8ea539c5c392eab28833606646a27e422076ceca38",
+          "size": [
+            1020,
+            1734
+          ]
+        },
+        "full": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\room_pair_composites_20260902\\OP004-room-pair-full.png",
+          "sha256": "d0dbf9f4b6a49af4716aa0fc3d893b80fb61dd686f3cad9abb3ded1addd6eaaa",
+          "size": [
+            2245,
+            3043
+          ]
+        }
+      },
+      "pair_selected": false,
+      "semantic_promotion": false,
+      "adjacency_confirmation": false,
+      "build_authorized": false
+    },
+    {
+      "opening_id": "OP005",
+      "source_segment_m": [
+        [
+          4.483994,
+          11.315557244655583
+        ],
+        [
+          5.408324022346369,
+          11.315557244655583
+        ]
+      ],
+      "source_segment_px": [
+        [
+          1109.698416793893,
+          825.9999999999998
+        ],
+        [
+          1236.0,
+          825.9999999999998
+        ]
+      ],
+      "registration": {
+        "expected_pixel_segment": [
+          [
+            1109.698416793893,
+            825.9999999999998
+          ],
+          [
+            1236.0,
+            825.9999999999998
+          ]
+        ],
+        "endpoint_error_px": [
+          0.0,
+          0.0
+        ],
+        "max_endpoint_error_px": 0.0,
+        "tolerance_px": 1.0
+      },
+      "anchor_map": [
+        {
+          "label": "A1",
+          "space_id": "bedroom_01",
+          "point_m": [
+            2.2065085,
+            11.5355415
+          ],
+          "point_px": [
+            798.5000164122138,
+            795.7500093088579
+          ],
+          "side_id": "left_of_directed_segment",
+          "rank": 1
+        },
+        {
+          "label": "A2",
+          "space_id": "north_toilet",
+          "point_m": [
+            5.108268,
+            13.996431
+          ],
+          "point_px": [
+            1194.999978625954,
+            457.35358929971267
+          ],
+          "side_id": "left_of_directed_segment",
+          "rank": 2
+        },
+        {
+          "label": "A3",
+          "space_id": "bedroom_02",
+          "point_m": [
+            7.475782,
+            13.305571
+          ],
+          "point_px": [
+            1518.499983206107,
+            552.3536088973085
+          ],
+          "side_id": "left_of_directed_segment",
+          "rank": 3
+        },
+        {
+          "label": "B1",
+          "space_id": "bedroom_corridor",
+          "point_m": [
+            5.108268,
+            10.20761
+          ],
+          "point_px": [
+            1194.999978625954,
+            978.353602691403
+          ],
+          "side_id": "right_of_directed_segment",
+          "rank": 1
+        },
+        {
+          "label": "B2",
+          "space_id": "bedroom_03",
+          "point_m": [
+            7.475782,
+            9.53023
+          ],
+          "point_px": [
+            1518.499983206107,
+            1071.499990201202
+          ],
+          "side_id": "right_of_directed_segment",
+          "rank": 2
+        },
+        {
+          "label": "B3",
+          "space_id": "lift_shaft",
+          "point_m": [
+            2.217486,
+            8.8830035
+          ],
+          "point_px": [
+            799.9999954198474,
+            1160.4999759929449
+          ],
+          "side_id": "right_of_directed_segment",
+          "rank": 3
+        }
+      ],
+      "artifacts": {
+        "crop": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\room_pair_composites_20260902\\OP005-room-pair-crop.png",
+          "sha256": "216e901abd12de94b9a0f8a4f4921c715013272e6593c36d5b24f27d8e5ca63d",
+          "size": [
+            1020,
+            1003
+          ]
+        },
+        "full": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\room_pair_composites_20260902\\OP005-room-pair-full.png",
+          "sha256": "337087de85aee5693a830bf68c17c1c11529bcd0a0fe32c8c011232af9a75ee6",
+          "size": [
+            2245,
+            3043
+          ]
+        }
+      },
+      "pair_selected": false,
+      "semantic_promotion": false,
+      "adjacency_confirmation": false,
+      "build_authorized": false
+    },
+    {
+      "opening_id": "OP006",
+      "source_segment_m": [
+        [
+          5.792542,
+          11.221019
+        ],
+        [
+          5.792542,
+          10.290176
+        ]
+      ],
+      "source_segment_px": [
+        [
+          1288.5000137404581,
+          838.9999350013063
+        ],
+        [
+          1288.5000137404581,
+          966.9999686438462
+        ]
+      ],
+      "registration": {
+        "expected_pixel_segment": [
+          [
+            1288.5000137404581,
+            838.9999350013063
+          ],
+          [
+            1288.5000137404581,
+            966.9999686438462
+          ]
+        ],
+        "endpoint_error_px": [
+          0.0,
+          0.0
+        ],
+        "max_endpoint_error_px": 0.0,
+        "tolerance_px": 1.0
+      },
+      "anchor_map": [
+        {
+          "label": "A1",
+          "space_id": "bedroom_03",
+          "point_m": [
+            7.475782,
+            9.53023
+          ],
+          "point_px": [
+            1518.499983206107,
+            1071.499990201202
+          ],
+          "side_id": "left_of_directed_segment",
+          "rank": 1
+        },
+        {
+          "label": "A2",
+          "space_id": "bedroom_02",
+          "point_m": [
+            7.475782,
+            13.305571
+          ],
+          "point_px": [
+            1518.499983206107,
+            552.3536088973085
+          ],
+          "side_id": "left_of_directed_segment",
+          "rank": 2
+        },
+        {
+          "label": "A3",
+          "space_id": "living_hall",
+          "point_m": [
+            6.778701,
+            4.358624
+          ],
+          "point_px": [
+            1423.2499839694656,
+            1782.6464907238046
+          ],
+          "side_id": "left_of_directed_segment",
+          "rank": 3
+        },
+        {
+          "label": "B1",
+          "space_id": "bedroom_corridor",
+          "point_m": [
+            5.108268,
+            10.20761
+          ],
+          "point_px": [
+            1194.999978625954,
+            978.353602691403
+          ],
+          "side_id": "right_of_directed_segment",
+          "rank": 1
+        },
+        {
+          "label": "B2",
+          "space_id": "north_toilet",
+          "point_m": [
+            5.108268,
+            13.996431
+          ],
+          "point_px": [
+            1194.999978625954,
+            457.35358929971267
+          ],
+          "side_id": "right_of_directed_segment",
+          "rank": 2
+        },
+        {
+          "label": "B3",
+          "space_id": "common_core_circulation",
+          "point_m": [
+            3.742086,
+            7.998365
+          ],
+          "point_px": [
+            1008.3232015267176,
+            1282.146438136922
+          ],
+          "side_id": "right_of_directed_segment",
+          "rank": 3
+        }
+      ],
+      "artifacts": {
+        "crop": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\room_pair_composites_20260902\\OP006-room-pair-crop.png",
+          "sha256": "9a4d749793a7986128bc2396488505691698200e7a71278d7c62fe2e8b55f4f3",
+          "size": [
+            810,
+            1625
+          ]
+        },
+        "full": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\room_pair_composites_20260902\\OP006-room-pair-full.png",
+          "sha256": "3a55b854789f1b9c6f66857419a62520682ece199041ca297e17245b33b5f349",
+          "size": [
+            2245,
+            3043
+          ]
+        }
+      },
+      "pair_selected": false,
+      "semantic_promotion": false,
+      "adjacency_confirmation": false,
+      "build_authorized": false
+    },
+    {
+      "opening_id": "OP007",
+      "source_segment_m": [
+        [
+          1.350251,
+          4.028804
+        ],
+        [
+          1.350251,
+          3.272494
+        ]
+      ],
+      "source_segment_px": [
+        [
+          681.4999458015268,
+          1827.9999725633656
+        ],
+        [
+          681.4999458015268,
+          1932.0000084922917
+        ]
+      ],
+      "registration": {
+        "expected_pixel_segment": [
+          [
+            681.4999458015268,
+            1827.9999725633656
+          ],
+          [
+            681.4999458015268,
+            1932.0000084922917
+          ]
+        ],
+        "endpoint_error_px": [
+          0.0,
+          0.0
+        ],
+        "max_endpoint_error_px": 0.0,
+        "tolerance_px": 1.0
+      },
+      "anchor_map": [
+        {
+          "label": "A1",
+          "space_id": "kitchen",
+          "point_m": [
+            2.6730585,
+            1.5798875
+          ],
+          "point_px": [
+            862.2499782442749,
+            2164.7499877515024
+          ],
+          "side_id": "left_of_directed_segment",
+          "rank": 1
+        },
+        {
+          "label": "A2",
+          "space_id": "lobby",
+          "point_m": [
+            3.3609915,
+            4.871315
+          ],
+          "point_px": [
+            956.2499835877863,
+            1712.1464544682517
+          ],
+          "side_id": "left_of_directed_segment",
+          "rank": 2
+        },
+        {
+          "label": "A3",
+          "space_id": "common_core_circulation",
+          "point_m": [
+            3.742086,
+            7.998365
+          ],
+          "point_px": [
+            1008.3232015267176,
+            1282.146438136922
+          ],
+          "side_id": "left_of_directed_segment",
+          "rank": 3
+        },
+        {
+          "label": "B1",
+          "space_id": "wc",
+          "point_m": [
+            0.6586595,
+            3.7342795
+          ],
+          "point_px": [
+            587.0000385496184,
+            1868.4999772994513
+          ],
+          "side_id": "right_of_directed_segment",
+          "rank": 1
+        },
+        {
+          "label": "B2",
+          "space_id": "bath",
+          "point_m": [
+            1.101425,
+            4.9451025
+          ],
+          "point_px": [
+            647.5000572519084,
+            1701.9999501894436
+          ],
+          "side_id": "right_of_directed_segment",
+          "rank": 2
+        },
+        {
+          "label": "B3",
+          "space_id": "dry_balcony",
+          "point_m": [
+            0.3768995,
+            1.6107945
+          ],
+          "point_px": [
+            548.5000080152672,
+            2160.4999724000522
+          ],
+          "side_id": "right_of_directed_segment",
+          "rank": 3
+        }
+      ],
+      "artifacts": {
+        "crop": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\room_pair_composites_20260902\\OP007-room-pair-crop.png",
+          "sha256": "3c2a2931aadae566683cbc56c60f5625109e5e5947c9c845de4c4c11e55a843b",
+          "size": [
+            760,
+            1182
+          ]
+        },
+        "full": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\room_pair_composites_20260902\\OP007-room-pair-full.png",
+          "sha256": "fcfe35c25aabbc4fb5d501bb6b9d09b0922c07fe2bb974688e518fe3aa878253",
+          "size": [
+            2245,
+            3043
+          ]
+        }
+      },
+      "pair_selected": false,
+      "semantic_promotion": false,
+      "adjacency_confirmation": false,
+      "build_authorized": false
+    },
+    {
+      "opening_id": "OP008",
+      "source_segment_m": [
+        [
+          1.134358,
+          4.254242
+        ],
+        [
+          2.085754,
+          4.254242
+        ]
+      ],
+      "source_segment_px": [
+        [
+          652.0000625954199,
+          1797.000038541939
+        ],
+        [
+          781.9999740458015,
+          1797.000038541939
+        ]
+      ],
+      "registration": {
+        "expected_pixel_segment": [
+          [
+            652.0000625954199,
+            1797.000038541939
+          ],
+          [
+            781.9999740458015,
+            1797.000038541939
+          ]
+        ],
+        "endpoint_error_px": [
+          0.0,
+          0.0
+        ],
+        "max_endpoint_error_px": 0.0,
+        "tolerance_px": 1.0
+      },
+      "anchor_map": [
+        {
+          "label": "A1",
+          "space_id": "bath",
+          "point_m": [
+            1.101425,
+            4.9451025
+          ],
+          "point_px": [
+            647.5000572519084,
+            1701.9999501894436
+          ],
+          "side_id": "left_of_directed_segment",
+          "rank": 1
+        },
+        {
+          "label": "A2",
+          "space_id": "lobby",
+          "point_m": [
+            3.3609915,
+            4.871315
+          ],
+          "point_px": [
+            956.2499835877863,
+            1712.1464544682517
+          ],
+          "side_id": "left_of_directed_segment",
+          "rank": 2
+        },
+        {
+          "label": "A3",
+          "space_id": "common_core_circulation",
+          "point_m": [
+            3.742086,
+            7.998365
+          ],
+          "point_px": [
+            1008.3232015267176,
+            1282.146438136922
+          ],
+          "side_id": "left_of_directed_segment",
+          "rank": 3
+        },
+        {
+          "label": "B1",
+          "space_id": "wc",
+          "point_m": [
+            0.6586595,
+            3.7342795
+          ],
+          "point_px": [
+            587.0000385496184,
+            1868.4999772994513
+          ],
+          "side_id": "right_of_directed_segment",
+          "rank": 1
+        },
+        {
+          "label": "B2",
+          "space_id": "kitchen",
+          "point_m": [
+            2.6730585,
+            1.5798875
+          ],
+          "point_px": [
+            862.2499782442749,
+            2164.7499877515024
+          ],
+          "side_id": "right_of_directed_segment",
+          "rank": 2
+        },
+        {
+          "label": "B3",
+          "space_id": "dry_balcony",
+          "point_m": [
+            0.3768995,
+            1.6107945
+          ],
+          "point_px": [
+            548.5000080152672,
+            2160.4999724000522
+          ],
+          "side_id": "right_of_directed_segment",
+          "rank": 3
+        }
+      ],
+      "artifacts": {
+        "crop": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\room_pair_composites_20260902\\OP008-room-pair-crop.png",
+          "sha256": "0880eb5b9c609aa1d8c211dc8252abb4f7ee682ec1529a572c56aa0da247efe6",
+          "size": [
+            760,
+            1182
+          ]
+        },
+        "full": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\room_pair_composites_20260902\\OP008-room-pair-full.png",
+          "sha256": "08804fd670a9c7c4f1932e78c3e54e70eadc5e8a5b27f8219a78a66622623d9d",
+          "size": [
+            2245,
+            3043
+          ]
+        }
+      },
+      "pair_selected": false,
+      "semantic_promotion": false,
+      "adjacency_confirmation": false,
+      "build_authorized": false
+    },
+    {
+      "opening_id": "OP009",
+      "source_segment_m": [
+        [
+          1.478324,
+          14.25353
+        ],
+        [
+          2.94933,
+          14.25353
+        ]
+      ],
+      "source_segment_px": [
+        [
+          698.9999969465649,
+          421.9999575385418
+        ],
+        [
+          900.0000534351145,
+          421.9999575385418
+        ]
+      ],
+      "registration": {
+        "expected_pixel_segment": [
+          [
+            698.9999969465649,
+            421.9999575385418
+          ],
+          [
+            900.0000534351145,
+            421.9999575385418
+          ]
+        ],
+        "endpoint_error_px": [
+          0.0,
+          0.0
+        ],
+        "max_endpoint_error_px": 0.0,
+        "tolerance_px": 1.0
+      },
+      "anchor_map": [
+        {
+          "label": "A1",
+          "space_id": "rear_balcony",
+          "point_m": [
+            2.2065085,
+            14.784401
+          ],
+          "point_px": [
+            798.5000164122138,
+            348.99999314084107
+          ],
+          "side_id": "left_of_directed_segment",
+          "rank": 1
+        },
+        {
+          "label": "B1",
+          "space_id": "north_toilet",
+          "point_m": [
+            5.108268,
+            13.996431
+          ],
+          "point_px": [
+            1194.999978625954,
+            457.35358929971267
+          ],
+          "side_id": "right_of_directed_segment",
+          "rank": 1
+        },
+        {
+          "label": "B2",
+          "space_id": "bedroom_01",
+          "point_m": [
+            2.2065085,
+            11.5355415
+          ],
+          "point_px": [
+            798.5000164122138,
+            795.7500093088579
+          ],
+          "side_id": "right_of_directed_segment",
+          "rank": 2
+        },
+        {
+          "label": "B3",
+          "space_id": "bedroom_corridor",
+          "point_m": [
+            5.108268,
+            10.20761
+          ],
+          "point_px": [
+            1194.999978625954,
+            978.353602691403
+          ],
+          "side_id": "right_of_directed_segment",
+          "rank": 3
+        }
+      ],
+      "artifacts": {
+        "crop": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\room_pair_composites_20260902\\OP009-room-pair-crop.png",
+          "sha256": "27a11d8a92ef08cc3e972739a555032bb43dc715b987e3342360bd2565649391",
+          "size": [
+            796,
+            930
+          ]
+        },
+        "full": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\room_pair_composites_20260902\\OP009-room-pair-full.png",
+          "sha256": "c7255323b824f3a8138fca17afbfcc5b06215116a09761bf9b52209ec4111016",
+          "size": [
+            2245,
+            3043
+          ]
+        }
+      },
+      "pair_selected": false,
+      "semantic_promotion": false,
+      "adjacency_confirmation": false,
+      "build_authorized": false
+    },
+    {
+      "opening_id": "OP010",
+      "source_segment_m": [
+        [
+          5.452235,
+          0.003636
+        ],
+        [
+          6.937877,
+          0.003636
+        ]
+      ],
+      "source_segment_px": [
+        [
+          1242.0000496183206,
+          2381.5000143715706
+        ],
+        [
+          1444.9999870229008,
+          2381.5000143715706
+        ]
+      ],
+      "registration": {
+        "expected_pixel_segment": [
+          [
+            1242.0000496183206,
+            2381.5000143715706
+          ],
+          [
+            1444.9999870229008,
+            2381.5000143715706
+          ]
+        ],
+        "endpoint_error_px": [
+          0.0,
+          0.0
+        ],
+        "max_endpoint_error_px": 0.0,
+        "tolerance_px": 1.0
+      },
+      "anchor_map": [
+        {
+          "label": "A1",
+          "space_id": "kitchen",
+          "point_m": [
+            2.6730585,
+            1.5798875
+          ],
+          "point_px": [
+            862.2499782442749,
+            2164.7499877515024
+          ],
+          "side_id": "left_of_directed_segment",
+          "rank": 1
+        },
+        {
+          "label": "A2",
+          "space_id": "living_hall",
+          "point_m": [
+            6.778701,
+            4.358624
+          ],
+          "point_px": [
+            1423.2499839694656,
+            1782.6464907238046
+          ],
+          "side_id": "left_of_directed_segment",
+          "rank": 2
+        },
+        {
+          "label": "A3",
+          "space_id": "lobby",
+          "point_m": [
+            3.3609915,
+            4.871315
+          ],
+          "point_px": [
+            956.2499835877863,
+            1712.1464544682517
+          ],
+          "side_id": "left_of_directed_segment",
+          "rank": 3
+        },
+        {
+          "label": "B1",
+          "space_id": "front_balcony",
+          "point_m": [
+            4.9765365,
+            -0.894482
+          ],
+          "point_px": [
+            1177.000025572519,
+            2505.0000398484453
+          ],
+          "side_id": "right_of_directed_segment",
+          "rank": 1
+        }
+      ],
+      "artifacts": {
+        "crop": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\room_pair_composites_20260902\\OP010-room-pair-crop.png",
+          "sha256": "c2baad051a2d5e777c08e260a47d3c5b5ce66a03978abb3ed4f243bd1a80343a",
+          "size": [
+            882,
+            1093
+          ]
+        },
+        "full": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\room_pair_composites_20260902\\OP010-room-pair-full.png",
+          "sha256": "4c0788edf12f4828254344a544699db54a869770f81b64a932b30929eaefa125",
+          "size": [
+            2245,
+            3043
+          ]
+        }
+      },
+      "pair_selected": false,
+      "semantic_promotion": false,
+      "adjacency_confirmation": false,
+      "build_authorized": false
+    },
+    {
+      "opening_id": "OP011",
+      "source_segment_m": [
+        [
+          0.764777,
+          3.134322
+        ],
+        [
+          0.764777,
+          2.341651
+        ]
+      ],
+      "source_segment_px": [
+        [
+          601.5000633587787,
+          1951.0000124118108
+        ],
+        [
+          601.5000633587787,
+          2060.0000421348313
+        ]
+      ],
+      "registration": {
+        "expected_pixel_segment": [
+          [
+            601.5000633587787,
+            1951.0000124118108
+          ],
+          [
+            601.5000633587787,
+            2060.0000421348313
+          ]
+        ],
+        "endpoint_error_px": [
+          0.0,
+          0.0
+        ],
+        "max_endpoint_error_px": 0.0,
+        "tolerance_px": 1.0
+      },
+      "anchor_map": [
+        {
+          "label": "A1",
+          "space_id": "bath",
+          "point_m": [
+            1.101425,
+            4.9451025
+          ],
+          "point_px": [
+            647.5000572519084,
+            1701.9999501894436
+          ],
+          "side_id": "left_of_directed_segment",
+          "rank": 1
+        },
+        {
+          "label": "A2",
+          "space_id": "kitchen",
+          "point_m": [
+            2.6730585,
+            1.5798875
+          ],
+          "point_px": [
+            862.2499782442749,
+            2164.7499877515024
+          ],
+          "side_id": "left_of_directed_segment",
+          "rank": 2
+        },
+        {
+          "label": "A3",
+          "space_id": "lobby",
+          "point_m": [
+            3.3609915,
+            4.871315
+          ],
+          "point_px": [
+            956.2499835877863,
+            1712.1464544682517
+          ],
+          "side_id": "left_of_directed_segment",
+          "rank": 3
+        },
+        {
+          "label": "B1",
+          "space_id": "wc",
+          "point_m": [
+            0.6586595,
+            3.7342795
+          ],
+          "point_px": [
+            587.0000385496184,
+            1868.4999772994513
+          ],
+          "side_id": "right_of_directed_segment",
+          "rank": 1
+        },
+        {
+          "label": "B2",
+          "space_id": "dry_balcony",
+          "point_m": [
+            0.3768995,
+            1.6107945
+          ],
+          "point_px": [
+            548.5000080152672,
+            2160.4999724000522
+          ],
+          "side_id": "right_of_directed_segment",
+          "rank": 2
+        },
+        {
+          "label": "B3",
+          "space_id": "west_toilet",
+          "point_m": [
+            0.687933,
+            9.206617
+          ],
+          "point_px": [
+            591.0000053435115,
+            1115.9999487196237
+          ],
+          "side_id": "right_of_directed_segment",
+          "rank": 3
+        }
+      ],
+      "artifacts": {
+        "crop": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\room_pair_composites_20260902\\OP011-room-pair-crop.png",
+          "sha256": "32bdca4e42580e506d974a8926aab44630ae6619306b89258bb67699bc6e71dc",
+          "size": [
+            708,
+            1349
+          ]
+        },
+        "full": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\room_pair_composites_20260902\\OP011-room-pair-full.png",
+          "sha256": "48bac4083ece5288150035914a3d38f7f5a69233598ece18cb27df34f5419b46",
+          "size": [
+            2245,
+            3043
+          ]
+        }
+      },
+      "pair_selected": false,
+      "semantic_promotion": false,
+      "adjacency_confirmation": false,
+      "build_authorized": false
+    }
+  ],
+  "semantic_promotion": false,
+  "adjacency_confirmation": false,
+  "build_authorized": false,
+  "ready": false
+}
