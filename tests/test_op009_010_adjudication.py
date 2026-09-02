@@ -32,6 +32,7 @@ def test_openings_share_container_but_not_policy_or_space_pair():
     assert rows["OP010"]["host_candidate"]["atom_id"] == "ATOM-WB003-03"
     assert rows["OP009"]["host_support_candidate"]["minimum_geometric_jamb_m"] == pytest.approx(1.44905)
     assert rows["OP010"]["host_support_candidate"]["minimum_geometric_jamb_m"] == pytest.approx(2.166257)
+    assert rows["OP009"]["host_support_candidate"]["candidate_policy_minimum_m"] == pytest.approx(0.05)
     assert all(row["selected_space_pair"] is None for row in rows.values())
     assert rows["OP009"]["side_space_rankings"][1]["ambiguity"]["ambiguity_class"] == "close_ranking"
     assert rows["OP010"]["side_space_rankings"][0]["ambiguity"]["ambiguity_class"] == "separated_ranking"

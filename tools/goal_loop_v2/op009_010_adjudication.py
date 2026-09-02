@@ -17,11 +17,11 @@ if str(REPO_ROOT) not in sys.path:
 from tools.fastloop_research.contract import canonical_json
 from tools.fastloop_research.v21_contract import validate_v21_document
 from tools.goal_loop_v2.opening_side_candidates import build_opening_side_space_candidate, validate_opening_side_space_candidate
+from tools.goal_loop_v2.jamb_policy import minimum_jamb_support_m
 from tools.goal_loop_v2.target_aware_wall_solids import build_target_aware_wall_solids, validate_target_aware_wall_solids
 
 SCHEMA = "op009-op010-adjudication-candidate-v1"
 CONFIG = {"OP009": "ATOM-WB005-01", "OP010": "ATOM-WB003-03"}
-JAMB_MIN_M = 0.12
 COMMON_BLOCKERS = [
     "SOURCE_HOST_MISSING",
     "SOURCE_EFFECTIVE_VOID_MISSING",
@@ -67,7 +67,7 @@ def _artifact_binding(evidence_file: Path, artifact: Mapping[str, Any]) -> dict[
     return {"filename": actual.name, "sha256": digest, "bytes": len(raw)}
 
 
-def _host_support(segment: list[list[float]], host: list[list[float]]) -> dict[str, Any]:
+def _host_support(segment: list[list[float]], host: list[list[float]], policy_minimum: float) -> dict[str, Any]:
     h0, h1 = host
     dx, dy = h1[0] - h0[0], h1[1] - h0[1]
     length = math.hypot(dx, dy)
@@ -83,8 +83,9 @@ def _host_support(segment: list[list[float]], host: list[list[float]]) -> dict[s
         "geometric_jamb_before_m": round(before, 9),
         "geometric_jamb_after_m": round(after, 9),
         "minimum_geometric_jamb_m": round(minimum, 9),
-        "candidate_policy_minimum_m": JAMB_MIN_M,
-        "candidate_policy_sufficient": minimum >= JAMB_MIN_M,
+        "candidate_policy_minimum_m": policy_minimum,
+        "candidate_policy_sufficient": minimum >= policy_minimum,
+        "policy_source": "opening_contract.minimum_jamb_support_m",
         "source_jamb_confirmation": False,
     }
 
@@ -116,7 +117,7 @@ def build_op009_010_adjudication(
         host = next(x for x in evidence_row["host_wall_candidates"] if x["atom_id"] == host_id)
         if host["segment_m"] != source_atom["centerline_m"]:
             raise ValueError(f"{opening_id} evidence host differs from source atom")
-        support = _host_support(evidence_row["source_segment_m"], host["segment_m"])
+        support = _host_support(evidence_row["source_segment_m"], host["segment_m"], minimum_jamb_support_m(doc))
         blockers = COMMON_BLOCKERS + SPECIFIC_BLOCKERS[opening_id] + ["SIDE_SPACE_PAIR_UNCONFIRMED"]
         openings.append(
             {

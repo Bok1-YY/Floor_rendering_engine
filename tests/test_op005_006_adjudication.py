@@ -16,7 +16,9 @@ def test_distinct_policies_preserve_hostless_op005_and_candidate_host_op006():
     assert rows['OP006']['source_kind']=='door' and rows['OP006']['source_observation_status']=='confirmed'
     assert rows['OP006']['host_candidate']['atom_id']=='ATOM-WB007-02'
     assert rows['OP006']['host_support_candidate']['minimum_geometric_jamb_m']==pytest.approx(0.094538)
-    assert 'GEOMETRIC_JAMB_INSUFFICIENT' in rows['OP006']['blockers']
+    assert rows['OP006']['host_support_candidate']['candidate_policy_minimum_m']==pytest.approx(0.05)
+    assert rows['OP006']['host_support_candidate']['candidate_policy_sufficient'] is True
+    assert 'GEOMETRIC_JAMB_INSUFFICIENT' not in rows['OP006']['blockers']
     assert rows['OP005']['side_space_rankings'][0]['ambiguity']['ambiguity_class']=='close_ranking'
     assert all(r['selected_space_pair'] is None for r in rows.values())
 def test_fabricated_host_pair_or_promotion_is_rejected():

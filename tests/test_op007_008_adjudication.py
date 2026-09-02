@@ -11,13 +11,17 @@ from tools.goal_loop_v2.op007_008_adjudication import build_op007_008_adjudicati
 ROOT=Path(__file__).resolve().parents[1];SOURCE=ROOT/'data/goal_loop_v2/references/1308/reference-coordinate-authorized-v21.json';EVIDENCE=ROOT/'reports/op007_op008_geometry_evidence_20260902/op007-op008-evidence.json'
 def _inputs():
     d=json.loads(SOURCE.read_text(encoding='utf-8'));return d,build_opening_side_space_candidate(d),build_target_aware_wall_solids(d)
-def test_packets_remain_distinct_and_jamb_blocked():
+def test_packets_remain_distinct_with_source_derived_jamb_policy():
     d,s,w=_inputs();c=build_op007_008_adjudication(d,EVIDENCE,s,w);rows={r['opening_id']:r for r in c['openings']}
     assert c['distinctness']['different_host_atoms'] and c['distinctness']['orthogonal_directions']
     assert rows['OP007']['pair_candidate']==['wc','kitchen'] and rows['OP008']['pair_candidate']==['bath','kitchen']
     assert rows['OP007']['jamb_support']['minimum_jamb_m']==pytest.approx(0.06545)
     assert rows['OP008']['jamb_support']['minimum_jamb_m']==pytest.approx(0.035139857,abs=1e-6)
-    assert all('JAMB_INSUFFICIENT_AT_ENDPOINT' in r['blockers'] for r in rows.values())
+    assert rows['OP007']['jamb_support']['required_minimum_jamb_m']==pytest.approx(0.05)
+    assert rows['OP007']['jamb_support']['jamb_sufficient'] is True
+    assert rows['OP008']['jamb_support']['jamb_sufficient'] is False
+    assert 'JAMB_INSUFFICIENT_AT_ENDPOINT' not in rows['OP007']['blockers']
+    assert 'JAMB_INSUFFICIENT_AT_ENDPOINT' in rows['OP008']['blockers']
     assert c['semantic_promotion'] is False and c['build_authorized'] is False
 def test_packets_reject_rehashed_merge_and_promotion():
     import tools.goal_loop_v2.op007_008_adjudication as module

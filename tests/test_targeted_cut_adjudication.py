@@ -15,4 +15,5 @@ def test_targeted_triplet_is_stable_distinct_and_unpromoted():
         assert len({face['polygon_hash'] for face in row['pre_cut_faces']})==2
         assert len(row['host_face_segments_m'])==2
         assert row['jamb_support']['minimum_jamb_m']>=0
+        assert row['jamb_support']['candidate_minimum_m']==0.05
         assert row['pre_cut_faces'][0]['polygon']!=row['pre_cut_faces'][1]['polygon']

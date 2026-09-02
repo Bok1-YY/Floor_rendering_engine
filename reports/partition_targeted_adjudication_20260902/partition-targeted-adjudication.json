@@ -201,8 +201,9 @@
         "jamb_before_m": 1.999857732,
         "jamb_after_m": 4.11424798,
         "minimum_jamb_m": 1.999857732,
-        "threshold_m": 0.12,
-        "sufficient": true
+        "threshold_m": 0.05,
+        "sufficient": true,
+        "policy_source": "opening_contract.minimum_jamb_support_m"
       },
       "jamb_classification": "sufficient",
       "sensitivity_stable": true,
@@ -392,10 +393,11 @@
         "jamb_before_m": 0.094538,
         "jamb_after_m": 2.488909491,
         "minimum_jamb_m": 0.094538,
-        "threshold_m": 0.12,
-        "sufficient": false
+        "threshold_m": 0.05,
+        "sufficient": true,
+        "policy_source": "opening_contract.minimum_jamb_support_m"
       },
-      "jamb_classification": "insufficient",
+      "jamb_classification": "sufficient",
       "sensitivity_stable": true,
       "artifact_bindings": {
         "full": {
@@ -592,10 +594,11 @@
         "jamb_before_m": 0.196349,
         "jamb_after_m": 0.06545,
         "minimum_jamb_m": 0.06545,
-        "threshold_m": 0.12,
-        "sufficient": false
+        "threshold_m": 0.05,
+        "sufficient": true,
+        "policy_source": "opening_contract.minimum_jamb_support_m"
       },
-      "jamb_classification": "insufficient",
+      "jamb_classification": "sufficient",
       "sensitivity_stable": true,
       "artifact_bindings": {
         "full": {
@@ -783,8 +786,9 @@
         "jamb_before_m": 4.687458,
         "jamb_after_m": 2.166257,
         "minimum_jamb_m": 2.166257,
-        "threshold_m": 0.12,
-        "sufficient": true
+        "threshold_m": 0.05,
+        "sufficient": true,
+        "policy_source": "opening_contract.minimum_jamb_support_m"
       },
       "jamb_classification": "sufficient",
       "sensitivity_stable": true,
@@ -814,5 +818,5 @@
   "score_effect": "none",
   "build_authorized": false,
   "ready": false,
-  "candidate_hash": "e191c94900bd8372ad48bdbabdb5456ffab1b19f6c2ef42349320d19ba6f0903"
+  "candidate_hash": "a064c9da05a7fbe150dd1eef2f5466df6dff217e45e50a163ab56a92e91e9cf9"
 }

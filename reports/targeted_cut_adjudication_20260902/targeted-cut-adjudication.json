@@ -76,8 +76,9 @@
         "jamb_before_m": 0,
         "jamb_after_m": 0.439106,
         "minimum_jamb_m": 0,
-        "candidate_minimum_m": 0.12,
-        "candidate_sufficient": false
+        "candidate_minimum_m": 0.05,
+        "candidate_sufficient": false,
+        "policy_source": "opening_contract.minimum_jamb_support_m"
       },
       "merged_group": [
         "bedroom_01",
@@ -293,8 +294,9 @@
         "jamb_before_m": 0.879937,
         "jamb_after_m": 2.116213,
         "minimum_jamb_m": 0.879937,
-        "candidate_minimum_m": 0.12,
-        "candidate_sufficient": true
+        "candidate_minimum_m": 0.05,
+        "candidate_sufficient": true,
+        "policy_source": "opening_contract.minimum_jamb_support_m"
       },
       "merged_group": [
         "bedroom_02",
@@ -490,8 +492,9 @@
         "jamb_before_m": 1.463687,
         "jamb_after_m": 1.44905,
         "minimum_jamb_m": 1.44905,
-        "candidate_minimum_m": 0.12,
-        "candidate_sufficient": true
+        "candidate_minimum_m": 0.05,
+        "candidate_sufficient": true,
+        "policy_source": "opening_contract.minimum_jamb_support_m"
       },
       "merged_group": [
         "bedroom_01",
@@ -640,5 +643,5 @@
   "adjacency_confirmation": false,
   "build_authorized": false,
   "ready": false,
-  "candidate_hash": "e8c906b611ca190fd9df93716ff047362abff1a1dafa43e660eae735a9e6440b"
+  "candidate_hash": "12c94e9cc7f259d2c087246a361d6dbb285469a5811c76776cd849413b143679"
 }

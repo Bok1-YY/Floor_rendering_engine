@@ -13,6 +13,7 @@ def test_op003_packet_preserves_pair_and_zero_jamb_blocker():
     assert c['registration']['passed'] is True and c['host_candidate']['atom_id']=='ATOM-WB010-01'
     assert c['room_pair_candidate']==['bedroom_01','west_toilet']
     assert c['jamb_support']['host_start_jamb_m']==pytest.approx(0.0)
+    assert c['jamb_support']['host_start_jamb_min_m']==pytest.approx(0.05)
     assert c['jamb_support']['jamb_insufficient'] is True
     assert 'JAMB_INSUFFICIENT_AT_HOST_START' in c['remaining_blockers']
     assert c['source_confirmation'] is False and c['build_authorized'] is False

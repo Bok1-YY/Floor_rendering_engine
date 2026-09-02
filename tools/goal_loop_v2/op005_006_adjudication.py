@@ -12,9 +12,10 @@ if str(REPO_ROOT) not in sys.path:sys.path.insert(0,str(REPO_ROOT))
 from tools.fastloop_research.contract import canonical_json
 from tools.fastloop_research.v21_contract import validate_v21_document
 from tools.goal_loop_v2.opening_side_candidates import build_opening_side_space_candidate,validate_opening_side_space_candidate
+from tools.goal_loop_v2.jamb_policy import minimum_jamb_support_m
 from tools.goal_loop_v2.target_aware_wall_solids import build_target_aware_wall_solids,validate_target_aware_wall_solids
 
-SCHEMA='op005-op006-adjudication-candidate-v1';HOSTS={'OP005':None,'OP006':'ATOM-WB007-02'};JAMB_MIN=.12
+SCHEMA='op005-op006-adjudication-candidate-v1';HOSTS={'OP005':None,'OP006':'ATOM-WB007-02'}
 COMMON=['SOURCE_HOST_MISSING','SOURCE_EFFECTIVE_VOID_MISSING','SOURCE_JAMB_MISSING','SOURCE_SIDE_SPACES_MISSING','SOURCE_PHYSICAL_WALL_BREAK_MISSING','SOURCE_ADJACENCY_MISSING','TRAVERSABILITY_UNCONFIRMED','Z_DIMENSIONS_ASSUMED_RESEARCH_ONLY','GEMINI_REVIEW_MISSING','HUMAN_REVIEW_PENDING']
 SPECIFIC={'OP005':['SOURCE_KIND_UNKNOWN','EVIDENCE_HOST_CANDIDATE_EMPTY','SOURCE_ANCHOR_MISSING','LEFT_SIDE_CLOSE_RANKING'],'OP006':['SOURCE_BUILD_DISPOSITION_EXCLUDED','HOST_ONLY_GEOMETRIC_CANDIDATE','SPACE_PAIR_UNCONFIRMED']}
 def _hash(v:Any)->str:return hashlib.sha256(canonical_json(v)).hexdigest()
@@ -26,9 +27,9 @@ def _artifact(evidence_file,artifact):
     raw=actual.read_bytes();digest=hashlib.sha256(raw).hexdigest()
     if digest!=artifact.get('sha256'):raise ValueError(f'OP005/006 artifact hash drift: {declared.name}')
     return {'filename':actual.name,'bytes':len(raw),'sha256':digest}
-def _support(segment,host):
-    h0,h1=host;dx,dy=h1[0]-h0[0],h1[1]-h0[1];length=math.hypot(dx,dy);den=length*length;values=[((p[0]-h0[0])*dx+(p[1]-h0[1])*dy)/den for p in segment];lo,hi=min(values),max(values);before=max(0,lo*length);after=max(0,(1-hi)*length);minimum=min(before,after)
-    return {'host_parameters':[round(v,9) for v in values],'endpoint_supported':[0<=v<=1 for v in values],'geometric_jamb_before_m':round(before,9),'geometric_jamb_after_m':round(after,9),'minimum_geometric_jamb_m':round(minimum,9),'candidate_policy_minimum_m':JAMB_MIN,'candidate_policy_sufficient':minimum>=JAMB_MIN,'source_jamb_confirmation':False}
+def _support(segment,host,minimum):
+    h0,h1=host;dx,dy=h1[0]-h0[0],h1[1]-h0[1];length=math.hypot(dx,dy);den=length*length;values=[((p[0]-h0[0])*dx+(p[1]-h0[1])*dy)/den for p in segment];lo,hi=min(values),max(values);before=max(0,lo*length);after=max(0,(1-hi)*length);measured=min(before,after)
+    return {'host_parameters':[round(v,9) for v in values],'endpoint_supported':[0<=v<=1 for v in values],'geometric_jamb_before_m':round(before,9),'geometric_jamb_after_m':round(after,9),'minimum_geometric_jamb_m':round(measured,9),'candidate_policy_minimum_m':minimum,'candidate_policy_sufficient':measured>=minimum,'policy_source':'opening_contract.minimum_jamb_support_m','source_jamb_confirmation':False}
 def build_op005_006_adjudication(document:Mapping[str,Any],evidence_file,side_candidate,wall_candidate,*,_skip_validate=False):
     doc=validate_v21_document(document);path=Path(evidence_file);ev=json.loads(path.read_text(encoding='utf-8'));side=validate_opening_side_space_candidate(doc,dict(side_candidate));wall=validate_target_aware_wall_solids(doc,dict(wall_candidate))
     if ev.get('schema')!='op005-op006-geometry-evidence-v1':raise ValueError('OP005/006 evidence schema drift')
@@ -42,7 +43,7 @@ def build_op005_006_adjudication(document:Mapping[str,Any],evidence_file,side_ca
         else:
             atom=next(x for x in doc['wall_graph']['atoms'] if x['id']==host_id);h=next(x for x in e['host_wall_candidates'] if x['atom_id']==host_id)
             if h['segment_m']!=atom['centerline_m']:raise ValueError('OP006 host differs from source atom')
-            host={'atom_id':host_id,'branch_id':atom['branch_id'],'segment_m':deepcopy(h['segment_m']),'endpoint_distance_sum_m':h['endpoint_distance_sum_m'],'thickness_m':atom['thickness_m'],'height_m':atom['height_m'],'status':atom['status'],'assumption_ids':deepcopy(atom['assumption_ids'])};support=_support(e['source_segment_m'],h['segment_m'])
+            host={'atom_id':host_id,'branch_id':atom['branch_id'],'segment_m':deepcopy(h['segment_m']),'endpoint_distance_sum_m':h['endpoint_distance_sum_m'],'thickness_m':atom['thickness_m'],'height_m':atom['height_m'],'status':atom['status'],'assumption_ids':deepcopy(atom['assumption_ids'])};support=_support(e['source_segment_m'],h['segment_m'],minimum_jamb_support_m(doc))
         blockers=COMMON+SPECIFIC[oid]
         if support is not None and not support['candidate_policy_sufficient']:blockers=blockers+['GEOMETRIC_JAMB_INSUFFICIENT']
         rows.append({'opening_id':oid,'policy_key':f'{oid.lower()}-independent-policy-v1','source_status':source['status'],'source_observation_status':source['source_observation']['status'],'source_kind':source['source_observation']['kind'],'source_build_disposition':source['build_disposition'],'source_anchor_id':source['source_observation']['anchor_id'],'registration':deepcopy(e['registration']),'source_segment_m':deepcopy(e['source_segment_m']),'segment_frame':deepcopy(s['segment_frame']),'host_candidate':host,'host_support_candidate':support,'side_space_rankings':deepcopy(s['sides']),'selected_space_pair':None,'artifact_bindings':{role:_artifact(path,e['artifacts'][role]) for role in ('crop','full')},'blockers':blockers,'decision':'unresolved_candidate','host_confirmation':False,'void_confirmation':False,'jamb_confirmation':False,'side_space_confirmation':False,'cut_confirmation':False,'adjacency_confirmation':False,'semantic_promotion':False,'build_authorized':False})
