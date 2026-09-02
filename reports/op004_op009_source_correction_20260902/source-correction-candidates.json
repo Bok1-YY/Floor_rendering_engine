@@ -1,0 +1,129 @@
+{
+  "schema": "op004-op009-source-correction-candidates-v1",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+  "review_bundle_candidate_hash": "77b7fbce555e424e75e3aadbe10b8bbf17074a04039ce5d7fc7970d79d538156",
+  "opening_ids": [
+    "OP004",
+    "OP009"
+  ],
+  "packets": [
+    {
+      "opening_id": "OP004",
+      "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+      "host_atom_id": "ATOM-WB007-01",
+      "registered_effective_segment_m": [
+        [
+          5.792542,
+          14.340796
+        ],
+        [
+          5.792542,
+          13.43177
+        ]
+      ],
+      "registered_effective_width_m": 0.909026,
+      "directed_side_assignment": {
+        "side_a": "bedroom_02",
+        "side_b": "north_toilet"
+      },
+      "jamb_support_m": {
+        "before": 0.879937,
+        "after": 2.116213,
+        "minimum": 0.879937
+      },
+      "visual_advisory": {
+        "review_status": "agree",
+        "visual_kind": "door",
+        "confidence": "high",
+        "geometry_agreement": true,
+        "pair_selection": false
+      },
+      "provenance": {
+        "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+        "targeted_evidence_candidate_hash": "e8c906b611ca190fd9df93716ff047362abff1a1dafa43e660eae735a9e6440b",
+        "targeted_evidence_file_sha256": "a585e805e7c8d6ed324a00fe90fab14b22b29767c616814e7547ea0e89e56068",
+        "review_bundle_candidate_hash": "77b7fbce555e424e75e3aadbe10b8bbf17074a04039ce5d7fc7970d79d538156",
+        "review_bundle_file_sha256": "45b4e53246c8ea58e4c21c1e34ff59f120ebaf19e3ff04e6c3bb0a8c12fcbe92",
+        "matrix_hash": "ffe9dc923fd998ab28e984d75951b913f21af8e15f0c45cb9d4a42de6ef8f613"
+      },
+      "limitations": {
+        "source_correction_candidate": true,
+        "build_disposition": false,
+        "build_kind": false,
+        "head_m": false,
+        "sill_m": false,
+        "z_geometry": false,
+        "swing": false,
+        "traversability": false,
+        "adjacency": false,
+        "score_effect": false,
+        "build_authorized": false,
+        "semantic_promotion": false
+      },
+      "status": "candidate_only",
+      "candidate_hash": "ba5958b80640650307b186df397c782ccc219cd5461ea4172f5e65d9fd1fb8fb"
+    },
+    {
+      "opening_id": "OP009",
+      "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+      "host_atom_id": "ATOM-WB005-01",
+      "registered_effective_segment_m": [
+        [
+          1.478324,
+          14.25353
+        ],
+        [
+          2.94933,
+          14.25353
+        ]
+      ],
+      "registered_effective_width_m": 1.471006,
+      "directed_side_assignment": {
+        "side_a": "bedroom_01",
+        "side_b": "rear_balcony"
+      },
+      "jamb_support_m": {
+        "before": 1.463687,
+        "after": 1.44905,
+        "minimum": 1.44905
+      },
+      "visual_advisory": {
+        "review_status": "agree",
+        "visual_kind": "glazed_interface",
+        "confidence": "high",
+        "geometry_agreement": true,
+        "pair_selection": false
+      },
+      "provenance": {
+        "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+        "targeted_evidence_candidate_hash": "e8c906b611ca190fd9df93716ff047362abff1a1dafa43e660eae735a9e6440b",
+        "targeted_evidence_file_sha256": "a585e805e7c8d6ed324a00fe90fab14b22b29767c616814e7547ea0e89e56068",
+        "review_bundle_candidate_hash": "77b7fbce555e424e75e3aadbe10b8bbf17074a04039ce5d7fc7970d79d538156",
+        "review_bundle_file_sha256": "45b4e53246c8ea58e4c21c1e34ff59f120ebaf19e3ff04e6c3bb0a8c12fcbe92",
+        "matrix_hash": "ffe9dc923fd998ab28e984d75951b913f21af8e15f0c45cb9d4a42de6ef8f613"
+      },
+      "limitations": {
+        "source_correction_candidate": true,
+        "build_disposition": false,
+        "build_kind": false,
+        "head_m": false,
+        "sill_m": false,
+        "z_geometry": false,
+        "swing": false,
+        "traversability": false,
+        "adjacency": false,
+        "score_effect": false,
+        "build_authorized": false,
+        "semantic_promotion": false
+      },
+      "status": "candidate_only",
+      "candidate_hash": "4ae2bea778086eac4b95103afa6bf637c547a96bb6ef1c935c3cab1708123b07"
+    }
+  ],
+  "semantic_promotion": false,
+  "adjacency_confirmation": false,
+  "build_authorized": false,
+  "ready": false,
+  "candidate_hash": "a929095d38ad2115f02a07a4787dd05b1e6d884cfead01eef3d5af1bd5cfd061"
+}
