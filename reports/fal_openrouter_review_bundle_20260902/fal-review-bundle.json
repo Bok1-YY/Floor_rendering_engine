@@ -1,0 +1,480 @@
+{
+  "advisory_only": true,
+  "all_reviews_usable": true,
+  "build_authorized": false,
+  "candidate_hash": "6193c1f2f25e95ed77416ed4ff18a89492e64d23d0eb72660d0351365d4e4323",
+  "covered_opening_ids": [
+    "OP001",
+    "OP002",
+    "OP003",
+    "OP004",
+    "OP005",
+    "OP006",
+    "OP007",
+    "OP008",
+    "OP009",
+    "OP010",
+    "OP011"
+  ],
+  "model": "google/gemini-2.5-flash",
+  "provider": "fal-openrouter-vision",
+  "ready": false,
+  "reviews": [
+    {
+      "advisory_complete": true,
+      "build_authorized": false,
+      "cost_usd": 0.0003384,
+      "image_bindings": [
+        {
+          "bytes": 1619551,
+          "filename": "op001-full-overlay.png",
+          "sha256": "cd50ea82cd06c2d731a7e5b74ff0a46033262035999cd0486a6cbfd02b946dc3"
+        },
+        {
+          "bytes": 112329,
+          "filename": "op001-crop-overlay.png",
+          "sha256": "7946d93e0981eb481510eab9c1784184d393959ed2e111984aef207141bf6702"
+        }
+      ],
+      "opening_id": "OP001",
+      "parsed": {
+        "confidence": "high",
+        "opening_id": "OP001",
+        "review_status": "agree",
+        "side_a": "unknown",
+        "side_b": "unknown",
+        "swing": "right",
+        "visual_kind": "door"
+      },
+      "result_canonical_sha256": "cade2ee70990a9d4487739d1a0e3726b4324762469178effed9732a166cb4dc1",
+      "result_file_sha256": "6c21cc4a2de12ae8b2bdcc575a1ca4f03edd344e741da29b6533bf298189e01f",
+      "score_effect": "none",
+      "semantic_promotion": false,
+      "usage": {
+        "completion_tokens": 42,
+        "cost": 0.0003384,
+        "prompt_tokens": 778,
+        "prompt_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "total_tokens": 820
+      }
+    },
+    {
+      "advisory_complete": true,
+      "build_authorized": false,
+      "cost_usd": 0.0003384,
+      "image_bindings": [
+        {
+          "bytes": 1619772,
+          "filename": "op002-vertical-full-overlay.png",
+          "sha256": "616b154f883554ab8aeab6a7d2b9b81e29d8f6143f996807a8624a58659332c0"
+        },
+        {
+          "bytes": 49644,
+          "filename": "op002-vertical-crop-overlay.png",
+          "sha256": "2759c46dfcd4f901d8c768c6026163e5f6e00b434fce4e3888f72c9e4c76290c"
+        }
+      ],
+      "opening_id": "OP002",
+      "parsed": {
+        "confidence": "high",
+        "opening_id": "OP002",
+        "review_status": "agree",
+        "side_a": "known",
+        "side_b": "known",
+        "swing": "left",
+        "visual_kind": "door"
+      },
+      "result_canonical_sha256": "84cdc2af35a28af3672eaacd12ede9e20152761f6f9ca462eafba6c75ed814a2",
+      "result_file_sha256": "d563d5371b0095689b191589cdc6dd51755de586bedb1476069f2f1b486f2aa3",
+      "score_effect": "none",
+      "semantic_promotion": false,
+      "usage": {
+        "completion_tokens": 42,
+        "cost": 0.0003384,
+        "prompt_tokens": 778,
+        "prompt_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "total_tokens": 820
+      }
+    },
+    {
+      "advisory_complete": true,
+      "build_authorized": false,
+      "cost_usd": 0.0003384,
+      "image_bindings": [
+        {
+          "bytes": 1619145,
+          "filename": "OP003-full-overlay.png",
+          "sha256": "682bc8df20dbae2b8268e9f550efd98505a96e1f8e176aa9fd05874171e42725"
+        },
+        {
+          "bytes": 62395,
+          "filename": "OP003-crop-overlay.png",
+          "sha256": "8b7c131a286ae4ee0196598ddfbf3b5db36b14604014610749761b04f44af81e"
+        }
+      ],
+      "opening_id": "OP003",
+      "parsed": {
+        "confidence": "high",
+        "opening_id": "OP003",
+        "review_status": "agree",
+        "side_a": "unknown",
+        "side_b": "known",
+        "swing": "right",
+        "visual_kind": "door"
+      },
+      "result_canonical_sha256": "9edae43e21fed52e0ffce3ec06fa2ea1aa13898d313fad7b64fdac6149cf876f",
+      "result_file_sha256": "8e7b38a83c9451162b2297ac8adc706955cdd1a853d77f6188b36fd28bb0bc2c",
+      "score_effect": "none",
+      "semantic_promotion": false,
+      "usage": {
+        "completion_tokens": 42,
+        "cost": 0.0003384,
+        "prompt_tokens": 778,
+        "prompt_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "total_tokens": 820
+      }
+    },
+    {
+      "advisory_complete": true,
+      "build_authorized": false,
+      "cost_usd": 0.0003384,
+      "image_bindings": [
+        {
+          "bytes": 1619797,
+          "filename": "OP004-full-overlay.png",
+          "sha256": "46be459f80d66f563577fc0a917659d95c46c479c568c605f19ca2e5f35a8e53"
+        },
+        {
+          "bytes": 65139,
+          "filename": "OP004-crop-overlay.png",
+          "sha256": "f4898f970091c7fa6e804ce3056fa5af33067f60369614dedfffd64d9907c46d"
+        }
+      ],
+      "opening_id": "OP004",
+      "parsed": {
+        "confidence": "high",
+        "opening_id": "OP004",
+        "review_status": "agree",
+        "side_a": "known",
+        "side_b": "known",
+        "swing": "left",
+        "visual_kind": "door"
+      },
+      "result_canonical_sha256": "756168a864ec969ce42565766a03be07e2250589768bfb9251d85b8d79e86cdc",
+      "result_file_sha256": "00f91b68c9be96cb59a3910ddcd8bffba0b4b4ab494ecb39040daa47b4289bb3",
+      "score_effect": "none",
+      "semantic_promotion": false,
+      "usage": {
+        "completion_tokens": 42,
+        "cost": 0.0003384,
+        "prompt_tokens": 778,
+        "prompt_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "total_tokens": 820
+      }
+    },
+    {
+      "advisory_complete": true,
+      "build_authorized": false,
+      "cost_usd": 0.0003384,
+      "image_bindings": [
+        {
+          "bytes": 1619896,
+          "filename": "OP005-full-overlay.png",
+          "sha256": "2faf2df9723ea6974405366ae800e4736aefa2f269ff95c915f457f2f49acbb6"
+        },
+        {
+          "bytes": 41300,
+          "filename": "OP005-crop-overlay.png",
+          "sha256": "b9a2a50ea0aa347a14dfbeeb6a2f0b6765eac9b384f7dcf72531a0b90ec492c4"
+        }
+      ],
+      "opening_id": "OP005",
+      "parsed": {
+        "confidence": "high",
+        "opening_id": "OP005",
+        "review_status": "agree",
+        "side_a": "unknown",
+        "side_b": "unknown",
+        "swing": "right",
+        "visual_kind": "door"
+      },
+      "result_canonical_sha256": "f932a4965ce82a00190e509d78f993b76eb287d7dbaf28e5b8fe6af7de38bd61",
+      "result_file_sha256": "2c322a5749171846099f2dea203c123d50f26e62c51f3791228ab9e4334ee556",
+      "score_effect": "none",
+      "semantic_promotion": false,
+      "usage": {
+        "completion_tokens": 42,
+        "cost": 0.0003384,
+        "prompt_tokens": 778,
+        "prompt_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "total_tokens": 820
+      }
+    },
+    {
+      "advisory_complete": true,
+      "build_authorized": false,
+      "cost_usd": 0.0003384,
+      "image_bindings": [
+        {
+          "bytes": 1619909,
+          "filename": "OP006-full-overlay.png",
+          "sha256": "d1484ae9a96f21466f3c5b0e483e483cbb31b9ee2e60145345ec85c1d7ae55e8"
+        },
+        {
+          "bytes": 30421,
+          "filename": "OP006-crop-overlay.png",
+          "sha256": "9daae6ba7c9e068ddfb78c527565d5b4fd4c70010ab60e1869898e4a1f90f54f"
+        }
+      ],
+      "opening_id": "OP006",
+      "parsed": {
+        "confidence": "high",
+        "opening_id": "OP006",
+        "review_status": "agree",
+        "side_a": "known",
+        "side_b": "known",
+        "swing": "right",
+        "visual_kind": "door"
+      },
+      "result_canonical_sha256": "4911be1daa18ad423881601d3aa381da1fea4be7e7749d6796248084f46a9f81",
+      "result_file_sha256": "3dd03deea0ce12002477b1aff22efd86400b8be24a051c86e789009e546b3b44",
+      "score_effect": "none",
+      "semantic_promotion": false,
+      "usage": {
+        "completion_tokens": 42,
+        "cost": 0.0003384,
+        "prompt_tokens": 778,
+        "prompt_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "total_tokens": 820
+      }
+    },
+    {
+      "advisory_complete": true,
+      "build_authorized": false,
+      "cost_usd": 0.0003384,
+      "image_bindings": [
+        {
+          "bytes": 1619433,
+          "filename": "OP007-full-overlay.png",
+          "sha256": "67e9611725d0f997ca8778907e92821cb8339fb2eeda25e441c0d0bd88589418"
+        },
+        {
+          "bytes": 94441,
+          "filename": "OP007-crop-overlay.png",
+          "sha256": "0257d7b0b05b819b41f24c0cd29ab32ad6013597d914e3293b8dc1c8fcdaeed7"
+        }
+      ],
+      "opening_id": "OP007",
+      "parsed": {
+        "confidence": "high",
+        "opening_id": "OP007",
+        "review_status": "agree",
+        "side_a": "known",
+        "side_b": "known",
+        "swing": "out",
+        "visual_kind": "door"
+      },
+      "result_canonical_sha256": "458f05919e50cea5a8e8e75b5642e8155d231322ee0746eab86a9bb61e2de718",
+      "result_file_sha256": "357e77d4e6ae8e068b275fbd9a49df01b7775f85e0ab705959138bc69edc7ba2",
+      "score_effect": "none",
+      "semantic_promotion": false,
+      "usage": {
+        "completion_tokens": 42,
+        "cost": 0.0003384,
+        "prompt_tokens": 778,
+        "prompt_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "total_tokens": 820
+      }
+    },
+    {
+      "advisory_complete": true,
+      "build_authorized": false,
+      "cost_usd": 0.0003384,
+      "image_bindings": [
+        {
+          "bytes": 1619744,
+          "filename": "OP008-full-overlay.png",
+          "sha256": "0faef05ef08db5d6636651b49cf7bfdd72ea00c320aa1e487710d6d220726106"
+        },
+        {
+          "bytes": 108851,
+          "filename": "OP008-crop-overlay.png",
+          "sha256": "4fa45b205e1cdd270936caa4df193dca27803a321a6635d52a28dc70f25c78d5"
+        }
+      ],
+      "opening_id": "OP008",
+      "parsed": {
+        "confidence": "high",
+        "opening_id": "OP008",
+        "review_status": "agree",
+        "side_a": "known",
+        "side_b": "known",
+        "swing": "right",
+        "visual_kind": "door"
+      },
+      "result_canonical_sha256": "7112f415cd10b45e3557a56b41d1b432d55e57cee2382bda57a649851cb127ad",
+      "result_file_sha256": "a5ce7b35ca754479eea4826b5b78ff8ebb1dacfabc0b05d0a19cb0f2f74384a8",
+      "score_effect": "none",
+      "semantic_promotion": false,
+      "usage": {
+        "completion_tokens": 42,
+        "cost": 0.0003384,
+        "prompt_tokens": 778,
+        "prompt_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "total_tokens": 820
+      }
+    },
+    {
+      "advisory_complete": true,
+      "build_authorized": false,
+      "cost_usd": 0.0003384,
+      "image_bindings": [
+        {
+          "bytes": 1619284,
+          "filename": "OP009-full-overlay.png",
+          "sha256": "2294fadc35087884a106b4e99ed37caf244722481dcd53fe233c77d426fd31b2"
+        },
+        {
+          "bytes": 119494,
+          "filename": "OP009-crop-overlay.png",
+          "sha256": "97f572c1f408e977a60dc5fea5abd3c314cd5fbc5b719bb8321fe3cbf98e4e43"
+        }
+      ],
+      "opening_id": "OP009",
+      "parsed": {
+        "confidence": "high",
+        "opening_id": "OP009",
+        "review_status": "agree",
+        "side_a": "known",
+        "side_b": "known",
+        "swing": "out",
+        "visual_kind": "door"
+      },
+      "result_canonical_sha256": "30b272c927addbe2e568d1b1fb640714ee6a63cbe725ec83b52ffe2b13ca8dd7",
+      "result_file_sha256": "bb0580764a852d032b67591dd01a53ca73fab6eca48093145159ee42516dcfae",
+      "score_effect": "none",
+      "semantic_promotion": false,
+      "usage": {
+        "completion_tokens": 42,
+        "cost": 0.0003384,
+        "prompt_tokens": 778,
+        "prompt_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "total_tokens": 820
+      }
+    },
+    {
+      "advisory_complete": true,
+      "build_authorized": false,
+      "cost_usd": 0.0003434,
+      "image_bindings": [
+        {
+          "bytes": 1619176,
+          "filename": "OP010-full-overlay.png",
+          "sha256": "3fc2dc6699e00b5e38bc9e12537e8a92d7a876d643ab33893de977de2a6ac5f2"
+        },
+        {
+          "bytes": 115170,
+          "filename": "OP010-crop-overlay.png",
+          "sha256": "538b30a915f8133ba2bd82dc94867fe910db15e92857c4fa3f7e8c36c9a1d918"
+        }
+      ],
+      "opening_id": "OP010",
+      "parsed": {
+        "confidence": "high",
+        "opening_id": "OP010",
+        "review_status": "agree",
+        "side_a": "known",
+        "side_b": "known",
+        "swing": "none",
+        "visual_kind": "glazed_interface"
+      },
+      "result_canonical_sha256": "adfec135d31716d7d4cb2a063baac82c02602fde4e82e5b8dfdf84e1ae8869fa",
+      "result_file_sha256": "eb68d935de0c9f3f8a312195a9b65cefa7cb1a5668294e22927bd11cf6356c43",
+      "score_effect": "none",
+      "semantic_promotion": false,
+      "usage": {
+        "completion_tokens": 44,
+        "cost": 0.0003434,
+        "prompt_tokens": 778,
+        "prompt_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "total_tokens": 822
+      }
+    },
+    {
+      "advisory_complete": true,
+      "build_authorized": false,
+      "cost_usd": 0.0003384,
+      "image_bindings": [
+        {
+          "bytes": 1619763,
+          "filename": "OP011-full-overlay.png",
+          "sha256": "ac1216ee6a0f3c5234456b41b06a45bf6ca12086cd89e7202ba633f6b1cd92c2"
+        },
+        {
+          "bytes": 99865,
+          "filename": "OP011-crop-overlay.png",
+          "sha256": "166aecf6b188fa35d7c222df2350d53375125fc7092cfa24e8eafc3d09a9a4dc"
+        }
+      ],
+      "opening_id": "OP011",
+      "parsed": {
+        "confidence": "high",
+        "opening_id": "OP011",
+        "review_status": "agree",
+        "side_a": "known",
+        "side_b": "known",
+        "swing": "out",
+        "visual_kind": "door"
+      },
+      "result_canonical_sha256": "268e148cfbe94caf16bbeaa29bf6f110e2955f4aae876cf9843cee31b57485e7",
+      "result_file_sha256": "eed3daf4563221eaaf473db0e66a68c2ea8034b99a4460347d127a897f0cc1ae",
+      "score_effect": "none",
+      "semantic_promotion": false,
+      "usage": {
+        "completion_tokens": 42,
+        "cost": 0.0003384,
+        "prompt_tokens": 778,
+        "prompt_tokens_details": {
+          "cache_write_tokens": 0,
+          "cached_tokens": 0
+        },
+        "total_tokens": 820
+      }
+    }
+  ],
+  "schema": "fal-openrouter-opening-review-bundle-v1",
+  "score_effect": "none",
+  "semantic_promotion": false,
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "total_cost_usd": 0.0037274
+}
