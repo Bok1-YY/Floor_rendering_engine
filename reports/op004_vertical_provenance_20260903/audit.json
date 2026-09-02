@@ -1,0 +1,109 @@
+{
+  "schema": "opening-vertical-provenance-audit-v1",
+  "opening_id": "OP004",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+  "clean_evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+  "clean_evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+  "subtype_bundle_file_sha256": "26b9fad645917e479477eb37df7bfbd2b66fcb312febfe0e3b0b8f5e406357ae",
+  "subtype_bundle_candidate_hash": "28258a62f7a2c7777c1bbae11b288b38ff45db6e439c3181585cbe9ca9bf654d",
+  "subtype_selected_result_file_sha256": "c1301b49a8b61fd9b275d6defc6a35b8e337ce34df0686fd767e8d42601aac12",
+  "visual_subtype_candidate": "door",
+  "visual_subtype_advisory_is_vertical_authority": false,
+  "opening_candidate_state": {
+    "opening_status": "candidate",
+    "source_observation_status": "candidate",
+    "build_disposition": "exclude_pending_resolution",
+    "build_kind": null,
+    "effective_void_present": false,
+    "source_host_present": false,
+    "assumption_ids": [
+      "ASSUME-Z-RESEARCH"
+    ]
+  },
+  "xy_research_binding": {
+    "host_atom_id": "ATOM-WB007-01",
+    "segment_m": [
+      [
+        5.792542,
+        14.340796
+      ],
+      [
+        5.792542,
+        13.43177
+      ]
+    ],
+    "authority": "registered_evidence_candidate",
+    "source_pixels_untouched": true,
+    "vertical_authority": false,
+    "effective_void_authority": false
+  },
+  "assumption_registry_entry": {
+    "id": "ASSUME-Z-RESEARCH",
+    "category": "z_geometry",
+    "basis": "research_default",
+    "status": "unverified",
+    "build_policy": "allow_research_only",
+    "disclosure": "The source plan does not certify Z dimensions; these values are reversible research assumptions.",
+    "value": {
+      "door_head_m": 2.1,
+      "wall_height_m": 2.8
+    }
+  },
+  "vertical_parameters": {
+    "wall_height_m": {
+      "source_observed_value": null,
+      "research_default_value": 2.8,
+      "provenance_class": "research_assumption",
+      "assumption_id": "ASSUME-Z-RESEARCH",
+      "source_explicit": false,
+      "human_authorized_default": false,
+      "usable_for_reversible_research_display": true,
+      "eligible_for_source_promotion": false
+    },
+    "head_m": {
+      "source_observed_value": null,
+      "research_default_value": 2.1,
+      "provenance_class": "research_assumption_unbound_to_opening_geometry",
+      "assumption_id": "ASSUME-Z-RESEARCH",
+      "source_explicit": false,
+      "human_authorized_default": false,
+      "usable_for_reversible_research_guide": true,
+      "eligible_for_source_promotion": false
+    },
+    "sill_m": {
+      "source_observed_value": null,
+      "research_default_value": null,
+      "provenance_class": "unknown",
+      "assumption_id": null,
+      "source_explicit": false,
+      "human_authorized_default": false,
+      "treatment": "unknown",
+      "usable_for_reversible_research_display": false,
+      "eligible_for_source_promotion": false
+    }
+  },
+  "vertical_evidence_present": false,
+  "isolated_blender_research_display": {
+    "policy_status": "pending_policy_guardian",
+    "wall_height_m": 2.8,
+    "head_guide_m": 2.1,
+    "head_guide_binding": "unbound_research_default",
+    "sill_m": null,
+    "opening_geometry_authorized": false,
+    "must_keep_source_walls_intact": true
+  },
+  "source_vertical_confirmation": false,
+  "source_subtype_confirmation": false,
+  "effective_void_confirmation": false,
+  "traversability_confirmation": false,
+  "pair_confirmation": false,
+  "adjacency_confirmation": false,
+  "root_confirmation": false,
+  "source_correction_authorized": false,
+  "semantic_promotion": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "ready": false,
+  "candidate_hash": "07ec58494591af7d2b7d3db37d9f66c52116bddc3d7ff5c89bb4e1b62eda783f"
+}

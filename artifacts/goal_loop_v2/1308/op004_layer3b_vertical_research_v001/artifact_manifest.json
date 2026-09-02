@@ -1,0 +1,91 @@
+{
+  "schema": "blender-opening-layer3b-vertical-research-manifest-v1",
+  "opening_id": "OP004",
+  "branch_id": "1308-op004-layer3b-vertical-research-v001",
+  "plan_candidate_hash": "68a98450453ffcde291b93ffd98a7becdc48a2a698166e9732a5ce4d87772c1c",
+  "plan_file_sha256": "41309d8019c01c9ca4626841579b946cce0375d35c9a2005c4c2795b18eadb0a",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+  "wall_count": 35,
+  "guide_count": 2,
+  "guide_roles": [
+    "nonsemantic_xy_locator",
+    "nonsemantic_unbound_head_guide"
+  ],
+  "opening_cuts": 0,
+  "opening_elements": 0,
+  "head_guide_binding": "unbound_research_default",
+  "sill_m": null,
+  "artifact_path_mode": "relative_to_manifest",
+  "artifacts": [
+    {
+      "kind": "checkpoint_blend",
+      "relative_path": "1308_OP004_layer3b_checkpoint_v000.blend",
+      "bytes": 97017,
+      "sha256": "2ef68a065a4386704550ce058fd1d6a0d88d0b8e3cf0cb66043a74495697c9ea"
+    },
+    {
+      "kind": "blender_source",
+      "relative_path": "1308_OP004_layer3b_vertical_research_v001.blend",
+      "bytes": 118108,
+      "sha256": "b9499f005abd8c840f3ea90ff6bb3506a6f61eaff495ae6ac79bd8781a0065a4"
+    },
+    {
+      "kind": "portable_glb",
+      "relative_path": "1308_OP004_layer3b_vertical_research_v001.glb",
+      "bytes": 52704,
+      "sha256": "641eb8db0b5bd1e0f11796ec628dbbb8ae20b34b6e1d288215ff85dd22cd00f7"
+    },
+    {
+      "kind": "render_top",
+      "relative_path": "1308_OP004_layer3b_top.png",
+      "bytes": 751060,
+      "sha256": "a0f9050a2da8e54a432709f3d069ecd2562eac82cf3ddc0cd3d4addd9fe6c3b7"
+    },
+    {
+      "kind": "render_northeast",
+      "relative_path": "1308_OP004_layer3b_northeast.png",
+      "bytes": 953171,
+      "sha256": "f716dc77139508284313fc097c19385c95b05da4c9d195db40c070bc9051e12b"
+    },
+    {
+      "kind": "render_front_closeup",
+      "relative_path": "1308_OP004_layer3b_front_closeup.png",
+      "bytes": 1082824,
+      "sha256": "ab03ba4a22b10388282e5135fd9d779a0deeeba7490b27f15bd06d4aad5f2730"
+    },
+    {
+      "kind": "validation",
+      "relative_path": "validation.json",
+      "bytes": 2233,
+      "sha256": "41caced82607eb49c2b3f5c3f2ad3307bc6de2f05fe0368b8c97245f861f7827"
+    }
+  ],
+  "labels": [
+    "OP004 LAYER 3B — VERTICAL RESEARCH DISPLAY",
+    "WALL HEIGHT 2.8m — UNVERIFIED RESEARCH ASSUMPTION",
+    "HEAD GUIDE 2.1m — UNBOUND RESEARCH DEFAULT / NOT OPENING GEOMETRY",
+    "SILL — UNKNOWN / NOT AUTHORIZED",
+    "DOOR VISUAL CANDIDATE ONLY",
+    "NO SOURCE VERTICAL CONFIRMATION",
+    "NO EFFECTIVE-VOID CONFIRMATION",
+    "SOURCE WALLS INTACT / ZERO CUTS",
+    "NO TRAVERSABILITY / ADJACENCY / ROOT",
+    "RESEARCH ONLY",
+    "NOT FOR CONSTRUCTION"
+  ],
+  "research_only": true,
+  "not_for_construction": true,
+  "source_vertical_confirmation": false,
+  "source_subtype_confirmation": false,
+  "effective_void_confirmation": false,
+  "traversability_confirmation": false,
+  "pair_confirmation": false,
+  "adjacency_confirmation": false,
+  "root_confirmation": false,
+  "source_correction_authorized": false,
+  "semantic_promotion": false,
+  "build_authorized": false,
+  "ready": false,
+  "score_effect": "none"
+}

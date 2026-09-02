@@ -1,0 +1,84 @@
+{
+  "schema": "opening-layer3b-display-evidence-v1",
+  "opening_id": "OP004",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "display_plan_file_sha256": "41309d8019c01c9ca4626841579b946cce0375d35c9a2005c4c2795b18eadb0a",
+  "display_plan_candidate_hash": "68a98450453ffcde291b93ffd98a7becdc48a2a698166e9732a5ce4d87772c1c",
+  "vertical_audit_file_sha256": "387cb1a9f22367348ea11fd046a5c36082b341d3919f0e75858cc42df81602d5",
+  "vertical_audit_candidate_hash": "07ec58494591af7d2b7d3db37d9f66c52116bddc3d7ff5c89bb4e1b62eda783f",
+  "clean_evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+  "clean_evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+  "display_manifest_file_sha256": "a6c429ba66a71819b5c95767543f99e7fc87494d6fe33bae241b3f31ad9cb638",
+  "display_validation_file_sha256": "41caced82607eb49c2b3f5c3f2ad3307bc6de2f05fe0368b8c97245f861f7827",
+  "image_bindings": {
+    "raw_crop": {
+      "path": "reports/opening_xy_clean_evidence_20260902/OP004-raw-crop.png",
+      "bytes": 36462,
+      "sha256": "b0749036a8f96b4cd3da0115b68152086e9657f740ffda55f2179c07579befd8",
+      "size": [
+        241,
+        366
+      ]
+    },
+    "top": {
+      "path": "artifacts/goal_loop_v2/1308/op004_layer3b_vertical_research_v001/1308_OP004_layer3b_top.png",
+      "bytes": 751060,
+      "sha256": "a0f9050a2da8e54a432709f3d069ecd2562eac82cf3ddc0cd3d4addd9fe6c3b7",
+      "size": [
+        1200,
+        1200
+      ]
+    },
+    "northeast": {
+      "path": "artifacts/goal_loop_v2/1308/op004_layer3b_vertical_research_v001/1308_OP004_layer3b_northeast.png",
+      "bytes": 953171,
+      "sha256": "f716dc77139508284313fc097c19385c95b05da4c9d195db40c070bc9051e12b",
+      "size": [
+        1200,
+        1200
+      ]
+    },
+    "front_closeup": {
+      "path": "artifacts/goal_loop_v2/1308/op004_layer3b_vertical_research_v001/1308_OP004_layer3b_front_closeup.png",
+      "bytes": 1082824,
+      "sha256": "ab03ba4a22b10388282e5135fd9d779a0deeeba7490b27f15bd06d4aad5f2730",
+      "size": [
+        1200,
+        1200
+      ]
+    },
+    "composite": {
+      "relative_path": "OP004-layer3b-display-composite.png",
+      "bytes": 2189030,
+      "sha256": "fdea97979ad04343ed1b7fa2845f0623a155416e0565ebfa96088949a8fa927a",
+      "size": [
+        5000,
+        1390
+      ]
+    }
+  },
+  "display_contract": {
+    "wall_count": 35,
+    "guide_count": 2,
+    "opening_cuts": 0,
+    "opening_elements": 0,
+    "head_guide_binding": "unbound_research_default",
+    "sill_m": null,
+    "door_leaf_created": false,
+    "ifc_opening_created": false
+  },
+  "visual_review_scope": "unbound_guide_display_clarity_only",
+  "source_vertical_confirmation": false,
+  "source_subtype_confirmation": false,
+  "effective_void_confirmation": false,
+  "traversability_confirmation": false,
+  "pair_confirmation": false,
+  "adjacency_confirmation": false,
+  "root_confirmation": false,
+  "source_correction_authorized": false,
+  "semantic_promotion": false,
+  "build_authorized": false,
+  "ready": false,
+  "score_effect": "none",
+  "candidate_hash": "b9c7e9bd7fb3c49ae76086951483c9e9241d68a7afbcebecbdc4f7565d929e45"
+}

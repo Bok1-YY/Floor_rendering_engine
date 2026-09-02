@@ -1,0 +1,156 @@
+{
+  "schema": "opening-layer3b-display-review-bundle-v1",
+  "opening_id": "OP004",
+  "evidence_file_sha256": "73ab7f378e4a7cb987bc64fc10f8b0a24165cb79fc6557160d9272ddc8a45321",
+  "evidence_candidate_hash": "b9c7e9bd7fb3c49ae76086951483c9e9241d68a7afbcebecbdc4f7565d929e45",
+  "display_plan_candidate_hash": "68a98450453ffcde291b93ffd98a7becdc48a2a698166e9732a5ce4d87772c1c",
+  "display_manifest_file_sha256": "a6c429ba66a71819b5c95767543f99e7fc87494d6fe33bae241b3f31ad9cb638",
+  "selected_result": {
+    "result_file_sha256": "01c2aa370b3a852307469d20d94c84641e1d4355679f213ae7ccaa386f8e673b",
+    "raw_response_sha256": "982561c593e9ccf9b70c5bdfc151e7af0b5244e1e1174a75419980afc50cb6af",
+    "parsed": {
+      "opening_id": "OP004",
+      "intact_wall_baseline_visible": "yes",
+      "blue_xy_locator_visible": "yes",
+      "orange_unbound_head_guide_visible": "yes",
+      "guides_visually_distinct_from_wall": "yes",
+      "floor_to_head_opening_cut_visible": "no",
+      "door_leaf_threshold_or_sill_geometry_visible": "no",
+      "labels_state_unbound_head_and_unknown_sill": "yes",
+      "display_misleading_as_confirmed_opening": "no",
+      "recommendation": "accept_research_display",
+      "confidence": "high"
+    },
+    "accepted_for_layer3b_research_display": true,
+    "cost_usd": 0.0008062,
+    "canonical_result": {
+      "schema": "fal-opening-vertical-display-review-v1",
+      "opening_id": "OP004",
+      "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+      "model": "google/gemini-2.5-flash",
+      "request_contract_sha256": "cc75a2d4ecb2372cbef07e658c077f5044510791f9ac39494786e860d3746f15",
+      "prompt_sha256": "4fe94a7de01b04ecab174788e93bc118360d1cede013ad85bc465a16428d14e3",
+      "system_sha256": "1d55fa12c3ec4a8aace4606f5034fdb2c4cd03b91e203c96f8fa0bafd9bfdce8",
+      "evidence_file_sha256": "73ab7f378e4a7cb987bc64fc10f8b0a24165cb79fc6557160d9272ddc8a45321",
+      "evidence_candidate_hash": "b9c7e9bd7fb3c49ae76086951483c9e9241d68a7afbcebecbdc4f7565d929e45",
+      "display_plan_candidate_hash": "68a98450453ffcde291b93ffd98a7becdc48a2a698166e9732a5ce4d87772c1c",
+      "display_manifest_file_sha256": "a6c429ba66a71819b5c95767543f99e7fc87494d6fe33bae241b3f31ad9cb638",
+      "image_bindings": [
+        {
+          "role": "labeled_composite",
+          "filename": "OP004-layer3b-display-composite.png",
+          "bytes": 2189030,
+          "sha256": "fdea97979ad04343ed1b7fa2845f0623a155416e0565ebfa96088949a8fa927a"
+        },
+        {
+          "role": "front_closeup",
+          "filename": "1308_OP004_layer3b_front_closeup.png",
+          "bytes": 1082824,
+          "sha256": "ab03ba4a22b10388282e5135fd9d779a0deeeba7490b27f15bd06d4aad5f2730"
+        },
+        {
+          "role": "top",
+          "filename": "1308_OP004_layer3b_top.png",
+          "bytes": 751060,
+          "sha256": "a0f9050a2da8e54a432709f3d069ecd2562eac82cf3ddc0cd3d4addd9fe6c3b7"
+        },
+        {
+          "role": "northeast",
+          "filename": "1308_OP004_layer3b_northeast.png",
+          "bytes": 953171,
+          "sha256": "f716dc77139508284313fc097c19385c95b05da4c9d195db40c070bc9051e12b"
+        }
+      ],
+      "http_status": 200,
+      "parsed": {
+        "opening_id": "OP004",
+        "intact_wall_baseline_visible": "yes",
+        "blue_xy_locator_visible": "yes",
+        "orange_unbound_head_guide_visible": "yes",
+        "guides_visually_distinct_from_wall": "yes",
+        "floor_to_head_opening_cut_visible": "no",
+        "door_leaf_threshold_or_sill_geometry_visible": "no",
+        "labels_state_unbound_head_and_unknown_sill": "yes",
+        "display_misleading_as_confirmed_opening": "no",
+        "recommendation": "accept_research_display",
+        "confidence": "high"
+      },
+      "validation_error": null,
+      "transport_error": null,
+      "usable_advisory": true,
+      "usage": {
+        "prompt_tokens": 1229,
+        "completion_tokens": 175,
+        "total_tokens": 1404,
+        "cost": 0.0008062,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "raw_response": {
+        "id": "gen-1788379928-Ewus0HJr0l9YOi0mQ38B",
+        "object": "chat.completion",
+        "created": 1788379928,
+        "model": "google/gemini-2.5-flash",
+        "provider": "Google",
+        "system_fingerprint": null,
+        "service_tier": "default",
+        "choices": [
+          {
+            "index": 0,
+            "logprobs": null,
+            "finish_reason": "stop",
+            "native_finish_reason": "STOP",
+            "message": {
+              "role": "assistant",
+              "content": "{\n  \"opening_id\": \"OP004\",\n  \"intact_wall_baseline_visible\": \"yes\",\n  \"blue_xy_locator_visible\": \"yes\",\n  \"orange_unbound_head_guide_visible\": \"yes\",\n  \"guides_visually_distinct_from_wall\": \"yes\",\n  \"floor_to_head_opening_cut_visible\": \"no\",\n  \"door_leaf_threshold_or_sill_geometry_visible\": \"no\",\n  \"labels_state_unbound_head_and_unknown_sill\": \"yes\",\n  \"display_misleading_as_confirmed_opening\": \"no\",\n  \"recommendation\": \"accept_research_display\",\n  \"confidence\": \"high\"\n}",
+              "refusal": null,
+              "reasoning": null
+            }
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 1229,
+          "completion_tokens": 175,
+          "total_tokens": 1404,
+          "cost": 0.0008062,
+          "prompt_tokens_details": {
+            "cached_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        }
+      },
+      "raw_response_sha256": "982561c593e9ccf9b70c5bdfc151e7af0b5244e1e1174a75419980afc50cb6af",
+      "display_clarity_advisory_only": true,
+      "source_vertical_confirmation": false,
+      "source_subtype_confirmation": false,
+      "effective_void_confirmation": false,
+      "traversability_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "root_confirmation": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "build_authorized": false,
+      "ready": false,
+      "score_effect": "none"
+    }
+  },
+  "accepted_for_layer3b_research_display": true,
+  "selected_review_cost_usd": 0.0008062,
+  "review_scope": "unbound_guide_display_clarity_only",
+  "source_vertical_confirmation": false,
+  "source_subtype_confirmation": false,
+  "effective_void_confirmation": false,
+  "traversability_confirmation": false,
+  "pair_confirmation": false,
+  "adjacency_confirmation": false,
+  "root_confirmation": false,
+  "source_correction_authorized": false,
+  "semantic_promotion": false,
+  "build_authorized": false,
+  "ready": false,
+  "score_effect": "none",
+  "candidate_hash": "e43c7426e4d4163bd5a6c0d3d7f06494769cc0a181f1521969259bd1129ac1c3"
+}
