@@ -1,0 +1,231 @@
+{
+  "schema": "op007-op008-geometry-evidence-v1",
+  "sample_id": "1308",
+  "source_path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\data\\goal_loop_v2\\references\\1308\\canonical-raw-portrait.png",
+  "source_sha256": "b85ff7446e2d1a123e3a41dc541ea9d6e081f3978d3460d6de8ef9906119bc07",
+  "source_document_path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\data\\goal_loop_v2\\references\\1308\\reference-coordinate-authorized-v21.json",
+  "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "registration_model": "canonical_px_to_metric_3x3",
+  "openings": [
+    {
+      "opening_id": "OP007",
+      "source_segment_m": [
+        [
+          1.350251,
+          4.028804
+        ],
+        [
+          1.350251,
+          3.272494
+        ]
+      ],
+      "source_segment_px": [
+        [
+          681.4999458015268,
+          1827.9999725633656
+        ],
+        [
+          681.4999458015268,
+          1932.0000084922917
+        ]
+      ],
+      "registration": {
+        "expected_pixel_segment": [
+          [
+            681.4999458015268,
+            1827.9999725633656
+          ],
+          [
+            681.4999458015268,
+            1932.0000084922917
+          ]
+        ],
+        "endpoint_error_px": [
+          0.0,
+          0.0
+        ],
+        "max_endpoint_error_px": 0.0,
+        "tolerance_px": 1.0
+      },
+      "host_wall_candidates": [
+        {
+          "atom_id": "ATOM-WB019-01",
+          "endpoint_distance_sum_m": 0.0,
+          "segment_m": [
+            [
+              1.350251,
+              4.225153
+            ],
+            [
+              1.350251,
+              3.207044
+            ]
+          ]
+        }
+      ],
+      "expected_host_candidate": "ATOM-WB019-01",
+      "nearby_space_candidates": [
+        {
+          "space_id": "wc",
+          "point_m": [
+            0.6586595,
+            3.7342795000000004
+          ],
+          "distance_m": 0.6915915000000001
+        },
+        {
+          "space_id": "bath",
+          "point_m": [
+            1.1014249999999999,
+            4.9451025
+          ],
+          "distance_m": 0.9494826588086008
+        },
+        {
+          "space_id": "dry_balcony",
+          "point_m": [
+            0.3768995,
+            1.6107945
+          ],
+          "distance_m": 1.925787727360547
+        }
+      ],
+      "semantic_status": "candidate_only",
+      "traversable_status": "candidate_only",
+      "observations": [
+        "Pixel segment is inverse-projected from the governing metric contract.",
+        "OP007 and OP008 remain distinct openings; host and space associations are geometric candidates only."
+      ],
+      "artifacts": {
+        "crop": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\op007_op008_geometry_evidence_20260902\\OP007-crop-overlay.png",
+          "sha256": "0257d7b0b05b819b41f24c0cd29ab32ad6013597d914e3293b8dc1c8fcdaeed7",
+          "size": [
+            360,
+            465
+          ]
+        },
+        "full": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\op007_op008_geometry_evidence_20260902\\OP007-full-overlay.png",
+          "sha256": "67e9611725d0f997ca8778907e92821cb8339fb2eeda25e441c0d0bd88589418",
+          "size": [
+            2245,
+            3043
+          ]
+        }
+      }
+    },
+    {
+      "opening_id": "OP008",
+      "source_segment_m": [
+        [
+          1.134358,
+          4.254242
+        ],
+        [
+          2.085754,
+          4.254242
+        ]
+      ],
+      "source_segment_px": [
+        [
+          652.0000625954199,
+          1797.000038541939
+        ],
+        [
+          781.9999740458015,
+          1797.000038541939
+        ]
+      ],
+      "registration": {
+        "expected_pixel_segment": [
+          [
+            652.0000625954199,
+            1797.000038541939
+          ],
+          [
+            781.9999740458015,
+            1797.000038541939
+          ]
+        ],
+        "endpoint_error_px": [
+          0.0,
+          0.0
+        ],
+        "max_endpoint_error_px": 0.0,
+        "tolerance_px": 1.0
+      },
+      "host_wall_candidates": [
+        {
+          "atom_id": "ATOM-WB018-01",
+          "endpoint_distance_sum_m": 4.246130487217708e-07,
+          "segment_m": [
+            [
+              0.014637,
+              4.254242
+            ],
+            [
+              2.1208938568156426,
+              4.254242280285036
+            ]
+          ]
+        }
+      ],
+      "expected_host_candidate": "ATOM-WB018-01",
+      "nearby_space_candidates": [
+        {
+          "space_id": "bath",
+          "point_m": [
+            1.1014249999999999,
+            4.9451025
+          ],
+          "distance_m": 0.6916450050056391
+        },
+        {
+          "space_id": "wc",
+          "point_m": [
+            0.6586595,
+            3.7342795000000004
+          ],
+          "distance_m": 0.7047340379948305
+        },
+        {
+          "space_id": "lobby",
+          "point_m": [
+            3.3609915,
+            4.871315
+          ],
+          "distance_m": 1.4166897221111086
+        }
+      ],
+      "semantic_status": "candidate_only",
+      "traversable_status": "candidate_only",
+      "observations": [
+        "Pixel segment is inverse-projected from the governing metric contract.",
+        "OP007 and OP008 remain distinct openings; host and space associations are geometric candidates only."
+      ],
+      "artifacts": {
+        "crop": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\op007_op008_geometry_evidence_20260902\\OP008-crop-overlay.png",
+          "sha256": "4fa45b205e1cdd270936caa4df193dca27803a321a6635d52a28dc70f25c78d5",
+          "size": [
+            489,
+            360
+          ]
+        },
+        "full": {
+          "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\op007_op008_geometry_evidence_20260902\\OP008-full-overlay.png",
+          "sha256": "0faef05ef08db5d6636651b49cf7bfdd72ea00c320aa1e487710d6d220726106",
+          "size": [
+            2245,
+            3043
+          ]
+        }
+      }
+    }
+  ],
+  "semantic_promotion": false,
+  "build_authorized": false,
+  "ready": false
+}
