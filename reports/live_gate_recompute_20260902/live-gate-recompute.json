@@ -1,0 +1,768 @@
+{
+  "all_packets_fail_closed": true,
+  "all_source_opening_ids": [
+    "OP001",
+    "OP002",
+    "OP003",
+    "OP004",
+    "OP005",
+    "OP006",
+    "OP007",
+    "OP008",
+    "OP009",
+    "OP010",
+    "OP011"
+  ],
+  "blocker_counts": {
+    "S01_SOURCE_IDENTITY": 0,
+    "S02_ORIENTATION_COORDINATE_CHAIN": 0,
+    "S03_SCALE_AND_DIMENSIONS": 0,
+    "S04_OUTER_BOUNDARY": 0,
+    "S05_WALL_GRAPH": 0,
+    "S06_OPENINGS": 33,
+    "S07_SPACES_ADJACENCY_REACHABILITY": 37,
+    "S08_PROVENANCE_UNRESOLVED": 2
+  },
+  "build_authorized": false,
+  "covered_opening_ids": [
+    "OP001",
+    "OP002",
+    "OP003",
+    "OP004",
+    "OP005",
+    "OP006",
+    "OP007",
+    "OP008",
+    "OP009",
+    "OP010",
+    "OP011"
+  ],
+  "demoted_portal_deny_hash": "f12daabb6c8562b960a9f2c007f604300c4d15b48abf834e1a83ef3be9bd00dd",
+  "demoted_portal_score_effect": "none",
+  "hard_failures": [
+    "S06_OPENINGS",
+    "S07_SPACES_ADJACENCY_REACHABILITY",
+    "S08_PROVENANCE_UNRESOLVED"
+  ],
+  "opening_packets": [
+    {
+      "build_authorized": false,
+      "candidate_hash": "6a5b20d7cbb58ef8fead76984e32b10a54fb61e7ff7d36ada59352e7bf4a0c31",
+      "opening_ids": [
+        "OP001"
+      ],
+      "ready": false,
+      "score_effect": "none",
+      "semantic_promotion": false
+    },
+    {
+      "build_authorized": false,
+      "candidate_hash": "acfd4d74f22d00ace30ea24b7fddbf0e87fac5f58e0522f290edda32fb5a0fda",
+      "opening_ids": [
+        "OP002"
+      ],
+      "ready": false,
+      "score_effect": "none",
+      "semantic_promotion": false
+    },
+    {
+      "build_authorized": false,
+      "candidate_hash": "9ca0032f5245feeddc698b3dcbd567338bd56c708f2a071bb9b86401cb6e9471",
+      "opening_ids": [
+        "OP003"
+      ],
+      "ready": false,
+      "score_effect": "none",
+      "semantic_promotion": false
+    },
+    {
+      "build_authorized": false,
+      "candidate_hash": "2d19a47909cec808c14ad12ccbc5b2cb0050b3f4b1d8165b7a201ab0c76fffc3",
+      "opening_ids": [
+        "OP004"
+      ],
+      "ready": false,
+      "score_effect": "none",
+      "semantic_promotion": false
+    },
+    {
+      "build_authorized": false,
+      "candidate_hash": "590433f7f23d2e71ed45326531a61c9aae89748560302ed0cbf4707ad21c200e",
+      "opening_ids": [
+        "OP005",
+        "OP006"
+      ],
+      "ready": false,
+      "score_effect": "none",
+      "semantic_promotion": false
+    },
+    {
+      "build_authorized": false,
+      "candidate_hash": "873c2d87e27c39509588a01f7b9e85c0a7dd05a3441f816bf8d175d2af3b73e5",
+      "opening_ids": [
+        "OP007",
+        "OP008"
+      ],
+      "ready": false,
+      "score_effect": "none",
+      "semantic_promotion": false
+    },
+    {
+      "build_authorized": false,
+      "candidate_hash": "c4ccbf3fe02bc77f7a0be0a7639cb4221a4626ec8d9d08c00c74a5ad2392aa79",
+      "opening_ids": [
+        "OP009",
+        "OP010"
+      ],
+      "ready": false,
+      "score_effect": "none",
+      "semantic_promotion": false
+    },
+    {
+      "build_authorized": false,
+      "candidate_hash": "704bfcc5a70052010f995aa5de9adb7ac81e9d1c96b57665a7c5fedc2401064e",
+      "opening_ids": [
+        "OP011"
+      ],
+      "ready": false,
+      "score_effect": "none",
+      "semantic_promotion": false
+    }
+  ],
+  "ready": false,
+  "schema": "goal-loop-v2-1308-live-gate-recompute-v1",
+  "source_detail": {
+    "entity_blockers": {
+      "S01_SOURCE_IDENTITY": [],
+      "S02_ORIENTATION_COORDINATE_CHAIN": [],
+      "S03_SCALE_AND_DIMENSIONS": [],
+      "S04_OUTER_BOUNDARY": [],
+      "S05_WALL_GRAPH": [],
+      "S06_OPENINGS": [
+        {
+          "entity_id": "OP001",
+          "entity_type": "opening",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "overall status candidate"
+        },
+        {
+          "entity_id": "OP001",
+          "entity_type": "opening",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "door/entrance is not traversable"
+        },
+        {
+          "entity_id": "OP001",
+          "entity_type": "opening",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "side spaces unresolved"
+        },
+        {
+          "entity_id": "OP002",
+          "entity_type": "opening",
+          "evidence_refs": [
+            "EVIDENCE-OP002-ARBITER"
+          ],
+          "reason": "overall status candidate"
+        },
+        {
+          "entity_id": "OP002",
+          "entity_type": "opening",
+          "evidence_refs": [
+            "EVIDENCE-OP002-ARBITER"
+          ],
+          "reason": "source status candidate"
+        },
+        {
+          "entity_id": "OP002",
+          "entity_type": "opening",
+          "evidence_refs": [
+            "EVIDENCE-OP002-ARBITER"
+          ],
+          "reason": "effective status candidate"
+        },
+        {
+          "entity_id": "OP002",
+          "entity_type": "opening",
+          "evidence_refs": [
+            "EVIDENCE-OP002-ARBITER"
+          ],
+          "reason": "jamb geometry not confirmed"
+        },
+        {
+          "entity_id": "OP003",
+          "entity_type": "opening",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "overall status candidate"
+        },
+        {
+          "entity_id": "OP003",
+          "entity_type": "opening",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "source status candidate"
+        },
+        {
+          "entity_id": "OP003",
+          "entity_type": "opening",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "build disposition pending resolution"
+        },
+        {
+          "entity_id": "OP004",
+          "entity_type": "opening",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "overall status candidate"
+        },
+        {
+          "entity_id": "OP004",
+          "entity_type": "opening",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "source status candidate"
+        },
+        {
+          "entity_id": "OP004",
+          "entity_type": "opening",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "build disposition pending resolution"
+        },
+        {
+          "entity_id": "OP005",
+          "entity_type": "opening",
+          "evidence_refs": [
+            "EVIDENCE-OP002-ARBITER"
+          ],
+          "reason": "overall status candidate"
+        },
+        {
+          "entity_id": "OP005",
+          "entity_type": "opening",
+          "evidence_refs": [
+            "EVIDENCE-OP002-ARBITER"
+          ],
+          "reason": "source status candidate"
+        },
+        {
+          "entity_id": "OP006",
+          "entity_type": "opening",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "overall status candidate"
+        },
+        {
+          "entity_id": "OP006",
+          "entity_type": "opening",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "build disposition pending resolution"
+        },
+        {
+          "entity_id": "OP007",
+          "entity_type": "opening",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "overall status candidate"
+        },
+        {
+          "entity_id": "OP007",
+          "entity_type": "opening",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "source status candidate"
+        },
+        {
+          "entity_id": "OP007",
+          "entity_type": "opening",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "build disposition pending resolution"
+        },
+        {
+          "entity_id": "OP008",
+          "entity_type": "opening",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "overall status candidate"
+        },
+        {
+          "entity_id": "OP008",
+          "entity_type": "opening",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "source status candidate"
+        },
+        {
+          "entity_id": "OP008",
+          "entity_type": "opening",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "build disposition pending resolution"
+        },
+        {
+          "entity_id": "OP009",
+          "entity_type": "opening",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "overall status candidate"
+        },
+        {
+          "entity_id": "OP009",
+          "entity_type": "opening",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "source status candidate"
+        },
+        {
+          "entity_id": "OP009",
+          "entity_type": "opening",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "build disposition pending resolution"
+        },
+        {
+          "entity_id": "OP010",
+          "entity_type": "opening",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "overall status candidate"
+        },
+        {
+          "entity_id": "OP010",
+          "entity_type": "opening",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "source status candidate"
+        },
+        {
+          "entity_id": "OP010",
+          "entity_type": "opening",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "build disposition pending resolution"
+        },
+        {
+          "entity_id": "OP011",
+          "entity_type": "opening",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "overall status unresolved"
+        },
+        {
+          "entity_id": "OP011",
+          "entity_type": "opening",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "build disposition pending resolution"
+        },
+        {
+          "entity_id": "PORTAL-WB011-WB006-01",
+          "entity_type": "opening",
+          "evidence_refs": [
+            "EVIDENCE-OP002-ARBITER"
+          ],
+          "reason": "overall status candidate"
+        },
+        {
+          "entity_id": "PORTAL-WB011-WB006-01",
+          "entity_type": "opening",
+          "evidence_refs": [
+            "EVIDENCE-OP002-ARBITER"
+          ],
+          "reason": "source status candidate"
+        }
+      ],
+      "S07_SPACES_ADJACENCY_REACHABILITY": [
+        {
+          "entity_id": "rear_balcony",
+          "entity_type": "space",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "status is candidate"
+        },
+        {
+          "entity_id": "north_toilet",
+          "entity_type": "space",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "status is candidate"
+        },
+        {
+          "entity_id": "bedroom_02",
+          "entity_type": "space",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "status is candidate"
+        },
+        {
+          "entity_id": "bedroom_01",
+          "entity_type": "space",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "status is candidate"
+        },
+        {
+          "entity_id": "bedroom_corridor",
+          "entity_type": "space",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "status is candidate"
+        },
+        {
+          "entity_id": "lobby",
+          "entity_type": "space",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "status is candidate"
+        },
+        {
+          "entity_id": "kitchen",
+          "entity_type": "space",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "status is candidate"
+        },
+        {
+          "entity_id": "living_hall",
+          "entity_type": "space",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "status is candidate"
+        },
+        {
+          "entity_id": "bedroom_03",
+          "entity_type": "space",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "status is candidate"
+        },
+        {
+          "entity_id": "west_toilet",
+          "entity_type": "space",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "status is candidate"
+        },
+        {
+          "entity_id": "common_core_circulation",
+          "entity_type": "space",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "status is candidate"
+        },
+        {
+          "entity_id": "lift_shaft",
+          "entity_type": "space",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "status is candidate"
+        },
+        {
+          "entity_id": "bath",
+          "entity_type": "space",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "status is candidate"
+        },
+        {
+          "entity_id": "wc",
+          "entity_type": "space",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "status is candidate"
+        },
+        {
+          "entity_id": "dry_balcony",
+          "entity_type": "space",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "status is candidate"
+        },
+        {
+          "entity_id": "front_balcony",
+          "entity_type": "space",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "status is candidate"
+        },
+        {
+          "entity_id": "truth",
+          "entity_type": "adjacency",
+          "evidence_refs": [],
+          "reason": "status is unresolved"
+        },
+        {
+          "entity_id": "EDGE-OP002",
+          "entity_type": "adjacency_edge",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "status is candidate"
+        },
+        {
+          "entity_id": "EDGE-OP003",
+          "entity_type": "adjacency_edge",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "status is candidate"
+        },
+        {
+          "entity_id": "EDGE-OP004",
+          "entity_type": "adjacency_edge",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "status is candidate"
+        },
+        {
+          "entity_id": "EDGE-OP009",
+          "entity_type": "adjacency_edge",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "status is candidate"
+        },
+        {
+          "entity_id": "bath",
+          "entity_type": "reachability",
+          "evidence_refs": [],
+          "reason": "space unreachable from exterior through confirmed edges"
+        },
+        {
+          "entity_id": "bedroom_01",
+          "entity_type": "reachability",
+          "evidence_refs": [],
+          "reason": "space unreachable from exterior through confirmed edges"
+        },
+        {
+          "entity_id": "bedroom_02",
+          "entity_type": "reachability",
+          "evidence_refs": [],
+          "reason": "space unreachable from exterior through confirmed edges"
+        },
+        {
+          "entity_id": "bedroom_03",
+          "entity_type": "reachability",
+          "evidence_refs": [],
+          "reason": "space unreachable from exterior through confirmed edges"
+        },
+        {
+          "entity_id": "bedroom_corridor",
+          "entity_type": "reachability",
+          "evidence_refs": [],
+          "reason": "space unreachable from exterior through confirmed edges"
+        },
+        {
+          "entity_id": "common_core_circulation",
+          "entity_type": "reachability",
+          "evidence_refs": [],
+          "reason": "space unreachable from exterior through confirmed edges"
+        },
+        {
+          "entity_id": "dry_balcony",
+          "entity_type": "reachability",
+          "evidence_refs": [],
+          "reason": "space unreachable from exterior through confirmed edges"
+        },
+        {
+          "entity_id": "front_balcony",
+          "entity_type": "reachability",
+          "evidence_refs": [],
+          "reason": "space unreachable from exterior through confirmed edges"
+        },
+        {
+          "entity_id": "kitchen",
+          "entity_type": "reachability",
+          "evidence_refs": [],
+          "reason": "space unreachable from exterior through confirmed edges"
+        },
+        {
+          "entity_id": "lift_shaft",
+          "entity_type": "reachability",
+          "evidence_refs": [],
+          "reason": "space unreachable from exterior through confirmed edges"
+        },
+        {
+          "entity_id": "living_hall",
+          "entity_type": "reachability",
+          "evidence_refs": [],
+          "reason": "space unreachable from exterior through confirmed edges"
+        },
+        {
+          "entity_id": "lobby",
+          "entity_type": "reachability",
+          "evidence_refs": [],
+          "reason": "space unreachable from exterior through confirmed edges"
+        },
+        {
+          "entity_id": "north_toilet",
+          "entity_type": "reachability",
+          "evidence_refs": [],
+          "reason": "space unreachable from exterior through confirmed edges"
+        },
+        {
+          "entity_id": "rear_balcony",
+          "entity_type": "reachability",
+          "evidence_refs": [],
+          "reason": "space unreachable from exterior through confirmed edges"
+        },
+        {
+          "entity_id": "wc",
+          "entity_type": "reachability",
+          "evidence_refs": [],
+          "reason": "space unreachable from exterior through confirmed edges"
+        },
+        {
+          "entity_id": "west_toilet",
+          "entity_type": "reachability",
+          "evidence_refs": [],
+          "reason": "space unreachable from exterior through confirmed edges"
+        }
+      ],
+      "S08_PROVENANCE_UNRESOLVED": [
+        {
+          "entity_id": "B1308-SEMANTIC-ADJACENCY",
+          "entity_type": "unresolved_issue",
+          "evidence_refs": [
+            "VIEW-CANONICAL"
+          ],
+          "reason": "Historical portal connectivity status is candidate_fail; component C12 is unreachable and semantic splits are not confirmed."
+        },
+        {
+          "entity_id": "ASSUME-Z-RESEARCH",
+          "entity_type": "assumption",
+          "evidence_refs": [],
+          "reason": "status/policy is unverified/allow_research_only"
+        }
+      ]
+    },
+    "entity_counts": {
+      "adjacency_edges": 4,
+      "anchors": 28,
+      "assumptions": 1,
+      "atoms": 35,
+      "branches": 21,
+      "junctions": 49,
+      "openings": 12,
+      "spaces": 16,
+      "unresolved_issues": 5
+    },
+    "hard_failures": [
+      "S06_OPENINGS",
+      "S07_SPACES_ADJACENCY_REACHABILITY",
+      "S08_PROVENANCE_UNRESOLVED"
+    ],
+    "maximum_score": 100,
+    "minimum_required": 95,
+    "provenance_chain": {
+      "lineage_type": "live_gate_recompute_20260902"
+    },
+    "reference_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+    "sample_id": "1308",
+    "schema": "goal-loop-v2-source-contract-detail-v1",
+    "scoring_version": "goal-loop-v2-scoring-v2",
+    "source_hash": "28520f8f7ee3ac2d36a2c86de874b7201c7aba27a0e4c3af2d57deaa441a99d7",
+    "weighted_score": 65
+  },
+  "source_report": {
+    "checks": [
+      {
+        "evidence": "mechanical V2.1 source-contract audit; weight=5; entity_blockers=0",
+        "id": "S01_SOURCE_IDENTITY",
+        "status": "pass"
+      },
+      {
+        "evidence": "mechanical V2.1 source-contract audit; weight=5; entity_blockers=0",
+        "id": "S02_ORIENTATION_COORDINATE_CHAIN",
+        "status": "pass"
+      },
+      {
+        "evidence": "mechanical V2.1 source-contract audit; weight=15; entity_blockers=0",
+        "id": "S03_SCALE_AND_DIMENSIONS",
+        "status": "pass"
+      },
+      {
+        "evidence": "mechanical V2.1 source-contract audit; weight=20; entity_blockers=0",
+        "id": "S04_OUTER_BOUNDARY",
+        "status": "pass"
+      },
+      {
+        "evidence": "mechanical V2.1 source-contract audit; weight=20; entity_blockers=0",
+        "id": "S05_WALL_GRAPH",
+        "status": "pass"
+      },
+      {
+        "evidence": "mechanical V2.1 source-contract audit; weight=20; entity_blockers=33",
+        "id": "S06_OPENINGS",
+        "status": "fail"
+      },
+      {
+        "evidence": "mechanical V2.1 source-contract audit; weight=10; entity_blockers=37",
+        "id": "S07_SPACES_ADJACENCY_REACHABILITY",
+        "status": "fail"
+      },
+      {
+        "evidence": "mechanical V2.1 source-contract audit; weight=5; entity_blockers=2",
+        "id": "S08_PROVENANCE_UNRESOLVED",
+        "status": "fail"
+      }
+    ],
+    "layer": "source_contract",
+    "reference_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+    "sample_id": "1308",
+    "schema": "goal-loop-v2-score-layer-v1",
+    "scoring_version": "goal-loop-v2-scoring-v2",
+    "source_hash": "28520f8f7ee3ac2d36a2c86de874b7201c7aba27a0e4c3af2d57deaa441a99d7"
+  },
+  "source_score": 65,
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1"
+}
