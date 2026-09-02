@@ -1,0 +1,85 @@
+{
+  "schema": "op011-geometry-evidence-v1",
+  "sample_id": "1308",
+  "opening_id": "OP011",
+  "source_path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\data\\goal_loop_v2\\references\\1308\\canonical-raw-portrait.png",
+  "source_sha256": "b85ff7446e2d1a123e3a41dc541ea9d6e081f3978d3460d6de8ef9906119bc07",
+  "source_document_path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\data\\goal_loop_v2\\references\\1308\\reference-coordinate-authorized-v21.json",
+  "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "registration_model": "canonical_px_to_metric_3x3",
+  "source_status": "confirmed",
+  "source_kind": "glazed_interface",
+  "source_segment_m": [
+    [
+      0.764777,
+      3.134322
+    ],
+    [
+      0.764777,
+      2.341651
+    ]
+  ],
+  "source_segment_px": [
+    [
+      601.5000633587787,
+      1951.0000124118108
+    ],
+    [
+      601.5000633587787,
+      2060.0000421348313
+    ]
+  ],
+  "registration": {
+    "expected_pixel_segment": [
+      [
+        601.5000633587787,
+        1951.0000124118108
+      ],
+      [
+        601.5000633587787,
+        2060.0000421348313
+      ]
+    ],
+    "endpoint_error_px": [
+      0.0,
+      0.0
+    ],
+    "max_endpoint_error_px": 0.0,
+    "tolerance_px": 1.0
+  },
+  "host_wall_candidates": [],
+  "effective_void": null,
+  "jamb_before": null,
+  "jamb_after": null,
+  "side_a_space_id": null,
+  "side_b_space_id": null,
+  "semantic_status": "candidate_only",
+  "traversable_status": "candidate_only",
+  "observations": [
+    "Metric segment is inverse-projected through the governing source registration.",
+    "OP011 remains an unresolved glazed-interface coordinate fact.",
+    "No host, void, jamb, type, space, adjacency, traversability, score, or build fact is inferred."
+  ],
+  "artifacts": {
+    "crop": {
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\op011_geometry_evidence_20260902\\OP011-crop-overlay.png",
+      "sha256": "166aecf6b188fa35d7c222df2350d53375125fc7092cfa24e8eafc3d09a9a4dc",
+      "size": [
+        360,
+        469
+      ]
+    },
+    "full": {
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\op011_geometry_evidence_20260902\\OP011-full-overlay.png",
+      "sha256": "ac1216ee6a0f3c5234456b41b06a45bf6ca12086cd89e7202ba633f6b1cd92c2",
+      "size": [
+        2245,
+        3043
+      ]
+    }
+  },
+  "semantic_promotion": false,
+  "build_authorized": false,
+  "ready": false
+}
