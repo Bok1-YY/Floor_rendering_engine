@@ -1,0 +1,1376 @@
+{
+  "schema": "exterior-root-search-candidate-v2",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+  "outer_boundary": {
+    "status": "confirmed",
+    "polygon_m": [
+      [
+        0.0,
+        15.308
+      ],
+      [
+        9.17,
+        15.308
+      ],
+      [
+        9.17,
+        0.0
+      ],
+      [
+        7.52037037,
+        0.0
+      ],
+      [
+        7.52037037,
+        -2.070434532
+      ],
+      [
+        2.425925926,
+        -2.070434532
+      ],
+      [
+        2.425925926,
+        0.0
+      ],
+      [
+        0.0,
+        0.0
+      ]
+    ],
+    "polygon_hash": "1957c0c0b1b8d332af0096925d5c9d3f7eb3ca11109d9a911b3ad40fd3ae9c33",
+    "edge_count": 8
+  },
+  "geometry_policy": {
+    "engine": "shapely",
+    "topology_tolerance_m": 1e-09,
+    "near_miss_threshold_m": 0.1,
+    "actual_crossing_definition": "positive inside-or-boundary length and positive outside length with boundary intersection",
+    "near_miss_is_root_evidence": false
+  },
+  "input_bindings": {
+    "demoted_portal_deny_schema": "source-exclusion-deny-sidecar-v1",
+    "demoted_portal_deny_candidate_hash": "f12daabb6c8562b960a9f2c007f604300c4d15b48abf834e1a83ef3be9bd00dd",
+    "op001_unit_scope_file_sha256": "bf0d8118ebe1584d4d33586e884332a58144f96e9c3d7826098566ec31f7a117",
+    "op001_unit_scope_candidate_hash": "052125fe3027f9ee3025c72a9755b71d7a25b4f43125cae29cb80354b2c4a858"
+  },
+  "source_graph_root_state": {
+    "adjacency_status": "unresolved",
+    "entrance_opening_id": null
+  },
+  "opening_ids": [
+    "OP001",
+    "OP002",
+    "OP003",
+    "OP004",
+    "OP005",
+    "OP006",
+    "OP007",
+    "OP008",
+    "OP009",
+    "OP010",
+    "OP011",
+    "PORTAL-WB011-WB006-01"
+  ],
+  "opening_count": 12,
+  "openings": [
+    {
+      "opening_id": "OP001",
+      "source_record_state": {
+        "opening_status": "candidate",
+        "build_disposition": "cut",
+        "build_kind": "entrance",
+        "source_observation_kind": "entrance_symbol",
+        "source_observation_status": "confirmed",
+        "record_fields_are_root_confirmations": false
+      },
+      "segment_scans": [
+        {
+          "source": "source_observation.nominal_segment_m",
+          "authority": "source_record",
+          "segment_m": [
+            [
+              3.432346,
+              5.62869
+            ],
+            [
+              4.39838,
+              5.62869
+            ]
+          ],
+          "geometry": {
+            "segment_m": [
+              [
+                3.432346,
+                5.62869
+              ],
+              [
+                4.39838,
+                5.62869
+              ]
+            ],
+            "segment_length_m": 0.966034,
+            "endpoint_locations": [
+              "inside",
+              "inside"
+            ],
+            "intersects_boundary": false,
+            "boundary_contact_without_crossing": false,
+            "actual_crossing": false,
+            "shapely_crosses_outer_polygon": false,
+            "intersection_geometry_type": "LineString",
+            "intersection_point_count": 0,
+            "boundary_overlap_length_m": 0.0,
+            "inside_or_boundary_length_m": 0.966034,
+            "outside_length_m": 0.0,
+            "minimum_boundary_distance_m": 3.432346,
+            "nearest_point_on_segment_m": [
+              3.432346,
+              5.62869
+            ],
+            "nearest_point_on_boundary_m": [
+              0.0,
+              5.62869
+            ],
+            "nearest_boundary_edge_ids": [
+              "OUTER-EDGE-008"
+            ],
+            "classification": "internal"
+          }
+        },
+        {
+          "source": "effective_void.segment_m",
+          "authority": "source_record_effective_void",
+          "effective_void_record_status": "confirmed",
+          "segment_m": [
+            [
+              3.432346,
+              5.62869
+            ],
+            [
+              4.363994000000001,
+              5.62869
+            ]
+          ],
+          "geometry": {
+            "segment_m": [
+              [
+                3.432346,
+                5.62869
+              ],
+              [
+                4.363994000000001,
+                5.62869
+              ]
+            ],
+            "segment_length_m": 0.931648,
+            "endpoint_locations": [
+              "inside",
+              "inside"
+            ],
+            "intersects_boundary": false,
+            "boundary_contact_without_crossing": false,
+            "actual_crossing": false,
+            "shapely_crosses_outer_polygon": false,
+            "intersection_geometry_type": "LineString",
+            "intersection_point_count": 0,
+            "boundary_overlap_length_m": 0.0,
+            "inside_or_boundary_length_m": 0.931648,
+            "outside_length_m": 0.0,
+            "minimum_boundary_distance_m": 3.432346,
+            "nearest_point_on_segment_m": [
+              3.432346,
+              5.62869
+            ],
+            "nearest_point_on_boundary_m": [
+              0.0,
+              5.62869
+            ],
+            "nearest_boundary_edge_ids": [
+              "OUTER-EDGE-008"
+            ],
+            "classification": "internal"
+          }
+        }
+      ],
+      "primary_segment_source": "source_observation.nominal_segment_m",
+      "primary_classification": "internal",
+      "primary_minimum_boundary_distance_m": 3.432346,
+      "any_actual_crossing": false,
+      "hard_denied": false,
+      "deny_candidate_hash": null,
+      "geometric_boundary_crossing_candidate": false,
+      "root_candidate": false,
+      "root_confirmation": false,
+      "entrance_confirmation": false,
+      "outside_side_confirmation": false,
+      "traversability_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "human_readable_boundary": {
+        "geometric_contact_is_not_root_confirmation": true,
+        "source_label_is_not_root_confirmation": true,
+        "near_miss_is_not_boundary_contact": true,
+        "root_requires_bounded_outside_inside_and_traversability": true
+      },
+      "candidate_hash": "1a1cade9eeb168755f3fbce5452c709a51414e1c243017925287ec29173d521c"
+    },
+    {
+      "opening_id": "OP002",
+      "source_record_state": {
+        "opening_status": "candidate",
+        "build_disposition": "cut",
+        "build_kind": "door",
+        "source_observation_kind": "door",
+        "source_observation_status": "candidate",
+        "record_fields_are_root_confirmations": false
+      },
+      "segment_scans": [
+        {
+          "source": "source_observation.nominal_segment_m",
+          "authority": "source_record",
+          "segment_m": [
+            [
+              4.423994413407822,
+              10.690147268408552
+            ],
+            [
+              4.423994413407822,
+              9.802937767220904
+            ]
+          ],
+          "geometry": {
+            "segment_m": [
+              [
+                4.423994413407822,
+                10.690147268408552
+              ],
+              [
+                4.423994413407822,
+                9.802937767220904
+              ]
+            ],
+            "segment_length_m": 0.887209501,
+            "endpoint_locations": [
+              "inside",
+              "inside"
+            ],
+            "intersects_boundary": false,
+            "boundary_contact_without_crossing": false,
+            "actual_crossing": false,
+            "shapely_crosses_outer_polygon": false,
+            "intersection_geometry_type": "LineString",
+            "intersection_point_count": 0,
+            "boundary_overlap_length_m": 0.0,
+            "inside_or_boundary_length_m": 0.887209501,
+            "outside_length_m": 0.0,
+            "minimum_boundary_distance_m": 4.423994413,
+            "nearest_point_on_segment_m": [
+              4.423994413,
+              10.690147268
+            ],
+            "nearest_point_on_boundary_m": [
+              0.0,
+              10.690147268
+            ],
+            "nearest_boundary_edge_ids": [
+              "OUTER-EDGE-008"
+            ],
+            "classification": "internal"
+          }
+        },
+        {
+          "source": "effective_void.segment_m",
+          "authority": "source_record_effective_void",
+          "effective_void_record_status": "candidate",
+          "segment_m": [
+            [
+              4.423994413407822,
+              10.690147268408552
+            ],
+            [
+              4.423994413407822,
+              9.802937767220904
+            ]
+          ],
+          "geometry": {
+            "segment_m": [
+              [
+                4.423994413407822,
+                10.690147268408552
+              ],
+              [
+                4.423994413407822,
+                9.802937767220904
+              ]
+            ],
+            "segment_length_m": 0.887209501,
+            "endpoint_locations": [
+              "inside",
+              "inside"
+            ],
+            "intersects_boundary": false,
+            "boundary_contact_without_crossing": false,
+            "actual_crossing": false,
+            "shapely_crosses_outer_polygon": false,
+            "intersection_geometry_type": "LineString",
+            "intersection_point_count": 0,
+            "boundary_overlap_length_m": 0.0,
+            "inside_or_boundary_length_m": 0.887209501,
+            "outside_length_m": 0.0,
+            "minimum_boundary_distance_m": 4.423994413,
+            "nearest_point_on_segment_m": [
+              4.423994413,
+              10.690147268
+            ],
+            "nearest_point_on_boundary_m": [
+              0.0,
+              10.690147268
+            ],
+            "nearest_boundary_edge_ids": [
+              "OUTER-EDGE-008"
+            ],
+            "classification": "internal"
+          }
+        }
+      ],
+      "primary_segment_source": "source_observation.nominal_segment_m",
+      "primary_classification": "internal",
+      "primary_minimum_boundary_distance_m": 4.423994413,
+      "any_actual_crossing": false,
+      "hard_denied": false,
+      "deny_candidate_hash": null,
+      "geometric_boundary_crossing_candidate": false,
+      "root_candidate": false,
+      "root_confirmation": false,
+      "entrance_confirmation": false,
+      "outside_side_confirmation": false,
+      "traversability_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "human_readable_boundary": {
+        "geometric_contact_is_not_root_confirmation": true,
+        "source_label_is_not_root_confirmation": true,
+        "near_miss_is_not_boundary_contact": true,
+        "root_requires_bounded_outside_inside_and_traversability": true
+      },
+      "candidate_hash": "6f9b42536a8989e0ccf594da2427647bff78b7d75379e506acf62e22a881a51e"
+    },
+    {
+      "opening_id": "OP003",
+      "source_record_state": {
+        "opening_status": "candidate",
+        "build_disposition": "exclude_pending_resolution",
+        "build_kind": null,
+        "source_observation_kind": "door",
+        "source_observation_status": "candidate",
+        "record_fields_are_root_confirmations": false
+      },
+      "segment_scans": [
+        {
+          "source": "source_observation.nominal_segment_m",
+          "authority": "source_record",
+          "segment_m": [
+            [
+              0.014637,
+              10.341081
+            ],
+            [
+              0.93676,
+              10.341081
+            ]
+          ],
+          "geometry": {
+            "segment_m": [
+              [
+                0.014637,
+                10.341081
+              ],
+              [
+                0.93676,
+                10.341081
+              ]
+            ],
+            "segment_length_m": 0.922123,
+            "endpoint_locations": [
+              "inside",
+              "inside"
+            ],
+            "intersects_boundary": false,
+            "boundary_contact_without_crossing": false,
+            "actual_crossing": false,
+            "shapely_crosses_outer_polygon": false,
+            "intersection_geometry_type": "LineString",
+            "intersection_point_count": 0,
+            "boundary_overlap_length_m": 0.0,
+            "inside_or_boundary_length_m": 0.922123,
+            "outside_length_m": 0.0,
+            "minimum_boundary_distance_m": 0.014637,
+            "nearest_point_on_segment_m": [
+              0.014637,
+              10.341081
+            ],
+            "nearest_point_on_boundary_m": [
+              0.0,
+              10.341081
+            ],
+            "nearest_boundary_edge_ids": [
+              "OUTER-EDGE-008"
+            ],
+            "classification": "near-miss"
+          }
+        }
+      ],
+      "primary_segment_source": "source_observation.nominal_segment_m",
+      "primary_classification": "near-miss",
+      "primary_minimum_boundary_distance_m": 0.014637,
+      "any_actual_crossing": false,
+      "hard_denied": false,
+      "deny_candidate_hash": null,
+      "geometric_boundary_crossing_candidate": false,
+      "root_candidate": false,
+      "root_confirmation": false,
+      "entrance_confirmation": false,
+      "outside_side_confirmation": false,
+      "traversability_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "human_readable_boundary": {
+        "geometric_contact_is_not_root_confirmation": true,
+        "source_label_is_not_root_confirmation": true,
+        "near_miss_is_not_boundary_contact": true,
+        "root_requires_bounded_outside_inside_and_traversability": true
+      },
+      "candidate_hash": "91d9dc6307367acfb142e37125d8559bbf182d6af3ebd20eb3fd4793ebe3680c"
+    },
+    {
+      "opening_id": "OP004",
+      "source_record_state": {
+        "opening_status": "candidate",
+        "build_disposition": "exclude_pending_resolution",
+        "build_kind": null,
+        "source_observation_kind": "door",
+        "source_observation_status": "candidate",
+        "record_fields_are_root_confirmations": false
+      },
+      "segment_scans": [
+        {
+          "source": "source_observation.nominal_segment_m",
+          "authority": "source_record",
+          "segment_m": [
+            [
+              5.792542,
+              14.340796
+            ],
+            [
+              5.792542,
+              13.43177
+            ]
+          ],
+          "geometry": {
+            "segment_m": [
+              [
+                5.792542,
+                14.340796
+              ],
+              [
+                5.792542,
+                13.43177
+              ]
+            ],
+            "segment_length_m": 0.909026,
+            "endpoint_locations": [
+              "inside",
+              "inside"
+            ],
+            "intersects_boundary": false,
+            "boundary_contact_without_crossing": false,
+            "actual_crossing": false,
+            "shapely_crosses_outer_polygon": false,
+            "intersection_geometry_type": "LineString",
+            "intersection_point_count": 0,
+            "boundary_overlap_length_m": 0.0,
+            "inside_or_boundary_length_m": 0.909026,
+            "outside_length_m": 0.0,
+            "minimum_boundary_distance_m": 0.967204,
+            "nearest_point_on_segment_m": [
+              5.792542,
+              14.340796
+            ],
+            "nearest_point_on_boundary_m": [
+              5.792542,
+              15.308
+            ],
+            "nearest_boundary_edge_ids": [
+              "OUTER-EDGE-001"
+            ],
+            "classification": "internal"
+          }
+        }
+      ],
+      "primary_segment_source": "source_observation.nominal_segment_m",
+      "primary_classification": "internal",
+      "primary_minimum_boundary_distance_m": 0.967204,
+      "any_actual_crossing": false,
+      "hard_denied": false,
+      "deny_candidate_hash": null,
+      "geometric_boundary_crossing_candidate": false,
+      "root_candidate": false,
+      "root_confirmation": false,
+      "entrance_confirmation": false,
+      "outside_side_confirmation": false,
+      "traversability_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "human_readable_boundary": {
+        "geometric_contact_is_not_root_confirmation": true,
+        "source_label_is_not_root_confirmation": true,
+        "near_miss_is_not_boundary_contact": true,
+        "root_requires_bounded_outside_inside_and_traversability": true
+      },
+      "candidate_hash": "73827b243e87d34d18774dc5ff1b3e9bf8e3c2b7ad443c1cf4248c5cf7bfb20d"
+    },
+    {
+      "opening_id": "OP005",
+      "source_record_state": {
+        "opening_status": "candidate",
+        "build_disposition": "evidence_only",
+        "build_kind": null,
+        "source_observation_kind": "unknown",
+        "source_observation_status": "candidate",
+        "record_fields_are_root_confirmations": false
+      },
+      "segment_scans": [
+        {
+          "source": "source_observation.nominal_segment_m",
+          "authority": "source_record",
+          "segment_m": [
+            [
+              4.483994,
+              11.315557244655583
+            ],
+            [
+              5.408324022346369,
+              11.315557244655583
+            ]
+          ],
+          "geometry": {
+            "segment_m": [
+              [
+                4.483994,
+                11.315557244655583
+              ],
+              [
+                5.408324022346369,
+                11.315557244655583
+              ]
+            ],
+            "segment_length_m": 0.924330022,
+            "endpoint_locations": [
+              "inside",
+              "inside"
+            ],
+            "intersects_boundary": false,
+            "boundary_contact_without_crossing": false,
+            "actual_crossing": false,
+            "shapely_crosses_outer_polygon": false,
+            "intersection_geometry_type": "LineString",
+            "intersection_point_count": 0,
+            "boundary_overlap_length_m": 0.0,
+            "inside_or_boundary_length_m": 0.924330022,
+            "outside_length_m": 0.0,
+            "minimum_boundary_distance_m": 3.761675978,
+            "nearest_point_on_segment_m": [
+              5.408324022,
+              11.315557245
+            ],
+            "nearest_point_on_boundary_m": [
+              9.17,
+              11.315557245
+            ],
+            "nearest_boundary_edge_ids": [
+              "OUTER-EDGE-002"
+            ],
+            "classification": "internal"
+          }
+        }
+      ],
+      "primary_segment_source": "source_observation.nominal_segment_m",
+      "primary_classification": "internal",
+      "primary_minimum_boundary_distance_m": 3.761675978,
+      "any_actual_crossing": false,
+      "hard_denied": false,
+      "deny_candidate_hash": null,
+      "geometric_boundary_crossing_candidate": false,
+      "root_candidate": false,
+      "root_confirmation": false,
+      "entrance_confirmation": false,
+      "outside_side_confirmation": false,
+      "traversability_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "human_readable_boundary": {
+        "geometric_contact_is_not_root_confirmation": true,
+        "source_label_is_not_root_confirmation": true,
+        "near_miss_is_not_boundary_contact": true,
+        "root_requires_bounded_outside_inside_and_traversability": true
+      },
+      "candidate_hash": "ce9f83ae2a1254b72bfd393678692556ab520e6b1da10ec34fdc002e3e1e1136"
+    },
+    {
+      "opening_id": "OP006",
+      "source_record_state": {
+        "opening_status": "candidate",
+        "build_disposition": "exclude_pending_resolution",
+        "build_kind": null,
+        "source_observation_kind": "door",
+        "source_observation_status": "confirmed",
+        "record_fields_are_root_confirmations": false
+      },
+      "segment_scans": [
+        {
+          "source": "source_observation.nominal_segment_m",
+          "authority": "source_record",
+          "segment_m": [
+            [
+              5.792542,
+              11.221019
+            ],
+            [
+              5.792542,
+              10.290176
+            ]
+          ],
+          "geometry": {
+            "segment_m": [
+              [
+                5.792542,
+                11.221019
+              ],
+              [
+                5.792542,
+                10.290176
+              ]
+            ],
+            "segment_length_m": 0.930843,
+            "endpoint_locations": [
+              "inside",
+              "inside"
+            ],
+            "intersects_boundary": false,
+            "boundary_contact_without_crossing": false,
+            "actual_crossing": false,
+            "shapely_crosses_outer_polygon": false,
+            "intersection_geometry_type": "LineString",
+            "intersection_point_count": 0,
+            "boundary_overlap_length_m": 0.0,
+            "inside_or_boundary_length_m": 0.930843,
+            "outside_length_m": 0.0,
+            "minimum_boundary_distance_m": 3.377458,
+            "nearest_point_on_segment_m": [
+              5.792542,
+              11.221019
+            ],
+            "nearest_point_on_boundary_m": [
+              9.17,
+              11.221019
+            ],
+            "nearest_boundary_edge_ids": [
+              "OUTER-EDGE-002"
+            ],
+            "classification": "internal"
+          }
+        }
+      ],
+      "primary_segment_source": "source_observation.nominal_segment_m",
+      "primary_classification": "internal",
+      "primary_minimum_boundary_distance_m": 3.377458,
+      "any_actual_crossing": false,
+      "hard_denied": false,
+      "deny_candidate_hash": null,
+      "geometric_boundary_crossing_candidate": false,
+      "root_candidate": false,
+      "root_confirmation": false,
+      "entrance_confirmation": false,
+      "outside_side_confirmation": false,
+      "traversability_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "human_readable_boundary": {
+        "geometric_contact_is_not_root_confirmation": true,
+        "source_label_is_not_root_confirmation": true,
+        "near_miss_is_not_boundary_contact": true,
+        "root_requires_bounded_outside_inside_and_traversability": true
+      },
+      "candidate_hash": "4f8d1fd919da039b3e0af8900330e7f5b84ca84708a302d187b5c55ee0da8f9c"
+    },
+    {
+      "opening_id": "OP007",
+      "source_record_state": {
+        "opening_status": "candidate",
+        "build_disposition": "exclude_pending_resolution",
+        "build_kind": null,
+        "source_observation_kind": "door",
+        "source_observation_status": "candidate",
+        "record_fields_are_root_confirmations": false
+      },
+      "segment_scans": [
+        {
+          "source": "source_observation.nominal_segment_m",
+          "authority": "source_record",
+          "segment_m": [
+            [
+              1.350251,
+              4.028804
+            ],
+            [
+              1.350251,
+              3.272494
+            ]
+          ],
+          "geometry": {
+            "segment_m": [
+              [
+                1.350251,
+                4.028804
+              ],
+              [
+                1.350251,
+                3.272494
+              ]
+            ],
+            "segment_length_m": 0.75631,
+            "endpoint_locations": [
+              "inside",
+              "inside"
+            ],
+            "intersects_boundary": false,
+            "boundary_contact_without_crossing": false,
+            "actual_crossing": false,
+            "shapely_crosses_outer_polygon": false,
+            "intersection_geometry_type": "LineString",
+            "intersection_point_count": 0,
+            "boundary_overlap_length_m": 0.0,
+            "inside_or_boundary_length_m": 0.75631,
+            "outside_length_m": 0.0,
+            "minimum_boundary_distance_m": 1.350251,
+            "nearest_point_on_segment_m": [
+              1.350251,
+              4.028804
+            ],
+            "nearest_point_on_boundary_m": [
+              0.0,
+              4.028804
+            ],
+            "nearest_boundary_edge_ids": [
+              "OUTER-EDGE-008"
+            ],
+            "classification": "internal"
+          }
+        }
+      ],
+      "primary_segment_source": "source_observation.nominal_segment_m",
+      "primary_classification": "internal",
+      "primary_minimum_boundary_distance_m": 1.350251,
+      "any_actual_crossing": false,
+      "hard_denied": false,
+      "deny_candidate_hash": null,
+      "geometric_boundary_crossing_candidate": false,
+      "root_candidate": false,
+      "root_confirmation": false,
+      "entrance_confirmation": false,
+      "outside_side_confirmation": false,
+      "traversability_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "human_readable_boundary": {
+        "geometric_contact_is_not_root_confirmation": true,
+        "source_label_is_not_root_confirmation": true,
+        "near_miss_is_not_boundary_contact": true,
+        "root_requires_bounded_outside_inside_and_traversability": true
+      },
+      "candidate_hash": "6cdd0e8dde6f95a3e5e1c4640b0abe4f3cf526f340c4d8aa40ae6e1aceb2da8a"
+    },
+    {
+      "opening_id": "OP008",
+      "source_record_state": {
+        "opening_status": "candidate",
+        "build_disposition": "exclude_pending_resolution",
+        "build_kind": null,
+        "source_observation_kind": "door",
+        "source_observation_status": "candidate",
+        "record_fields_are_root_confirmations": false
+      },
+      "segment_scans": [
+        {
+          "source": "source_observation.nominal_segment_m",
+          "authority": "source_record",
+          "segment_m": [
+            [
+              1.134358,
+              4.254242
+            ],
+            [
+              2.085754,
+              4.254242
+            ]
+          ],
+          "geometry": {
+            "segment_m": [
+              [
+                1.134358,
+                4.254242
+              ],
+              [
+                2.085754,
+                4.254242
+              ]
+            ],
+            "segment_length_m": 0.951396,
+            "endpoint_locations": [
+              "inside",
+              "inside"
+            ],
+            "intersects_boundary": false,
+            "boundary_contact_without_crossing": false,
+            "actual_crossing": false,
+            "shapely_crosses_outer_polygon": false,
+            "intersection_geometry_type": "LineString",
+            "intersection_point_count": 0,
+            "boundary_overlap_length_m": 0.0,
+            "inside_or_boundary_length_m": 0.951396,
+            "outside_length_m": 0.0,
+            "minimum_boundary_distance_m": 1.134358,
+            "nearest_point_on_segment_m": [
+              1.134358,
+              4.254242
+            ],
+            "nearest_point_on_boundary_m": [
+              0.0,
+              4.254242
+            ],
+            "nearest_boundary_edge_ids": [
+              "OUTER-EDGE-008"
+            ],
+            "classification": "internal"
+          }
+        }
+      ],
+      "primary_segment_source": "source_observation.nominal_segment_m",
+      "primary_classification": "internal",
+      "primary_minimum_boundary_distance_m": 1.134358,
+      "any_actual_crossing": false,
+      "hard_denied": false,
+      "deny_candidate_hash": null,
+      "geometric_boundary_crossing_candidate": false,
+      "root_candidate": false,
+      "root_confirmation": false,
+      "entrance_confirmation": false,
+      "outside_side_confirmation": false,
+      "traversability_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "human_readable_boundary": {
+        "geometric_contact_is_not_root_confirmation": true,
+        "source_label_is_not_root_confirmation": true,
+        "near_miss_is_not_boundary_contact": true,
+        "root_requires_bounded_outside_inside_and_traversability": true
+      },
+      "candidate_hash": "bdc28c4934826ab73b28d420c0a5e78c5e67f0a1b151b16949879b05c48161a8"
+    },
+    {
+      "opening_id": "OP009",
+      "source_record_state": {
+        "opening_status": "candidate",
+        "build_disposition": "exclude_pending_resolution",
+        "build_kind": null,
+        "source_observation_kind": "glazed_access_door",
+        "source_observation_status": "candidate",
+        "record_fields_are_root_confirmations": false
+      },
+      "segment_scans": [
+        {
+          "source": "source_observation.nominal_segment_m",
+          "authority": "source_record",
+          "segment_m": [
+            [
+              1.478324,
+              14.25353
+            ],
+            [
+              2.94933,
+              14.25353
+            ]
+          ],
+          "geometry": {
+            "segment_m": [
+              [
+                1.478324,
+                14.25353
+              ],
+              [
+                2.94933,
+                14.25353
+              ]
+            ],
+            "segment_length_m": 1.471006,
+            "endpoint_locations": [
+              "inside",
+              "inside"
+            ],
+            "intersects_boundary": false,
+            "boundary_contact_without_crossing": false,
+            "actual_crossing": false,
+            "shapely_crosses_outer_polygon": false,
+            "intersection_geometry_type": "LineString",
+            "intersection_point_count": 0,
+            "boundary_overlap_length_m": 0.0,
+            "inside_or_boundary_length_m": 1.471006,
+            "outside_length_m": 0.0,
+            "minimum_boundary_distance_m": 1.05447,
+            "nearest_point_on_segment_m": [
+              1.478324,
+              14.25353
+            ],
+            "nearest_point_on_boundary_m": [
+              1.478324,
+              15.308
+            ],
+            "nearest_boundary_edge_ids": [
+              "OUTER-EDGE-001"
+            ],
+            "classification": "internal"
+          }
+        }
+      ],
+      "primary_segment_source": "source_observation.nominal_segment_m",
+      "primary_classification": "internal",
+      "primary_minimum_boundary_distance_m": 1.05447,
+      "any_actual_crossing": false,
+      "hard_denied": false,
+      "deny_candidate_hash": null,
+      "geometric_boundary_crossing_candidate": false,
+      "root_candidate": false,
+      "root_confirmation": false,
+      "entrance_confirmation": false,
+      "outside_side_confirmation": false,
+      "traversability_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "human_readable_boundary": {
+        "geometric_contact_is_not_root_confirmation": true,
+        "source_label_is_not_root_confirmation": true,
+        "near_miss_is_not_boundary_contact": true,
+        "root_requires_bounded_outside_inside_and_traversability": true
+      },
+      "candidate_hash": "7dd9ce8985291db9ad6fc8ac91fc5c8693d6b0bc3540fd9688491d54f539d4b6"
+    },
+    {
+      "opening_id": "OP010",
+      "source_record_state": {
+        "opening_status": "candidate",
+        "build_disposition": "exclude_pending_resolution",
+        "build_kind": null,
+        "source_observation_kind": "glazed_access_door",
+        "source_observation_status": "candidate",
+        "record_fields_are_root_confirmations": false
+      },
+      "segment_scans": [
+        {
+          "source": "source_observation.nominal_segment_m",
+          "authority": "source_record",
+          "segment_m": [
+            [
+              5.452235,
+              0.003636
+            ],
+            [
+              6.937877,
+              0.003636
+            ]
+          ],
+          "geometry": {
+            "segment_m": [
+              [
+                5.452235,
+                0.003636
+              ],
+              [
+                6.937877,
+                0.003636
+              ]
+            ],
+            "segment_length_m": 1.485642,
+            "endpoint_locations": [
+              "inside",
+              "inside"
+            ],
+            "intersects_boundary": false,
+            "boundary_contact_without_crossing": false,
+            "actual_crossing": false,
+            "shapely_crosses_outer_polygon": false,
+            "intersection_geometry_type": "LineString",
+            "intersection_point_count": 0,
+            "boundary_overlap_length_m": 0.0,
+            "inside_or_boundary_length_m": 1.485642,
+            "outside_length_m": 0.0,
+            "minimum_boundary_distance_m": 0.582504718,
+            "nearest_point_on_segment_m": [
+              6.937877,
+              0.003636
+            ],
+            "nearest_point_on_boundary_m": [
+              7.52037037,
+              0.0
+            ],
+            "nearest_boundary_edge_ids": [
+              "OUTER-EDGE-003",
+              "OUTER-EDGE-004"
+            ],
+            "classification": "internal"
+          }
+        }
+      ],
+      "primary_segment_source": "source_observation.nominal_segment_m",
+      "primary_classification": "internal",
+      "primary_minimum_boundary_distance_m": 0.582504718,
+      "any_actual_crossing": false,
+      "hard_denied": false,
+      "deny_candidate_hash": null,
+      "geometric_boundary_crossing_candidate": false,
+      "root_candidate": false,
+      "root_confirmation": false,
+      "entrance_confirmation": false,
+      "outside_side_confirmation": false,
+      "traversability_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "human_readable_boundary": {
+        "geometric_contact_is_not_root_confirmation": true,
+        "source_label_is_not_root_confirmation": true,
+        "near_miss_is_not_boundary_contact": true,
+        "root_requires_bounded_outside_inside_and_traversability": true
+      },
+      "candidate_hash": "c18f5c5dc9e55d5cf9b4d0c60bbd53ddcccfefcaf7242dad0db252dfdbbd0880"
+    },
+    {
+      "opening_id": "OP011",
+      "source_record_state": {
+        "opening_status": "unresolved",
+        "build_disposition": "exclude_pending_resolution",
+        "build_kind": null,
+        "source_observation_kind": "glazed_interface",
+        "source_observation_status": "confirmed",
+        "record_fields_are_root_confirmations": false
+      },
+      "segment_scans": [
+        {
+          "source": "source_observation.nominal_segment_m",
+          "authority": "source_record",
+          "segment_m": [
+            [
+              0.764777,
+              3.134322
+            ],
+            [
+              0.764777,
+              2.341651
+            ]
+          ],
+          "geometry": {
+            "segment_m": [
+              [
+                0.764777,
+                3.134322
+              ],
+              [
+                0.764777,
+                2.341651
+              ]
+            ],
+            "segment_length_m": 0.792671,
+            "endpoint_locations": [
+              "inside",
+              "inside"
+            ],
+            "intersects_boundary": false,
+            "boundary_contact_without_crossing": false,
+            "actual_crossing": false,
+            "shapely_crosses_outer_polygon": false,
+            "intersection_geometry_type": "LineString",
+            "intersection_point_count": 0,
+            "boundary_overlap_length_m": 0.0,
+            "inside_or_boundary_length_m": 0.792671,
+            "outside_length_m": 0.0,
+            "minimum_boundary_distance_m": 0.764777,
+            "nearest_point_on_segment_m": [
+              0.764777,
+              3.134322
+            ],
+            "nearest_point_on_boundary_m": [
+              0.0,
+              3.134322
+            ],
+            "nearest_boundary_edge_ids": [
+              "OUTER-EDGE-008"
+            ],
+            "classification": "internal"
+          }
+        }
+      ],
+      "primary_segment_source": "source_observation.nominal_segment_m",
+      "primary_classification": "internal",
+      "primary_minimum_boundary_distance_m": 0.764777,
+      "any_actual_crossing": false,
+      "hard_denied": false,
+      "deny_candidate_hash": null,
+      "geometric_boundary_crossing_candidate": false,
+      "root_candidate": false,
+      "root_confirmation": false,
+      "entrance_confirmation": false,
+      "outside_side_confirmation": false,
+      "traversability_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "human_readable_boundary": {
+        "geometric_contact_is_not_root_confirmation": true,
+        "source_label_is_not_root_confirmation": true,
+        "near_miss_is_not_boundary_contact": true,
+        "root_requires_bounded_outside_inside_and_traversability": true
+      },
+      "candidate_hash": "2ec4fd3ff160d8ed0de6f6ec61757d3b96255d10973affb5937a9947075d7c66"
+    },
+    {
+      "opening_id": "PORTAL-WB011-WB006-01",
+      "source_record_state": {
+        "opening_status": "candidate",
+        "build_disposition": "evidence_only",
+        "build_kind": null,
+        "source_observation_kind": "unknown",
+        "source_observation_status": "candidate",
+        "record_fields_are_root_confirmations": false
+      },
+      "segment_scans": [
+        {
+          "source": "source_observation.nominal_segment_m",
+          "authority": "source_record",
+          "segment_m": [
+            [
+              3.4616201117318437,
+              9.715671258907363
+            ],
+            [
+              4.363994000000001,
+              9.715671258907363
+            ]
+          ],
+          "geometry": {
+            "segment_m": [
+              [
+                3.4616201117318437,
+                9.715671258907363
+              ],
+              [
+                4.363994000000001,
+                9.715671258907363
+              ]
+            ],
+            "segment_length_m": 0.902373888,
+            "endpoint_locations": [
+              "inside",
+              "inside"
+            ],
+            "intersects_boundary": false,
+            "boundary_contact_without_crossing": false,
+            "actual_crossing": false,
+            "shapely_crosses_outer_polygon": false,
+            "intersection_geometry_type": "LineString",
+            "intersection_point_count": 0,
+            "boundary_overlap_length_m": 0.0,
+            "inside_or_boundary_length_m": 0.902373888,
+            "outside_length_m": 0.0,
+            "minimum_boundary_distance_m": 3.461620112,
+            "nearest_point_on_segment_m": [
+              3.461620112,
+              9.715671259
+            ],
+            "nearest_point_on_boundary_m": [
+              0.0,
+              9.715671259
+            ],
+            "nearest_boundary_edge_ids": [
+              "OUTER-EDGE-008"
+            ],
+            "classification": "internal"
+          }
+        }
+      ],
+      "primary_segment_source": "source_observation.nominal_segment_m",
+      "primary_classification": "hard-denied-portal",
+      "primary_minimum_boundary_distance_m": 3.461620112,
+      "any_actual_crossing": false,
+      "hard_denied": true,
+      "deny_candidate_hash": "f12daabb6c8562b960a9f2c007f604300c4d15b48abf834e1a83ef3be9bd00dd",
+      "geometric_boundary_crossing_candidate": false,
+      "root_candidate": false,
+      "root_confirmation": false,
+      "entrance_confirmation": false,
+      "outside_side_confirmation": false,
+      "traversability_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "human_readable_boundary": {
+        "geometric_contact_is_not_root_confirmation": true,
+        "source_label_is_not_root_confirmation": true,
+        "near_miss_is_not_boundary_contact": true,
+        "root_requires_bounded_outside_inside_and_traversability": true
+      },
+      "candidate_hash": "5f4d2c6bb7cdd905adc00690ac30d2ab1d5e3b8b6861400c9f7f2fd10ef2be16"
+    }
+  ],
+  "near_miss_ids": [
+    "OP003"
+  ],
+  "boundary_touch_ids": [],
+  "actual_crossing_ids": [],
+  "hard_denied_ids": [
+    "PORTAL-WB011-WB006-01"
+  ],
+  "special_summaries": {
+    "OP001": {
+      "classification": "internal",
+      "minimum_boundary_distance_m": 3.432346,
+      "building_exterior_root_confirmation": false,
+      "unit_root_candidate": "hypothesis",
+      "unit_root_confirmation": false,
+      "entry_label_is_source_pixel_context_only": true
+    },
+    "OP003": {
+      "classification": "near-miss",
+      "minimum_boundary_distance_m": 0.014637,
+      "near_miss_is_not_crossing": true
+    },
+    "OP009": {
+      "classification": "internal",
+      "minimum_boundary_distance_m": 1.05447,
+      "balcony_facing_is_not_exterior_root": true
+    },
+    "OP010": {
+      "classification": "internal",
+      "minimum_boundary_distance_m": 0.582504718,
+      "balcony_facing_is_not_exterior_root": true
+    }
+  },
+  "excluded_non_source_candidates": {
+    "OP012": {
+      "reason": "not present in current source opening records",
+      "included_in_scan": false,
+      "eligible_as_root": false
+    },
+    "GATE": {
+      "reason": "site/plot label, not an opening record",
+      "included_in_scan": false,
+      "eligible_as_root": false
+    }
+  },
+  "root_status": "needs_human_or_source_policy",
+  "root_opening_id": null,
+  "next_policy_gate": {
+    "required": true,
+    "reason": "no source opening segment crosses the confirmed building outer boundary",
+    "allowed_options": [
+      {
+        "id": "human_confirmed_in_frame_exterior_segment",
+        "risk_class": "evidence_required",
+        "result_authority": "candidate_until_full_geometry_and_traversability_gate"
+      },
+      {
+        "id": "human_authorized_unit_scope_root_policy",
+        "risk_class": "human_policy_required",
+        "result_authority": "unit_scope_only_not_building_exterior"
+      },
+      {
+        "id": "human_authorized_off_frame_root_hypothesis",
+        "risk_class": "human_policy_and_hypothesis_only",
+        "result_authority": "hypothesis_only_no_graph_edge"
+      }
+    ],
+    "automatic_model_authority": false,
+    "source_mutation_authorized": false,
+    "score_change_authorized": false
+  },
+  "any_geometric_boundary_crossing_candidate": false,
+  "root_confirmation": false,
+  "entrance_confirmation": false,
+  "outside_side_confirmation": false,
+  "traversability_confirmation": false,
+  "pair_confirmation": false,
+  "adjacency_confirmation": false,
+  "reachability_confirmation": false,
+  "source_correction_authorized": false,
+  "semantic_promotion": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "ready": false,
+  "candidate_hash": "dfc5ff48f69a2e6fa539a96c4cb968ee2f54750bfcac6688f03b3f90bca3bc8f"
+}
