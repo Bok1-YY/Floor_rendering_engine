@@ -1,0 +1,750 @@
+{
+  "schema": "partition-targeted-adjudication-evidence-v1",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+  "target_aware_wall_candidate_hash": "fd4e8b2b787715800fadcbd3bf4867b27a990baf8ae3d3c8a348834eb3dc9aed",
+  "cut_matrix_candidate_hash": "ffe9dc923fd998ab28e984d75951b913f21af8e15f0c45cb9d4a42de6ef8f613",
+  "partition_file_sha256": "ea324b82e533c2346883d440ec0bec71b7e2ea8509853c73b6a3fa15547ce6a3",
+  "partition_candidate_hash": "cc2f512bc8db5c6516548e5a747251789290071a4277888d553dfe3c8369b5aa",
+  "pair_candidate_hash": "5fb410dcee736042652f2a8b290305737b3e4e10178e7263b9ef8e998400dae2",
+  "opening_ids": [
+    "OP002",
+    "OP006",
+    "OP007",
+    "OP010"
+  ],
+  "openings": [
+    {
+      "opening_id": "OP002",
+      "host_atom_id": "ATOM-WB006-02",
+      "registered_segment_m": [
+        [
+          4.423994413407822,
+          10.690147268408552
+        ],
+        [
+          4.423994413407822,
+          9.802937767220904
+        ]
+      ],
+      "directed_side_assignment": {
+        "side_a": "bedroom_corridor",
+        "side_b": "bedroom_01"
+      },
+      "public_cell": {
+        "space_id": "bedroom_corridor",
+        "polygon_hash": "83af109ea3b15b42718c37f9cc21f6af240f69730cc1e633a643e9f5e12b3109",
+        "polygons": [
+          {
+            "exterior": [
+              [
+                5.448906699606406,
+                7.141868742807237
+              ],
+              [
+                4.48399430875878,
+                7.457812435029438
+              ],
+              [
+                4.483994004,
+                12.630005
+              ],
+              [
+                5.732542,
+                12.630005
+              ],
+              [
+                5.732542,
+                11.37555668
+              ],
+              [
+                5.348324127,
+                11.375557349
+              ],
+              [
+                5.348323918,
+                11.255557349
+              ],
+              [
+                5.732541998,
+                11.25555668
+              ],
+              [
+                5.732541899,
+                7.801265511
+              ],
+              [
+                5.737684972,
+                7.80126551
+              ],
+              [
+                5.737621314,
+                7.683080293
+              ],
+              [
+                7.340923728573136,
+                7.682216707693454
+              ],
+              [
+                5.448906699606406,
+                7.141868742807237
+              ]
+            ],
+            "holes": []
+          }
+        ]
+      },
+      "non_public_anchor_ids": [
+        "bedroom_01"
+      ],
+      "pre_cut_anchor_groups": [
+        [
+          "bath"
+        ],
+        [
+          "bedroom_01"
+        ],
+        [
+          "bedroom_02"
+        ],
+        [
+          "bedroom_03"
+        ],
+        [
+          "bedroom_corridor",
+          "kitchen",
+          "living_hall",
+          "lobby"
+        ],
+        [
+          "common_core_circulation"
+        ],
+        [
+          "dry_balcony"
+        ],
+        [
+          "front_balcony"
+        ],
+        [
+          "lift_shaft"
+        ],
+        [
+          "north_toilet"
+        ],
+        [
+          "rear_balcony"
+        ],
+        [
+          "wc"
+        ],
+        [
+          "west_toilet"
+        ]
+      ],
+      "post_cut_anchor_groups": [
+        [
+          "bath"
+        ],
+        [
+          "bedroom_01",
+          "bedroom_corridor",
+          "kitchen",
+          "living_hall",
+          "lobby"
+        ],
+        [
+          "bedroom_02"
+        ],
+        [
+          "bedroom_03"
+        ],
+        [
+          "common_core_circulation"
+        ],
+        [
+          "dry_balcony"
+        ],
+        [
+          "front_balcony"
+        ],
+        [
+          "lift_shaft"
+        ],
+        [
+          "north_toilet"
+        ],
+        [
+          "rear_balcony"
+        ],
+        [
+          "wc"
+        ],
+        [
+          "west_toilet"
+        ]
+      ],
+      "jamb_classification": "sufficient",
+      "jamb_threshold_m": 0.12,
+      "sensitivity_stable": true,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "build_authorized": false,
+      "artifact_bindings": []
+    },
+    {
+      "opening_id": "OP006",
+      "host_atom_id": "ATOM-WB007-02",
+      "registered_segment_m": [
+        [
+          5.792542,
+          11.221019
+        ],
+        [
+          5.792542,
+          10.290176
+        ]
+      ],
+      "directed_side_assignment": {
+        "side_a": "bedroom_03",
+        "side_b": "bedroom_corridor"
+      },
+      "public_cell": {
+        "space_id": "bedroom_corridor",
+        "polygon_hash": "83af109ea3b15b42718c37f9cc21f6af240f69730cc1e633a643e9f5e12b3109",
+        "polygons": [
+          {
+            "exterior": [
+              [
+                5.448906699606406,
+                7.141868742807237
+              ],
+              [
+                4.48399430875878,
+                7.457812435029438
+              ],
+              [
+                4.483994004,
+                12.630005
+              ],
+              [
+                5.732542,
+                12.630005
+              ],
+              [
+                5.732542,
+                11.37555668
+              ],
+              [
+                5.348324127,
+                11.375557349
+              ],
+              [
+                5.348323918,
+                11.255557349
+              ],
+              [
+                5.732541998,
+                11.25555668
+              ],
+              [
+                5.732541899,
+                7.801265511
+              ],
+              [
+                5.737684972,
+                7.80126551
+              ],
+              [
+                5.737621314,
+                7.683080293
+              ],
+              [
+                7.340923728573136,
+                7.682216707693454
+              ],
+              [
+                5.448906699606406,
+                7.141868742807237
+              ]
+            ],
+            "holes": []
+          }
+        ]
+      },
+      "non_public_anchor_ids": [
+        "bedroom_03"
+      ],
+      "pre_cut_anchor_groups": [
+        [
+          "bath"
+        ],
+        [
+          "bedroom_01"
+        ],
+        [
+          "bedroom_02"
+        ],
+        [
+          "bedroom_03"
+        ],
+        [
+          "bedroom_corridor",
+          "kitchen",
+          "living_hall",
+          "lobby"
+        ],
+        [
+          "common_core_circulation"
+        ],
+        [
+          "dry_balcony"
+        ],
+        [
+          "front_balcony"
+        ],
+        [
+          "lift_shaft"
+        ],
+        [
+          "north_toilet"
+        ],
+        [
+          "rear_balcony"
+        ],
+        [
+          "wc"
+        ],
+        [
+          "west_toilet"
+        ]
+      ],
+      "post_cut_anchor_groups": [
+        [
+          "bath"
+        ],
+        [
+          "bedroom_01"
+        ],
+        [
+          "bedroom_02"
+        ],
+        [
+          "bedroom_03",
+          "bedroom_corridor",
+          "kitchen",
+          "living_hall",
+          "lobby"
+        ],
+        [
+          "common_core_circulation"
+        ],
+        [
+          "dry_balcony"
+        ],
+        [
+          "front_balcony"
+        ],
+        [
+          "lift_shaft"
+        ],
+        [
+          "north_toilet"
+        ],
+        [
+          "rear_balcony"
+        ],
+        [
+          "wc"
+        ],
+        [
+          "west_toilet"
+        ]
+      ],
+      "jamb_classification": "insufficient",
+      "jamb_threshold_m": 0.12,
+      "sensitivity_stable": true,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "build_authorized": false,
+      "artifact_bindings": []
+    },
+    {
+      "opening_id": "OP007",
+      "host_atom_id": "ATOM-WB019-01",
+      "registered_segment_m": [
+        [
+          1.350251,
+          4.028804
+        ],
+        [
+          1.350251,
+          3.272494
+        ]
+      ],
+      "directed_side_assignment": {
+        "side_a": "lobby",
+        "side_b": "wc"
+      },
+      "public_cell": {
+        "space_id": "lobby",
+        "polygon_hash": "ac99f688983f042febccb5452b4627416780ff25b2059b4aba3b302ff03f5868",
+        "polygons": [
+          {
+            "exterior": [
+              [
+                1.410251,
+                3.5614290505947266
+              ],
+              [
+                1.410251,
+                4.194242186
+              ],
+              [
+                2.120894,
+                4.19424228
+              ],
+              [
+                2.120894,
+                3.412899340941696
+              ],
+              [
+                1.410251,
+                3.5614290505947266
+              ]
+            ],
+            "holes": []
+          },
+          {
+            "exterior": [
+              [
+                5.448906699606406,
+                7.141868742807237
+              ],
+              [
+                4.805356959693232,
+                2.851826475976375
+              ],
+              [
+                2.240894,
+                3.387818442152341
+              ],
+              [
+                2.240894,
+                5.569228554
+              ],
+              [
+                4.39892086,
+                5.588686524
+              ],
+              [
+                4.398019175,
+                5.688689785
+              ],
+              [
+                4.483994413,
+                5.68868979
+              ],
+              [
+                4.48399430875878,
+                7.457812435029438
+              ],
+              [
+                5.448906699606406,
+                7.141868742807237
+              ]
+            ],
+            "holes": []
+          }
+        ]
+      },
+      "non_public_anchor_ids": [
+        "wc"
+      ],
+      "pre_cut_anchor_groups": [
+        [
+          "bath"
+        ],
+        [
+          "bedroom_01"
+        ],
+        [
+          "bedroom_02"
+        ],
+        [
+          "bedroom_03"
+        ],
+        [
+          "bedroom_corridor",
+          "kitchen",
+          "living_hall",
+          "lobby"
+        ],
+        [
+          "common_core_circulation"
+        ],
+        [
+          "dry_balcony"
+        ],
+        [
+          "front_balcony"
+        ],
+        [
+          "lift_shaft"
+        ],
+        [
+          "north_toilet"
+        ],
+        [
+          "rear_balcony"
+        ],
+        [
+          "wc"
+        ],
+        [
+          "west_toilet"
+        ]
+      ],
+      "post_cut_anchor_groups": [
+        [
+          "bath"
+        ],
+        [
+          "bedroom_01"
+        ],
+        [
+          "bedroom_02"
+        ],
+        [
+          "bedroom_03"
+        ],
+        [
+          "bedroom_corridor",
+          "kitchen",
+          "living_hall",
+          "lobby",
+          "wc"
+        ],
+        [
+          "common_core_circulation"
+        ],
+        [
+          "dry_balcony"
+        ],
+        [
+          "front_balcony"
+        ],
+        [
+          "lift_shaft"
+        ],
+        [
+          "north_toilet"
+        ],
+        [
+          "rear_balcony"
+        ],
+        [
+          "west_toilet"
+        ]
+      ],
+      "jamb_classification": "insufficient",
+      "jamb_threshold_m": 0.12,
+      "sensitivity_stable": true,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "build_authorized": false,
+      "artifact_bindings": []
+    },
+    {
+      "opening_id": "OP010",
+      "host_atom_id": "ATOM-WB003-03",
+      "registered_segment_m": [
+        [
+          5.452235,
+          0.003636
+        ],
+        [
+          6.937877,
+          0.003636
+        ]
+      ],
+      "directed_side_assignment": {
+        "side_a": "kitchen",
+        "side_b": "front_balcony"
+      },
+      "public_cell": {
+        "space_id": "kitchen",
+        "polygon_hash": "e6b5ca73bf92d6f684dd3599792572a1e8e9bc1b3875506be989b0ed38def319",
+        "polygons": [
+          {
+            "exterior": [
+              [
+                2.120894,
+                3.412899340941696
+              ],
+              [
+                2.120894,
+                3.207044
+              ],
+              [
+                2.240894,
+                3.207044
+              ],
+              [
+                2.240894,
+                3.387818442152341
+              ],
+              [
+                4.805356959693232,
+                2.851826475976375
+              ],
+              [
+                6.665357479599173,
+                0.103636
+              ],
+              [
+                0.824777,
+                0.103636
+              ],
+              [
+                0.824777,
+                3.154316
+              ],
+              [
+                1.339275,
+                3.154316
+              ],
+              [
+                1.339275,
+                3.207044
+              ],
+              [
+                1.410251,
+                3.207044
+              ],
+              [
+                1.410251,
+                3.5614290505947266
+              ],
+              [
+                2.120894,
+                3.412899340941696
+              ]
+            ],
+            "holes": []
+          }
+        ]
+      },
+      "non_public_anchor_ids": [
+        "front_balcony"
+      ],
+      "pre_cut_anchor_groups": [
+        [
+          "bath"
+        ],
+        [
+          "bedroom_01"
+        ],
+        [
+          "bedroom_02"
+        ],
+        [
+          "bedroom_03"
+        ],
+        [
+          "bedroom_corridor",
+          "kitchen",
+          "living_hall",
+          "lobby"
+        ],
+        [
+          "common_core_circulation"
+        ],
+        [
+          "dry_balcony"
+        ],
+        [
+          "front_balcony"
+        ],
+        [
+          "lift_shaft"
+        ],
+        [
+          "north_toilet"
+        ],
+        [
+          "rear_balcony"
+        ],
+        [
+          "wc"
+        ],
+        [
+          "west_toilet"
+        ]
+      ],
+      "post_cut_anchor_groups": [
+        [
+          "bath"
+        ],
+        [
+          "bedroom_01"
+        ],
+        [
+          "bedroom_02"
+        ],
+        [
+          "bedroom_03"
+        ],
+        [
+          "bedroom_corridor",
+          "front_balcony",
+          "kitchen",
+          "living_hall",
+          "lobby"
+        ],
+        [
+          "common_core_circulation"
+        ],
+        [
+          "dry_balcony"
+        ],
+        [
+          "lift_shaft"
+        ],
+        [
+          "north_toilet"
+        ],
+        [
+          "rear_balcony"
+        ],
+        [
+          "wc"
+        ],
+        [
+          "west_toilet"
+        ]
+      ],
+      "jamb_classification": "sufficient",
+      "jamb_threshold_m": 0.12,
+      "sensitivity_stable": true,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "build_authorized": false,
+      "artifact_bindings": []
+    }
+  ],
+  "pair_confirmation": false,
+  "adjacency_confirmation": false,
+  "semantic_promotion": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "ready": false,
+  "candidate_hash": "92ef7a612715826e50761a73a9d42c47a02bd58f888bcf243ccb0bdb63b3a14b"
+}
