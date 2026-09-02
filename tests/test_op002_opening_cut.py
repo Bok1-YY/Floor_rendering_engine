@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from tools.goal_loop_v2.op002_opening_cut import build_op002_opening_cut_candidate, validate_op002_opening_cut_candidate
+from tools.goal_loop_v2.jamb_policy import minimum_jamb_support_m
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -15,10 +16,11 @@ def _document():
 
 
 def test_op002_cut_candidate_is_fail_closed_and_bounded():
-    candidate = build_op002_opening_cut_candidate(_document())
+    document = _document()
+    candidate = build_op002_opening_cut_candidate(document)
     assert candidate["opening_id"] == "OP002"
     assert candidate["host_atom_id"] == "ATOM-WB006-02"
-    assert candidate["jamb_support_m"][0] > 0.12 and candidate["jamb_support_m"][1] > 0.12
+    assert all(value > minimum_jamb_support_m(document) for value in candidate["jamb_support_m"])
     assert candidate["cut_confirmation"] is False
     assert candidate["build_authorized"] is False
     assert len(candidate["sensitivity"]) == 5

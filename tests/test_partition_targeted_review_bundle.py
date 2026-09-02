@@ -6,7 +6,7 @@ from tools.goal_loop_v2.partition_targeted_review_bundle import build_partition_
 ROOT=Path(__file__).resolve().parents[1];SOURCE=ROOT/'data/goal_loop_v2/references/1308/reference-coordinate-authorized-v21.json';MANIFEST=ROOT/'reports/partition_targeted_adjudication_20260902/partition-targeted-adjudication.json';RESULTS=Path(r'C:/Users/1_1/Desktop/goal_loop_v2_1308_fal_partition_targeted_jamb50_20260902')
 def test_live_partition_targeted_bundle_migrates_op002_and_keeps_op010_excluded():
  if not RESULTS.is_dir():pytest.skip('live results unavailable')
- d=json.loads(SOURCE.read_text());b=build_partition_targeted_review_bundle(d,MANIFEST,RESULTS);assert b['usable_count']==1 and b['covered_opening_ids']==['OP002'] and b['correction_review_candidate_ids']==['OP002'];assert b['total_cost_usd']==pytest.approx(.0003299);assert b['excluded_opening_reviews'][0]['opening_id']=='OP010';assert b['build_authorized'] is False
+ d=json.loads(SOURCE.read_text());b=build_partition_targeted_review_bundle(d,MANIFEST,RESULTS);assert b['usable_count']==1 and b['covered_opening_ids']==['OP002'] and b['correction_review_candidate_ids']==['OP002'];assert b['failed_review_attempt_ids']==['OP006','OP007'] and all(x['parsed'] is None for x in b['failed_reviews']);assert b['total_cost_usd']==pytest.approx(.0010147);assert b['excluded_opening_reviews'][0]['opening_id']=='OP010';assert b['build_authorized'] is False
 def test_rehashed_promotion_is_rejected():
  if not RESULTS.is_dir():pytest.skip('live results unavailable')
  import tools.goal_loop_v2.partition_targeted_review_bundle as module

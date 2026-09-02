@@ -44,8 +44,8 @@
       "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
       "targeted_evidence_candidate_hash": "a064c9da05a7fbe150dd1eef2f5466df6dff217e45e50a163ab56a92e91e9cf9",
       "targeted_evidence_file_sha256": "3a6ac6ddd89cc54fd13f6cc80bbd614e62c316e1dc0d5d04da9caa0d48c785ab",
-      "review_bundle_candidate_hash": "df9b0e7c3f4e902c106d9652d894cc316c39249b6a5a323dea14824b11bbdedb",
-      "review_bundle_file_sha256": "c0f96325ea7c0460c1f22edbb6d224f326387b7cffc0186ce426cbb33e5521c4",
+      "review_bundle_candidate_hash": "e6ca564a7d5cfc697c392a1f9ea8e14c63d11d6b759cd0f93b5731932c7d971f",
+      "review_bundle_file_sha256": "46614410e986e9333edca7044e8a0786b36e54c9b7571f18076c860f54bbebcf",
       "review_result_file_sha256": "49024aff4bce33173aa0550c47277df74aed703321b47306d8ed2b00f389e48a",
       "review_result_canonical_sha256": "855b754a035e5bb2e80686dd4e62a8e605c775cddde4274be07d266c3ccd087e"
     },
@@ -65,7 +65,7 @@
       "semantic_promotion": true
     },
     "status": "candidate_only",
-    "candidate_hash": "1cbed5d19d70c4948c840a3be01873a6777a560735bc9b68dccab897cb192370"
+    "candidate_hash": "90123fd563e87ab04c4cd8165d49f1ff45c8e1849d7a92ed4a0971f4d83f2625"
   },
   "pair_confirmation": false,
   "adjacency_confirmation": false,
@@ -73,5 +73,5 @@
   "score_effect": "none",
   "build_authorized": false,
   "ready": false,
-  "candidate_hash": "0208c650a316f20fc412e75b44584759db6c1f50b9b1f35d48fed692f92aa931"
+  "candidate_hash": "c3fcb758783d8db1557117c990fdfc3ab5deb662923b24a9d2917ebb3b4bb17e"
 }

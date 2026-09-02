@@ -1,7 +1,7 @@
 {
   "adjacency_confirmation": false,
   "build_authorized": false,
-  "candidate_hash": "df9b0e7c3f4e902c106d9652d894cc316c39249b6a5a323dea14824b11bbdedb",
+  "candidate_hash": "e6ca564a7d5cfc697c392a1f9ea8e14c63d11d6b759cd0f93b5731932c7d971f",
   "correction_review_candidate_ids": [
     "OP002"
   ],
@@ -15,6 +15,52 @@
     {
       "opening_id": "OP010",
       "reason": "prior flash and pro reviews violated bare-JSON protocol; unchanged visual method not repeated after policy-only migration"
+    }
+  ],
+  "failed_review_attempt_ids": [
+    "OP006",
+    "OP007"
+  ],
+  "failed_reviews": [
+    {
+      "cost_usd": 0.0003424,
+      "image_bindings": [
+        {
+          "bytes": 1618181,
+          "filename": "OP006-full.png",
+          "sha256": "48f1dd689f9c7d36b186affc50a2c56b66f124b2aae97b150aba245601841e33"
+        },
+        {
+          "bytes": 237851,
+          "filename": "OP006-crop.png",
+          "sha256": "3e97f287ee354988448fefd25cddba5b4b299ed54940170759f16603c56dad7b"
+        }
+      ],
+      "opening_id": "OP006",
+      "parsed": null,
+      "reason": "bare_json_protocol_failed",
+      "result_canonical_sha256": "3f0749948631108bad4ddbdb418f6cccdd192919fc3fb5482f158da7c9fba9d8",
+      "result_file_sha256": "04a22f83b58f24d3d1d6e684e99b2f451c9fe031b672420aee68e29208550f1a"
+    },
+    {
+      "cost_usd": 0.0003424,
+      "image_bindings": [
+        {
+          "bytes": 1619453,
+          "filename": "OP007-full.png",
+          "sha256": "0679c77e757faf2c2ce4935518a3da4c6404b81f7a5f0b7e5915bb389942626e"
+        },
+        {
+          "bytes": 307091,
+          "filename": "OP007-crop.png",
+          "sha256": "b173483edf8af6feb78046d53a3fc7dfae010856d264f22286e5f8f471569e65"
+        }
+      ],
+      "opening_id": "OP007",
+      "parsed": null,
+      "reason": "bare_json_protocol_failed",
+      "result_canonical_sha256": "12362f6a193c616ffd2986631571b9b9b54702b565994ee0f99514dbe13c4c53",
+      "result_file_sha256": "4847b3c8c3cb630723102d43700c717c36735c5215d2007ea0efa8b21697a49e"
     }
   ],
   "pair_confirmation": false,
@@ -72,10 +118,10 @@
       "visual_geometry_agreement": true
     }
   ],
-  "schema": "partition-targeted-review-bundle-v2",
+  "schema": "partition-targeted-review-bundle-v3",
   "score_effect": "none",
   "semantic_promotion": false,
   "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
-  "total_cost_usd": 0.0003299,
+  "total_cost_usd": 0.0010147,
   "usable_count": 1
 }

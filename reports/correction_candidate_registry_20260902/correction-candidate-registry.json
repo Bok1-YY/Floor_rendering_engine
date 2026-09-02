@@ -1,7 +1,7 @@
 {
   "application_authorized": false,
   "build_authorized": false,
-  "candidate_hash": "40fb086ebea80bbb84cae29d88cb7a686ade2ebcd511b9f231b4173de9cff7ed",
+  "candidate_hash": "2d776f3a8df6d15269bd36c7fc37372ce81ae460667a8481ef990bdbc8ca5d93",
   "candidates": [
     {
       "application_authorized": false,
@@ -13,7 +13,7 @@
       "host_atom_id": "ATOM-WB006-02",
       "minimum_jamb_m": 1.999857732,
       "opening_id": "OP002",
-      "packet_hash": "1cbed5d19d70c4948c840a3be01873a6777a560735bc9b68dccab897cb192370",
+      "packet_hash": "90123fd563e87ab04c4cd8165d49f1ff45c8e1849d7a92ed4a0971f4d83f2625",
       "remaining_blockers": [
         "SOURCE_APPLICATION_REVIEW",
         "VERTICAL_POLICY_PENDING",
@@ -33,8 +33,8 @@
         ]
       ],
       "semantic_promotion": false,
-      "source_candidate_file_sha256": "67865114524b11a086942dafea17616b6bda135e5dbd08ad9b457a47ebe227d7",
-      "source_candidate_hash": "0208c650a316f20fc412e75b44584759db6c1f50b9b1f35d48fed692f92aa931",
+      "source_candidate_file_sha256": "ff5d3b1c2d0957653c314f65a87170471c732730dace9d2e0c45254dd2002bca",
+      "source_candidate_hash": "c3fcb758783d8db1557117c990fdfc3ab5deb662923b24a9d2917ebb3b4bb17e",
       "visual_advisory": "door",
       "width_m": 0.8872095011876482
     },

@@ -13,3 +13,9 @@ def test_missing_invalid_policy_fails_closed():
   if value is None:del f['opening_contract']['minimum_jamb_support_m']
   else:f['opening_contract']['minimum_jamb_support_m']=value
   with pytest.raises(ValueError):minimum_jamb_support_m(f)
+def test_policy_consumers_do_not_reintroduce_wall_thickness_as_jamb_minimum():
+ consumers=['op003_adjudication_candidate.py','op005_006_adjudication.py','op007_008_adjudication.py','op009_010_adjudication.py','build_targeted_cut_adjudication.py','build_partition_targeted_adjudication.py']
+ for name in consumers:
+  text=(ROOT/'tools/goal_loop_v2'/name).read_text(encoding='utf-8')
+  assert 'JAMB_MIN' not in text
+  assert '0.12' not in text and '.12' not in text
