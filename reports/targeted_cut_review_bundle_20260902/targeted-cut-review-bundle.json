@@ -1,0 +1,121 @@
+{
+  "adjacency_confirmation": false,
+  "all_visual_geometry_agree": true,
+  "build_authorized": false,
+  "candidate_hash": "77b7fbce555e424e75e3aadbe10b8bbf17074a04039ce5d7fc7970d79d538156",
+  "covered_opening_ids": [
+    "OP004",
+    "OP009"
+  ],
+  "cut_confirmation": false,
+  "decision": "source_correction_candidate_ready_for_independent_review",
+  "pair_confirmation": false,
+  "ready": false,
+  "reviews": [
+    {
+      "adjacency_confirmation": false,
+      "build_authorized": false,
+      "cost_usd": 0.0003287,
+      "cut_confirmation": false,
+      "geometry_packet_hash": "e8c906b611ca190fd9df93716ff047362abff1a1dafa43e660eae735a9e6440b",
+      "image_bindings": [
+        {
+          "bytes": 1616543,
+          "filename": "OP004-full.png",
+          "sha256": "a86a0b61ba0e64cb1f1c2470b697af67394dbbaf2399498a6bf178a8ce0942ba"
+        },
+        {
+          "bytes": 216049,
+          "filename": "OP004-crop.png",
+          "sha256": "de7834e129894afe5058967930e4818dcde17d04d233bff58cb86058566f7f61"
+        }
+      ],
+      "jamb_support": {
+        "candidate_minimum_m": 0.12,
+        "candidate_sufficient": true,
+        "host_parameters": [
+          0.225325824,
+          0.45810048
+        ],
+        "jamb_after_m": 2.116213,
+        "jamb_before_m": 0.879937,
+        "minimum_jamb_m": 0.879937
+      },
+      "merged_group": [
+        "bedroom_02",
+        "north_toilet"
+      ],
+      "opening_id": "OP004",
+      "pair_confirmation": false,
+      "parsed": {
+        "confidence": "high",
+        "host_alignment": "agree",
+        "opening_id": "OP004",
+        "opposite_face_geometry": "agree",
+        "segment_on_visible_opening": "yes",
+        "visual_kind": "door"
+      },
+      "result_canonical_sha256": "d5b1b71c250ab4e8c6333984a83c345d5f74771faa97ff72e6edef9a7c612888",
+      "result_file_sha256": "6bb9acd4db3f9d998f9eb7295d9711e445bd72da640404842a1dea6f38dd2f6f",
+      "score_effect": "none",
+      "semantic_promotion": false,
+      "visual_geometry_agreement": true
+    },
+    {
+      "adjacency_confirmation": false,
+      "build_authorized": false,
+      "cost_usd": 0.0003337,
+      "cut_confirmation": false,
+      "geometry_packet_hash": "e8c906b611ca190fd9df93716ff047362abff1a1dafa43e660eae735a9e6440b",
+      "image_bindings": [
+        {
+          "bytes": 1606759,
+          "filename": "OP009-full.png",
+          "sha256": "b936ce5149c385f61cf90a078f12f8f1ce34704ee107062f14a8a4c080875c5a"
+        },
+        {
+          "bytes": 283660,
+          "filename": "OP009-crop.png",
+          "sha256": "a6a762f92d5b46855181a9aec66043eb2a8c400c9a1364bc0b29c2a0ac14419e"
+        }
+      ],
+      "jamb_support": {
+        "candidate_minimum_m": 0.12,
+        "candidate_sufficient": true,
+        "host_parameters": [
+          0.333889783,
+          0.669449144
+        ],
+        "jamb_after_m": 1.44905,
+        "jamb_before_m": 1.463687,
+        "minimum_jamb_m": 1.44905
+      },
+      "merged_group": [
+        "bedroom_01",
+        "rear_balcony"
+      ],
+      "opening_id": "OP009",
+      "pair_confirmation": false,
+      "parsed": {
+        "confidence": "high",
+        "host_alignment": "agree",
+        "opening_id": "OP009",
+        "opposite_face_geometry": "agree",
+        "segment_on_visible_opening": "yes",
+        "visual_kind": "glazed_interface"
+      },
+      "result_canonical_sha256": "3b17aeb44bbd75eb3fd65b9265941706816a41a06b04b73ecec3d855cdda62cb",
+      "result_file_sha256": "c54e24ad1096828aa405ed3e4a9a0cf620b1fc019e9cfba8db69f41d63245ca2",
+      "score_effect": "none",
+      "semantic_promotion": false,
+      "visual_geometry_agreement": true
+    }
+  ],
+  "schema": "targeted-cut-review-bundle-v1",
+  "score_effect": "none",
+  "semantic_promotion": false,
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "targeted_evidence_candidate_hash": "e8c906b611ca190fd9df93716ff047362abff1a1dafa43e660eae735a9e6440b",
+  "targeted_evidence_file_sha256": "a585e805e7c8d6ed324a00fe90fab14b22b29767c616814e7547ea0e89e56068",
+  "total_cost_usd": 0.0006624
+}
