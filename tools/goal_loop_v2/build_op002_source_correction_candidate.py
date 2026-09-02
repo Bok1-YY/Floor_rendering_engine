@@ -1,7 +1,9 @@
 """Fail-closed, non-applying OP002 2D source-correction wrapper."""
-import json, hashlib
+import json, hashlib,sys
 from copy import deepcopy
 from pathlib import Path
+REPO_ROOT=Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:sys.path.insert(0,str(REPO_ROOT))
 from tools.fastloop_research.contract import canonical_json
 ROOT=Path(__file__).resolve().parents[2]; SRC=ROOT/'data/goal_loop_v2/references/1308/reference-coordinate-authorized-v21.json'; EVID=ROOT/'reports/partition_targeted_adjudication_20260902/partition-targeted-adjudication.json'; REVIEW=ROOT/'reports/partition_targeted_review_bundle_20260902/partition-targeted-review-bundle.json'; OUT=ROOT/'reports/op002_source_correction_candidate_20260902'
 def _sha(p): return hashlib.sha256(p.read_bytes()).hexdigest()
