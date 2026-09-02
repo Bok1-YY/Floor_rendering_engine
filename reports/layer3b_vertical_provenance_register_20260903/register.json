@@ -1,0 +1,1398 @@
+{
+  "schema": "layer3b-vertical-provenance-register-v3",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+  "layer3a_register_file_sha256": "c428b5c277e89b817139b61ccc22310847f62e47182c4eb6dead496afc046a26",
+  "layer3a_register_candidate_hash": "4ff72ad28612b4959049195bc7ea9f2b5bd61dd2c5ef11f960f007c773d6fdb4",
+  "clean_xy_evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+  "clean_xy_evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+  "assumption_registry_entry": {
+    "basis": "research_default",
+    "build_policy": "allow_research_only",
+    "category": "z_geometry",
+    "disclosure": "The source plan does not certify Z dimensions; these values are reversible research assumptions.",
+    "evidence_refs": [],
+    "id": "ASSUME-Z-RESEARCH",
+    "status": "unverified",
+    "targets": [
+      {
+        "entity_id": null,
+        "entity_kind": "bundle",
+        "field": "default wall/opening heights"
+      }
+    ],
+    "unit": "m",
+    "value": {
+      "door_head_m": 2.1,
+      "wall_height_m": 2.8
+    }
+  },
+  "opening_ids": [
+    "OP001",
+    "OP002",
+    "OP003",
+    "OP004",
+    "OP006",
+    "OP007",
+    "OP008",
+    "OP009",
+    "OP010"
+  ],
+  "excluded_opening_ids": [
+    "OP005",
+    "OP011",
+    "PORTAL-WB011-WB006-01",
+    "OP012"
+  ],
+  "rows": [
+    {
+      "opening_id": "OP001",
+      "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+      "source_record_state": {
+        "opening_status": "candidate",
+        "build_disposition": "cut",
+        "build_kind": "entrance",
+        "source_observation_kind": "entrance_symbol",
+        "source_observation_status": "confirmed",
+        "source_host_atom_id": "ATOM-WB016-02",
+        "effective_void_record_present": true,
+        "effective_void_record_status": "confirmed",
+        "effective_void_record_head_m": 2.1,
+        "effective_void_record_sill_m": 0.0,
+        "traversable_record_value": false,
+        "assumption_ids": [
+          "ASSUME-Z-RESEARCH"
+        ],
+        "record_fields_are_register_confirmations": false
+      },
+      "assumption_binding": {
+        "id": "ASSUME-Z-RESEARCH",
+        "basis": "research_default",
+        "status": "unverified",
+        "build_policy": "allow_research_only",
+        "value": {
+          "door_head_m": 2.1,
+          "wall_height_m": 2.8
+        }
+      },
+      "layer3a_binding": {
+        "register_file_sha256": "c428b5c277e89b817139b61ccc22310847f62e47182c4eb6dead496afc046a26",
+        "register_candidate_hash": "4ff72ad28612b4959049195bc7ea9f2b5bd61dd2c5ef11f960f007c773d6fdb4",
+        "bundle_candidate_hash": "1d464b43c5a990bb758b0943318a7ab7066ccc6ee758420472686a1397df747e",
+        "selected_result_file_sha256": "42dc50d62cff978b651c3473ef9863927fab6299f1d48e8857d01f4354c5db79",
+        "visual_subtype_candidate": "door",
+        "downstream_use_status": "accepted_with_quarantine",
+        "vertical_parameters_reviewed": false,
+        "vertical_authority": false
+      },
+      "xy_binding": {
+        "evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+        "evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+        "authority": "source_active",
+        "classification": "no_topology_change",
+        "matrix_cuttable": true,
+        "host_atom_id": "ATOM-WB016-02",
+        "segment_m": [
+          [
+            3.432346,
+            5.62869
+          ],
+          [
+            4.363994000000001,
+            5.62869
+          ]
+        ],
+        "source_pixels_untouched": true,
+        "vertical_authority": false,
+        "effective_void_authority": false
+      },
+      "opening_specific_audit_binding": null,
+      "op001_unit_scope_binding": {
+        "file_sha256": "bf0d8118ebe1584d4d33586e884332a58144f96e9c3d7826098566ec31f7a117",
+        "candidate_hash": "052125fe3027f9ee3025c72a9755b71d7a25b4f43125cae29cb80354b2c4a858",
+        "building_outer_boundary_intersection": false,
+        "building_exterior_root_confirmation": false,
+        "unit_root_candidate": "hypothesis",
+        "unit_root_confirmation": false,
+        "common_side_space_id": "common_core_circulation",
+        "unit_side_space_id": "lobby"
+      },
+      "vertical_parameters": {
+        "wall_height_m": {
+          "source_record_value": null,
+          "research_default_value": 2.8,
+          "provenance_class": "research_assumption",
+          "assumption_id": "ASSUME-Z-RESEARCH",
+          "source_explicit": false,
+          "human_authorized_default": false,
+          "eligible_for_source_promotion": false
+        },
+        "head_m": {
+          "source_record_value": 2.1,
+          "research_default_value": 2.1,
+          "provenance_class": "research_assumption_bound_to_candidate_source_record",
+          "assumption_id": "ASSUME-Z-RESEARCH",
+          "source_explicit": false,
+          "human_authorized_default": false,
+          "eligible_for_source_promotion": false
+        },
+        "sill_m": {
+          "source_record_value": 0.0,
+          "research_default_value": null,
+          "provenance_class": "unsupported_candidate_value",
+          "assumption_id": null,
+          "source_explicit": false,
+          "human_authorized_default": false,
+          "treatment": "unknown",
+          "usable_for_reversible_research_display": false,
+          "eligible_for_source_promotion": false
+        }
+      },
+      "vertical_display_policy": {
+        "status": "candidate_requires_dedicated_plan_and_review",
+        "wall_height_research_display": true,
+        "head_guide_binding": "bound_research_assumption",
+        "sill_display_authorized": false,
+        "must_keep_source_walls_intact": true,
+        "opening_geometry_authorized": false,
+        "semantic_objects_authorized": false,
+        "ifc_authorized": false
+      },
+      "human_readable_boundary": {
+        "source_record_status_is_not_register_confirmation": true,
+        "effective_void_record_status_does_not_authorize_a_cut": true,
+        "entry_label_is_source_pixel_context_only": true,
+        "numeric_z_values_are_unverified_research_assumptions": true,
+        "coverage_means_provenance_rows_only": true
+      },
+      "remaining_blockers": [
+        "BUILDING_EXTERIOR_ROOT_REJECTED",
+        "UNIT_ROOT_SOURCE_AUTHORITY_MISSING",
+        "SOURCE_VERTICAL_AUTHORITY_MISSING",
+        "SILL_AUTHORITY_MISSING",
+        "EFFECTIVE_VOID_CONFIRMATION_MISSING",
+        "TRAVERSABILITY_CONFIRMATION_MISSING",
+        "ADJACENCY_CONFIRMATION_MISSING",
+        "HUMAN_ACCEPTANCE_MISSING"
+      ],
+      "source_vertical_confirmation": false,
+      "source_subtype_confirmation": false,
+      "effective_void_confirmation": false,
+      "traversability_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "building_exterior_root_confirmation": false,
+      "unit_root_candidate": "hypothesis",
+      "unit_root_confirmation": false,
+      "root_confirmation": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "candidate_hash": "b9e32acbc66cde34a4ca2a5c6b344046bb5ec821fedc1b6775a56981b59fbe37"
+    },
+    {
+      "opening_id": "OP002",
+      "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+      "source_record_state": {
+        "opening_status": "candidate",
+        "build_disposition": "cut",
+        "build_kind": "door",
+        "source_observation_kind": "door",
+        "source_observation_status": "candidate",
+        "source_host_atom_id": "ATOM-WB006-02",
+        "effective_void_record_present": true,
+        "effective_void_record_status": "candidate",
+        "effective_void_record_head_m": 2.1,
+        "effective_void_record_sill_m": 0.0,
+        "traversable_record_value": true,
+        "assumption_ids": [
+          "ASSUME-Z-RESEARCH"
+        ],
+        "record_fields_are_register_confirmations": false
+      },
+      "assumption_binding": {
+        "id": "ASSUME-Z-RESEARCH",
+        "basis": "research_default",
+        "status": "unverified",
+        "build_policy": "allow_research_only",
+        "value": {
+          "door_head_m": 2.1,
+          "wall_height_m": 2.8
+        }
+      },
+      "layer3a_binding": {
+        "register_file_sha256": "c428b5c277e89b817139b61ccc22310847f62e47182c4eb6dead496afc046a26",
+        "register_candidate_hash": "4ff72ad28612b4959049195bc7ea9f2b5bd61dd2c5ef11f960f007c773d6fdb4",
+        "bundle_candidate_hash": "17d1a0c818066590e291a993235c6d599ac5a852ad56378f388787b02c0e449b",
+        "selected_result_file_sha256": "5b9259c63fb7ac8542f1dd5e65d25fcec7b2bab68e82b41a659f7817dcb9df4c",
+        "visual_subtype_candidate": "door",
+        "downstream_use_status": "accepted_with_quarantine",
+        "vertical_parameters_reviewed": false,
+        "vertical_authority": false
+      },
+      "xy_binding": {
+        "evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+        "evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+        "authority": "source_active",
+        "classification": "group_ambiguous",
+        "matrix_cuttable": true,
+        "host_atom_id": "ATOM-WB006-02",
+        "segment_m": [
+          [
+            4.423994413407822,
+            10.690147268408552
+          ],
+          [
+            4.423994413407822,
+            9.802937767220904
+          ]
+        ],
+        "source_pixels_untouched": true,
+        "vertical_authority": false,
+        "effective_void_authority": false
+      },
+      "opening_specific_audit_binding": {
+        "schema": "op002-vertical-provenance-audit-v2",
+        "file_sha256": "d081ad39e42b3b95660175fbee6f4b300addb455fc5dbbb793d47da9b6d68d84",
+        "candidate_hash": "07a585668252edbed1177390052077cd24fdf3a73bc58143ceed30e24814861e",
+        "validated": true,
+        "vertical_evidence_supports_height": false,
+        "raw_vertical_parameters": {
+          "wall_height_m": {
+            "observed_value": 2.8,
+            "provenance_class": "research_assumption",
+            "assumption_id": "ASSUME-Z-RESEARCH",
+            "source_explicit": false,
+            "human_authorized_default": false,
+            "usable_for_reversible_research_display": true,
+            "eligible_for_source_promotion": false
+          },
+          "head_m": {
+            "observed_value": 2.1,
+            "provenance_class": "research_assumption",
+            "assumption_id": "ASSUME-Z-RESEARCH",
+            "source_explicit": false,
+            "human_authorized_default": false,
+            "usable_for_reversible_research_display": true,
+            "eligible_for_source_promotion": false
+          },
+          "sill_m": {
+            "observed_value": 0.0,
+            "provenance_class": "unsupported_candidate_value",
+            "assumption_id": null,
+            "source_explicit": false,
+            "human_authorized_default": false,
+            "treatment": "unknown",
+            "usable_for_reversible_research_display": false,
+            "eligible_for_source_promotion": false
+          }
+        }
+      },
+      "op001_unit_scope_binding": null,
+      "vertical_parameters": {
+        "wall_height_m": {
+          "source_record_value": null,
+          "research_default_value": 2.8,
+          "provenance_class": "research_assumption",
+          "assumption_id": "ASSUME-Z-RESEARCH",
+          "source_explicit": false,
+          "human_authorized_default": false,
+          "eligible_for_source_promotion": false
+        },
+        "head_m": {
+          "source_record_value": 2.1,
+          "research_default_value": 2.1,
+          "provenance_class": "research_assumption_bound_to_candidate_source_record",
+          "assumption_id": "ASSUME-Z-RESEARCH",
+          "source_explicit": false,
+          "human_authorized_default": false,
+          "eligible_for_source_promotion": false
+        },
+        "sill_m": {
+          "source_record_value": 0.0,
+          "research_default_value": null,
+          "provenance_class": "unsupported_candidate_value",
+          "assumption_id": null,
+          "source_explicit": false,
+          "human_authorized_default": false,
+          "treatment": "unknown",
+          "usable_for_reversible_research_display": false,
+          "eligible_for_source_promotion": false
+        }
+      },
+      "vertical_display_policy": {
+        "status": "existing_no_cut_display_reviewed",
+        "wall_height_research_display": true,
+        "head_guide_binding": "bound_research_assumption",
+        "sill_display_authorized": false,
+        "must_keep_source_walls_intact": true,
+        "opening_geometry_authorized": false,
+        "semantic_objects_authorized": false,
+        "ifc_authorized": false
+      },
+      "human_readable_boundary": {
+        "source_record_status_is_not_register_confirmation": true,
+        "effective_void_record_status_does_not_authorize_a_cut": true,
+        "entry_label_is_source_pixel_context_only": false,
+        "numeric_z_values_are_unverified_research_assumptions": true,
+        "coverage_means_provenance_rows_only": true
+      },
+      "remaining_blockers": [
+        "SOURCE_VERTICAL_AUTHORITY_MISSING",
+        "SILL_AUTHORITY_MISSING",
+        "EFFECTIVE_VOID_CONFIRMATION_MISSING",
+        "TRAVERSABILITY_CONFIRMATION_MISSING",
+        "ADJACENCY_CONFIRMATION_MISSING",
+        "HUMAN_ACCEPTANCE_MISSING"
+      ],
+      "source_vertical_confirmation": false,
+      "source_subtype_confirmation": false,
+      "effective_void_confirmation": false,
+      "traversability_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "building_exterior_root_confirmation": false,
+      "unit_root_candidate": "not_assessed",
+      "unit_root_confirmation": false,
+      "root_confirmation": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "candidate_hash": "60d81de0ee61f2cdc9dbf922819870249087240b0fcdc39437528f3157a4106e"
+    },
+    {
+      "opening_id": "OP003",
+      "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+      "source_record_state": {
+        "opening_status": "candidate",
+        "build_disposition": "exclude_pending_resolution",
+        "build_kind": null,
+        "source_observation_kind": "door",
+        "source_observation_status": "candidate",
+        "source_host_atom_id": null,
+        "effective_void_record_present": false,
+        "effective_void_record_status": null,
+        "effective_void_record_head_m": null,
+        "effective_void_record_sill_m": null,
+        "traversable_record_value": false,
+        "assumption_ids": [
+          "ASSUME-Z-RESEARCH"
+        ],
+        "record_fields_are_register_confirmations": false
+      },
+      "assumption_binding": {
+        "id": "ASSUME-Z-RESEARCH",
+        "basis": "research_default",
+        "status": "unverified",
+        "build_policy": "allow_research_only",
+        "value": {
+          "door_head_m": 2.1,
+          "wall_height_m": 2.8
+        }
+      },
+      "layer3a_binding": {
+        "register_file_sha256": "c428b5c277e89b817139b61ccc22310847f62e47182c4eb6dead496afc046a26",
+        "register_candidate_hash": "4ff72ad28612b4959049195bc7ea9f2b5bd61dd2c5ef11f960f007c773d6fdb4",
+        "bundle_candidate_hash": "9507d9767ff6adda5a38459d80d85dd126c7fa5b0af5da3b4f0ddb58db67c8cc",
+        "selected_result_file_sha256": "bbd5e50bb2c17e51034f05e3b288dca3de5bf01acaac41a73d77e4477d6a3aef",
+        "visual_subtype_candidate": "door",
+        "downstream_use_status": "accepted_with_quarantine",
+        "vertical_parameters_reviewed": false,
+        "vertical_authority": false
+      },
+      "xy_binding": {
+        "evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+        "evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+        "authority": "registered_evidence_candidate",
+        "classification": "unique_single_to_single_pair",
+        "matrix_cuttable": true,
+        "host_atom_id": "ATOM-WB010-01",
+        "segment_m": [
+          [
+            0.014637,
+            10.341081
+          ],
+          [
+            0.93676,
+            10.341081
+          ]
+        ],
+        "source_pixels_untouched": true,
+        "vertical_authority": false,
+        "effective_void_authority": false
+      },
+      "opening_specific_audit_binding": null,
+      "op001_unit_scope_binding": null,
+      "vertical_parameters": {
+        "wall_height_m": {
+          "source_record_value": null,
+          "research_default_value": 2.8,
+          "provenance_class": "research_assumption",
+          "assumption_id": "ASSUME-Z-RESEARCH",
+          "source_explicit": false,
+          "human_authorized_default": false,
+          "eligible_for_source_promotion": false
+        },
+        "head_m": {
+          "source_record_value": null,
+          "research_default_value": 2.1,
+          "provenance_class": "research_assumption_unbound_to_opening_geometry",
+          "assumption_id": "ASSUME-Z-RESEARCH",
+          "source_explicit": false,
+          "human_authorized_default": false,
+          "eligible_for_source_promotion": false
+        },
+        "sill_m": {
+          "source_record_value": null,
+          "research_default_value": null,
+          "provenance_class": "unknown",
+          "assumption_id": null,
+          "source_explicit": false,
+          "human_authorized_default": false,
+          "treatment": "unknown",
+          "usable_for_reversible_research_display": false,
+          "eligible_for_source_promotion": false
+        }
+      },
+      "vertical_display_policy": {
+        "status": "not_authorized_without_opening_specific_audit",
+        "wall_height_research_display": false,
+        "head_guide_binding": "not_authorized",
+        "sill_display_authorized": false,
+        "must_keep_source_walls_intact": true,
+        "opening_geometry_authorized": false,
+        "semantic_objects_authorized": false,
+        "ifc_authorized": false
+      },
+      "human_readable_boundary": {
+        "source_record_status_is_not_register_confirmation": true,
+        "effective_void_record_status_does_not_authorize_a_cut": true,
+        "entry_label_is_source_pixel_context_only": false,
+        "numeric_z_values_are_unverified_research_assumptions": true,
+        "coverage_means_provenance_rows_only": true
+      },
+      "remaining_blockers": [
+        "OPENING_SPECIFIC_VERTICAL_AUDIT_MISSING",
+        "SOURCE_HOST_EFFECTIVE_VOID_MISSING",
+        "SOURCE_VERTICAL_AUTHORITY_MISSING",
+        "SILL_AUTHORITY_MISSING",
+        "EFFECTIVE_VOID_CONFIRMATION_MISSING",
+        "TRAVERSABILITY_CONFIRMATION_MISSING",
+        "ADJACENCY_CONFIRMATION_MISSING",
+        "HUMAN_ACCEPTANCE_MISSING"
+      ],
+      "source_vertical_confirmation": false,
+      "source_subtype_confirmation": false,
+      "effective_void_confirmation": false,
+      "traversability_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "building_exterior_root_confirmation": false,
+      "unit_root_candidate": "not_assessed",
+      "unit_root_confirmation": false,
+      "root_confirmation": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "candidate_hash": "c0c4579ce1658637bf2fc1e7645756740d0c3090787cdde7cc08e8423cb4a414"
+    },
+    {
+      "opening_id": "OP004",
+      "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+      "source_record_state": {
+        "opening_status": "candidate",
+        "build_disposition": "exclude_pending_resolution",
+        "build_kind": null,
+        "source_observation_kind": "door",
+        "source_observation_status": "candidate",
+        "source_host_atom_id": null,
+        "effective_void_record_present": false,
+        "effective_void_record_status": null,
+        "effective_void_record_head_m": null,
+        "effective_void_record_sill_m": null,
+        "traversable_record_value": false,
+        "assumption_ids": [
+          "ASSUME-Z-RESEARCH"
+        ],
+        "record_fields_are_register_confirmations": false
+      },
+      "assumption_binding": {
+        "id": "ASSUME-Z-RESEARCH",
+        "basis": "research_default",
+        "status": "unverified",
+        "build_policy": "allow_research_only",
+        "value": {
+          "door_head_m": 2.1,
+          "wall_height_m": 2.8
+        }
+      },
+      "layer3a_binding": {
+        "register_file_sha256": "c428b5c277e89b817139b61ccc22310847f62e47182c4eb6dead496afc046a26",
+        "register_candidate_hash": "4ff72ad28612b4959049195bc7ea9f2b5bd61dd2c5ef11f960f007c773d6fdb4",
+        "bundle_candidate_hash": "28258a62f7a2c7777c1bbae11b288b38ff45db6e439c3181585cbe9ca9bf654d",
+        "selected_result_file_sha256": "c1301b49a8b61fd9b275d6defc6a35b8e337ce34df0686fd767e8d42601aac12",
+        "visual_subtype_candidate": "door",
+        "downstream_use_status": "accepted_with_quarantine",
+        "vertical_parameters_reviewed": false,
+        "vertical_authority": false
+      },
+      "xy_binding": {
+        "evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+        "evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+        "authority": "registered_evidence_candidate",
+        "classification": "unique_single_to_single_pair",
+        "matrix_cuttable": true,
+        "host_atom_id": "ATOM-WB007-01",
+        "segment_m": [
+          [
+            5.792542,
+            14.340796
+          ],
+          [
+            5.792542,
+            13.43177
+          ]
+        ],
+        "source_pixels_untouched": true,
+        "vertical_authority": false,
+        "effective_void_authority": false
+      },
+      "opening_specific_audit_binding": {
+        "schema": "opening-vertical-provenance-audit-v1",
+        "file_sha256": "387cb1a9f22367348ea11fd046a5c36082b341d3919f0e75858cc42df81602d5",
+        "candidate_hash": "07ec58494591af7d2b7d3db37d9f66c52116bddc3d7ff5c89bb4e1b62eda783f",
+        "validated": true,
+        "vertical_evidence_present": false,
+        "raw_vertical_parameters": {
+          "wall_height_m": {
+            "source_observed_value": null,
+            "research_default_value": 2.8,
+            "provenance_class": "research_assumption",
+            "assumption_id": "ASSUME-Z-RESEARCH",
+            "source_explicit": false,
+            "human_authorized_default": false,
+            "usable_for_reversible_research_display": true,
+            "eligible_for_source_promotion": false
+          },
+          "head_m": {
+            "source_observed_value": null,
+            "research_default_value": 2.1,
+            "provenance_class": "research_assumption_unbound_to_opening_geometry",
+            "assumption_id": "ASSUME-Z-RESEARCH",
+            "source_explicit": false,
+            "human_authorized_default": false,
+            "usable_for_reversible_research_guide": true,
+            "eligible_for_source_promotion": false
+          },
+          "sill_m": {
+            "source_observed_value": null,
+            "research_default_value": null,
+            "provenance_class": "unknown",
+            "assumption_id": null,
+            "source_explicit": false,
+            "human_authorized_default": false,
+            "treatment": "unknown",
+            "usable_for_reversible_research_display": false,
+            "eligible_for_source_promotion": false
+          }
+        }
+      },
+      "op001_unit_scope_binding": null,
+      "vertical_parameters": {
+        "wall_height_m": {
+          "source_record_value": null,
+          "research_default_value": 2.8,
+          "provenance_class": "research_assumption",
+          "assumption_id": "ASSUME-Z-RESEARCH",
+          "source_explicit": false,
+          "human_authorized_default": false,
+          "eligible_for_source_promotion": false
+        },
+        "head_m": {
+          "source_record_value": null,
+          "research_default_value": 2.1,
+          "provenance_class": "research_assumption_unbound_to_opening_geometry",
+          "assumption_id": "ASSUME-Z-RESEARCH",
+          "source_explicit": false,
+          "human_authorized_default": false,
+          "eligible_for_source_promotion": false
+        },
+        "sill_m": {
+          "source_record_value": null,
+          "research_default_value": null,
+          "provenance_class": "unknown",
+          "assumption_id": null,
+          "source_explicit": false,
+          "human_authorized_default": false,
+          "treatment": "unknown",
+          "usable_for_reversible_research_display": false,
+          "eligible_for_source_promotion": false
+        }
+      },
+      "vertical_display_policy": {
+        "status": "existing_no_cut_display_reviewed",
+        "wall_height_research_display": true,
+        "head_guide_binding": "unbound_research_default",
+        "sill_display_authorized": false,
+        "must_keep_source_walls_intact": true,
+        "opening_geometry_authorized": false,
+        "semantic_objects_authorized": false,
+        "ifc_authorized": false
+      },
+      "human_readable_boundary": {
+        "source_record_status_is_not_register_confirmation": true,
+        "effective_void_record_status_does_not_authorize_a_cut": true,
+        "entry_label_is_source_pixel_context_only": false,
+        "numeric_z_values_are_unverified_research_assumptions": true,
+        "coverage_means_provenance_rows_only": true
+      },
+      "remaining_blockers": [
+        "SOURCE_HOST_EFFECTIVE_VOID_MISSING",
+        "SOURCE_VERTICAL_AUTHORITY_MISSING",
+        "SILL_AUTHORITY_MISSING",
+        "EFFECTIVE_VOID_CONFIRMATION_MISSING",
+        "TRAVERSABILITY_CONFIRMATION_MISSING",
+        "ADJACENCY_CONFIRMATION_MISSING",
+        "HUMAN_ACCEPTANCE_MISSING"
+      ],
+      "source_vertical_confirmation": false,
+      "source_subtype_confirmation": false,
+      "effective_void_confirmation": false,
+      "traversability_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "building_exterior_root_confirmation": false,
+      "unit_root_candidate": "not_assessed",
+      "unit_root_confirmation": false,
+      "root_confirmation": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "candidate_hash": "4ef0d4ea9e6497a8bd21fde19e6f2b436ff111f050ca4cd28aad817ddbc53a75"
+    },
+    {
+      "opening_id": "OP006",
+      "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+      "source_record_state": {
+        "opening_status": "candidate",
+        "build_disposition": "exclude_pending_resolution",
+        "build_kind": null,
+        "source_observation_kind": "door",
+        "source_observation_status": "confirmed",
+        "source_host_atom_id": null,
+        "effective_void_record_present": false,
+        "effective_void_record_status": null,
+        "effective_void_record_head_m": null,
+        "effective_void_record_sill_m": null,
+        "traversable_record_value": false,
+        "assumption_ids": [
+          "ASSUME-Z-RESEARCH"
+        ],
+        "record_fields_are_register_confirmations": false
+      },
+      "assumption_binding": {
+        "id": "ASSUME-Z-RESEARCH",
+        "basis": "research_default",
+        "status": "unverified",
+        "build_policy": "allow_research_only",
+        "value": {
+          "door_head_m": 2.1,
+          "wall_height_m": 2.8
+        }
+      },
+      "layer3a_binding": {
+        "register_file_sha256": "c428b5c277e89b817139b61ccc22310847f62e47182c4eb6dead496afc046a26",
+        "register_candidate_hash": "4ff72ad28612b4959049195bc7ea9f2b5bd61dd2c5ef11f960f007c773d6fdb4",
+        "bundle_candidate_hash": "1624820396e6afdbb25b8c1d29163e61a295c7b26fb897c96c63a1cff72cd781",
+        "selected_result_file_sha256": "a9e7020845c23ca031621bb6cb48eab4b2cacfbfa118b4e1e9a04a65bfd2ccd0",
+        "visual_subtype_candidate": "door",
+        "downstream_use_status": "accepted_with_quarantine",
+        "vertical_parameters_reviewed": false,
+        "vertical_authority": false
+      },
+      "xy_binding": {
+        "evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+        "evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+        "authority": "registered_evidence_candidate",
+        "classification": "group_ambiguous",
+        "matrix_cuttable": true,
+        "host_atom_id": "ATOM-WB007-02",
+        "segment_m": [
+          [
+            5.792542,
+            11.221019
+          ],
+          [
+            5.792542,
+            10.290176
+          ]
+        ],
+        "source_pixels_untouched": true,
+        "vertical_authority": false,
+        "effective_void_authority": false
+      },
+      "opening_specific_audit_binding": null,
+      "op001_unit_scope_binding": null,
+      "vertical_parameters": {
+        "wall_height_m": {
+          "source_record_value": null,
+          "research_default_value": 2.8,
+          "provenance_class": "research_assumption",
+          "assumption_id": "ASSUME-Z-RESEARCH",
+          "source_explicit": false,
+          "human_authorized_default": false,
+          "eligible_for_source_promotion": false
+        },
+        "head_m": {
+          "source_record_value": null,
+          "research_default_value": 2.1,
+          "provenance_class": "research_assumption_unbound_to_opening_geometry",
+          "assumption_id": "ASSUME-Z-RESEARCH",
+          "source_explicit": false,
+          "human_authorized_default": false,
+          "eligible_for_source_promotion": false
+        },
+        "sill_m": {
+          "source_record_value": null,
+          "research_default_value": null,
+          "provenance_class": "unknown",
+          "assumption_id": null,
+          "source_explicit": false,
+          "human_authorized_default": false,
+          "treatment": "unknown",
+          "usable_for_reversible_research_display": false,
+          "eligible_for_source_promotion": false
+        }
+      },
+      "vertical_display_policy": {
+        "status": "not_authorized_without_opening_specific_audit",
+        "wall_height_research_display": false,
+        "head_guide_binding": "not_authorized",
+        "sill_display_authorized": false,
+        "must_keep_source_walls_intact": true,
+        "opening_geometry_authorized": false,
+        "semantic_objects_authorized": false,
+        "ifc_authorized": false
+      },
+      "human_readable_boundary": {
+        "source_record_status_is_not_register_confirmation": true,
+        "effective_void_record_status_does_not_authorize_a_cut": true,
+        "entry_label_is_source_pixel_context_only": false,
+        "numeric_z_values_are_unverified_research_assumptions": true,
+        "coverage_means_provenance_rows_only": true
+      },
+      "remaining_blockers": [
+        "OPENING_SPECIFIC_VERTICAL_AUDIT_MISSING",
+        "SOURCE_HOST_EFFECTIVE_VOID_MISSING",
+        "SOURCE_VERTICAL_AUTHORITY_MISSING",
+        "SILL_AUTHORITY_MISSING",
+        "EFFECTIVE_VOID_CONFIRMATION_MISSING",
+        "TRAVERSABILITY_CONFIRMATION_MISSING",
+        "ADJACENCY_CONFIRMATION_MISSING",
+        "HUMAN_ACCEPTANCE_MISSING"
+      ],
+      "source_vertical_confirmation": false,
+      "source_subtype_confirmation": false,
+      "effective_void_confirmation": false,
+      "traversability_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "building_exterior_root_confirmation": false,
+      "unit_root_candidate": "not_assessed",
+      "unit_root_confirmation": false,
+      "root_confirmation": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "candidate_hash": "9c58cf5e4675f8915b3d2632559a32dd1d23aab55cd1982c25a472c32b0dc481"
+    },
+    {
+      "opening_id": "OP007",
+      "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+      "source_record_state": {
+        "opening_status": "candidate",
+        "build_disposition": "exclude_pending_resolution",
+        "build_kind": null,
+        "source_observation_kind": "door",
+        "source_observation_status": "candidate",
+        "source_host_atom_id": null,
+        "effective_void_record_present": false,
+        "effective_void_record_status": null,
+        "effective_void_record_head_m": null,
+        "effective_void_record_sill_m": null,
+        "traversable_record_value": false,
+        "assumption_ids": [
+          "ASSUME-Z-RESEARCH"
+        ],
+        "record_fields_are_register_confirmations": false
+      },
+      "assumption_binding": {
+        "id": "ASSUME-Z-RESEARCH",
+        "basis": "research_default",
+        "status": "unverified",
+        "build_policy": "allow_research_only",
+        "value": {
+          "door_head_m": 2.1,
+          "wall_height_m": 2.8
+        }
+      },
+      "layer3a_binding": {
+        "register_file_sha256": "c428b5c277e89b817139b61ccc22310847f62e47182c4eb6dead496afc046a26",
+        "register_candidate_hash": "4ff72ad28612b4959049195bc7ea9f2b5bd61dd2c5ef11f960f007c773d6fdb4",
+        "bundle_candidate_hash": "cda781d23afced8692a04b72038606e4d4650f6ade98e68078366a255851c218",
+        "selected_result_file_sha256": "dde34dc0032da1a15f3164f46282b6095296697a40d22677a92fb5e3cafe2884",
+        "visual_subtype_candidate": "door",
+        "downstream_use_status": "accepted_with_quarantine",
+        "vertical_parameters_reviewed": false,
+        "vertical_authority": false
+      },
+      "xy_binding": {
+        "evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+        "evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+        "authority": "registered_evidence_candidate",
+        "classification": "group_ambiguous",
+        "matrix_cuttable": true,
+        "host_atom_id": "ATOM-WB019-01",
+        "segment_m": [
+          [
+            1.350251,
+            4.028804
+          ],
+          [
+            1.350251,
+            3.272494
+          ]
+        ],
+        "source_pixels_untouched": true,
+        "vertical_authority": false,
+        "effective_void_authority": false
+      },
+      "opening_specific_audit_binding": null,
+      "op001_unit_scope_binding": null,
+      "vertical_parameters": {
+        "wall_height_m": {
+          "source_record_value": null,
+          "research_default_value": 2.8,
+          "provenance_class": "research_assumption",
+          "assumption_id": "ASSUME-Z-RESEARCH",
+          "source_explicit": false,
+          "human_authorized_default": false,
+          "eligible_for_source_promotion": false
+        },
+        "head_m": {
+          "source_record_value": null,
+          "research_default_value": 2.1,
+          "provenance_class": "research_assumption_unbound_to_opening_geometry",
+          "assumption_id": "ASSUME-Z-RESEARCH",
+          "source_explicit": false,
+          "human_authorized_default": false,
+          "eligible_for_source_promotion": false
+        },
+        "sill_m": {
+          "source_record_value": null,
+          "research_default_value": null,
+          "provenance_class": "unknown",
+          "assumption_id": null,
+          "source_explicit": false,
+          "human_authorized_default": false,
+          "treatment": "unknown",
+          "usable_for_reversible_research_display": false,
+          "eligible_for_source_promotion": false
+        }
+      },
+      "vertical_display_policy": {
+        "status": "not_authorized_without_opening_specific_audit",
+        "wall_height_research_display": false,
+        "head_guide_binding": "not_authorized",
+        "sill_display_authorized": false,
+        "must_keep_source_walls_intact": true,
+        "opening_geometry_authorized": false,
+        "semantic_objects_authorized": false,
+        "ifc_authorized": false
+      },
+      "human_readable_boundary": {
+        "source_record_status_is_not_register_confirmation": true,
+        "effective_void_record_status_does_not_authorize_a_cut": true,
+        "entry_label_is_source_pixel_context_only": false,
+        "numeric_z_values_are_unverified_research_assumptions": true,
+        "coverage_means_provenance_rows_only": true
+      },
+      "remaining_blockers": [
+        "OPENING_SPECIFIC_VERTICAL_AUDIT_MISSING",
+        "SOURCE_HOST_EFFECTIVE_VOID_MISSING",
+        "SOURCE_VERTICAL_AUTHORITY_MISSING",
+        "SILL_AUTHORITY_MISSING",
+        "EFFECTIVE_VOID_CONFIRMATION_MISSING",
+        "TRAVERSABILITY_CONFIRMATION_MISSING",
+        "ADJACENCY_CONFIRMATION_MISSING",
+        "HUMAN_ACCEPTANCE_MISSING"
+      ],
+      "source_vertical_confirmation": false,
+      "source_subtype_confirmation": false,
+      "effective_void_confirmation": false,
+      "traversability_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "building_exterior_root_confirmation": false,
+      "unit_root_candidate": "not_assessed",
+      "unit_root_confirmation": false,
+      "root_confirmation": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "candidate_hash": "24f37b857d7e974d4aef4f6a01787fa5eb9c6edd0194ea14e6e9e063961c5e75"
+    },
+    {
+      "opening_id": "OP008",
+      "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+      "source_record_state": {
+        "opening_status": "candidate",
+        "build_disposition": "exclude_pending_resolution",
+        "build_kind": null,
+        "source_observation_kind": "door",
+        "source_observation_status": "candidate",
+        "source_host_atom_id": null,
+        "effective_void_record_present": false,
+        "effective_void_record_status": null,
+        "effective_void_record_head_m": null,
+        "effective_void_record_sill_m": null,
+        "traversable_record_value": false,
+        "assumption_ids": [
+          "ASSUME-Z-RESEARCH"
+        ],
+        "record_fields_are_register_confirmations": false
+      },
+      "assumption_binding": {
+        "id": "ASSUME-Z-RESEARCH",
+        "basis": "research_default",
+        "status": "unverified",
+        "build_policy": "allow_research_only",
+        "value": {
+          "door_head_m": 2.1,
+          "wall_height_m": 2.8
+        }
+      },
+      "layer3a_binding": {
+        "register_file_sha256": "c428b5c277e89b817139b61ccc22310847f62e47182c4eb6dead496afc046a26",
+        "register_candidate_hash": "4ff72ad28612b4959049195bc7ea9f2b5bd61dd2c5ef11f960f007c773d6fdb4",
+        "bundle_candidate_hash": "8719e8c2fc9bbbe839e0e8922ad1469a0588df757f5c4c24468efe014e5d3259",
+        "selected_result_file_sha256": "703dadee898865fa521cb31fc47b9f6d5b63cf391aad00d7b8b9936373d5cf82",
+        "visual_subtype_candidate": "door",
+        "downstream_use_status": "accepted_with_quarantine",
+        "vertical_parameters_reviewed": false,
+        "vertical_authority": false
+      },
+      "xy_binding": {
+        "evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+        "evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+        "authority": "registered_evidence_candidate",
+        "classification": "group_ambiguous",
+        "matrix_cuttable": true,
+        "host_atom_id": "ATOM-WB018-01",
+        "segment_m": [
+          [
+            1.134358,
+            4.254242
+          ],
+          [
+            2.085754,
+            4.254242
+          ]
+        ],
+        "source_pixels_untouched": true,
+        "vertical_authority": false,
+        "effective_void_authority": false
+      },
+      "opening_specific_audit_binding": null,
+      "op001_unit_scope_binding": null,
+      "vertical_parameters": {
+        "wall_height_m": {
+          "source_record_value": null,
+          "research_default_value": 2.8,
+          "provenance_class": "research_assumption",
+          "assumption_id": "ASSUME-Z-RESEARCH",
+          "source_explicit": false,
+          "human_authorized_default": false,
+          "eligible_for_source_promotion": false
+        },
+        "head_m": {
+          "source_record_value": null,
+          "research_default_value": 2.1,
+          "provenance_class": "research_assumption_unbound_to_opening_geometry",
+          "assumption_id": "ASSUME-Z-RESEARCH",
+          "source_explicit": false,
+          "human_authorized_default": false,
+          "eligible_for_source_promotion": false
+        },
+        "sill_m": {
+          "source_record_value": null,
+          "research_default_value": null,
+          "provenance_class": "unknown",
+          "assumption_id": null,
+          "source_explicit": false,
+          "human_authorized_default": false,
+          "treatment": "unknown",
+          "usable_for_reversible_research_display": false,
+          "eligible_for_source_promotion": false
+        }
+      },
+      "vertical_display_policy": {
+        "status": "not_authorized_without_opening_specific_audit",
+        "wall_height_research_display": false,
+        "head_guide_binding": "not_authorized",
+        "sill_display_authorized": false,
+        "must_keep_source_walls_intact": true,
+        "opening_geometry_authorized": false,
+        "semantic_objects_authorized": false,
+        "ifc_authorized": false
+      },
+      "human_readable_boundary": {
+        "source_record_status_is_not_register_confirmation": true,
+        "effective_void_record_status_does_not_authorize_a_cut": true,
+        "entry_label_is_source_pixel_context_only": false,
+        "numeric_z_values_are_unverified_research_assumptions": true,
+        "coverage_means_provenance_rows_only": true
+      },
+      "remaining_blockers": [
+        "OPENING_SPECIFIC_VERTICAL_AUDIT_MISSING",
+        "SOURCE_HOST_EFFECTIVE_VOID_MISSING",
+        "SOURCE_VERTICAL_AUTHORITY_MISSING",
+        "SILL_AUTHORITY_MISSING",
+        "EFFECTIVE_VOID_CONFIRMATION_MISSING",
+        "TRAVERSABILITY_CONFIRMATION_MISSING",
+        "ADJACENCY_CONFIRMATION_MISSING",
+        "HUMAN_ACCEPTANCE_MISSING"
+      ],
+      "source_vertical_confirmation": false,
+      "source_subtype_confirmation": false,
+      "effective_void_confirmation": false,
+      "traversability_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "building_exterior_root_confirmation": false,
+      "unit_root_candidate": "not_assessed",
+      "unit_root_confirmation": false,
+      "root_confirmation": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "candidate_hash": "91937ef2f56b7ad7aa0c068e235e3b304b4ea758e6dd88862a9ca4db2b04c162"
+    },
+    {
+      "opening_id": "OP009",
+      "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+      "source_record_state": {
+        "opening_status": "candidate",
+        "build_disposition": "exclude_pending_resolution",
+        "build_kind": null,
+        "source_observation_kind": "glazed_access_door",
+        "source_observation_status": "candidate",
+        "source_host_atom_id": null,
+        "effective_void_record_present": false,
+        "effective_void_record_status": null,
+        "effective_void_record_head_m": null,
+        "effective_void_record_sill_m": null,
+        "traversable_record_value": false,
+        "assumption_ids": [
+          "ASSUME-Z-RESEARCH"
+        ],
+        "record_fields_are_register_confirmations": false
+      },
+      "assumption_binding": {
+        "id": "ASSUME-Z-RESEARCH",
+        "basis": "research_default",
+        "status": "unverified",
+        "build_policy": "allow_research_only",
+        "value": {
+          "door_head_m": 2.1,
+          "wall_height_m": 2.8
+        }
+      },
+      "layer3a_binding": {
+        "register_file_sha256": "c428b5c277e89b817139b61ccc22310847f62e47182c4eb6dead496afc046a26",
+        "register_candidate_hash": "4ff72ad28612b4959049195bc7ea9f2b5bd61dd2c5ef11f960f007c773d6fdb4",
+        "bundle_candidate_hash": "0a3c4f9032e8e6356d9860f4ba6a2519bdae211c6ffc6d82cf495322a6e7b8e1",
+        "selected_result_file_sha256": "24a027f8fb375109ae414886fe00557d54ed531736e7f7c43bf550c2d36e32e6",
+        "visual_subtype_candidate": "glazed_interface_or_sliding_access",
+        "downstream_use_status": "accepted_with_quarantine",
+        "vertical_parameters_reviewed": false,
+        "vertical_authority": false
+      },
+      "xy_binding": {
+        "evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+        "evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+        "authority": "registered_evidence_candidate",
+        "classification": "unique_single_to_single_pair",
+        "matrix_cuttable": true,
+        "host_atom_id": "ATOM-WB005-01",
+        "segment_m": [
+          [
+            1.478324,
+            14.25353
+          ],
+          [
+            2.94933,
+            14.25353
+          ]
+        ],
+        "source_pixels_untouched": true,
+        "vertical_authority": false,
+        "effective_void_authority": false
+      },
+      "opening_specific_audit_binding": null,
+      "op001_unit_scope_binding": null,
+      "vertical_parameters": {
+        "wall_height_m": {
+          "source_record_value": null,
+          "research_default_value": 2.8,
+          "provenance_class": "research_assumption",
+          "assumption_id": "ASSUME-Z-RESEARCH",
+          "source_explicit": false,
+          "human_authorized_default": false,
+          "eligible_for_source_promotion": false
+        },
+        "head_m": {
+          "source_record_value": null,
+          "research_default_value": 2.1,
+          "provenance_class": "research_assumption_unbound_to_opening_geometry",
+          "assumption_id": "ASSUME-Z-RESEARCH",
+          "source_explicit": false,
+          "human_authorized_default": false,
+          "eligible_for_source_promotion": false
+        },
+        "sill_m": {
+          "source_record_value": null,
+          "research_default_value": null,
+          "provenance_class": "unknown",
+          "assumption_id": null,
+          "source_explicit": false,
+          "human_authorized_default": false,
+          "treatment": "unknown",
+          "usable_for_reversible_research_display": false,
+          "eligible_for_source_promotion": false
+        }
+      },
+      "vertical_display_policy": {
+        "status": "not_authorized_without_opening_specific_audit",
+        "wall_height_research_display": false,
+        "head_guide_binding": "not_authorized",
+        "sill_display_authorized": false,
+        "must_keep_source_walls_intact": true,
+        "opening_geometry_authorized": false,
+        "semantic_objects_authorized": false,
+        "ifc_authorized": false
+      },
+      "human_readable_boundary": {
+        "source_record_status_is_not_register_confirmation": true,
+        "effective_void_record_status_does_not_authorize_a_cut": true,
+        "entry_label_is_source_pixel_context_only": false,
+        "numeric_z_values_are_unverified_research_assumptions": true,
+        "coverage_means_provenance_rows_only": true
+      },
+      "remaining_blockers": [
+        "OPENING_SPECIFIC_VERTICAL_AUDIT_MISSING",
+        "SOURCE_HOST_EFFECTIVE_VOID_MISSING",
+        "SOURCE_VERTICAL_AUTHORITY_MISSING",
+        "SILL_AUTHORITY_MISSING",
+        "EFFECTIVE_VOID_CONFIRMATION_MISSING",
+        "TRAVERSABILITY_CONFIRMATION_MISSING",
+        "ADJACENCY_CONFIRMATION_MISSING",
+        "HUMAN_ACCEPTANCE_MISSING"
+      ],
+      "source_vertical_confirmation": false,
+      "source_subtype_confirmation": false,
+      "effective_void_confirmation": false,
+      "traversability_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "building_exterior_root_confirmation": false,
+      "unit_root_candidate": "not_assessed",
+      "unit_root_confirmation": false,
+      "root_confirmation": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "candidate_hash": "448021ef0e7a14f45aad1836aa135335e080a4a4aafb95b119f3435af12cea10"
+    },
+    {
+      "opening_id": "OP010",
+      "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+      "source_record_state": {
+        "opening_status": "candidate",
+        "build_disposition": "exclude_pending_resolution",
+        "build_kind": null,
+        "source_observation_kind": "glazed_access_door",
+        "source_observation_status": "candidate",
+        "source_host_atom_id": null,
+        "effective_void_record_present": false,
+        "effective_void_record_status": null,
+        "effective_void_record_head_m": null,
+        "effective_void_record_sill_m": null,
+        "traversable_record_value": false,
+        "assumption_ids": [
+          "ASSUME-Z-RESEARCH"
+        ],
+        "record_fields_are_register_confirmations": false
+      },
+      "assumption_binding": {
+        "id": "ASSUME-Z-RESEARCH",
+        "basis": "research_default",
+        "status": "unverified",
+        "build_policy": "allow_research_only",
+        "value": {
+          "door_head_m": 2.1,
+          "wall_height_m": 2.8
+        }
+      },
+      "layer3a_binding": {
+        "register_file_sha256": "c428b5c277e89b817139b61ccc22310847f62e47182c4eb6dead496afc046a26",
+        "register_candidate_hash": "4ff72ad28612b4959049195bc7ea9f2b5bd61dd2c5ef11f960f007c773d6fdb4",
+        "bundle_candidate_hash": "cb4cee7f324e84f9dc7d8b968cc73fc25777fd53fc52f09123b37792b261b98c",
+        "selected_result_file_sha256": "c4fd9fd4973368762014995d222c2c1d79d176dcd7d5fca09a7d27502e624a35",
+        "visual_subtype_candidate": "door",
+        "downstream_use_status": "accepted_with_quarantine",
+        "vertical_parameters_reviewed": false,
+        "vertical_authority": false
+      },
+      "xy_binding": {
+        "evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+        "evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+        "authority": "registered_evidence_candidate",
+        "classification": "group_ambiguous",
+        "matrix_cuttable": true,
+        "host_atom_id": "ATOM-WB003-03",
+        "segment_m": [
+          [
+            5.452235,
+            0.003636
+          ],
+          [
+            6.937877,
+            0.003636
+          ]
+        ],
+        "source_pixels_untouched": true,
+        "vertical_authority": false,
+        "effective_void_authority": false
+      },
+      "opening_specific_audit_binding": null,
+      "op001_unit_scope_binding": null,
+      "vertical_parameters": {
+        "wall_height_m": {
+          "source_record_value": null,
+          "research_default_value": 2.8,
+          "provenance_class": "research_assumption",
+          "assumption_id": "ASSUME-Z-RESEARCH",
+          "source_explicit": false,
+          "human_authorized_default": false,
+          "eligible_for_source_promotion": false
+        },
+        "head_m": {
+          "source_record_value": null,
+          "research_default_value": 2.1,
+          "provenance_class": "research_assumption_unbound_to_opening_geometry",
+          "assumption_id": "ASSUME-Z-RESEARCH",
+          "source_explicit": false,
+          "human_authorized_default": false,
+          "eligible_for_source_promotion": false
+        },
+        "sill_m": {
+          "source_record_value": null,
+          "research_default_value": null,
+          "provenance_class": "unknown",
+          "assumption_id": null,
+          "source_explicit": false,
+          "human_authorized_default": false,
+          "treatment": "unknown",
+          "usable_for_reversible_research_display": false,
+          "eligible_for_source_promotion": false
+        }
+      },
+      "vertical_display_policy": {
+        "status": "not_authorized_without_opening_specific_audit",
+        "wall_height_research_display": false,
+        "head_guide_binding": "not_authorized",
+        "sill_display_authorized": false,
+        "must_keep_source_walls_intact": true,
+        "opening_geometry_authorized": false,
+        "semantic_objects_authorized": false,
+        "ifc_authorized": false
+      },
+      "human_readable_boundary": {
+        "source_record_status_is_not_register_confirmation": true,
+        "effective_void_record_status_does_not_authorize_a_cut": true,
+        "entry_label_is_source_pixel_context_only": false,
+        "numeric_z_values_are_unverified_research_assumptions": true,
+        "coverage_means_provenance_rows_only": true
+      },
+      "remaining_blockers": [
+        "OPENING_SPECIFIC_VERTICAL_AUDIT_MISSING",
+        "SOURCE_HOST_EFFECTIVE_VOID_MISSING",
+        "SOURCE_VERTICAL_AUTHORITY_MISSING",
+        "SILL_AUTHORITY_MISSING",
+        "EFFECTIVE_VOID_CONFIRMATION_MISSING",
+        "TRAVERSABILITY_CONFIRMATION_MISSING",
+        "ADJACENCY_CONFIRMATION_MISSING",
+        "HUMAN_ACCEPTANCE_MISSING"
+      ],
+      "source_vertical_confirmation": false,
+      "source_subtype_confirmation": false,
+      "effective_void_confirmation": false,
+      "traversability_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "building_exterior_root_confirmation": false,
+      "unit_root_candidate": "not_assessed",
+      "unit_root_confirmation": false,
+      "root_confirmation": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "candidate_hash": "5398d4e54e4fc2cb18eb8db7493cdcf62095fd9a50b97f48633ab626e1c02dcd"
+    }
+  ],
+  "coverage_count": 9,
+  "opening_specific_audit_count": 2,
+  "source_confirmed_vertical_count": 0,
+  "unknown_sill_treatment_count": 9,
+  "batch_gate_status": "coverage_complete_provenance_only_all_vertical_gates_closed",
+  "all_subtypes_source_confirmed": false,
+  "all_verticals_source_confirmed": false,
+  "all_effective_voids_confirmed": false,
+  "all_traversability_confirmed": false,
+  "all_pairs_confirmed": false,
+  "all_adjacency_confirmed": false,
+  "all_roots_confirmed": false,
+  "source_vertical_confirmation": false,
+  "source_subtype_confirmation": false,
+  "effective_void_confirmation": false,
+  "traversability_confirmation": false,
+  "pair_confirmation": false,
+  "adjacency_confirmation": false,
+  "root_confirmation": false,
+  "source_correction_authorized": false,
+  "semantic_promotion": false,
+  "vertical_entry_authorized": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "ready": false,
+  "candidate_hash": "35673405f10e6ea82a0be40cb6185b2eb2a286c88314d9b453fdbe3b821c6487"
+}
