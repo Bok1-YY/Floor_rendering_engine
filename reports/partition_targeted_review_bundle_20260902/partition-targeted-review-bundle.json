@@ -1,0 +1,118 @@
+{
+  "adjacency_confirmation": false,
+  "build_authorized": false,
+  "candidate_hash": "30eae4474c9f54579ff8429019c88224d250ffe77a4b1a175380281a48be4d53",
+  "correction_review_candidate_ids": [
+    "OP002"
+  ],
+  "covered_opening_ids": [
+    "OP002",
+    "OP010"
+  ],
+  "cut_confirmation": false,
+  "evidence_candidate_hash": "e191c94900bd8372ad48bdbabdb5456ffab1b19f6c2ef42349320d19ba6f0903",
+  "evidence_file_sha256": "9100555518ffb7c4e545eeae0cee047861815979874211937c233e489b8b2e16",
+  "pair_confirmation": false,
+  "ready": false,
+  "reviews": [
+    {
+      "adjacency_confirmation": false,
+      "build_authorized": false,
+      "cost_usd": 0.0003299,
+      "cut_confirmation": false,
+      "decision": "correction_review_candidate",
+      "directed_side_assignment": {
+        "side_a": "bedroom_corridor",
+        "side_b": "bedroom_01"
+      },
+      "image_bindings": [
+        {
+          "bytes": 1615040,
+          "filename": "OP002-full.png",
+          "sha256": "ee6d0fd9fad9c3e801c2ddd4bcb481f1162a7e0d27b8013125c889e3046b04c6"
+        },
+        {
+          "bytes": 610090,
+          "filename": "OP002-crop.png",
+          "sha256": "87b68d468555b96b7aa1b38ac56fb1380e3ba6a9da5338d27f84e33c5de4d3b9"
+        }
+      ],
+      "jamb_support": {
+        "host_parameters": [
+          0.285640293,
+          0.412360699
+        ],
+        "jamb_after_m": 4.11424798,
+        "jamb_before_m": 1.999857732,
+        "minimum_jamb_m": 1.999857732,
+        "sufficient": true,
+        "threshold_m": 0.12
+      },
+      "opening_id": "OP002",
+      "pair_confirmation": false,
+      "parsed": {
+        "confidence": "high",
+        "host_alignment": "agree",
+        "opening_id": "OP002",
+        "opposite_face_geometry": "agree",
+        "segment_on_visible_opening": "yes",
+        "visual_kind": "door"
+      },
+      "result_canonical_sha256": "b2b96296ad1563b358f8331116403f417e06bce8430e47a789096f831404994a",
+      "result_file_sha256": "31b50004ed93367e9aecedeb6092809cdcc1d068fbe2c64e80753025c8ec6029",
+      "score_effect": "none",
+      "semantic_promotion": false,
+      "usable_advisory": true,
+      "visual_geometry_agreement": true
+    },
+    {
+      "adjacency_confirmation": false,
+      "build_authorized": false,
+      "cost_usd": 0.0003474,
+      "cut_confirmation": false,
+      "decision": "review_protocol_failed",
+      "directed_side_assignment": {
+        "side_a": "kitchen",
+        "side_b": "front_balcony"
+      },
+      "image_bindings": [
+        {
+          "bytes": 1614354,
+          "filename": "OP010-full.png",
+          "sha256": "0ef665a05fe14fef1a5d61fa3ea98fa0a85b0351d58feaf5b162778355b7505a"
+        },
+        {
+          "bytes": 492687,
+          "filename": "OP010-crop.png",
+          "sha256": "9c86e3e77e79d304f21e64c283311a65806555e233585533357f8beca867b555"
+        }
+      ],
+      "jamb_support": {
+        "host_parameters": [
+          0.56208866,
+          0.740236927
+        ],
+        "jamb_after_m": 2.166257,
+        "jamb_before_m": 4.687458,
+        "minimum_jamb_m": 2.166257,
+        "sufficient": true,
+        "threshold_m": 0.12
+      },
+      "opening_id": "OP010",
+      "pair_confirmation": false,
+      "parsed": null,
+      "result_canonical_sha256": "872df668c97e84ce3941269d9a8d485ba196b1229f42b8041b0feed2cd81e7c8",
+      "result_file_sha256": "3137827f01b262b0c23a6b000513917eea889d3a30502b332ad6364c35b80b30",
+      "score_effect": "none",
+      "semantic_promotion": false,
+      "usable_advisory": false,
+      "visual_geometry_agreement": false
+    }
+  ],
+  "schema": "partition-targeted-review-bundle-v1",
+  "score_effect": "none",
+  "semantic_promotion": false,
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "total_cost_usd": 0.0006773,
+  "usable_count": 1
+}
