@@ -25,7 +25,12 @@
       "registered_effective_width_m": 0.909026,
       "directed_side_assignment": {
         "side_a": "bedroom_02",
-        "side_b": "north_toilet"
+        "side_b": "north_toilet",
+        "contract": "side_a=left_of_source_p0_to_p1; side_b=right_of_source_p0_to_p1",
+        "signed_normal_offsets_m": {
+          "bedroom_02": 1.68324,
+          "north_toilet": -0.684274
+        }
       },
       "jamb_support_m": {
         "before": 0.879937,
@@ -62,7 +67,7 @@
         "semantic_promotion": false
       },
       "status": "candidate_only",
-      "candidate_hash": "ba5958b80640650307b186df397c782ccc219cd5461ea4172f5e65d9fd1fb8fb"
+      "candidate_hash": "bdc1ed691dbfb799ebe2e6ed70bf3a9eb9fb897fe48f944099d344cb4bdf0b6c"
     },
     {
       "opening_id": "OP009",
@@ -80,8 +85,13 @@
       ],
       "registered_effective_width_m": 1.471006,
       "directed_side_assignment": {
-        "side_a": "bedroom_01",
-        "side_b": "rear_balcony"
+        "side_a": "rear_balcony",
+        "side_b": "bedroom_01",
+        "contract": "side_a=left_of_source_p0_to_p1; side_b=right_of_source_p0_to_p1",
+        "signed_normal_offsets_m": {
+          "bedroom_01": -2.7179885,
+          "rear_balcony": 0.530871
+        }
       },
       "jamb_support_m": {
         "before": 1.463687,
@@ -118,12 +128,12 @@
         "semantic_promotion": false
       },
       "status": "candidate_only",
-      "candidate_hash": "4ae2bea778086eac4b95103afa6bf637c547a96bb6ef1c935c3cab1708123b07"
+      "candidate_hash": "a6d4371a7525ec945d6715c7e756fcb44b83af4d1d306e27651464b57d19a052"
     }
   ],
   "semantic_promotion": false,
   "adjacency_confirmation": false,
   "build_authorized": false,
   "ready": false,
-  "candidate_hash": "a929095d38ad2115f02a07a4787dd05b1e6d884cfead01eef3d5af1bd5cfd061"
+  "candidate_hash": "0043b67b78ffa2db2a7f75e2822d54027ab25d906bfd6060f0af36c2067560c9"
 }
