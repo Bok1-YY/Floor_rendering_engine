@@ -19,7 +19,9 @@ def test_register_has_complete_coverage_and_explicit_unresolved() -> None:
     assert result["coverage_count"] == 9
     assert result["research_bundle_acceptance_count"] == 9
     assert result["layer3a_visual_advisory_coverage_complete"] is True
-    assert result["explicit_unresolved_ids"] == ["OP006", "OP008"]
+    assert result["explicit_unresolved_ids"] == []
+    assert result["downstream_accepted_with_quarantine_ids"] == list(target.OPENING_IDS)
+    assert result["all_visual_candidates_available_for_quarantined_research"] is True
     assert result["all_subtypes_source_confirmed"] is False
     assert result["all_subtypes_downstream_ready"] is False
     assert result["vertical_entry_authorized"] is False
@@ -35,6 +37,16 @@ def test_register_has_complete_coverage_and_explicit_unresolved() -> None:
     op001 = next(row for row in result["rows"] if row["opening_id"] == "OP001")
     assert "building_exterior_root" in op001["quarantine"]
     assert op001["root_confirmation"] is False
+    for opening_id in ("OP006", "OP008"):
+        row = next(item for item in result["rows"] if item["opening_id"] == opening_id)
+        assert row["targeted_remediation"]["subtype_use_status"] == "resolved_after_tighter_crop"
+        assert row["targeted_remediation"]["original_advisory_preserved"] is True
+        assert row["targeted_remediation"]["neighboring_visual_cues_present"] is False
+        assert row["targeted_remediation"]["target_cue_isolated"] is True
+    assert result["targeted_remediation_cost_usd"] == pytest.approx(0.000933)
+    assert result["base_wide_crop_review_cost_usd"] == pytest.approx(0.0035225)
+    assert result["cumulative_visual_review_cost_usd"] == pytest.approx(0.0044555)
+    assert result["cost_accounting_model"] == "cumulative_base_advisories_plus_targeted_remediation"
     assert target.validate(result) == result
 
 
@@ -42,13 +54,13 @@ def test_register_has_complete_coverage_and_explicit_unresolved() -> None:
     "mutator",
     [
         lambda value: value["opening_ids"].append("OP005"),
-        lambda value: value["explicit_unresolved_ids"].clear(),
+        lambda value: value["explicit_unresolved_ids"].append("OP006"),
         lambda value: value.__setitem__("all_subtypes_source_confirmed", True),
         lambda value: value.__setitem__("vertical_entry_authorized", True),
         lambda value: value.__setitem__("score_effect", "increase"),
         lambda value: value.__setitem__("build_authorized", True),
         lambda value: value["rows"][0].__setitem__("root_confirmation", True),
-        lambda value: value["rows"][4].__setitem__("downstream_use_status", "accepted_with_quarantine"),
+        lambda value: value["rows"][4].__setitem__("downstream_use_status", "needs_tighter_crop"),
     ],
 )
 def test_rehashed_register_tampering_is_rejected(mutator) -> None:

@@ -1,0 +1,117 @@
+{
+  "schema": "targeted-clean-subtype-evidence-v1",
+  "opening_id": "OP008",
+  "purpose": "reduce_neighboring_visual_cue_contamination",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "base_evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+  "base_evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+  "source_image": {
+    "path": "data/goal_loop_v2/references/1308/canonical-raw-portrait.png",
+    "bytes": 1621238,
+    "sha256": "b85ff7446e2d1a123e3a41dc541ea9d6e081f3978d3460d6de8ef9906119bc07",
+    "pixel_sha256": "c1696cb6c157b61029770b048a750f1a35e835355e2740bce0c62710166230f9",
+    "size": [
+      2245,
+      3043
+    ]
+  },
+  "host_atom_id": "ATOM-WB018-01",
+  "segment_m": [
+    [
+      1.134358,
+      4.254242
+    ],
+    [
+      2.085754,
+      4.254242
+    ]
+  ],
+  "segment_px": [
+    [
+      652.0000625954199,
+      1797.000038541939
+    ],
+    [
+      781.9999740458015,
+      1797.000038541939
+    ]
+  ],
+  "parent_crop_box_px": [
+    532,
+    1677,
+    902,
+    1918
+  ],
+  "targeted_crop_box_px": [
+    635,
+    1713,
+    840,
+    1825
+  ],
+  "targeted_local_segment_px": [
+    [
+      17.000062595419877,
+      84.00003854193892
+    ],
+    [
+      146.99997404580154,
+      84.00003854193892
+    ]
+  ],
+  "minimum_target_endpoint_clearance_px": 17.000062595419877,
+  "artifacts": {
+    "targeted_raw_crop": {
+      "relative_path": "OP008-targeted-raw-crop.png",
+      "bytes": 7121,
+      "sha256": "6e388fbbb229384b474db869e4436be4d3a4f9d0227ea83121f8b64a6e5a32e7",
+      "pixel_sha256": "8d223ca12299f0f98a35d84b23f26f01db04a3f454893e5b68396d571444aee6",
+      "size": [
+        205,
+        112
+      ],
+      "role": "pixel_exact_source_crop_semantic_authority",
+      "source_pixels_untouched": true,
+      "semantic_authority": true
+    },
+    "locator": {
+      "path": "reports/opening_xy_clean_evidence_20260902/OP008-locator.png",
+      "bytes": 1621194,
+      "sha256": "0b120fb5e14e58feca88dafed20939cc0aa9783463396045cee691ec1d6cbb1c",
+      "pixel_sha256": "b238641dbcb35874cace7926cae5d596a71b78cfa03af605ad50f9a577537ffa",
+      "size": [
+        2245,
+        3043
+      ],
+      "role": "locator_navigation_only",
+      "source_pixels_untouched": false,
+      "semantic_authority": false
+    },
+    "parent_raw_crop": {
+      "path": "reports/opening_xy_clean_evidence_20260902/OP008-raw-crop.png",
+      "bytes": 49957,
+      "sha256": "acfc3cfef1072a5de68e278bea5c620bc68f35f77fc53657f3b45599792fbba5",
+      "pixel_sha256": "8cbb7b029b466248c2dd39986c625abdaa7ee6bab479b80df26ac4300b7b7e71",
+      "size": [
+        370,
+        241
+      ],
+      "role": "historical_wider_crop_provenance_only",
+      "semantic_authority_for_targeted_review": false
+    }
+  },
+  "neighboring_visual_cues_present": "pending_independent_review",
+  "target_cue_isolated": "pending_independent_review",
+  "subtype_use_status": "pending_targeted_review",
+  "source_subtype_confirmation": false,
+  "effective_void_confirmation": false,
+  "vertical_parameters_reviewed": false,
+  "traversability_confirmation": false,
+  "pair_confirmation": false,
+  "adjacency_confirmation": false,
+  "source_correction_authorized": false,
+  "semantic_promotion": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "ready": false,
+  "candidate_hash": "be8ee5773fc30aed185dcfd80abe6d9fb38935a039eba8950b3db7da731a20d4"
+}

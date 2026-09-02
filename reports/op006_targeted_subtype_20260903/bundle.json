@@ -1,0 +1,195 @@
+{
+  "schema": "targeted-subtype-remediation-bundle-v1",
+  "opening_id": "OP006",
+  "original_advisory": {
+    "bundle_file_sha256": "4e04e1384418bccb36e76815b7bf1799ae32a17f9d27488f2df425b7717d73f5",
+    "bundle_candidate_hash": "1624820396e6afdbb25b8c1d29163e61a295c7b26fb897c96c63a1cff72cd781",
+    "selected_result_file_sha256": "a9e7020845c23ca031621bb6cb48eab4b2cacfbfa118b4e1e9a04a65bfd2ccd0",
+    "visual_subtype_candidate": "door",
+    "preserved_as_history": true
+  },
+  "targeted_evidence": {
+    "file_sha256": "85bdaf8fcb9964eee7b5a3c08360aaf0104542a9b4237bef09165d8630df7335",
+    "candidate_hash": "7b4f4f636ff19c178d4fa933803564abdd66da85e6151580bb2a4f538d98d21c",
+    "crop_box_px": [
+      1230,
+      790,
+      1409,
+      1040
+    ],
+    "targeted_raw_crop": {
+      "relative_path": "OP006-targeted-raw-crop.png",
+      "bytes": 9319,
+      "sha256": "7cb0375a1b5022ee506f56bae66495a6bcb4e157ee97caaf89ce78d6e7b2c415",
+      "pixel_sha256": "cbc63a807b683fcc91f872f932cf77bf838a6160ac631b16b2b0844be55b0281",
+      "size": [
+        179,
+        250
+      ],
+      "role": "pixel_exact_source_crop_semantic_authority",
+      "source_pixels_untouched": true,
+      "semantic_authority": true
+    },
+    "parent_raw_crop": {
+      "path": "reports/opening_xy_clean_evidence_20260902/OP006-raw-crop.png",
+      "bytes": 17295,
+      "sha256": "e395128bfcdaba269314be6d7cbe6490abd814060925acd93ab57f6b0bc481df",
+      "pixel_sha256": "e3b0a1a7ecd4d70e4f1ff208c20d025da3d8667e91eabca9dfc86c842c744407",
+      "size": [
+        241,
+        369
+      ],
+      "role": "historical_wider_crop_provenance_only",
+      "semantic_authority_for_targeted_review": false
+    }
+  },
+  "targeted_selected_result": {
+    "file_sha256": "7ac732e523ec4e54cbe49bdd7ff4bef2f4023e3af6bfc63a5045dd98a0b31321",
+    "raw_response_sha256": "0b0facb319dfb3e922180b821fe07863b0c8c3642d1714a77995fc1ee57084e0",
+    "parsed": {
+      "opening_id": "OP006",
+      "visual_kind": "door",
+      "wall_break_visible": "yes",
+      "swing_arc_visible": "yes",
+      "sliding_track_visible": "no",
+      "neighboring_opening_cue_visible": "no",
+      "target_swing_cue_attributable_to_target": "yes",
+      "confidence": "high"
+    },
+    "cost_usd": 0.0004665,
+    "canonical_result": {
+      "schema": "fal-targeted-clean-subtype-review-v1",
+      "opening_id": "OP006",
+      "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+      "model": "google/gemini-2.5-flash",
+      "request_contract_sha256": "2b2f5a664272cd0c84b570f2ffc5cd3eb2bffc110f4265e8fa3d799141b90e6e",
+      "prompt_sha256": "f5088233d547957a429d8141c069774caf1db9e0d662231f6a281fb85c59538d",
+      "system_sha256": "e40d641c5235b7b5a4296c06bb3ddb8e6fcde734e658f92a19fc7552dba2c7d3",
+      "targeted_evidence_file_sha256": "85bdaf8fcb9964eee7b5a3c08360aaf0104542a9b4237bef09165d8630df7335",
+      "targeted_evidence_candidate_hash": "7b4f4f636ff19c178d4fa933803564abdd66da85e6151580bb2a4f538d98d21c",
+      "base_evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+      "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+      "host_atom_id": "ATOM-WB007-02",
+      "segment_m": [
+        [
+          5.792542,
+          11.221019
+        ],
+        [
+          5.792542,
+          10.290176
+        ]
+      ],
+      "targeted_crop_box_px": [
+        1230,
+        790,
+        1409,
+        1040
+      ],
+      "image_bindings": [
+        {
+          "role": "targeted_raw_crop",
+          "semantic_authority": true,
+          "filename": "OP006-targeted-raw-crop.png",
+          "bytes": 9319,
+          "sha256": "7cb0375a1b5022ee506f56bae66495a6bcb4e157ee97caaf89ce78d6e7b2c415"
+        },
+        {
+          "role": "locator",
+          "semantic_authority": false,
+          "filename": "OP006-locator.png",
+          "bytes": 1621270,
+          "sha256": "dac2cd9a0edbefe2b66a74eed7dc8e21c7d556d395785d9551397ddb085fb7b4"
+        }
+      ],
+      "http_status": 200,
+      "parsed": {
+        "opening_id": "OP006",
+        "visual_kind": "door",
+        "wall_break_visible": "yes",
+        "swing_arc_visible": "yes",
+        "sliding_track_visible": "no",
+        "neighboring_opening_cue_visible": "no",
+        "target_swing_cue_attributable_to_target": "yes",
+        "confidence": "high"
+      },
+      "validation_error": null,
+      "transport_error": null,
+      "usable_advisory": true,
+      "usage": {
+        "prompt_tokens": 680,
+        "completion_tokens": 105,
+        "total_tokens": 785,
+        "cost": 0.0004665,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "raw_response": {
+        "id": "gen-1788381966-2DwaLb8r7HjAxlTdIChW",
+        "object": "chat.completion",
+        "created": 1788381966,
+        "model": "google/gemini-2.5-flash",
+        "provider": "Google",
+        "system_fingerprint": null,
+        "service_tier": "default",
+        "choices": [
+          {
+            "index": 0,
+            "logprobs": null,
+            "finish_reason": "stop",
+            "native_finish_reason": "STOP",
+            "message": {
+              "role": "assistant",
+              "content": "{\n  \"opening_id\": \"OP006\",\n  \"visual_kind\": \"door\",\n  \"wall_break_visible\": \"yes\",\n  \"swing_arc_visible\": \"yes\",\n  \"sliding_track_visible\": \"no\",\n  \"neighboring_opening_cue_visible\": \"no\",\n  \"target_swing_cue_attributable_to_target\": \"yes\",\n  \"confidence\": \"high\"\n}",
+              "refusal": null,
+              "reasoning": null
+            }
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 680,
+          "completion_tokens": 105,
+          "total_tokens": 785,
+          "cost": 0.0004665,
+          "prompt_tokens_details": {
+            "cached_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        }
+      },
+      "raw_response_sha256": "0b0facb319dfb3e922180b821fe07863b0c8c3642d1714a77995fc1ee57084e0",
+      "targeted_cue_attribution_advisory_only": true,
+      "source_subtype_confirmation": false,
+      "effective_void_confirmation": false,
+      "vertical_parameters_reviewed": false,
+      "traversability_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "build_authorized": false,
+      "ready": false,
+      "score_effect": "none"
+    }
+  },
+  "visual_subtype_candidate": "door",
+  "neighboring_visual_cues_present": false,
+  "target_cue_isolated": true,
+  "subtype_use_status": "resolved_after_tighter_crop",
+  "accepted_for_downstream_research_with_quarantine": true,
+  "targeted_review_cost_usd": 0.0004665,
+  "source_subtype_confirmation": false,
+  "effective_void_confirmation": false,
+  "vertical_parameters_reviewed": false,
+  "traversability_confirmation": false,
+  "pair_confirmation": false,
+  "adjacency_confirmation": false,
+  "source_correction_authorized": false,
+  "semantic_promotion": false,
+  "build_authorized": false,
+  "ready": false,
+  "score_effect": "none",
+  "candidate_hash": "e3a70f147d6c63ca321b23e868988c352aff75917dd381ffb312c22d3d0c7e33"
+}

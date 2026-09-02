@@ -218,14 +218,14 @@
         "access_traversability": "unconfirmed"
       },
       "bundle_accepted_for_layer3a_visual_subtype_research": true,
-      "downstream_use_status": "needs_tighter_crop",
+      "downstream_use_status": "accepted_with_quarantine",
       "quarantine": [
-        "neighboring_swing_arc",
+        "historical_neighboring_swing_arc",
         "endpoint_context",
         "traversability",
         "adjacency"
       ],
-      "explicit_unresolved": true,
+      "explicit_unresolved": false,
       "vertical_parameters_reviewed": false,
       "source_subtype_confirmation": false,
       "effective_void_confirmation": false,
@@ -237,7 +237,20 @@
       "semantic_promotion": false,
       "score_effect": "none",
       "build_authorized": false,
-      "ready": false
+      "ready": false,
+      "targeted_remediation": {
+        "bundle_file_sha256": "7f2e1a657155a81eb5ed95469534c2a61887b5cd2ca697876f5a267fe8d69845",
+        "bundle_candidate_hash": "e3a70f147d6c63ca321b23e868988c352aff75917dd381ffb312c22d3d0c7e33",
+        "evidence_file_sha256": "85bdaf8fcb9964eee7b5a3c08360aaf0104542a9b4237bef09165d8630df7335",
+        "evidence_candidate_hash": "7b4f4f636ff19c178d4fa933803564abdd66da85e6151580bb2a4f538d98d21c",
+        "selected_result_file_sha256": "7ac732e523ec4e54cbe49bdd7ff4bef2f4023e3af6bfc63a5045dd98a0b31321",
+        "selected_raw_response_sha256": "0b0facb319dfb3e922180b821fe07863b0c8c3642d1714a77995fc1ee57084e0",
+        "targeted_review_cost_usd": 0.0004665,
+        "original_advisory_preserved": true,
+        "neighboring_visual_cues_present": false,
+        "target_cue_isolated": true,
+        "subtype_use_status": "resolved_after_tighter_crop"
+      }
     },
     {
       "opening_id": "OP007",
@@ -306,14 +319,14 @@
         "access_traversability": "unconfirmed"
       },
       "bundle_accepted_for_layer3a_visual_subtype_research": true,
-      "downstream_use_status": "needs_tighter_crop",
+      "downstream_use_status": "accepted_with_quarantine",
       "quarantine": [
-        "neighboring_swing_arc",
-        "room_labels",
+        "historical_neighboring_swing_arc",
+        "remaining_edge_context",
         "return_wall",
         "room_pair"
       ],
-      "explicit_unresolved": true,
+      "explicit_unresolved": false,
       "vertical_parameters_reviewed": false,
       "source_subtype_confirmation": false,
       "effective_void_confirmation": false,
@@ -325,7 +338,20 @@
       "semantic_promotion": false,
       "score_effect": "none",
       "build_authorized": false,
-      "ready": false
+      "ready": false,
+      "targeted_remediation": {
+        "bundle_file_sha256": "873b34231cbce8cda586b3a37c61fcff5048d98ec374e5ffe2eaf4d02db03420",
+        "bundle_candidate_hash": "52215767de7d36d1ba7641cbc0d148ea6f05287fc4049033b4d81c720453a60d",
+        "evidence_file_sha256": "06c21a9ad2307bb12efe4c829f4883238b971103f80bca96a8c76f8372bfce16",
+        "evidence_candidate_hash": "be8ee5773fc30aed185dcfd80abe6d9fb38935a039eba8950b3db7da731a20d4",
+        "selected_result_file_sha256": "db666e8fbd39aa92cb2f704c29b24f52e835247fc0fbe1e6c8c3a02e0740fcec",
+        "selected_raw_response_sha256": "668f59eda9e128d0b26e9e0f0eb84b6f6a6f782456c0cc52594c89dcae6738bc",
+        "targeted_review_cost_usd": 0.0004665,
+        "original_advisory_preserved": true,
+        "neighboring_visual_cues_present": false,
+        "target_cue_isolated": true,
+        "subtype_use_status": "resolved_after_tighter_crop"
+      }
     },
     {
       "opening_id": "OP009",
@@ -423,19 +449,22 @@
     "OP002",
     "OP003",
     "OP004",
+    "OP006",
     "OP007",
+    "OP008",
     "OP009",
     "OP010"
   ],
-  "explicit_unresolved_ids": [
-    "OP006",
-    "OP008"
-  ],
+  "explicit_unresolved_ids": [],
   "layer3a_visual_advisory_coverage_complete": true,
   "all_subtypes_source_confirmed": false,
   "all_subtypes_downstream_ready": false,
-  "batch_gate_status": "coverage_complete_with_explicit_unresolved",
-  "selected_review_cost_usd": 0.0035225,
+  "all_visual_candidates_available_for_quarantined_research": true,
+  "batch_gate_status": "coverage_complete_all_visual_candidates_quarantined",
+  "base_wide_crop_review_cost_usd": 0.0035225,
+  "targeted_remediation_cost_usd": 0.000933,
+  "cumulative_visual_review_cost_usd": 0.0044555,
+  "cost_accounting_model": "cumulative_base_advisories_plus_targeted_remediation",
   "failed_attempts_preserved_where_present": true,
   "source_subtype_confirmation": false,
   "effective_void_confirmation": false,
@@ -450,5 +479,5 @@
   "score_effect": "none",
   "build_authorized": false,
   "ready": false,
-  "candidate_hash": "4036d7da984edeeeb919c8d934ee6f687402af66624376da6cddd099461aa23d"
+  "candidate_hash": "4ff72ad28612b4959049195bc7ea9f2b5bd61dd2c5ef11f960f007c773d6fdb4"
 }

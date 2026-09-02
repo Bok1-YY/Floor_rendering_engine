@@ -16,6 +16,7 @@ if str(ROOT) not in sys.path:
 from tools.fastloop_research.contract import canonical_json
 from tools.goal_loop_v2.build_clean_subtype_bundle import validate as validate_generic_bundle
 from tools.goal_loop_v2.build_op002_clean_subtype_bundle import validate as validate_op002_bundle
+from tools.goal_loop_v2.build_targeted_subtype_bundle import validate as validate_targeted_bundle
 
 OUT = ROOT / "reports/layer3a_subtype_register_20260903"
 OPENING_IDS = ("OP001", "OP002", "OP003", "OP004", "OP006", "OP007", "OP008", "OP009", "OP010")
@@ -26,6 +27,10 @@ GENERIC_DIRS = {
     if opening_id != "OP002"
 }
 OP002_DIR = ROOT / "reports/op002_clean_subtype_20260903"
+TARGETED_DIRS = {
+    opening_id: ROOT / f"reports/{opening_id.lower()}_targeted_subtype_20260903"
+    for opening_id in ("OP006", "OP008")
+}
 DISPOSITIONS = {
     "OP001": {
         "downstream_use_status": "accepted_with_quarantine",
@@ -44,16 +49,16 @@ DISPOSITIONS = {
         "quarantine": ["vertical_parameters", "room_pair", "traversability", "adjacency"],
     },
     "OP006": {
-        "downstream_use_status": "needs_tighter_crop",
-        "quarantine": ["neighboring_swing_arc", "endpoint_context", "traversability", "adjacency"],
+        "downstream_use_status": "accepted_with_quarantine",
+        "quarantine": ["historical_neighboring_swing_arc", "endpoint_context", "traversability", "adjacency"],
     },
     "OP007": {
         "downstream_use_status": "accepted_with_quarantine",
         "quarantine": ["public_wc_semantics", "room_pair", "traversability", "adjacency"],
     },
     "OP008": {
-        "downstream_use_status": "needs_tighter_crop",
-        "quarantine": ["neighboring_swing_arc", "room_labels", "return_wall", "room_pair"],
+        "downstream_use_status": "accepted_with_quarantine",
+        "quarantine": ["historical_neighboring_swing_arc", "remaining_edge_context", "return_wall", "room_pair"],
     },
     "OP009": {
         "downstream_use_status": "accepted_with_quarantine",
@@ -129,7 +134,7 @@ def _load_row(opening_id: str) -> dict[str, Any]:
     selected = bundle["selected_result"]
     parsed = selected["parsed"]
     disposition = deepcopy(DISPOSITIONS[opening_id])
-    return {
+    result = {
         "opening_id": opening_id,
         "bundle_schema": bundle["schema"],
         "bundle_file_sha256": _file_hash(bundle_path),
@@ -159,6 +164,34 @@ def _load_row(opening_id: str) -> dict[str, Any]:
         "build_authorized": False,
         "ready": False,
     }
+    if opening_id in TARGETED_DIRS:
+        targeted_dir = TARGETED_DIRS[opening_id]
+        targeted_bundle_path = targeted_dir / "bundle.json"
+        targeted_result_path = targeted_dir / "targeted-selected-result.json"
+        targeted_evidence_path = ROOT / f"reports/{opening_id.lower()}_targeted_subtype_evidence_20260903/evidence.json"
+        targeted = json.loads(targeted_bundle_path.read_text(encoding="utf-8"))
+        validate_targeted_bundle(
+            targeted,
+            opening_id,
+            original_bundle_path=bundle_path,
+            original_result_path=selected_path,
+            targeted_evidence_path=targeted_evidence_path,
+            targeted_result_path=targeted_result_path,
+        )
+        result["targeted_remediation"] = {
+            "bundle_file_sha256": _file_hash(targeted_bundle_path),
+            "bundle_candidate_hash": targeted["candidate_hash"],
+            "evidence_file_sha256": targeted["targeted_evidence"]["file_sha256"],
+            "evidence_candidate_hash": targeted["targeted_evidence"]["candidate_hash"],
+            "selected_result_file_sha256": targeted["targeted_selected_result"]["file_sha256"],
+            "selected_raw_response_sha256": targeted["targeted_selected_result"]["raw_response_sha256"],
+            "targeted_review_cost_usd": targeted["targeted_review_cost_usd"],
+            "original_advisory_preserved": targeted["original_advisory"]["preserved_as_history"],
+            "neighboring_visual_cues_present": targeted["neighboring_visual_cues_present"],
+            "target_cue_isolated": targeted["target_cue_isolated"],
+            "subtype_use_status": targeted["subtype_use_status"],
+        }
+    return result
 
 
 def build(*, _skip_validate: bool = False) -> dict[str, Any]:
@@ -188,11 +221,28 @@ def build(*, _skip_validate: bool = False) -> dict[str, Any]:
         "layer3a_visual_advisory_coverage_complete": len(rows) == len(OPENING_IDS),
         "all_subtypes_source_confirmed": False,
         "all_subtypes_downstream_ready": False,
-        "batch_gate_status": "coverage_complete_with_explicit_unresolved",
-        "selected_review_cost_usd": round(
+        "all_visual_candidates_available_for_quarantined_research": len(downstream_accepted) == len(OPENING_IDS),
+        "batch_gate_status": "coverage_complete_all_visual_candidates_quarantined",
+        "base_wide_crop_review_cost_usd": round(
             sum(float(row["selected_review_cost_usd"]) for row in rows),
             10,
         ),
+        "targeted_remediation_cost_usd": round(
+            sum(
+                float(row.get("targeted_remediation", {}).get("targeted_review_cost_usd", 0.0))
+                for row in rows
+            ),
+            10,
+        ),
+        "cumulative_visual_review_cost_usd": round(
+            sum(float(row["selected_review_cost_usd"]) for row in rows)
+            + sum(
+                float(row.get("targeted_remediation", {}).get("targeted_review_cost_usd", 0.0))
+                for row in rows
+            ),
+            10,
+        ),
+        "cost_accounting_model": "cumulative_base_advisories_plus_targeted_remediation",
         "failed_attempts_preserved_where_present": True,
         "source_subtype_confirmation": False,
         "effective_void_confirmation": False,
@@ -225,11 +275,19 @@ def validate(candidate: Mapping[str, Any]) -> dict[str, Any]:
         or actual.get("opening_ids") != list(OPENING_IDS)
         or actual.get("excluded_opening_ids") != list(EXCLUDED_IDS)
         or actual.get("coverage_count") != 9
-        or actual.get("explicit_unresolved_ids") != ["OP006", "OP008"]
+        or actual.get("explicit_unresolved_ids") != []
         or actual.get("layer3a_visual_advisory_coverage_complete") is not True
         or actual.get("all_subtypes_source_confirmed") is not False
         or actual.get("all_subtypes_downstream_ready") is not False
-        or actual.get("batch_gate_status") != "coverage_complete_with_explicit_unresolved"
+        or actual.get("all_visual_candidates_available_for_quarantined_research") is not True
+        or actual.get("batch_gate_status") != "coverage_complete_all_visual_candidates_quarantined"
+        or actual.get("cost_accounting_model") != "cumulative_base_advisories_plus_targeted_remediation"
+        or actual.get("cumulative_visual_review_cost_usd")
+        != round(
+            actual.get("base_wide_crop_review_cost_usd", 0.0)
+            + actual.get("targeted_remediation_cost_usd", 0.0),
+            10,
+        )
     ):
         raise ValueError("Layer3A subtype register scope/coverage drift")
     for key in FAIL_CLOSED:
@@ -279,16 +337,16 @@ def main(argv: list[str] | None = None) -> int:
     (args.output.parent / "REPORT.md").write_text(
         "# Layer3A visual subtype register v1\n\n"
         "All nine admitted XY openings now have independent raw-first visual-subtype advisory bundles. Seven are "
-        "accepted for downstream research only with explicit quarantine; OP006 and OP008 remain explicit unresolved "
-        "items requiring tighter crops before downstream subtype use. OP009 is normalized to the glazed-interface "
+        "accepted for downstream research only with explicit quarantine. OP006 and OP008 include validated tighter-"
+        "crop remediation while preserving their wider-crop history. OP009 is normalized to the glazed-interface "
         "family with sliding operation and access traversability unconfirmed. Coverage complete does not mean source "
         "subtypes confirmed, downstream-ready openings, vertical authorization, score change, or formal build.\n",
         encoding="utf-8",
     )
     (args.output.parent / "REVIEW_CARD_ZH.md").write_text(
         "# Layer3A 视觉类型覆盖表 v1\n\n"
-        "九个纳入的 XY 候选均已完成独立 raw-first 视觉审查。七个只能在隔离条件下用于后续研究；OP006 和 "
-        "OP008 因邻近摆弧污染需 tighter crop，明确保持 unresolved。OP009 归入 glazed-interface 视觉家族，"
+        "九个纳入的 XY 候选均已完成独立 raw-first 视觉审查，全部只能在隔离条件下用于后续研究。OP006 和 "
+        "OP008 已用 tighter crop 解决邻弧归属并保留原历史。OP009 归入 glazed-interface 视觉家族，"
         "滑动操作和通行均未确认。覆盖完成不等于源类型确认、垂直授权、评分提升或正式建模。\n",
         encoding="utf-8",
     )

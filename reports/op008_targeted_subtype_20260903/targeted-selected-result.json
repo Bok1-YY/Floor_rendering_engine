@@ -1,0 +1,116 @@
+{
+  "schema": "fal-targeted-clean-subtype-review-v1",
+  "opening_id": "OP008",
+  "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+  "model": "google/gemini-2.5-flash",
+  "request_contract_sha256": "5260c8ee678be9cb80feb6422bdae014fd9349fb9125cfc93351259898ba44ac",
+  "prompt_sha256": "2c758f58bf517b72ee41af84295d052321732037f636013c21b941569e722b2f",
+  "system_sha256": "e40d641c5235b7b5a4296c06bb3ddb8e6fcde734e658f92a19fc7552dba2c7d3",
+  "targeted_evidence_file_sha256": "06c21a9ad2307bb12efe4c829f4883238b971103f80bca96a8c76f8372bfce16",
+  "targeted_evidence_candidate_hash": "be8ee5773fc30aed185dcfd80abe6d9fb38935a039eba8950b3db7da731a20d4",
+  "base_evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "host_atom_id": "ATOM-WB018-01",
+  "segment_m": [
+    [
+      1.134358,
+      4.254242
+    ],
+    [
+      2.085754,
+      4.254242
+    ]
+  ],
+  "targeted_crop_box_px": [
+    635,
+    1713,
+    840,
+    1825
+  ],
+  "image_bindings": [
+    {
+      "role": "targeted_raw_crop",
+      "semantic_authority": true,
+      "filename": "OP008-targeted-raw-crop.png",
+      "bytes": 7121,
+      "sha256": "6e388fbbb229384b474db869e4436be4d3a4f9d0227ea83121f8b64a6e5a32e7"
+    },
+    {
+      "role": "locator",
+      "semantic_authority": false,
+      "filename": "OP008-locator.png",
+      "bytes": 1621194,
+      "sha256": "0b120fb5e14e58feca88dafed20939cc0aa9783463396045cee691ec1d6cbb1c"
+    }
+  ],
+  "http_status": 200,
+  "parsed": {
+    "opening_id": "OP008",
+    "visual_kind": "door",
+    "wall_break_visible": "yes",
+    "swing_arc_visible": "yes",
+    "sliding_track_visible": "no",
+    "neighboring_opening_cue_visible": "no",
+    "target_swing_cue_attributable_to_target": "yes",
+    "confidence": "high"
+  },
+  "validation_error": null,
+  "transport_error": null,
+  "usable_advisory": true,
+  "usage": {
+    "prompt_tokens": 680,
+    "completion_tokens": 105,
+    "total_tokens": 785,
+    "cost": 0.0004665,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0
+    }
+  },
+  "raw_response": {
+    "id": "gen-1788381966-r5X6qq7CxiQJsATfk2CY",
+    "object": "chat.completion",
+    "created": 1788381966,
+    "model": "google/gemini-2.5-flash",
+    "provider": "Google",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choices": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "STOP",
+        "message": {
+          "role": "assistant",
+          "content": "{\n  \"opening_id\": \"OP008\",\n  \"visual_kind\": \"door\",\n  \"wall_break_visible\": \"yes\",\n  \"swing_arc_visible\": \"yes\",\n  \"sliding_track_visible\": \"no\",\n  \"neighboring_opening_cue_visible\": \"no\",\n  \"target_swing_cue_attributable_to_target\": \"yes\",\n  \"confidence\": \"high\"\n}",
+          "refusal": null,
+          "reasoning": null
+        }
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 680,
+      "completion_tokens": 105,
+      "total_tokens": 785,
+      "cost": 0.0004665,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0
+      }
+    }
+  },
+  "raw_response_sha256": "668f59eda9e128d0b26e9e0f0eb84b6f6a6f782456c0cc52594c89dcae6738bc",
+  "targeted_cue_attribution_advisory_only": true,
+  "source_subtype_confirmation": false,
+  "effective_void_confirmation": false,
+  "vertical_parameters_reviewed": false,
+  "traversability_confirmation": false,
+  "pair_confirmation": false,
+  "adjacency_confirmation": false,
+  "source_correction_authorized": false,
+  "semantic_promotion": false,
+  "build_authorized": false,
+  "ready": false,
+  "score_effect": "none"
+}
