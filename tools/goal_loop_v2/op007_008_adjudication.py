@@ -25,6 +25,16 @@ BASE_BLOCKERS=['SOURCE_HOST_MISSING','SOURCE_EFFECTIVE_VOID_MISSING','SOURCE_JAM
 def _hash(v:Any)->str:return hashlib.sha256(canonical_json(v)).hexdigest()
 def _binding(path):
     p=Path(path).resolve();raw=p.read_bytes();return {'path':str(p),'file_sha256':hashlib.sha256(raw).hexdigest(),'canonical_sha256':_hash(json.loads(raw.decode('utf-8')))}
+def _artifact_binding(evidence_file,artifact):
+    evidence_dir=Path(evidence_file).resolve().parent;declared=Path(artifact['path'])
+    # Prefer the file beside the evidence manifest.  This keeps a cloned packet
+    # verifiable even when the producer recorded an absolute workstation path.
+    candidates=(evidence_dir/declared.name,declared)
+    actual=next((p for p in candidates if p.is_file()),None)
+    if actual is None:raise ValueError(f"OP007/008 evidence artifact missing: {declared.name}")
+    raw=actual.read_bytes();digest=hashlib.sha256(raw).hexdigest()
+    if digest!=artifact.get('sha256'):raise ValueError(f"OP007/008 evidence artifact hash drift: {declared.name}")
+    return {'filename':actual.name,'sha256':digest,'bytes':len(raw)}
 def _support(segment,host):
     a,b=segment;h0,h1=host;dx,dy=h1[0]-h0[0],h1[1]-h0[1];length=math.hypot(dx,dy);den=length*length
     vals=[((p[0]-h0[0])*dx+(p[1]-h0[1])*dy)/den for p in (a,b)];lo,hi=min(vals),max(vals);before=max(0,lo*length);after=max(0,(1-hi)*length)
@@ -35,7 +45,7 @@ def build_op007_008_adjudication(document:Mapping[str,Any],evidence_file,side_ca
     for oid in ('OP007','OP008'):
         source=next(x for x in doc['opening_contract']['openings'] if x['id']==oid);e=next(x for x in ev['openings'] if x['opening_id']==oid);cfg=CONFIG[oid];host=next(x for x in e['host_wall_candidates'] if x['atom_id']==cfg['host']);jamb=_support(e['source_segment_m'],host['segment_m']);blockers=deepcopy(BASE_BLOCKERS)
         if not jamb['jamb_sufficient']:blockers.append('JAMB_INSUFFICIENT_AT_ENDPOINT')
-        rows.append({'opening_id':oid,'source_status':source['status'],'registration':deepcopy(e['registration']),'host_candidate':{'atom_id':cfg['host'],'segment_m':deepcopy(host['segment_m']),'endpoint_distance_sum_m':host['endpoint_distance_sum_m']},'pair_candidate':deepcopy(cfg['pair']),'jamb_support':jamb,'artifact_hashes':{'crop':e['artifacts']['crop']['sha256'],'full':e['artifacts']['full']['sha256']},'blockers':blockers,'decision':'unresolved_candidate','source_confirmation':False,'pair_confirmation':False,'semantic_promotion':False,'build_authorized':False})
+        rows.append({'opening_id':oid,'source_status':source['status'],'registration':deepcopy(e['registration']),'host_candidate':{'atom_id':cfg['host'],'segment_m':deepcopy(host['segment_m']),'endpoint_distance_sum_m':host['endpoint_distance_sum_m']},'pair_candidate':deepcopy(cfg['pair']),'jamb_support':jamb,'artifact_bindings':{'crop':_artifact_binding(evidence_file,e['artifacts']['crop']),'full':_artifact_binding(evidence_file,e['artifacts']['full'])},'blockers':blockers,'decision':'unresolved_candidate','source_confirmation':False,'pair_confirmation':False,'semantic_promotion':False,'build_authorized':False})
     s0,s1=[r['registration']['expected_pixel_segment'] for r in rows];v0=(s0[1][0]-s0[0][0],s0[1][1]-s0[0][1]);v1=(s1[1][0]-s1[0][0],s1[1][1]-s1[0][1]);dot=v0[0]*v1[0]+v0[1]*v1[1]
     result={'schema':SCHEMA,'source_structure_hash':doc['structure_hash'],'evidence_binding':_binding(evidence_file),'side_candidate_hash':side['candidate_hash'],'target_aware_wall_hash':wall['candidate_hash'],'openings':rows,'distinctness':{'different_opening_ids':True,'different_host_atoms':rows[0]['host_candidate']['atom_id']!=rows[1]['host_candidate']['atom_id'],'pixel_direction_dot':round(dot,9),'orthogonal_directions':abs(dot)<1e-6},'status':'pending_human_review','semantic_promotion':False,'score_effect':'none','build_authorized':False,'ready':False,'candidate_hash':'0'*64}
     result['candidate_hash']=_hash({k:v for k,v in result.items() if k!='candidate_hash'})
