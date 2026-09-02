@@ -1,0 +1,96 @@
+{
+  "schema": "blender-op002-layer3b-vertical-research-validation-v1",
+  "branch_id": "1308-op002-layer3b-vertical-research-v001",
+  "plan_candidate_hash": "1ee1ba25163e64a6949ca66fccc284026d1bf4989689e43f0c8dde0af2690db5",
+  "plan_file_sha256": "1a5b1e1981c5712f484818f8c9cee3d38585ddf4b9ba8263ace571a4b7d29975",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+  "unit_system": "METRIC",
+  "length_unit": "METERS",
+  "scale_length": 1.0,
+  "expected_wall_count": 35,
+  "actual_wall_count": 35,
+  "distinct_source_atom_count": 35,
+  "missing_source_atom_ids": [],
+  "extra_source_atom_ids": [],
+  "duplicate_source_atom_ids": [],
+  "wall_topology_errors": [],
+  "wall_property_errors": [],
+  "expected_guide_count": 2,
+  "actual_guide_count": 2,
+  "guide_roles": [
+    "nonsemantic_xy_locator",
+    "nonsemantic_head_assumption_guide"
+  ],
+  "guide_topology_errors": [],
+  "guide_property_errors": [],
+  "expected_guide_bounds_m": {
+    "nonsemantic_xy_locator": {
+      "z_min_m": 2.8099999999999996,
+      "z_max_m": 2.8299999999999996
+    },
+    "nonsemantic_head_assumption_guide": {
+      "z_min_m": 2.08,
+      "z_max_m": 2.12
+    }
+  },
+  "actual_guide_bounds_m": {
+    "nonsemantic_xy_locator": {
+      "z_min_m": 2.809999942779541,
+      "z_max_m": 2.8299999237060547
+    },
+    "nonsemantic_head_assumption_guide": {
+      "z_min_m": 2.0799999237060547,
+      "z_max_m": 2.119999885559082
+    }
+  },
+  "guide_bound_errors": [],
+  "forbidden_objects": [],
+  "wall_height_m": 2.8,
+  "wall_height_provenance": "unverified_research_assumption",
+  "head_level_m": 2.1,
+  "head_level_provenance": "unverified_research_assumption",
+  "sill_level_m": null,
+  "sill_level_state": "unknown_not_authorized",
+  "opening_cuts": 0,
+  "opening_elements": 0,
+  "opening_geometry_created": false,
+  "floor_cut_created": false,
+  "sill_geometry_created": false,
+  "door_leaf_created": false,
+  "lintel_structural_element_created": false,
+  "ifc_opening_created": false,
+  "ifc_void_or_fill_created": false,
+  "validation_camera_count": 3,
+  "hidden_startup_objects": [
+    "Cube",
+    "Light",
+    "Camera"
+  ],
+  "labels": [
+    "OP002 LAYER 3B — VERTICAL RESEARCH DISPLAY",
+    "WALL HEIGHT 2.8m — UNVERIFIED RESEARCH ASSUMPTION",
+    "HEAD 2.1m — UNVERIFIED RESEARCH ASSUMPTION",
+    "SILL — UNKNOWN / NOT AUTHORIZED",
+    "VISUAL DOOR CANDIDATE ONLY",
+    "NO SOURCE VERTICAL CONFIRMATION",
+    "NO EFFECTIVE-VOID CONFIRMATION",
+    "NO TRAVERSABILITY / ADJACENCY",
+    "NO SOURCE CORRECTION",
+    "RESEARCH ONLY",
+    "NOT FOR CONSTRUCTION"
+  ],
+  "research_only": true,
+  "not_for_construction": true,
+  "source_vertical_confirmation": false,
+  "source_subtype_confirmation": false,
+  "effective_void_confirmation": false,
+  "traversability_confirmation": false,
+  "adjacency_confirmation": false,
+  "source_correction_authorized": false,
+  "semantic_promotion": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "ready": false,
+  "pass": true
+}

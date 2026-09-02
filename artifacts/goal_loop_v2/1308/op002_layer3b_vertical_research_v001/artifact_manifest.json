@@ -1,0 +1,92 @@
+{
+  "schema": "blender-op002-layer3b-vertical-research-artifact-manifest-v1",
+  "branch_id": "1308-op002-layer3b-vertical-research-v001",
+  "plan_candidate_hash": "1ee1ba25163e64a6949ca66fccc284026d1bf4989689e43f0c8dde0af2690db5",
+  "plan_file_sha256": "1a5b1e1981c5712f484818f8c9cee3d38585ddf4b9ba8263ace571a4b7d29975",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+  "blender_version": "5.2.0 LTS",
+  "wall_count": 35,
+  "guide_count": 2,
+  "guide_roles": [
+    "nonsemantic_xy_locator",
+    "nonsemantic_head_assumption_guide"
+  ],
+  "opening_cuts": 0,
+  "opening_elements": 0,
+  "door_leaf_created": false,
+  "ifc_opening_created": false,
+  "wall_height_m": 2.8,
+  "head_level_m": 2.1,
+  "sill_level_m": null,
+  "artifact_path_mode": "relative_to_manifest",
+  "artifacts": [
+    {
+      "kind": "checkpoint_blend",
+      "relative_path": "1308_op002_layer3b_checkpoint_v000.blend",
+      "bytes": 97136,
+      "sha256": "6049de26cdbe92e7d461d719455bd5b0fc819da8b4960db3a70f4dbc69f40c1d"
+    },
+    {
+      "kind": "blender_source",
+      "relative_path": "1308_op002_layer3b_vertical_research_v001.blend",
+      "bytes": 120670,
+      "sha256": "cd33bae73d1d724d84d712e8900c4716540ae0264853a44521f96dd87ee90f7c"
+    },
+    {
+      "kind": "portable_glb",
+      "relative_path": "1308_op002_layer3b_vertical_research_v001.glb",
+      "bytes": 57412,
+      "sha256": "d938b0e0e4683783c0cb70885aad2c2215a374519e8093d71039a8240de17cdb"
+    },
+    {
+      "kind": "render_top",
+      "relative_path": "1308_op002_layer3b_top.png",
+      "bytes": 750827,
+      "sha256": "e157e697c353c2f8ad02d6d959f6fcaaa461da1927efb98be15710f0110a2f07"
+    },
+    {
+      "kind": "render_northeast",
+      "relative_path": "1308_op002_layer3b_northeast.png",
+      "bytes": 952214,
+      "sha256": "82b0995129afdb75d8dd37bcbf59d8aef88b747cb2524873672417ca79282ed8"
+    },
+    {
+      "kind": "render_front_closeup",
+      "relative_path": "1308_op002_layer3b_front_closeup.png",
+      "bytes": 1067369,
+      "sha256": "b9f1fc374f23034e5b86073c939c41933cdc3115a1fc06db89c63ae17708923b"
+    },
+    {
+      "kind": "validation",
+      "relative_path": "validation.json",
+      "bytes": 3205,
+      "sha256": "963228a98c730eefbfcacf4542e6518223697b6a7e09b489d62f7a439131252f"
+    }
+  ],
+  "labels": [
+    "OP002 LAYER 3B — VERTICAL RESEARCH DISPLAY",
+    "WALL HEIGHT 2.8m — UNVERIFIED RESEARCH ASSUMPTION",
+    "HEAD 2.1m — UNVERIFIED RESEARCH ASSUMPTION",
+    "SILL — UNKNOWN / NOT AUTHORIZED",
+    "VISUAL DOOR CANDIDATE ONLY",
+    "NO SOURCE VERTICAL CONFIRMATION",
+    "NO EFFECTIVE-VOID CONFIRMATION",
+    "NO TRAVERSABILITY / ADJACENCY",
+    "NO SOURCE CORRECTION",
+    "RESEARCH ONLY",
+    "NOT FOR CONSTRUCTION"
+  ],
+  "research_only": true,
+  "not_for_construction": true,
+  "source_vertical_confirmation": false,
+  "source_subtype_confirmation": false,
+  "effective_void_confirmation": false,
+  "traversability_confirmation": false,
+  "adjacency_confirmation": false,
+  "source_correction_authorized": false,
+  "semantic_promotion": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "ready": false
+}

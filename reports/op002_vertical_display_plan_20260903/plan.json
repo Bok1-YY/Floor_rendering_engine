@@ -1,0 +1,178 @@
+{
+  "schema": "op002-vertical-display-plan-v2",
+  "branch_id": "1308-op002-layer3b-vertical-research-v001",
+  "branch_kind": "vertical_parameter_research_display_without_opening_cut",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+  "vertical_audit_file_sha256": "d081ad39e42b3b95660175fbee6f4b300addb455fc5dbbb793d47da9b6d68d84",
+  "vertical_audit_candidate_hash": "07a585668252edbed1177390052077cd24fdf3a73bc58143ceed30e24814861e",
+  "layer1_manifest_file_sha256": "fa37dfa1cff899bdb7b7214b87f0af6176bb5c0d706b0e4444f73634e866c911",
+  "layer1_blender_source_sha256": "4357010f124314954ec1a38316a6364a2474311441f87d96cd0a30b5839bb09d",
+  "baseline": {
+    "source_wall_atom_count": 35,
+    "intact_source_wall_count": 35,
+    "opening_cuts": 0,
+    "wall_geometry_source": "v21_wall_atoms_rebuilt_without_splits"
+  },
+  "op002_xy_binding": {
+    "host_atom_id": "ATOM-WB006-02",
+    "source_segment_m": [
+      [
+        4.423994413407822,
+        10.690147268408552
+      ],
+      [
+        4.423994413407822,
+        9.802937767220904
+      ]
+    ],
+    "source_segment_length_m": 0.8872095011876482,
+    "host_centerline_m": [
+      [
+        4.423994,
+        12.690005
+      ],
+      [
+        4.423994413407822,
+        5.688689786747744
+      ]
+    ],
+    "host_thickness_m": 0.12,
+    "display_face_normal_xy": [
+      1.0,
+      0.0
+    ],
+    "semantic": false
+  },
+  "vertical_assumptions": {
+    "wall_height_m": {
+      "value": 2.8,
+      "provenance_class": "research_assumption",
+      "assumption_id": "ASSUME-Z-RESEARCH",
+      "source_explicit": false,
+      "human_authorized_default": false
+    },
+    "head_m": {
+      "value": 2.1,
+      "provenance_class": "research_assumption",
+      "assumption_id": "ASSUME-Z-RESEARCH",
+      "source_explicit": false,
+      "human_authorized_default": false
+    },
+    "sill_m": {
+      "value": null,
+      "provenance_class": "unknown",
+      "reason": "unsupported_candidate_value_not_authorized",
+      "source_explicit": false,
+      "human_authorized_default": false
+    }
+  },
+  "guide_specs": [
+    {
+      "object_name": "GEO-RESEARCH-OP002-XY-LOCATOR",
+      "role": "nonsemantic_xy_locator",
+      "centerline_m": [
+        [
+          4.423994413407822,
+          10.690147268408552
+        ],
+        [
+          4.423994413407822,
+          9.802937767220904
+        ]
+      ],
+      "xy_thickness_m": 0.04,
+      "z_min_m": 2.8099999999999996,
+      "z_max_m": 2.8299999999999996,
+      "source_fact": false,
+      "opening_geometry": false
+    },
+    {
+      "object_name": "GEO-RESEARCH-OP002-HEAD-GUIDE",
+      "role": "nonsemantic_head_assumption_guide",
+      "centerline_m": [
+        [
+          4.513994413407822,
+          10.690147268408552
+        ],
+        [
+          4.513994413407822,
+          9.802937767220904
+        ]
+      ],
+      "xy_thickness_m": 0.03,
+      "face_offset_m": 0.09,
+      "z_center_m": 2.1,
+      "z_min_m": 2.08,
+      "z_max_m": 2.12,
+      "source_fact": false,
+      "opening_geometry": false
+    }
+  ],
+  "view_contracts": [
+    {
+      "view_id": "top",
+      "projection": "orthographic",
+      "purpose": "verify unchanged XY source walls and locator"
+    },
+    {
+      "view_id": "northeast",
+      "projection": "orthographic_axonometric",
+      "purpose": "show wall/head assumptions without a cut"
+    },
+    {
+      "view_id": "front_closeup",
+      "projection": "orthographic",
+      "camera_side": "positive_display_face_normal",
+      "purpose": "show head guide and intact host wall"
+    }
+  ],
+  "labels": [
+    "OP002 LAYER 3B — VERTICAL RESEARCH DISPLAY",
+    "WALL HEIGHT 2.8m — UNVERIFIED RESEARCH ASSUMPTION",
+    "HEAD 2.1m — UNVERIFIED RESEARCH ASSUMPTION",
+    "SILL — UNKNOWN / NOT AUTHORIZED",
+    "VISUAL DOOR CANDIDATE ONLY",
+    "NO SOURCE VERTICAL CONFIRMATION",
+    "NO EFFECTIVE-VOID CONFIRMATION",
+    "NO TRAVERSABILITY / ADJACENCY",
+    "NO SOURCE CORRECTION",
+    "RESEARCH ONLY",
+    "NOT FOR CONSTRUCTION"
+  ],
+  "forbidden_object_roles": [
+    "floor_cut",
+    "opening_volume",
+    "door_leaf",
+    "window",
+    "threshold",
+    "sill_geometry",
+    "lintel_structural_element",
+    "ifc_opening",
+    "ifc_void",
+    "ifc_fill",
+    "traversability_edge",
+    "adjacency_edge"
+  ],
+  "guide_object_count": 2,
+  "opening_geometry_created": false,
+  "floor_cut_created": false,
+  "sill_geometry_created": false,
+  "door_leaf_created": false,
+  "lintel_structural_element_created": false,
+  "ifc_opening_created": false,
+  "ifc_void_or_fill_created": false,
+  "research_only": true,
+  "not_for_construction": true,
+  "source_vertical_confirmation": false,
+  "source_subtype_confirmation": false,
+  "effective_void_confirmation": false,
+  "traversability_confirmation": false,
+  "adjacency_confirmation": false,
+  "source_correction_authorized": false,
+  "semantic_promotion": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "ready": false,
+  "candidate_hash": "1ee1ba25163e64a6949ca66fccc284026d1bf4989689e43f0c8dde0af2690db5"
+}

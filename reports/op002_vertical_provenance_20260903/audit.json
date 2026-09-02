@@ -1,0 +1,117 @@
+{
+  "schema": "op002-vertical-provenance-audit-v2",
+  "opening_id": "OP002",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+  "clean_subtype_bundle_file_sha256": "1cae6a9cf49a33dbaedd9355f793684ee62a7c6de68ecd7c4c4c2590f3e82f97",
+  "clean_subtype_bundle_candidate_hash": "17d1a0c818066590e291a993235c6d599ac5a852ad56378f388787b02c0e449b",
+  "vertical_evidence": {
+    "file_sha256": "5e90c21081596d24cf18ee99bbd6837f671623593cee3da0650a6f6a56473b6e",
+    "source_image_sha256": "b85ff7446e2d1a123e3a41dc541ea9d6e081f3978d3460d6de8ef9906119bc07",
+    "source_segment_px": [
+      [
+        1101.5000000000002,
+        911.9999999999998
+      ],
+      [
+        1101.5000000000002,
+        1033.9999999999998
+      ]
+    ],
+    "registration_max_endpoint_error_px": 0.0,
+    "explicit_no_height_promotion_disclosure": true,
+    "artifacts": {
+      "crop_overlay": {
+        "relative_path": "op002-vertical-crop-overlay.png",
+        "bytes": 49644,
+        "sha256": "2759c46dfcd4f901d8c768c6026163e5f6e00b434fce4e3888f72c9e4c76290c",
+        "size": [
+          360,
+          482
+        ]
+      },
+      "full_overlay": {
+        "relative_path": "op002-vertical-full-overlay.png",
+        "bytes": 1619772,
+        "sha256": "616b154f883554ab8aeab6a7d2b9b81e29d8f6143f996807a8624a58659332c0",
+        "size": [
+          2245,
+          3043
+        ]
+      }
+    }
+  },
+  "opening_candidate_state": {
+    "opening_status": "candidate",
+    "source_observation_status": "candidate",
+    "effective_void_status": "candidate",
+    "assumption_ids": [
+      "ASSUME-Z-RESEARCH"
+    ]
+  },
+  "assumption_registry_entry": {
+    "id": "ASSUME-Z-RESEARCH",
+    "category": "z_geometry",
+    "basis": "research_default",
+    "status": "unverified",
+    "build_policy": "allow_research_only",
+    "disclosure": "The source plan does not certify Z dimensions; these values are reversible research assumptions.",
+    "value": {
+      "door_head_m": 2.1,
+      "wall_height_m": 2.8
+    }
+  },
+  "vertical_parameters": {
+    "wall_height_m": {
+      "observed_value": 2.8,
+      "provenance_class": "research_assumption",
+      "assumption_id": "ASSUME-Z-RESEARCH",
+      "source_explicit": false,
+      "human_authorized_default": false,
+      "usable_for_reversible_research_display": true,
+      "eligible_for_source_promotion": false
+    },
+    "head_m": {
+      "observed_value": 2.1,
+      "provenance_class": "research_assumption",
+      "assumption_id": "ASSUME-Z-RESEARCH",
+      "source_explicit": false,
+      "human_authorized_default": false,
+      "usable_for_reversible_research_display": true,
+      "eligible_for_source_promotion": false
+    },
+    "sill_m": {
+      "observed_value": 0.0,
+      "provenance_class": "unsupported_candidate_value",
+      "assumption_id": null,
+      "source_explicit": false,
+      "human_authorized_default": false,
+      "treatment": "unknown",
+      "usable_for_reversible_research_display": false,
+      "eligible_for_source_promotion": false
+    }
+  },
+  "visual_subtype_candidate": "door",
+  "visual_subtype_advisory_is_vertical_authority": false,
+  "vertical_evidence_supports_height": false,
+  "isolated_blender_research_display": {
+    "policy_status": "pending_policy_guardian",
+    "wall_height_m": 2.8,
+    "head_m": 2.1,
+    "sill_m": null,
+    "must_label_head_as_research_assumption": true,
+    "must_label_sill_as_unknown": true,
+    "opening_geometry_authorized": false
+  },
+  "source_vertical_confirmation": false,
+  "source_subtype_confirmation": false,
+  "effective_void_confirmation": false,
+  "traversability_confirmation": false,
+  "adjacency_confirmation": false,
+  "source_correction_authorized": false,
+  "semantic_promotion": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "ready": false,
+  "candidate_hash": "07a585668252edbed1177390052077cd24fdf3a73bc58143ceed30e24814861e"
+}

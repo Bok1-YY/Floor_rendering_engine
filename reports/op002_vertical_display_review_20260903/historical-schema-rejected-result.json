@@ -1,0 +1,99 @@
+{
+  "schema": "fal-op002-layer3b-display-review-v1",
+  "opening_id": "OP002",
+  "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+  "model": "google/gemini-2.5-flash",
+  "request_contract_sha256": "2096e6167bb010a039ce81694a78997990f164206051022783b9525e4f67059e",
+  "prompt_sha256": "66f85fe052b1da721d71f3e49bdcb8c011f7bb33424b3886ff4e5bdba7cc550b",
+  "system_sha256": "1d3797c9fc645e5e09b0608497ec8948ec205332bb367a7011bb0b9bd8c953ac",
+  "evidence_file_sha256": "92f380f00bbece8dd786a75cb6474f77ff2784be78c850e733dc020ccbf2d0e3",
+  "evidence_candidate_hash": "0812ea2db2ebfc2ce6ef8e067c3caeb9295caa39de0560f9d72f0753dea6f242",
+  "display_plan_candidate_hash": "1ee1ba25163e64a6949ca66fccc284026d1bf4989689e43f0c8dde0af2690db5",
+  "display_manifest_file_sha256": "ae6085b5971893ad301a7b7fc9068006f3152ffcfd11f4a78c1ad70b1d1f4b91",
+  "image_bindings": [
+    {
+      "role": "labeled_composite",
+      "filename": "op002-layer3b-display-composite.png",
+      "bytes": 2087351,
+      "sha256": "326e6251c665e4f9101466f72994a4dba126cd8909397c0ad6421321c4870ed2"
+    },
+    {
+      "role": "front_closeup",
+      "filename": "1308_op002_layer3b_front_closeup.png",
+      "bytes": 1067369,
+      "sha256": "b9f1fc374f23034e5b86073c939c41933cdc3115a1fc06db89c63ae17708923b"
+    },
+    {
+      "role": "top",
+      "filename": "1308_op002_layer3b_top.png",
+      "bytes": 750827,
+      "sha256": "e157e697c353c2f8ad02d6d959f6fcaaa461da1927efb98be15710f0110a2f07"
+    },
+    {
+      "role": "northeast",
+      "filename": "1308_op002_layer3b_northeast.png",
+      "bytes": 952214,
+      "sha256": "82b0995129afdb75d8dd37bcbf59d8aef88b747cb2524873672417ca79282ed8"
+    }
+  ],
+  "http_status": 200,
+  "parsed": null,
+  "validation_error": "OP002 Layer3B display review schema/id mismatch",
+  "transport_error": null,
+  "usable_advisory": false,
+  "usage": {
+    "prompt_tokens": 1276,
+    "completion_tokens": 181,
+    "total_tokens": 1457,
+    "cost": 0.0008353,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0
+    }
+  },
+  "raw_response": {
+    "id": "gen-1788374487-yxhhf0GqjQLk3RREluGP",
+    "object": "chat.completion",
+    "created": 1788374487,
+    "model": "google/gemini-2.5-flash",
+    "provider": "Google",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choices": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "STOP",
+        "message": {
+          "role": "assistant",
+          "content": "{\n  \"opening_id\": \"OP002 Layer3B\",\n  \"intact_wall_baseline_visible\": \"yes\",\n  \"blue_xy_locator_visible\": \"yes\",\n  \"orange_head_assumption_guide_visible\": \"yes\",\n  \"guides_visually_distinct_from_wall\": \"yes\",\n  \"floor_to_head_opening_cut_visible\": \"no\",\n  \"door_leaf_threshold_or_sill_geometry_visible\": \"no\",\n  \"display_labels_state_assumptions_and_unknown_sill\": \"yes\",\n  \"display_misleading_as_confirmed_opening\": \"no\",\n  \"recommendation\": \"accept_layer3b_research_display\",\n  \"confidence\": \"high\"\n}",
+          "refusal": null,
+          "reasoning": null
+        }
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 1276,
+      "completion_tokens": 181,
+      "total_tokens": 1457,
+      "cost": 0.0008353,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0
+      }
+    }
+  },
+  "raw_response_sha256": "8f311a8aa4242db0ce126319fd4776ce860b4de2c4b77847763f684b2134433d",
+  "display_clarity_advisory_only": true,
+  "source_vertical_confirmation": false,
+  "source_subtype_confirmation": false,
+  "effective_void_confirmation": false,
+  "traversability_confirmation": false,
+  "adjacency_confirmation": false,
+  "source_correction_authorized": false,
+  "semantic_promotion": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "ready": false
+}

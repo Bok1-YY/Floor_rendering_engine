@@ -1,0 +1,111 @@
+{
+  "schema": "fal-op002-layer3b-display-review-v1",
+  "opening_id": "OP002",
+  "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+  "model": "google/gemini-2.5-flash",
+  "request_contract_sha256": "c046245f2f6c857223ed5171c2d4221424803cbee9785dda961955aac2844266",
+  "prompt_sha256": "ab8660e85499fce509bbd429f3e29f25e0aa09f5d4d3b834fb6ef6b342d97a16",
+  "system_sha256": "1d3797c9fc645e5e09b0608497ec8948ec205332bb367a7011bb0b9bd8c953ac",
+  "evidence_file_sha256": "92f380f00bbece8dd786a75cb6474f77ff2784be78c850e733dc020ccbf2d0e3",
+  "evidence_candidate_hash": "0812ea2db2ebfc2ce6ef8e067c3caeb9295caa39de0560f9d72f0753dea6f242",
+  "display_plan_candidate_hash": "1ee1ba25163e64a6949ca66fccc284026d1bf4989689e43f0c8dde0af2690db5",
+  "display_manifest_file_sha256": "ae6085b5971893ad301a7b7fc9068006f3152ffcfd11f4a78c1ad70b1d1f4b91",
+  "image_bindings": [
+    {
+      "role": "labeled_composite",
+      "filename": "op002-layer3b-display-composite.png",
+      "bytes": 2087351,
+      "sha256": "326e6251c665e4f9101466f72994a4dba126cd8909397c0ad6421321c4870ed2"
+    },
+    {
+      "role": "front_closeup",
+      "filename": "1308_op002_layer3b_front_closeup.png",
+      "bytes": 1067369,
+      "sha256": "b9f1fc374f23034e5b86073c939c41933cdc3115a1fc06db89c63ae17708923b"
+    },
+    {
+      "role": "top",
+      "filename": "1308_op002_layer3b_top.png",
+      "bytes": 750827,
+      "sha256": "e157e697c353c2f8ad02d6d959f6fcaaa461da1927efb98be15710f0110a2f07"
+    },
+    {
+      "role": "northeast",
+      "filename": "1308_op002_layer3b_northeast.png",
+      "bytes": 952214,
+      "sha256": "82b0995129afdb75d8dd37bcbf59d8aef88b747cb2524873672417ca79282ed8"
+    }
+  ],
+  "http_status": 200,
+  "parsed": {
+    "opening_id": "OP002",
+    "intact_wall_baseline_visible": "yes",
+    "blue_xy_locator_visible": "yes",
+    "orange_head_assumption_guide_visible": "yes",
+    "guides_visually_distinct_from_wall": "yes",
+    "floor_to_head_opening_cut_visible": "no",
+    "door_leaf_threshold_or_sill_geometry_visible": "no",
+    "display_labels_state_assumptions_and_unknown_sill": "yes",
+    "display_misleading_as_confirmed_opening": "no",
+    "recommendation": "accept_layer3b_research_display",
+    "confidence": "high"
+  },
+  "validation_error": null,
+  "transport_error": null,
+  "usable_advisory": true,
+  "usage": {
+    "prompt_tokens": 1302,
+    "completion_tokens": 178,
+    "total_tokens": 1480,
+    "cost": 0.0008356,
+    "prompt_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 0
+    }
+  },
+  "raw_response": {
+    "id": "gen-1788374570-QyJgpXsBiSOtZQRLJvZe",
+    "object": "chat.completion",
+    "created": 1788374570,
+    "model": "google/gemini-2.5-flash",
+    "provider": "Google",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choices": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "STOP",
+        "message": {
+          "role": "assistant",
+          "content": "{\n  \"opening_id\": \"OP002\",\n  \"intact_wall_baseline_visible\": \"yes\",\n  \"blue_xy_locator_visible\": \"yes\",\n  \"orange_head_assumption_guide_visible\": \"yes\",\n  \"guides_visually_distinct_from_wall\": \"yes\",\n  \"floor_to_head_opening_cut_visible\": \"no\",\n  \"door_leaf_threshold_or_sill_geometry_visible\": \"no\",\n  \"display_labels_state_assumptions_and_unknown_sill\": \"yes\",\n  \"display_misleading_as_confirmed_opening\": \"no\",\n  \"recommendation\": \"accept_layer3b_research_display\",\n  \"confidence\": \"high\"\n}",
+          "refusal": null,
+          "reasoning": null
+        }
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 1302,
+      "completion_tokens": 178,
+      "total_tokens": 1480,
+      "cost": 0.0008356,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0
+      }
+    }
+  },
+  "raw_response_sha256": "ae016a9baf2952d7ee5024634ba7cd957ece7db76144aaae08165722506d34de",
+  "display_clarity_advisory_only": true,
+  "source_vertical_confirmation": false,
+  "source_subtype_confirmation": false,
+  "effective_void_confirmation": false,
+  "traversability_confirmation": false,
+  "adjacency_confirmation": false,
+  "source_correction_authorized": false,
+  "semantic_promotion": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "ready": false
+}
