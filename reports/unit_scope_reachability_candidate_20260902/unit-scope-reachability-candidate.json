@@ -1,0 +1,308 @@
+{
+  "schema": "unit-scope-reachability-candidate-v1",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "root_hypothesis": {
+    "space_id": "common_core_circulation",
+    "scope": "external_to_private_unit_candidate",
+    "building_exterior_root_confirmation": false,
+    "unit_root_confirmation": false
+  },
+  "scope_space_ids": [
+    "bath",
+    "bedroom_01",
+    "bedroom_02",
+    "bedroom_03",
+    "bedroom_corridor",
+    "common_core_circulation",
+    "dry_balcony",
+    "front_balcony",
+    "kitchen",
+    "living_hall",
+    "lobby",
+    "north_toilet",
+    "rear_balcony",
+    "wc",
+    "west_toilet"
+  ],
+  "excluded_nontraversable_space_ids": [
+    "lift_shaft"
+  ],
+  "semantic_open_plan_edges": [
+    {
+      "id": "VEIRTUAL-bedroom_corridor-living_hall",
+      "space_a_id": "bedroom_corridor",
+      "space_b_id": "living_hall",
+      "kind": "semantic_open_plan_boundary",
+      "shared_boundary_m": 1.967664697,
+      "confirmation": false
+    },
+    {
+      "id": "VEIRTUAL-bedroom_corridor-lobby",
+      "space_a_id": "bedroom_corridor",
+      "space_b_id": "lobby",
+      "kind": "semantic_open_plan_boundary",
+      "shared_boundary_m": 1.015320806,
+      "confirmation": false
+    },
+    {
+      "id": "VEIRTUAL-kitchen-living_hall",
+      "space_a_id": "kitchen",
+      "space_b_id": "living_hall",
+      "kind": "semantic_open_plan_boundary",
+      "shared_boundary_m": 3.318456392,
+      "confirmation": false
+    },
+    {
+      "id": "VEIRTUAL-kitchen-lobby",
+      "space_a_id": "kitchen",
+      "space_b_id": "lobby",
+      "kind": "semantic_open_plan_boundary",
+      "shared_boundary_m": 3.345876413,
+      "confirmation": false
+    },
+    {
+      "id": "VEIRTUAL-living_hall-lobby",
+      "space_a_id": "living_hall",
+      "space_b_id": "lobby",
+      "kind": "semantic_open_plan_boundary",
+      "shared_boundary_m": 4.338043213,
+      "confirmation": false
+    }
+  ],
+  "tiers": [
+    {
+      "tier": "A",
+      "description": "unit-root + correction registry + semantic open-plan cells",
+      "edges": [
+        {
+          "id": "UNIT-ROOT-OP001",
+          "space_a_id": "common_core_circulation",
+          "space_b_id": "lobby",
+          "kind": "unit_scope_entrance_hypothesis",
+          "opening_id": "OP001",
+          "confirmation": false
+        },
+        {
+          "id": "VEIRTUAL-bedroom_corridor-living_hall",
+          "space_a_id": "bedroom_corridor",
+          "space_b_id": "living_hall",
+          "kind": "semantic_open_plan_boundary",
+          "shared_boundary_m": 1.967664697,
+          "confirmation": false
+        },
+        {
+          "id": "VEIRTUAL-bedroom_corridor-lobby",
+          "space_a_id": "bedroom_corridor",
+          "space_b_id": "lobby",
+          "kind": "semantic_open_plan_boundary",
+          "shared_boundary_m": 1.015320806,
+          "confirmation": false
+        },
+        {
+          "id": "VEIRTUAL-kitchen-living_hall",
+          "space_a_id": "kitchen",
+          "space_b_id": "living_hall",
+          "kind": "semantic_open_plan_boundary",
+          "shared_boundary_m": 3.318456392,
+          "confirmation": false
+        },
+        {
+          "id": "VEIRTUAL-kitchen-lobby",
+          "space_a_id": "kitchen",
+          "space_b_id": "lobby",
+          "kind": "semantic_open_plan_boundary",
+          "shared_boundary_m": 3.345876413,
+          "confirmation": false
+        },
+        {
+          "id": "VEIRTUAL-living_hall-lobby",
+          "space_a_id": "living_hall",
+          "space_b_id": "lobby",
+          "kind": "semantic_open_plan_boundary",
+          "shared_boundary_m": 4.338043213,
+          "confirmation": false
+        },
+        {
+          "id": "REGISTRY-OP002",
+          "space_a_id": "bedroom_corridor",
+          "space_b_id": "bedroom_01",
+          "kind": "verified_2d_correction_candidate",
+          "opening_id": "OP002",
+          "confirmation": false
+        },
+        {
+          "id": "REGISTRY-OP004",
+          "space_a_id": "bedroom_02",
+          "space_b_id": "north_toilet",
+          "kind": "verified_2d_correction_candidate",
+          "opening_id": "OP004",
+          "confirmation": false
+        },
+        {
+          "id": "REGISTRY-OP009",
+          "space_a_id": "rear_balcony",
+          "space_b_id": "bedroom_01",
+          "kind": "verified_2d_correction_candidate",
+          "opening_id": "OP009",
+          "confirmation": false
+        }
+      ],
+      "reachable_space_ids": [
+        "bedroom_01",
+        "bedroom_corridor",
+        "common_core_circulation",
+        "kitchen",
+        "living_hall",
+        "lobby",
+        "rear_balcony"
+      ],
+      "unreachable_scope_space_ids": [
+        "bath",
+        "bedroom_02",
+        "bedroom_03",
+        "dry_balcony",
+        "front_balcony",
+        "north_toilet",
+        "wc",
+        "west_toilet"
+      ]
+    },
+    {
+      "tier": "B",
+      "description": "Tier A plus OP006/OP007/OP010 targeted-review-protocol-failed geometry candidates",
+      "edges": [
+        {
+          "id": "UNIT-ROOT-OP001",
+          "space_a_id": "common_core_circulation",
+          "space_b_id": "lobby",
+          "kind": "unit_scope_entrance_hypothesis",
+          "opening_id": "OP001",
+          "confirmation": false
+        },
+        {
+          "id": "VEIRTUAL-bedroom_corridor-living_hall",
+          "space_a_id": "bedroom_corridor",
+          "space_b_id": "living_hall",
+          "kind": "semantic_open_plan_boundary",
+          "shared_boundary_m": 1.967664697,
+          "confirmation": false
+        },
+        {
+          "id": "VEIRTUAL-bedroom_corridor-lobby",
+          "space_a_id": "bedroom_corridor",
+          "space_b_id": "lobby",
+          "kind": "semantic_open_plan_boundary",
+          "shared_boundary_m": 1.015320806,
+          "confirmation": false
+        },
+        {
+          "id": "VEIRTUAL-kitchen-living_hall",
+          "space_a_id": "kitchen",
+          "space_b_id": "living_hall",
+          "kind": "semantic_open_plan_boundary",
+          "shared_boundary_m": 3.318456392,
+          "confirmation": false
+        },
+        {
+          "id": "VEIRTUAL-kitchen-lobby",
+          "space_a_id": "kitchen",
+          "space_b_id": "lobby",
+          "kind": "semantic_open_plan_boundary",
+          "shared_boundary_m": 3.345876413,
+          "confirmation": false
+        },
+        {
+          "id": "VEIRTUAL-living_hall-lobby",
+          "space_a_id": "living_hall",
+          "space_b_id": "lobby",
+          "kind": "semantic_open_plan_boundary",
+          "shared_boundary_m": 4.338043213,
+          "confirmation": false
+        },
+        {
+          "id": "REGISTRY-OP002",
+          "space_a_id": "bedroom_corridor",
+          "space_b_id": "bedroom_01",
+          "kind": "verified_2d_correction_candidate",
+          "opening_id": "OP002",
+          "confirmation": false
+        },
+        {
+          "id": "REGISTRY-OP004",
+          "space_a_id": "bedroom_02",
+          "space_b_id": "north_toilet",
+          "kind": "verified_2d_correction_candidate",
+          "opening_id": "OP004",
+          "confirmation": false
+        },
+        {
+          "id": "REGISTRY-OP009",
+          "space_a_id": "rear_balcony",
+          "space_b_id": "bedroom_01",
+          "kind": "verified_2d_correction_candidate",
+          "opening_id": "OP009",
+          "confirmation": false
+        },
+        {
+          "id": "PROTOCOL-FAILED-OP006",
+          "space_a_id": "bedroom_03",
+          "space_b_id": "bedroom_corridor",
+          "kind": "geometry_candidate_targeted_review_protocol_failed",
+          "opening_id": "OP006",
+          "confirmation": false
+        },
+        {
+          "id": "PROTOCOL-FAILED-OP007",
+          "space_a_id": "lobby",
+          "space_b_id": "wc",
+          "kind": "geometry_candidate_targeted_review_protocol_failed",
+          "opening_id": "OP007",
+          "confirmation": false
+        },
+        {
+          "id": "PROTOCOL-FAILED-OP010",
+          "space_a_id": "kitchen",
+          "space_b_id": "front_balcony",
+          "kind": "geometry_candidate_targeted_review_protocol_failed",
+          "opening_id": "OP010",
+          "confirmation": false
+        }
+      ],
+      "reachable_space_ids": [
+        "bedroom_01",
+        "bedroom_03",
+        "bedroom_corridor",
+        "common_core_circulation",
+        "front_balcony",
+        "kitchen",
+        "living_hall",
+        "lobby",
+        "rear_balcony",
+        "wc"
+      ],
+      "unreachable_scope_space_ids": [
+        "bath",
+        "bedroom_02",
+        "dry_balcony",
+        "north_toilet",
+        "west_toilet"
+      ]
+    }
+  ],
+  "evidence_chain": {
+    "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+    "unit_scope_candidate_hash": "052125fe3027f9ee3025c72a9755b71d7a25b4f43125cae29cb80354b2c4a858",
+    "semantic_partition_hash": "cc2f512bc8db5c6516548e5a747251789290071a4277888d553dfe3c8369b5aa",
+    "pair_candidate_hash": "5fb410dcee736042652f2a8b290305737b3e4e10178e7263b9ef8e998400dae2",
+    "correction_registry_hash": "2d776f3a8df6d15269bd36c7fc37372ce81ae460667a8481ef990bdbc8ca5d93",
+    "op006_endpoint_candidate_hash": "0c8844f167c3da712ccba4d788ac8a1a7539dc9064c084524e1494e8ba548372"
+  },
+  "root_confirmation": false,
+  "reachability_confirmation": false,
+  "adjacency_confirmation": false,
+  "semantic_promotion": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "ready": false,
+  "candidate_hash": "b84c29fa838b108315d70e42db41b0f287dd9900d1c368ed1e35c0dcc2f9629b"
+}
