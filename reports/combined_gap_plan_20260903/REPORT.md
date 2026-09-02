@@ -1,0 +1,3 @@
+# Combined XY-gap research plan v3
+
+Nine independently reviewed XY-only variants are combined into one 43-piece wall plan that is reproducible inside the current evidence workspace. It is not yet a portable evidence bundle because upstream manifests embed machine-absolute artifact paths. The plan binds the validated v21 source, gap plans, registered Gemini review, Layer 1 artifacts, and all nine isolated Blender manifests/validations. OP003 has one residual piece because its gap starts at host parameter zero; no short wall was silently discarded. This remains full-height research visualization only and makes no type, Z, room, traversability, adjacency, source-correction, score, or formal-build claim.

@@ -1,0 +1,1276 @@
+{
+  "schema": "registered-gap-review-bundle-v2",
+  "registered_composites_file_sha256": "ad3c955bf77223a6c45ed93f78006ff968bd91415e19589a30676692f38e9dcd",
+  "registered_composites_candidate_hash": "744e57caecc11eaf3984b8a0bc8e623c8576b3ea58af4ded645494453132b7de",
+  "opening_ids": [
+    "OP001",
+    "OP002",
+    "OP003",
+    "OP004",
+    "OP006",
+    "OP007",
+    "OP008",
+    "OP009",
+    "OP010"
+  ],
+  "rows": [
+    {
+      "opening_id": "OP001",
+      "result_file_sha256": "4b5a304ad46810b8e472186eb1e8f13c8602f97eecec8a555bcdf358105a0a86",
+      "parsed": {
+        "opening_id": "OP001",
+        "source_segment_visible": "yes",
+        "model_gap_centered_on_source_segment": "yes",
+        "model_gap_width_matches_source_xy": "yes",
+        "junction_or_neighbor_obstruction": "no",
+        "xy_variant_visually_valid": "yes",
+        "recommendation": "accept_xy_variant",
+        "confidence": "high"
+      },
+      "accepted_for_isolated_xy_variant": true,
+      "cost_usd": 0.0005733,
+      "canonical_result": {
+        "schema": "fal-opening-gap-registered-review-v1",
+        "opening_id": "OP001",
+        "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+        "model": "google/gemini-2.5-flash",
+        "request_contract_sha256": "b30a4136cde748a7bfd4231a010a8e69940f12f48b810800675c55dd4c0cac65",
+        "prompt_sha256": "f98883d62915906f0d2b79d6c37456992fc4da976066da001b1eb538959dc49a",
+        "system_sha256": "744d700353330cbe74fffe5662c9b8fb17309ea50ed2a1cb56c1da63eded51f8",
+        "evidence_file_sha256": "ad3c955bf77223a6c45ed93f78006ff968bd91415e19589a30676692f38e9dcd",
+        "evidence_candidate_hash": "744e57caecc11eaf3984b8a0bc8e623c8576b3ea58af4ded645494453132b7de",
+        "variant_hash": "4f2fcac04d0dc2d27a7857ab0756882ee440113411158c24e7c156d6b7d4e5ef",
+        "metric_window": {
+          "center_m": [
+            3.8980302810668945,
+            5.644172668457031
+          ],
+          "ortho_scale_m": 2.4,
+          "resolution_px": [
+            1200,
+            1200
+          ],
+          "meters_per_pixel": 0.002
+        },
+        "image_bindings": [
+          {
+            "role": "composite",
+            "filename": "OP001-registered-composite.png",
+            "bytes": 922058,
+            "sha256": "8b52b64bd40b10713025a3bf0bc17efca3370879a33f33bc48f66768da341389"
+          },
+          {
+            "role": "registered_source",
+            "filename": "OP001-registered-source.png",
+            "bytes": 358329,
+            "sha256": "ee777b355dcc2a591e00a474f9fdb50460f133e13930439c13b455238d02b617"
+          },
+          {
+            "role": "model_closeup",
+            "filename": "1308_OP001_gap_variant_closeup_top.png",
+            "bytes": 717664,
+            "sha256": "37242aef60994478434649c163e0dc2023b32726aa74580a883b08c1afa05b9e"
+          }
+        ],
+        "http_status": 200,
+        "parsed": {
+          "opening_id": "OP001",
+          "source_segment_visible": "yes",
+          "model_gap_centered_on_source_segment": "yes",
+          "model_gap_width_matches_source_xy": "yes",
+          "junction_or_neighbor_obstruction": "no",
+          "xy_variant_visually_valid": "yes",
+          "recommendation": "accept_xy_variant",
+          "confidence": "high"
+        },
+        "validation_error": null,
+        "transport_error": null,
+        "usable_advisory": true,
+        "usage": {
+          "prompt_tokens": 961,
+          "completion_tokens": 114,
+          "total_tokens": 1075,
+          "cost": 0.0005733,
+          "prompt_tokens_details": {
+            "cached_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        },
+        "raw_response": {
+          "id": "gen-1788365952-2aAV5O9Gzsq2ItiqmWfr",
+          "object": "chat.completion",
+          "created": 1788365952,
+          "model": "google/gemini-2.5-flash",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\n  \"opening_id\": \"OP001\",\n  \"source_segment_visible\": \"yes\",\n  \"model_gap_centered_on_source_segment\": \"yes\",\n  \"model_gap_width_matches_source_xy\": \"yes\",\n  \"junction_or_neighbor_obstruction\": \"no\",\n  \"xy_variant_visually_valid\": \"yes\",\n  \"recommendation\": \"accept_xy_variant\",\n  \"confidence\": \"high\"\n}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 961,
+            "completion_tokens": 114,
+            "total_tokens": 1075,
+            "cost": 0.0005733,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            }
+          }
+        },
+        "raw_response_sha256": "94d7b6c1e58be2a2bb076a901223484c682a0a00dfd6d201e5587f11dea8d7ea",
+        "xy_experiment_confirmation": false,
+        "cut_confirmation": false,
+        "pair_confirmation": false,
+        "adjacency_confirmation": false,
+        "semantic_promotion": false,
+        "score_effect": "none",
+        "build_authorized": false
+      }
+    },
+    {
+      "opening_id": "OP002",
+      "result_file_sha256": "cca65a2d0b2ce603b4cb9a864c71f14a2ae57004da4c85310c0c5e4db973362f",
+      "parsed": {
+        "opening_id": "OP002",
+        "source_segment_visible": "yes",
+        "model_gap_centered_on_source_segment": "yes",
+        "model_gap_width_matches_source_xy": "yes",
+        "junction_or_neighbor_obstruction": "no",
+        "xy_variant_visually_valid": "yes",
+        "recommendation": "accept_xy_variant",
+        "confidence": "high"
+      },
+      "accepted_for_isolated_xy_variant": true,
+      "cost_usd": 0.0005733,
+      "canonical_result": {
+        "schema": "fal-opening-gap-registered-review-v1",
+        "opening_id": "OP002",
+        "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+        "model": "google/gemini-2.5-flash",
+        "request_contract_sha256": "d4c9774bbacd3505c4d08e6ac4a89ebbb6c89216c8029302f6d74006d1d4ff5c",
+        "prompt_sha256": "67d47039e8bfc7c0892728ed16f9bac66af1e78e9716ac8f0f33d6ade6569985",
+        "system_sha256": "744d700353330cbe74fffe5662c9b8fb17309ea50ed2a1cb56c1da63eded51f8",
+        "evidence_file_sha256": "ad3c955bf77223a6c45ed93f78006ff968bd91415e19589a30676692f38e9dcd",
+        "evidence_candidate_hash": "744e57caecc11eaf3984b8a0bc8e623c8576b3ea58af4ded645494453132b7de",
+        "variant_hash": "ca443c90b54554b3ac9acdfb24d886f222abf2bebe43cfa1b81db98466bbd0ef",
+        "metric_window": {
+          "center_m": [
+            4.423994064331055,
+            10.246542930603027
+          ],
+          "ortho_scale_m": 2.4,
+          "resolution_px": [
+            1200,
+            1200
+          ],
+          "meters_per_pixel": 0.002
+        },
+        "image_bindings": [
+          {
+            "role": "composite",
+            "filename": "OP002-registered-composite.png",
+            "bytes": 807673,
+            "sha256": "a989e7c6a4e8f58d7f02f78feca4e68a270d0e26a60ecb7326f2064f0f2b3bf8"
+          },
+          {
+            "role": "registered_source",
+            "filename": "OP002-registered-source.png",
+            "bytes": 213792,
+            "sha256": "57928732724901a2fdb46a9111e5ae232e00fa450dd6bb929751c85e438c8c54"
+          },
+          {
+            "role": "model_closeup",
+            "filename": "1308_OP002_gap_variant_closeup_top.png",
+            "bytes": 757888,
+            "sha256": "bec5aa9018f263fc5724c3bd10130f34b11c56b4fd34a0c5526f301947693219"
+          }
+        ],
+        "http_status": 200,
+        "parsed": {
+          "opening_id": "OP002",
+          "source_segment_visible": "yes",
+          "model_gap_centered_on_source_segment": "yes",
+          "model_gap_width_matches_source_xy": "yes",
+          "junction_or_neighbor_obstruction": "no",
+          "xy_variant_visually_valid": "yes",
+          "recommendation": "accept_xy_variant",
+          "confidence": "high"
+        },
+        "validation_error": null,
+        "transport_error": null,
+        "usable_advisory": true,
+        "usage": {
+          "prompt_tokens": 961,
+          "completion_tokens": 114,
+          "total_tokens": 1075,
+          "cost": 0.0005733,
+          "prompt_tokens_details": {
+            "cached_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        },
+        "raw_response": {
+          "id": "gen-1788365951-iXxSixoElvKW5jKXKs6i",
+          "object": "chat.completion",
+          "created": 1788365951,
+          "model": "google/gemini-2.5-flash",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\n  \"opening_id\": \"OP002\",\n  \"source_segment_visible\": \"yes\",\n  \"model_gap_centered_on_source_segment\": \"yes\",\n  \"model_gap_width_matches_source_xy\": \"yes\",\n  \"junction_or_neighbor_obstruction\": \"no\",\n  \"xy_variant_visually_valid\": \"yes\",\n  \"recommendation\": \"accept_xy_variant\",\n  \"confidence\": \"high\"\n}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 961,
+            "completion_tokens": 114,
+            "total_tokens": 1075,
+            "cost": 0.0005733,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            }
+          }
+        },
+        "raw_response_sha256": "c508893ae65a0aa2c3462f371fad70b3b890ae081fae9a94eb635771401df710",
+        "xy_experiment_confirmation": false,
+        "cut_confirmation": false,
+        "pair_confirmation": false,
+        "adjacency_confirmation": false,
+        "semantic_promotion": false,
+        "score_effect": "none",
+        "build_authorized": false
+      }
+    },
+    {
+      "opening_id": "OP003",
+      "result_file_sha256": "35e3ae55231ca6a3669060ee44873274ec7662d71941faba77a763a6d85700f4",
+      "parsed": {
+        "opening_id": "OP003",
+        "source_segment_visible": "yes",
+        "model_gap_centered_on_source_segment": "yes",
+        "model_gap_width_matches_source_xy": "yes",
+        "junction_or_neighbor_obstruction": "no",
+        "xy_variant_visually_valid": "yes",
+        "recommendation": "accept_xy_variant",
+        "confidence": "high"
+      },
+      "accepted_for_isolated_xy_variant": true,
+      "cost_usd": 0.0005733,
+      "canonical_result": {
+        "schema": "fal-opening-gap-registered-review-v1",
+        "opening_id": "OP003",
+        "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+        "model": "google/gemini-2.5-flash",
+        "request_contract_sha256": "471e995912eb878c6f9a64b6dcf1042def205890a7a91b44ec3e87272b5fc135",
+        "prompt_sha256": "1f08ea6e1b0307158b65bfe3d2986d8f15e5566afa5b986100576579132f1237",
+        "system_sha256": "744d700353330cbe74fffe5662c9b8fb17309ea50ed2a1cb56c1da63eded51f8",
+        "evidence_file_sha256": "ad3c955bf77223a6c45ed93f78006ff968bd91415e19589a30676692f38e9dcd",
+        "evidence_candidate_hash": "744e57caecc11eaf3984b8a0bc8e623c8576b3ea58af4ded645494453132b7de",
+        "variant_hash": "2d00270904fba196e757bbe50933d5471113f7e83d6fcf91d8660205dfd4504e",
+        "metric_window": {
+          "center_m": [
+            0.4756985008716583,
+            10.341080665588379
+          ],
+          "ortho_scale_m": 2.4,
+          "resolution_px": [
+            1200,
+            1200
+          ],
+          "meters_per_pixel": 0.002
+        },
+        "image_bindings": [
+          {
+            "role": "composite",
+            "filename": "OP003-registered-composite.png",
+            "bytes": 949777,
+            "sha256": "1213bc6550c0ff400e9b0455561c2d620777d93b3c9a26d455896063d34435f4"
+          },
+          {
+            "role": "registered_source",
+            "filename": "OP003-registered-source.png",
+            "bytes": 293597,
+            "sha256": "99e59519f91fadb08b82008cdcb17cb8b93392ef89aeca89ec2421aea2c87571"
+          },
+          {
+            "role": "model_closeup",
+            "filename": "1308_OP003_gap_variant_closeup_top.png",
+            "bytes": 823545,
+            "sha256": "c43e99a03ef3ccdd5406690ce0c16e6f9343cfe0dffc93715e2b4420cd77f5ab"
+          }
+        ],
+        "http_status": 200,
+        "parsed": {
+          "opening_id": "OP003",
+          "source_segment_visible": "yes",
+          "model_gap_centered_on_source_segment": "yes",
+          "model_gap_width_matches_source_xy": "yes",
+          "junction_or_neighbor_obstruction": "no",
+          "xy_variant_visually_valid": "yes",
+          "recommendation": "accept_xy_variant",
+          "confidence": "high"
+        },
+        "validation_error": null,
+        "transport_error": null,
+        "usable_advisory": true,
+        "usage": {
+          "prompt_tokens": 961,
+          "completion_tokens": 114,
+          "total_tokens": 1075,
+          "cost": 0.0005733,
+          "prompt_tokens_details": {
+            "cached_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        },
+        "raw_response": {
+          "id": "gen-1788365953-0XnZOr0dpjV8lbP17QdP",
+          "object": "chat.completion",
+          "created": 1788365953,
+          "model": "google/gemini-2.5-flash",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\n  \"opening_id\": \"OP003\",\n  \"source_segment_visible\": \"yes\",\n  \"model_gap_centered_on_source_segment\": \"yes\",\n  \"model_gap_width_matches_source_xy\": \"yes\",\n  \"junction_or_neighbor_obstruction\": \"no\",\n  \"xy_variant_visually_valid\": \"yes\",\n  \"recommendation\": \"accept_xy_variant\",\n  \"confidence\": \"high\"\n}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 961,
+            "completion_tokens": 114,
+            "total_tokens": 1075,
+            "cost": 0.0005733,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            }
+          }
+        },
+        "raw_response_sha256": "f5fd10bb823a1b53cfc4b804c4e313dbdd4f492ed97c83f3da1227bbe6152b5b",
+        "xy_experiment_confirmation": false,
+        "cut_confirmation": false,
+        "pair_confirmation": false,
+        "adjacency_confirmation": false,
+        "semantic_promotion": false,
+        "score_effect": "none",
+        "build_authorized": false
+      }
+    },
+    {
+      "opening_id": "OP004",
+      "result_file_sha256": "0265fe53f407499c1508cffb9a823e29b6507781e1b46e15da55c29e2a54ec71",
+      "parsed": {
+        "opening_id": "OP004",
+        "source_segment_visible": "yes",
+        "model_gap_centered_on_source_segment": "yes",
+        "model_gap_width_matches_source_xy": "yes",
+        "junction_or_neighbor_obstruction": "no",
+        "xy_variant_visually_valid": "yes",
+        "recommendation": "accept_xy_variant",
+        "confidence": "high"
+      },
+      "accepted_for_isolated_xy_variant": true,
+      "cost_usd": 0.0005733,
+      "canonical_result": {
+        "schema": "fal-opening-gap-registered-review-v1",
+        "opening_id": "OP004",
+        "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+        "model": "google/gemini-2.5-flash",
+        "request_contract_sha256": "7403faf3ee3a9788e71411225fc5df618f7927d867fd4032b788636e4636d691",
+        "prompt_sha256": "e56feb0e44059598564a135cc88afbbe4f332de8969dff76b506860ee613c4c2",
+        "system_sha256": "744d700353330cbe74fffe5662c9b8fb17309ea50ed2a1cb56c1da63eded51f8",
+        "evidence_file_sha256": "ad3c955bf77223a6c45ed93f78006ff968bd91415e19589a30676692f38e9dcd",
+        "evidence_candidate_hash": "744e57caecc11eaf3984b8a0bc8e623c8576b3ea58af4ded645494453132b7de",
+        "variant_hash": "b5398086c2624a275965b14dc357a4247b27c3b5bcff88b7414753eba0e6392b",
+        "metric_window": {
+          "center_m": [
+            5.792541980743408,
+            13.886282920837402
+          ],
+          "ortho_scale_m": 2.4,
+          "resolution_px": [
+            1200,
+            1200
+          ],
+          "meters_per_pixel": 0.002
+        },
+        "image_bindings": [
+          {
+            "role": "composite",
+            "filename": "OP004-registered-composite.png",
+            "bytes": 963430,
+            "sha256": "b012ca2a157c803f928ce9b37317547453466bf86015ca26327efc87dd2f97d6"
+          },
+          {
+            "role": "registered_source",
+            "filename": "OP004-registered-source.png",
+            "bytes": 392567,
+            "sha256": "47faed816d0db5595f015c4cdbbff694295c89d26af16a1e1b512c100bb25c8d"
+          },
+          {
+            "role": "model_closeup",
+            "filename": "1308_OP004_gap_variant_closeup_top.png",
+            "bytes": 719629,
+            "sha256": "a8f9e1cfb35a0a43890b776d19c07599c3bea31047c2c201f62c97f275ebfba8"
+          }
+        ],
+        "http_status": 200,
+        "parsed": {
+          "opening_id": "OP004",
+          "source_segment_visible": "yes",
+          "model_gap_centered_on_source_segment": "yes",
+          "model_gap_width_matches_source_xy": "yes",
+          "junction_or_neighbor_obstruction": "no",
+          "xy_variant_visually_valid": "yes",
+          "recommendation": "accept_xy_variant",
+          "confidence": "high"
+        },
+        "validation_error": null,
+        "transport_error": null,
+        "usable_advisory": true,
+        "usage": {
+          "prompt_tokens": 961,
+          "completion_tokens": 114,
+          "total_tokens": 1075,
+          "cost": 0.0005733,
+          "prompt_tokens_details": {
+            "cached_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        },
+        "raw_response": {
+          "id": "gen-1788365992-IZYBVMPK3MXWeZEjDq6N",
+          "object": "chat.completion",
+          "created": 1788365992,
+          "model": "google/gemini-2.5-flash",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\n  \"opening_id\": \"OP004\",\n  \"source_segment_visible\": \"yes\",\n  \"model_gap_centered_on_source_segment\": \"yes\",\n  \"model_gap_width_matches_source_xy\": \"yes\",\n  \"junction_or_neighbor_obstruction\": \"no\",\n  \"xy_variant_visually_valid\": \"yes\",\n  \"recommendation\": \"accept_xy_variant\",\n  \"confidence\": \"high\"\n}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 961,
+            "completion_tokens": 114,
+            "total_tokens": 1075,
+            "cost": 0.0005733,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            }
+          }
+        },
+        "raw_response_sha256": "0fc1683555f252ddd36103803bce849e04de0abccd68adb307b62d039207fd22",
+        "xy_experiment_confirmation": false,
+        "cut_confirmation": false,
+        "pair_confirmation": false,
+        "adjacency_confirmation": false,
+        "semantic_promotion": false,
+        "score_effect": "none",
+        "build_authorized": false
+      }
+    },
+    {
+      "opening_id": "OP006",
+      "result_file_sha256": "0f359055bf2314f33c832ddc81e461f26c9ef8b011ad2435e4cb6713fe12b484",
+      "parsed": {
+        "opening_id": "OP006",
+        "source_segment_visible": "yes",
+        "model_gap_centered_on_source_segment": "yes",
+        "model_gap_width_matches_source_xy": "yes",
+        "junction_or_neighbor_obstruction": "no",
+        "xy_variant_visually_valid": "yes",
+        "recommendation": "accept_xy_variant",
+        "confidence": "high"
+      },
+      "accepted_for_isolated_xy_variant": true,
+      "cost_usd": 0.0005733,
+      "canonical_result": {
+        "schema": "fal-opening-gap-registered-review-v1",
+        "opening_id": "OP006",
+        "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+        "model": "google/gemini-2.5-flash",
+        "request_contract_sha256": "fe9ab07c9b4b407f01a62e6b6e84835ed58ac91573f424160eed7e3ad3d23f64",
+        "prompt_sha256": "58101927fe50a67828e31d7d8caf4f2bac5df8d2526f575921d3fe047402948d",
+        "system_sha256": "744d700353330cbe74fffe5662c9b8fb17309ea50ed2a1cb56c1da63eded51f8",
+        "evidence_file_sha256": "ad3c955bf77223a6c45ed93f78006ff968bd91415e19589a30676692f38e9dcd",
+        "evidence_candidate_hash": "744e57caecc11eaf3984b8a0bc8e623c8576b3ea58af4ded645494453132b7de",
+        "variant_hash": "03a4eaa8a28b60f28f19c81dae5164078aaf9a2f7675a0fa3549d0a4314a7dd1",
+        "metric_window": {
+          "center_m": [
+            5.792541980743408,
+            10.755597114562988
+          ],
+          "ortho_scale_m": 2.4,
+          "resolution_px": [
+            1200,
+            1200
+          ],
+          "meters_per_pixel": 0.002
+        },
+        "image_bindings": [
+          {
+            "role": "composite",
+            "filename": "OP006-registered-composite.png",
+            "bytes": 736865,
+            "sha256": "6419633e6396b7140af7119e5ae88186add07bb7ecefaeb39944f15c7494405a"
+          },
+          {
+            "role": "registered_source",
+            "filename": "OP006-registered-source.png",
+            "bytes": 169349,
+            "sha256": "c8ce2f58000772fbda930ad92579eb6c3ca5ecc9dbd0da83d564a85736378f6b"
+          },
+          {
+            "role": "model_closeup",
+            "filename": "1308_OP006_gap_variant_closeup_top.png",
+            "bytes": 735217,
+            "sha256": "45a20f22a2f122634edd4d1ee159f6da8a7b734e0a9e94f711f05d0942646fff"
+          }
+        ],
+        "http_status": 200,
+        "parsed": {
+          "opening_id": "OP006",
+          "source_segment_visible": "yes",
+          "model_gap_centered_on_source_segment": "yes",
+          "model_gap_width_matches_source_xy": "yes",
+          "junction_or_neighbor_obstruction": "no",
+          "xy_variant_visually_valid": "yes",
+          "recommendation": "accept_xy_variant",
+          "confidence": "high"
+        },
+        "validation_error": null,
+        "transport_error": null,
+        "usable_advisory": true,
+        "usage": {
+          "prompt_tokens": 961,
+          "completion_tokens": 114,
+          "total_tokens": 1075,
+          "cost": 0.0005733,
+          "prompt_tokens_details": {
+            "cached_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        },
+        "raw_response": {
+          "id": "gen-1788365990-EGUcD2sWQtjYULx10Ps7",
+          "object": "chat.completion",
+          "created": 1788365990,
+          "model": "google/gemini-2.5-flash",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\n  \"opening_id\": \"OP006\",\n  \"source_segment_visible\": \"yes\",\n  \"model_gap_centered_on_source_segment\": \"yes\",\n  \"model_gap_width_matches_source_xy\": \"yes\",\n  \"junction_or_neighbor_obstruction\": \"no\",\n  \"xy_variant_visually_valid\": \"yes\",\n  \"recommendation\": \"accept_xy_variant\",\n  \"confidence\": \"high\"\n}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 961,
+            "completion_tokens": 114,
+            "total_tokens": 1075,
+            "cost": 0.0005733,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            }
+          }
+        },
+        "raw_response_sha256": "4489a7abc8aa68d6e001f19b12215385c79a083e8e0fc3238b83a3c3400988e9",
+        "xy_experiment_confirmation": false,
+        "cut_confirmation": false,
+        "pair_confirmation": false,
+        "adjacency_confirmation": false,
+        "semantic_promotion": false,
+        "score_effect": "none",
+        "build_authorized": false
+      }
+    },
+    {
+      "opening_id": "OP007",
+      "result_file_sha256": "3cab66e1986c5c9f69080c947ba557681ffbf8ab3b47e7b73e8ccc73552c05b8",
+      "parsed": {
+        "opening_id": "OP007",
+        "source_segment_visible": "yes",
+        "model_gap_centered_on_source_segment": "yes",
+        "model_gap_width_matches_source_xy": "yes",
+        "junction_or_neighbor_obstruction": "no",
+        "xy_variant_visually_valid": "yes",
+        "recommendation": "accept_xy_variant",
+        "confidence": "high"
+      },
+      "accepted_for_isolated_xy_variant": true,
+      "cost_usd": 0.0005733,
+      "canonical_result": {
+        "schema": "fal-opening-gap-registered-review-v1",
+        "opening_id": "OP007",
+        "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+        "model": "google/gemini-2.5-flash",
+        "request_contract_sha256": "ec0b41c80fcabe675ab90730856db79b95f531eedeb2b541251696890c6f0fb3",
+        "prompt_sha256": "529d087a3156fd09cd2d432d3080937972b23e0617315a14acb4086e2f290cfc",
+        "system_sha256": "744d700353330cbe74fffe5662c9b8fb17309ea50ed2a1cb56c1da63eded51f8",
+        "evidence_file_sha256": "ad3c955bf77223a6c45ed93f78006ff968bd91415e19589a30676692f38e9dcd",
+        "evidence_candidate_hash": "744e57caecc11eaf3984b8a0bc8e623c8576b3ea58af4ded645494453132b7de",
+        "variant_hash": "e1d3f348909863f1b6f5a2fa8d51a4b0be26935c1ec66c169b764cf3a50b0d6e",
+        "metric_window": {
+          "center_m": [
+            1.3502509593963623,
+            3.650649070739746
+          ],
+          "ortho_scale_m": 2.4,
+          "resolution_px": [
+            1200,
+            1200
+          ],
+          "meters_per_pixel": 0.002
+        },
+        "image_bindings": [
+          {
+            "role": "composite",
+            "filename": "OP007-registered-composite.png",
+            "bytes": 1032651,
+            "sha256": "b12e70d89d08791ed832b996d7c79c8cd9182177b272d7148a347c61133457c1"
+          },
+          {
+            "role": "registered_source",
+            "filename": "OP007-registered-source.png",
+            "bytes": 389542,
+            "sha256": "d8415f0195f9d80b588434ab0d92b8a323b502a0233f5402f3a88d44758c0e4b"
+          },
+          {
+            "role": "model_closeup",
+            "filename": "1308_OP007_gap_variant_closeup_top.png",
+            "bytes": 795050,
+            "sha256": "afe65d258eb63fadabc5e41691b72dbf09467066e87c4b1fcdb195f3f091cf40"
+          }
+        ],
+        "http_status": 200,
+        "parsed": {
+          "opening_id": "OP007",
+          "source_segment_visible": "yes",
+          "model_gap_centered_on_source_segment": "yes",
+          "model_gap_width_matches_source_xy": "yes",
+          "junction_or_neighbor_obstruction": "no",
+          "xy_variant_visually_valid": "yes",
+          "recommendation": "accept_xy_variant",
+          "confidence": "high"
+        },
+        "validation_error": null,
+        "transport_error": null,
+        "usable_advisory": true,
+        "usage": {
+          "prompt_tokens": 961,
+          "completion_tokens": 114,
+          "total_tokens": 1075,
+          "cost": 0.0005733,
+          "prompt_tokens_details": {
+            "cached_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        },
+        "raw_response": {
+          "id": "gen-1788365991-cmUz5ZI3PEslOzLEtbnk",
+          "object": "chat.completion",
+          "created": 1788365991,
+          "model": "google/gemini-2.5-flash",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\n  \"opening_id\": \"OP007\",\n  \"source_segment_visible\": \"yes\",\n  \"model_gap_centered_on_source_segment\": \"yes\",\n  \"model_gap_width_matches_source_xy\": \"yes\",\n  \"junction_or_neighbor_obstruction\": \"no\",\n  \"xy_variant_visually_valid\": \"yes\",\n  \"recommendation\": \"accept_xy_variant\",\n  \"confidence\": \"high\"\n}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 961,
+            "completion_tokens": 114,
+            "total_tokens": 1075,
+            "cost": 0.0005733,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            }
+          }
+        },
+        "raw_response_sha256": "f337f8a5c0913c53e4941ffc7ac9024f146f0308d4c0725c480debe4f6cdb62e",
+        "xy_experiment_confirmation": false,
+        "cut_confirmation": false,
+        "pair_confirmation": false,
+        "adjacency_confirmation": false,
+        "semantic_promotion": false,
+        "score_effect": "none",
+        "build_authorized": false
+      }
+    },
+    {
+      "opening_id": "OP008",
+      "result_file_sha256": "a6e128944e4c118dc1ba763d52f26b9aded82532f323174e822db4f0ae18d9bf",
+      "parsed": {
+        "opening_id": "OP008",
+        "source_segment_visible": "yes",
+        "model_gap_centered_on_source_segment": "yes",
+        "model_gap_width_matches_source_xy": "yes",
+        "junction_or_neighbor_obstruction": "no",
+        "xy_variant_visually_valid": "yes",
+        "recommendation": "accept_xy_variant",
+        "confidence": "high"
+      },
+      "accepted_for_isolated_xy_variant": true,
+      "cost_usd": 0.0005733,
+      "canonical_result": {
+        "schema": "fal-opening-gap-registered-review-v1",
+        "opening_id": "OP008",
+        "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+        "model": "google/gemini-2.5-flash",
+        "request_contract_sha256": "5d78188ef62455780379a27050066980ad79571f427d7eafe3585ecd61693355",
+        "prompt_sha256": "d2e2d7440649c8712a55bbb9815eba0d3b4bbf26b9a6f32947a64ef0aa6cfc33",
+        "system_sha256": "744d700353330cbe74fffe5662c9b8fb17309ea50ed2a1cb56c1da63eded51f8",
+        "evidence_file_sha256": "ad3c955bf77223a6c45ed93f78006ff968bd91415e19589a30676692f38e9dcd",
+        "evidence_candidate_hash": "744e57caecc11eaf3984b8a0bc8e623c8576b3ea58af4ded645494453132b7de",
+        "variant_hash": "42661045e4288e85544c36f3f389de4547bf1437476956fc8422e3a1d3802e03",
+        "metric_window": {
+          "center_m": [
+            1.6100560426712036,
+            4.254242420196533
+          ],
+          "ortho_scale_m": 2.4,
+          "resolution_px": [
+            1200,
+            1200
+          ],
+          "meters_per_pixel": 0.002
+        },
+        "image_bindings": [
+          {
+            "role": "composite",
+            "filename": "OP008-registered-composite.png",
+            "bytes": 1079706,
+            "sha256": "5c8ca3668fa4bf70c53197ba92d36a6b22645f5496cfa644d816dda57b2346f0"
+          },
+          {
+            "role": "registered_source",
+            "filename": "OP008-registered-source.png",
+            "bytes": 437145,
+            "sha256": "0d0d46c0a94b2f44e24d2aa92a9799dbd106fd5fe0c4f27d2c8b3cbbfe502817"
+          },
+          {
+            "role": "model_closeup",
+            "filename": "1308_OP008_gap_variant_closeup_top.png",
+            "bytes": 795115,
+            "sha256": "eedb27d148e161581517877937beb64ed87d44f915123243960deb7d4a103c97"
+          }
+        ],
+        "http_status": 200,
+        "parsed": {
+          "opening_id": "OP008",
+          "source_segment_visible": "yes",
+          "model_gap_centered_on_source_segment": "yes",
+          "model_gap_width_matches_source_xy": "yes",
+          "junction_or_neighbor_obstruction": "no",
+          "xy_variant_visually_valid": "yes",
+          "recommendation": "accept_xy_variant",
+          "confidence": "high"
+        },
+        "validation_error": null,
+        "transport_error": null,
+        "usable_advisory": true,
+        "usage": {
+          "prompt_tokens": 961,
+          "completion_tokens": 114,
+          "total_tokens": 1075,
+          "cost": 0.0005733,
+          "prompt_tokens_details": {
+            "cached_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        },
+        "raw_response": {
+          "id": "gen-1788366034-dza4BQtOwlzlW9BaevPW",
+          "object": "chat.completion",
+          "created": 1788366034,
+          "model": "google/gemini-2.5-flash",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\n  \"opening_id\": \"OP008\",\n  \"source_segment_visible\": \"yes\",\n  \"model_gap_centered_on_source_segment\": \"yes\",\n  \"model_gap_width_matches_source_xy\": \"yes\",\n  \"junction_or_neighbor_obstruction\": \"no\",\n  \"xy_variant_visually_valid\": \"yes\",\n  \"recommendation\": \"accept_xy_variant\",\n  \"confidence\": \"high\"\n}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 961,
+            "completion_tokens": 114,
+            "total_tokens": 1075,
+            "cost": 0.0005733,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            }
+          }
+        },
+        "raw_response_sha256": "b1c8673d45519716fa6594ebbf61bb1772190abd0d29d1537a1d95842b47042e",
+        "xy_experiment_confirmation": false,
+        "cut_confirmation": false,
+        "pair_confirmation": false,
+        "adjacency_confirmation": false,
+        "semantic_promotion": false,
+        "score_effect": "none",
+        "build_authorized": false
+      }
+    },
+    {
+      "opening_id": "OP009",
+      "result_file_sha256": "8ab075ccc6f95d0374a796cbd05780141c25a6f4620d42b1b7e8f70117e758d1",
+      "parsed": {
+        "opening_id": "OP009",
+        "source_segment_visible": "yes",
+        "model_gap_centered_on_source_segment": "yes",
+        "model_gap_width_matches_source_xy": "yes",
+        "junction_or_neighbor_obstruction": "no",
+        "xy_variant_visually_valid": "yes",
+        "recommendation": "accept_xy_variant",
+        "confidence": "high"
+      },
+      "accepted_for_isolated_xy_variant": true,
+      "cost_usd": 0.0005733,
+      "canonical_result": {
+        "schema": "fal-opening-gap-registered-review-v1",
+        "opening_id": "OP009",
+        "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+        "model": "google/gemini-2.5-flash",
+        "request_contract_sha256": "91962bb5af023cf6e21fc8c0ecdf635b69dabb7916b9ff650827c7595daf26f2",
+        "prompt_sha256": "b466f40448fbdc201e1b4536ad539919ac2f37a1b3bddab5f99c20ae6c833b99",
+        "system_sha256": "744d700353330cbe74fffe5662c9b8fb17309ea50ed2a1cb56c1da63eded51f8",
+        "evidence_file_sha256": "ad3c955bf77223a6c45ed93f78006ff968bd91415e19589a30676692f38e9dcd",
+        "evidence_candidate_hash": "744e57caecc11eaf3984b8a0bc8e623c8576b3ea58af4ded645494453132b7de",
+        "variant_hash": "c33e063eea824086c97421c7192bd8020cc158db5a37550616b0f5508b417f5c",
+        "metric_window": {
+          "center_m": [
+            2.213826894760132,
+            14.25352954864502
+          ],
+          "ortho_scale_m": 3.6775149999999988,
+          "resolution_px": [
+            1200,
+            1200
+          ],
+          "meters_per_pixel": 0.0030645958333333323
+        },
+        "image_bindings": [
+          {
+            "role": "composite",
+            "filename": "OP009-registered-composite.png",
+            "bytes": 1056726,
+            "sha256": "e761fe7fd69c7569aaf983bd5d20bf793a5b4ba223b0f36511db3be9b95a0b0e"
+          },
+          {
+            "role": "registered_source",
+            "filename": "OP009-registered-source.png",
+            "bytes": 470396,
+            "sha256": "5ed29097cda7a2457de233f40f15c1cfca6bb0f2952af6e9d3048254731b0e89"
+          },
+          {
+            "role": "model_closeup",
+            "filename": "1308_OP009_gap_variant_closeup_top.png",
+            "bytes": 724283,
+            "sha256": "3396dd824a538c3fcab4672685d4ebd3c4c07098c4416110c54d018e9060b41b"
+          }
+        ],
+        "http_status": 200,
+        "parsed": {
+          "opening_id": "OP009",
+          "source_segment_visible": "yes",
+          "model_gap_centered_on_source_segment": "yes",
+          "model_gap_width_matches_source_xy": "yes",
+          "junction_or_neighbor_obstruction": "no",
+          "xy_variant_visually_valid": "yes",
+          "recommendation": "accept_xy_variant",
+          "confidence": "high"
+        },
+        "validation_error": null,
+        "transport_error": null,
+        "usable_advisory": true,
+        "usage": {
+          "prompt_tokens": 961,
+          "completion_tokens": 114,
+          "total_tokens": 1075,
+          "cost": 0.0005733,
+          "prompt_tokens_details": {
+            "cached_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        },
+        "raw_response": {
+          "id": "gen-1788366042-rUOE79FtjTb4COvXRYQw",
+          "object": "chat.completion",
+          "created": 1788366042,
+          "model": "google/gemini-2.5-flash",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\n  \"opening_id\": \"OP009\",\n  \"source_segment_visible\": \"yes\",\n  \"model_gap_centered_on_source_segment\": \"yes\",\n  \"model_gap_width_matches_source_xy\": \"yes\",\n  \"junction_or_neighbor_obstruction\": \"no\",\n  \"xy_variant_visually_valid\": \"yes\",\n  \"recommendation\": \"accept_xy_variant\",\n  \"confidence\": \"high\"\n}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 961,
+            "completion_tokens": 114,
+            "total_tokens": 1075,
+            "cost": 0.0005733,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            }
+          }
+        },
+        "raw_response_sha256": "ac99327be931f8e19b22a5c98906065e8c2dc7dc11e19d01eba03adc67bdf1e5",
+        "xy_experiment_confirmation": false,
+        "cut_confirmation": false,
+        "pair_confirmation": false,
+        "adjacency_confirmation": false,
+        "semantic_promotion": false,
+        "score_effect": "none",
+        "build_authorized": false
+      }
+    },
+    {
+      "opening_id": "OP010",
+      "result_file_sha256": "e75d049cc95b2394ed4eb3de8d61139c6b58d9ce1e24fc64a645f6417cfc6721",
+      "parsed": {
+        "opening_id": "OP010",
+        "source_segment_visible": "yes",
+        "model_gap_centered_on_source_segment": "yes",
+        "model_gap_width_matches_source_xy": "yes",
+        "junction_or_neighbor_obstruction": "no",
+        "xy_variant_visually_valid": "yes",
+        "recommendation": "accept_xy_variant",
+        "confidence": "high"
+      },
+      "accepted_for_isolated_xy_variant": true,
+      "cost_usd": 0.0005733,
+      "canonical_result": {
+        "schema": "fal-opening-gap-registered-review-v1",
+        "opening_id": "OP010",
+        "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+        "model": "google/gemini-2.5-flash",
+        "request_contract_sha256": "6224b141a13ec7301020b466d05b55dc44ba3a7c563bcf15ceb25d5e3b843cf4",
+        "prompt_sha256": "2423bf8c1f4ddcfd8ab4e1be05e2ac946f00fe086efa6f4afd771e2dee48944e",
+        "system_sha256": "744d700353330cbe74fffe5662c9b8fb17309ea50ed2a1cb56c1da63eded51f8",
+        "evidence_file_sha256": "ad3c955bf77223a6c45ed93f78006ff968bd91415e19589a30676692f38e9dcd",
+        "evidence_candidate_hash": "744e57caecc11eaf3984b8a0bc8e623c8576b3ea58af4ded645494453132b7de",
+        "variant_hash": "b1cfd0a352eaa8497af84602cfb276e9f5cac5dbb2f363f32bb3aadfd989c729",
+        "metric_window": {
+          "center_m": [
+            6.195055961608887,
+            0.0036359999794512987
+          ],
+          "ortho_scale_m": 3.714105000000001,
+          "resolution_px": [
+            1200,
+            1200
+          ],
+          "meters_per_pixel": 0.003095087500000001
+        },
+        "image_bindings": [
+          {
+            "role": "composite",
+            "filename": "OP010-registered-composite.png",
+            "bytes": 1157172,
+            "sha256": "261924a244beffdf10b37599ee35f459243943b1072a5eafaa396c08fd0ff32c"
+          },
+          {
+            "role": "registered_source",
+            "filename": "OP010-registered-source.png",
+            "bytes": 597603,
+            "sha256": "effb17b88133e7758ca77ffc20edd7b71a08ad7598e7975515a19b7bee38a04f"
+          },
+          {
+            "role": "model_closeup",
+            "filename": "1308_OP010_gap_variant_closeup_top.png",
+            "bytes": 692952,
+            "sha256": "96c4da1d342e94fbd105fcabe1d741b929e0cf736e24e315fb5743ee51d87d66"
+          }
+        ],
+        "http_status": 200,
+        "parsed": {
+          "opening_id": "OP010",
+          "source_segment_visible": "yes",
+          "model_gap_centered_on_source_segment": "yes",
+          "model_gap_width_matches_source_xy": "yes",
+          "junction_or_neighbor_obstruction": "no",
+          "xy_variant_visually_valid": "yes",
+          "recommendation": "accept_xy_variant",
+          "confidence": "high"
+        },
+        "validation_error": null,
+        "transport_error": null,
+        "usable_advisory": true,
+        "usage": {
+          "prompt_tokens": 961,
+          "completion_tokens": 114,
+          "total_tokens": 1075,
+          "cost": 0.0005733,
+          "prompt_tokens_details": {
+            "cached_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        },
+        "raw_response": {
+          "id": "gen-1788366034-1wg7qJ8dFkYfW2wu1rVr",
+          "object": "chat.completion",
+          "created": 1788366034,
+          "model": "google/gemini-2.5-flash",
+          "provider": "Google",
+          "system_fingerprint": null,
+          "service_tier": "default",
+          "choices": [
+            {
+              "index": 0,
+              "logprobs": null,
+              "finish_reason": "stop",
+              "native_finish_reason": "STOP",
+              "message": {
+                "role": "assistant",
+                "content": "{\n  \"opening_id\": \"OP010\",\n  \"source_segment_visible\": \"yes\",\n  \"model_gap_centered_on_source_segment\": \"yes\",\n  \"model_gap_width_matches_source_xy\": \"yes\",\n  \"junction_or_neighbor_obstruction\": \"no\",\n  \"xy_variant_visually_valid\": \"yes\",\n  \"recommendation\": \"accept_xy_variant\",\n  \"confidence\": \"high\"\n}",
+                "refusal": null,
+                "reasoning": null
+              }
+            }
+          ],
+          "usage": {
+            "prompt_tokens": 961,
+            "completion_tokens": 114,
+            "total_tokens": 1075,
+            "cost": 0.0005733,
+            "prompt_tokens_details": {
+              "cached_tokens": 0,
+              "cache_write_tokens": 0
+            }
+          }
+        },
+        "raw_response_sha256": "095851617839ff935765f365af9b7384a69bf24f752f5e89b9eee22dce6ad537",
+        "xy_experiment_confirmation": false,
+        "cut_confirmation": false,
+        "pair_confirmation": false,
+        "adjacency_confirmation": false,
+        "semantic_promotion": false,
+        "score_effect": "none",
+        "build_authorized": false
+      }
+    }
+  ],
+  "accepted_for_isolated_xy_variant": [
+    "OP001",
+    "OP002",
+    "OP003",
+    "OP004",
+    "OP006",
+    "OP007",
+    "OP008",
+    "OP009",
+    "OP010"
+  ],
+  "historical_op001_v2": {
+    "result_file_sha256": "d1ce9464d49ec68e9b2876056e43f6aad175be46c1eeb32fae3584713c1417e4",
+    "evidence_candidate_hash": "f9f7973e4fc4d3bcb12143f41de4a052fec2124a26381c98cf424bcf2772496a",
+    "parsed": {
+      "opening_id": "OP001",
+      "source_segment_visible": "yes",
+      "model_gap_centered_on_source_segment": "no",
+      "model_gap_width_matches_source_xy": "no",
+      "junction_or_neighbor_obstruction": "no",
+      "xy_variant_visually_valid": "no",
+      "recommendation": "reject_xy_variant",
+      "confidence": "high"
+    },
+    "canonical_result": {
+      "schema": "fal-opening-gap-composite-review-v2",
+      "opening_id": "OP001",
+      "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+      "model": "google/gemini-2.5-flash",
+      "request_contract_sha256": "bc770e01c91fa4bd22158e490115ab47b40936299dc9bfb31235643b62b76782",
+      "prompt_sha256": "29fa79c3ba519dd65fac9c1e5538eed01e05da9a4b38cb3b5d780659f2c3e29a",
+      "system_sha256": "bf4f12c6c9c706cb60e0303c99e7c52c1ecefe6c7bf0978e33a15f56c07becf3",
+      "evidence_file_sha256": "827d1cca0414de74a32e1da1229905c3b542b7f538cd6a5ef1c71988eeacc61e",
+      "evidence_candidate_hash": "f9f7973e4fc4d3bcb12143f41de4a052fec2124a26381c98cf424bcf2772496a",
+      "variant_hash": "4f2fcac04d0dc2d27a7857ab0756882ee440113411158c24e7c156d6b7d4e5ef",
+      "image_bindings": [
+        {
+          "role": "composite",
+          "filename": "OP001-composite.png",
+          "bytes": 311124,
+          "sha256": "0a7a6c707f83390d5a6db2dab0a1713c992803033eb582ac401a11562c5f1969"
+        },
+        {
+          "role": "source_crop",
+          "filename": "OP001-raw-crop.png",
+          "bytes": 41299,
+          "sha256": "9e7719d5f015e8b922b7cb4d5308247359ad0d34e8198e76199a3c10a56fbc2f"
+        },
+        {
+          "role": "model_closeup",
+          "filename": "1308_OP001_gap_variant_closeup_top.png",
+          "bytes": 717664,
+          "sha256": "fb8f39601b5d852f5a9813f3ff03a8790e187120e864d4faf793bfbadd28b485"
+        }
+      ],
+      "http_status": 200,
+      "parsed": {
+        "opening_id": "OP001",
+        "source_segment_visible": "yes",
+        "model_gap_centered_on_source_segment": "no",
+        "model_gap_width_matches_source_xy": "no",
+        "junction_or_neighbor_obstruction": "no",
+        "xy_variant_visually_valid": "no",
+        "recommendation": "reject_xy_variant",
+        "confidence": "high"
+      },
+      "validation_error": null,
+      "transport_error": null,
+      "usable_advisory": true,
+      "usage": {
+        "prompt_tokens": 1004,
+        "completion_tokens": 114,
+        "total_tokens": 1118,
+        "cost": 0.0005862,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "raw_response": {
+        "id": "gen-1788364898-crzlTSehuWSb5IAWk4fr",
+        "object": "chat.completion",
+        "created": 1788364898,
+        "model": "google/gemini-2.5-flash",
+        "provider": "Google",
+        "system_fingerprint": null,
+        "service_tier": "default",
+        "choices": [
+          {
+            "index": 0,
+            "logprobs": null,
+            "finish_reason": "stop",
+            "native_finish_reason": "STOP",
+            "message": {
+              "role": "assistant",
+              "content": "{\n  \"opening_id\": \"OP001\",\n  \"source_segment_visible\": \"yes\",\n  \"model_gap_centered_on_source_segment\": \"no\",\n  \"model_gap_width_matches_source_xy\": \"no\",\n  \"junction_or_neighbor_obstruction\": \"no\",\n  \"xy_variant_visually_valid\": \"no\",\n  \"recommendation\": \"reject_xy_variant\",\n  \"confidence\": \"high\"\n}",
+              "refusal": null,
+              "reasoning": null
+            }
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 1004,
+          "completion_tokens": 114,
+          "total_tokens": 1118,
+          "cost": 0.0005862,
+          "prompt_tokens_details": {
+            "cached_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        }
+      },
+      "raw_response_sha256": "91bfe01316c954002b1cf0cbd87734af907ac1fbbadb8b0c9836a97dbe84a3a4",
+      "xy_experiment_confirmation": false,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false
+    }
+  },
+  "op001_scale_registration_effect_demonstrated": true,
+  "selected_review_cost_usd": 0.0051597,
+  "xy_experiment_confirmation": false,
+  "cut_confirmation": false,
+  "pair_confirmation": false,
+  "adjacency_confirmation": false,
+  "semantic_promotion": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "ready": false,
+  "candidate_hash": "cda181f0822ade777911f8452b02456f0d5488b8f760ed5abe8d6333976d1a8c"
+}

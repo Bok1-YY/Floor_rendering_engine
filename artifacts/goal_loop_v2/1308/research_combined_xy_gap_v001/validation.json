@@ -1,0 +1,285 @@
+{
+  "schema": "blender-combined-gap-layer-validation-v1",
+  "branch_id": "1308-combined-xy-gap-research-v001",
+  "plan_candidate_hash": "2020c5470db70792d4ebd5028bf283f650f17e24898c6dc24149989ca4bfc528",
+  "plan_file_sha256": "d25639a04cd66d62d1c285e5bfe5567ea6a8e034ef21dc1e9655075c168a287b",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+  "wall_height_m": 2.8,
+  "unit_system": "METRIC",
+  "length_unit": "METERS",
+  "scale_length": 1.0,
+  "source_wall_atom_count": 35,
+  "expected_wall_piece_count": 43,
+  "actual_wall_piece_count": 43,
+  "untouched_atom_count": 26,
+  "actual_untouched_piece_count": 26,
+  "host_atom_count": 9,
+  "expected_host_piece_count": 17,
+  "actual_host_piece_count": 17,
+  "included_opening_ids": [
+    "OP001",
+    "OP002",
+    "OP003",
+    "OP004",
+    "OP006",
+    "OP007",
+    "OP008",
+    "OP009",
+    "OP010"
+  ],
+  "excluded_opening_ids": [
+    "OP005",
+    "OP011",
+    "PORTAL-WB011-WB006-01",
+    "OP012"
+  ],
+  "host_atom_ids": [
+    "ATOM-WB016-02",
+    "ATOM-WB006-02",
+    "ATOM-WB010-01",
+    "ATOM-WB007-01",
+    "ATOM-WB007-02",
+    "ATOM-WB019-01",
+    "ATOM-WB018-01",
+    "ATOM-WB005-01",
+    "ATOM-WB003-03"
+  ],
+  "expected_source_atom_piece_counts": {
+    "ATOM-WB001-01": 1,
+    "ATOM-WB002-01": 1,
+    "ATOM-WB003-01": 1,
+    "ATOM-WB003-02": 1,
+    "ATOM-WB003-03": 2,
+    "ATOM-WB004-01": 1,
+    "ATOM-WB004-02": 1,
+    "ATOM-WB005-01": 2,
+    "ATOM-WB006-01": 1,
+    "ATOM-WB006-02": 2,
+    "ATOM-WB007-01": 2,
+    "ATOM-WB007-02": 2,
+    "ATOM-WB008-01": 1,
+    "ATOM-WB008-02": 1,
+    "ATOM-WB009-01": 1,
+    "ATOM-WB009-02": 1,
+    "ATOM-WB010-01": 1,
+    "ATOM-WB010-02": 1,
+    "ATOM-WB011-01": 1,
+    "ATOM-WB011-02": 1,
+    "ATOM-WB012-01": 1,
+    "ATOM-WB012-02": 1,
+    "ATOM-WB013-01": 1,
+    "ATOM-WB013-02": 1,
+    "ATOM-WB014-01": 1,
+    "ATOM-WB015-01": 1,
+    "ATOM-WB016-01": 1,
+    "ATOM-WB016-02": 2,
+    "ATOM-WB017-01": 1,
+    "ATOM-WB017-02": 1,
+    "ATOM-WB018-01": 2,
+    "ATOM-WB019-01": 2,
+    "ATOM-WB021-01": 1,
+    "ATOM-WB022-01": 1,
+    "ATOM-WB022-02": 1
+  },
+  "actual_source_atom_piece_counts": {
+    "ATOM-WB001-01": 1,
+    "ATOM-WB002-01": 1,
+    "ATOM-WB003-01": 1,
+    "ATOM-WB003-02": 1,
+    "ATOM-WB004-01": 1,
+    "ATOM-WB004-02": 1,
+    "ATOM-WB006-01": 1,
+    "ATOM-WB008-01": 1,
+    "ATOM-WB008-02": 1,
+    "ATOM-WB009-01": 1,
+    "ATOM-WB009-02": 1,
+    "ATOM-WB010-02": 1,
+    "ATOM-WB011-01": 1,
+    "ATOM-WB011-02": 1,
+    "ATOM-WB012-01": 1,
+    "ATOM-WB012-02": 1,
+    "ATOM-WB013-01": 1,
+    "ATOM-WB013-02": 1,
+    "ATOM-WB014-01": 1,
+    "ATOM-WB015-01": 1,
+    "ATOM-WB016-01": 1,
+    "ATOM-WB017-01": 1,
+    "ATOM-WB017-02": 1,
+    "ATOM-WB021-01": 1,
+    "ATOM-WB022-01": 1,
+    "ATOM-WB022-02": 1,
+    "ATOM-WB016-02": 2,
+    "ATOM-WB006-02": 2,
+    "ATOM-WB010-01": 1,
+    "ATOM-WB007-01": 2,
+    "ATOM-WB007-02": 2,
+    "ATOM-WB019-01": 2,
+    "ATOM-WB018-01": 2,
+    "ATOM-WB005-01": 2,
+    "ATOM-WB003-03": 2
+  },
+  "non_host_count_errors": [],
+  "host_count_errors": [],
+  "topology_errors": [],
+  "property_errors": [],
+  "gap_overlap_errors": [],
+  "world_bbox_m": {
+    "min": [
+      -0.1036589965224266,
+      -0.09636399894952774,
+      0.0
+    ],
+    "max": [
+      9.259021759033203,
+      15.411636352539062,
+      2.799999952316284
+    ]
+  },
+  "full_top_metric_window": {
+    "center_m": [
+      4.577681541442871,
+      7.6576361656188965
+    ],
+    "ortho_scale_m": 17.05880038663745,
+    "resolution_px": [
+      1200,
+      1200
+    ],
+    "meters_per_pixel": 0.014215666988864542
+  },
+  "hidden_startup_objects": [
+    "Cube",
+    "Light",
+    "Camera"
+  ],
+  "validation_camera_count": 4,
+  "gap_closeup_metric_windows": {
+    "OP001": {
+      "center_m": [
+        3.898030399770404,
+        5.644172655962585
+      ],
+      "ortho_scale_m": 2.4,
+      "resolution_px": [
+        1200,
+        1200
+      ]
+    },
+    "OP002": {
+      "center_m": [
+        4.4239941442795345,
+        10.246542517814712
+      ],
+      "ortho_scale_m": 2.4,
+      "resolution_px": [
+        1200,
+        1200
+      ]
+    },
+    "OP003": {
+      "center_m": [
+        0.4756985000000001,
+        10.341081
+      ],
+      "ortho_scale_m": 2.4,
+      "resolution_px": [
+        1200,
+        1200
+      ]
+    },
+    "OP004": {
+      "center_m": [
+        5.792542,
+        13.886282999999999
+      ],
+      "ortho_scale_m": 2.4,
+      "resolution_px": [
+        1200,
+        1200
+      ]
+    },
+    "OP006": {
+      "center_m": [
+        5.792541983977199,
+        10.7555975
+      ],
+      "ortho_scale_m": 2.4,
+      "resolution_px": [
+        1200,
+        1200
+      ]
+    },
+    "OP007": {
+      "center_m": [
+        1.350251,
+        3.650649
+      ],
+      "ortho_scale_m": 2.4,
+      "resolution_px": [
+        1200,
+        1200
+      ]
+    },
+    "OP008": {
+      "center_m": [
+        1.6100559999999717,
+        4.254242212306524
+      ],
+      "ortho_scale_m": 2.4,
+      "resolution_px": [
+        1200,
+        1200
+      ]
+    },
+    "OP009": {
+      "center_m": [
+        2.213827,
+        14.25353
+      ],
+      "ortho_scale_m": 3.6775149999999988,
+      "resolution_px": [
+        1200,
+        1200
+      ]
+    },
+    "OP010": {
+      "center_m": [
+        6.195056,
+        0.003636
+      ],
+      "ortho_scale_m": 3.714105000000001,
+      "resolution_px": [
+        1200,
+        1200
+      ]
+    }
+  },
+  "opening_elements": 0,
+  "opening_element_objects": [],
+  "artifact_labels": [
+    "COMBINED LAYER 2",
+    "XY GAP RESEARCH ONLY",
+    "NINE CANDIDATE GAPS",
+    "FULL-HEIGHT VISUALIZATION ONLY",
+    "NOT SOURCE-CONFIRMED",
+    "NO DOOR/WINDOW SEMANTICS",
+    "NO Z/HEAD/SILL CLAIM",
+    "NO TRAVERSABILITY / ADJACENCY",
+    "NOT FOR CONSTRUCTION"
+  ],
+  "gap_z_policy": "full_height_visualization_only",
+  "evidence_plan_portable": false,
+  "research_only": true,
+  "not_for_construction": true,
+  "source_correction_authorized": false,
+  "xy_experiment_confirmation": false,
+  "cut_confirmation": false,
+  "pair_confirmation": false,
+  "adjacency_confirmation": false,
+  "semantic_promotion": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "ready": false,
+  "pass": true
+}

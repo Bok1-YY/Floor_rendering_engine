@@ -1,0 +1,139 @@
+{
+  "schema": "blender-combined-gap-layer-artifact-manifest-v1",
+  "branch_id": "1308-combined-xy-gap-research-v001",
+  "plan_candidate_hash": "2020c5470db70792d4ebd5028bf283f650f17e24898c6dc24149989ca4bfc528",
+  "plan_file_sha256": "d25639a04cd66d62d1c285e5bfe5567ea6a8e034ef21dc1e9655075c168a287b",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+  "blender_version": "5.2.0 LTS",
+  "wall_piece_count": 43,
+  "untouched_atom_count": 26,
+  "host_atom_count": 9,
+  "host_piece_count": 17,
+  "opening_elements": 0,
+  "wall_height_m": 2.8,
+  "artifact_path_mode": "relative_to_manifest",
+  "evidence_plan_portable": false,
+  "artifact_files_relocatable_with_manifest": true,
+  "artifacts": [
+    {
+      "kind": "checkpoint_blend",
+      "relative_path": "1308_combined_xy_gap_checkpoint_v000.blend",
+      "bytes": 97098,
+      "sha256": "3770f298a969e61b59bbc6334eb5c14daab389231d053fffbcea6b4d06300b1e"
+    },
+    {
+      "kind": "blender_source",
+      "relative_path": "1308_combined_xy_gap_research_v001.blend",
+      "bytes": 126775,
+      "sha256": "bc504578fb38f1413cf0fbab2a83d0ee1eb98afdb855a1c740ddb7b99ac70d32"
+    },
+    {
+      "kind": "portable_glb",
+      "relative_path": "1308_combined_xy_gap_research_v001.glb",
+      "bytes": 78364,
+      "sha256": "d1b1cd9aadee6d8d4a8c631a0b414e00fb8291b13a365c4dab6e7e7ffbb1aa8c"
+    },
+    {
+      "kind": "render_top",
+      "relative_path": "1308_combined_xy_gap_top.png",
+      "bytes": 746504,
+      "sha256": "2ca9b39ebdfd1386e0058319ea75a02de9130b127430e748ca7a39cea34a26bb"
+    },
+    {
+      "kind": "render_northeast",
+      "relative_path": "1308_combined_xy_gap_northeast.png",
+      "bytes": 963672,
+      "sha256": "a476a705edc8db11851facaef2b8d41f1e9478f16e3a24c37acce0ed332f3332"
+    },
+    {
+      "kind": "render_northwest",
+      "relative_path": "1308_combined_xy_gap_northwest.png",
+      "bytes": 965851,
+      "sha256": "95c2f8e3545dce9d348f65b05398c77ed7464a6dc7b1d58928517485114c583d"
+    },
+    {
+      "kind": "render_gap_closeup_OP001",
+      "relative_path": "1308_combined_xy_gap_OP001_closeup_top.png",
+      "bytes": 717668,
+      "sha256": "1cfbdb55b493862f3443cac96ed72f5ff21353cf7cc755f1c962a8fda4f10c5d"
+    },
+    {
+      "kind": "render_gap_closeup_OP002",
+      "relative_path": "1308_combined_xy_gap_OP002_closeup_top.png",
+      "bytes": 757892,
+      "sha256": "3635967702ccd607880dbc2d13352807f6063786e2305742231c8832cee03583"
+    },
+    {
+      "kind": "render_gap_closeup_OP003",
+      "relative_path": "1308_combined_xy_gap_OP003_closeup_top.png",
+      "bytes": 823549,
+      "sha256": "efc89f47b15769d47d09f7329617895e537e688870ef3fd13a696e55449584c2"
+    },
+    {
+      "kind": "render_gap_closeup_OP004",
+      "relative_path": "1308_combined_xy_gap_OP004_closeup_top.png",
+      "bytes": 719633,
+      "sha256": "f8a15a12f92e78b9a145c13afe34819b3e7da9ce03fd24c008987fa60644dbf5"
+    },
+    {
+      "kind": "render_gap_closeup_OP006",
+      "relative_path": "1308_combined_xy_gap_OP006_closeup_top.png",
+      "bytes": 735221,
+      "sha256": "b2e03e860fc07f27c14932565ae428c9bd29230e067a455d71425a68cb423e10"
+    },
+    {
+      "kind": "render_gap_closeup_OP007",
+      "relative_path": "1308_combined_xy_gap_OP007_closeup_top.png",
+      "bytes": 784185,
+      "sha256": "e669c0c7ce67167a475384f63c7fd5936128aae0037612dfa156a76228c2a1fc"
+    },
+    {
+      "kind": "render_gap_closeup_OP008",
+      "relative_path": "1308_combined_xy_gap_OP008_closeup_top.png",
+      "bytes": 775997,
+      "sha256": "e2803c6574699cb74eabbca29e23eb4e1bb9d91a511d7930d1acd3ad207a31df"
+    },
+    {
+      "kind": "render_gap_closeup_OP009",
+      "relative_path": "1308_combined_xy_gap_OP009_closeup_top.png",
+      "bytes": 724287,
+      "sha256": "b3919b94203464f20789d11412f8f718fb15d5ed93e8c0bed5a6d863c92462cf"
+    },
+    {
+      "kind": "render_gap_closeup_OP010",
+      "relative_path": "1308_combined_xy_gap_OP010_closeup_top.png",
+      "bytes": 692956,
+      "sha256": "8ce85b3b837aa8935b10fe07cb9fb9d833cfb33ce970e835ced80d71342e3749"
+    },
+    {
+      "kind": "validation",
+      "relative_path": "validation.json",
+      "bytes": 6571,
+      "sha256": "dd08c2e1c5a28934af70405144903825228ce26ffb4e7a8a139141a66007e424"
+    }
+  ],
+  "artifact_labels": [
+    "COMBINED LAYER 2",
+    "XY GAP RESEARCH ONLY",
+    "NINE CANDIDATE GAPS",
+    "FULL-HEIGHT VISUALIZATION ONLY",
+    "NOT SOURCE-CONFIRMED",
+    "NO DOOR/WINDOW SEMANTICS",
+    "NO Z/HEAD/SILL CLAIM",
+    "NO TRAVERSABILITY / ADJACENCY",
+    "NOT FOR CONSTRUCTION"
+  ],
+  "gap_z_policy": "full_height_visualization_only",
+  "research_only": true,
+  "not_for_construction": true,
+  "source_correction_authorized": false,
+  "xy_experiment_confirmation": false,
+  "cut_confirmation": false,
+  "pair_confirmation": false,
+  "adjacency_confirmation": false,
+  "semantic_promotion": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "ready": false
+}

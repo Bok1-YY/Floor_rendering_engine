@@ -1,0 +1,70 @@
+{
+  "schema": "blender-opening-gap-variant-artifact-manifest-v1",
+  "opening_id": "OP009",
+  "branch_id": "1308-gap-OP009-v001",
+  "variant_hash": "c33e063eea824086c97421c7192bd8020cc158db5a37550616b0f5508b417f5c",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "wall_piece_count": 36,
+  "opening_elements": 0,
+  "gap_center_m": [
+    2.213826894760132,
+    14.25352954864502
+  ],
+  "closeup_camera_ortho_scale_m": 3.6775149999999988,
+  "closeup_render_resolution_px": [
+    1200,
+    1200
+  ],
+  "artifacts": [
+    {
+      "kind": "checkpoint_blend",
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\artifacts\\goal_loop_v2\\1308\\opening_xy_variants_v001\\OP009\\1308_OP009_gap_variant_checkpoint_v000.blend",
+      "bytes": 96937,
+      "sha256": "726e1e93d9a9bb3b02bd624aa1cc64aff08aeb8f36912035578f0ad2f764fc1f"
+    },
+    {
+      "kind": "blender_source",
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\artifacts\\goal_loop_v2\\1308\\opening_xy_variants_v001\\OP009\\1308_OP009_gap_variant_v001.blend",
+      "bytes": 116509,
+      "sha256": "a4188db0a1e099b9ac7cd600f43799e76bfff096799b4f3185cbea789943115e"
+    },
+    {
+      "kind": "portable_glb",
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\artifacts\\goal_loop_v2\\1308\\opening_xy_variants_v001\\OP009\\1308_OP009_gap_variant_v001.glb",
+      "bytes": 52048,
+      "sha256": "621835e61516c3fd07249e20e0cdff7f5b32b2434d4a6e7f88d591429b12ce6a"
+    },
+    {
+      "kind": "render_top",
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\artifacts\\goal_loop_v2\\1308\\opening_xy_variants_v001\\OP009\\1308_OP009_gap_variant_top.png",
+      "bytes": 749759,
+      "sha256": "2f898bfea67870f461c153168fc8ed2427410de2156810db7f2800b53bf76297"
+    },
+    {
+      "kind": "render_northeast",
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\artifacts\\goal_loop_v2\\1308\\opening_xy_variants_v001\\OP009\\1308_OP009_gap_variant_northeast.png",
+      "bytes": 953177,
+      "sha256": "f4cad60f7ca3cdc61c89f192c801662de59e7ffcf13306439ce202020c398981"
+    },
+    {
+      "kind": "render_closeup_top",
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\artifacts\\goal_loop_v2\\1308\\opening_xy_variants_v001\\OP009\\1308_OP009_gap_variant_closeup_top.png",
+      "bytes": 724283,
+      "sha256": "3396dd824a538c3fcab4672685d4ebd3c4c07098c4416110c54d018e9060b41b"
+    },
+    {
+      "kind": "validation",
+      "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\artifacts\\goal_loop_v2\\1308\\opening_xy_variants_v001\\OP009\\validation.json",
+      "bytes": 1984,
+      "sha256": "b3ad4d3945ec9f0e8c5629f8a778738cb41c3913457d34164a3748d636b45065"
+    }
+  ],
+  "one_opening_only": true,
+  "gap_z_policy": "full_height_visualization_only",
+  "xy_experiment_confirmation": false,
+  "semantic_promotion": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "research_only": true,
+  "not_for_construction": true
+}

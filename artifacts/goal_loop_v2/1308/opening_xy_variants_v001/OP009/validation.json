@@ -1,0 +1,71 @@
+{
+  "schema": "blender-opening-gap-variant-validation-v2",
+  "branch_id": "1308-gap-OP009-v001",
+  "opening_id": "OP009",
+  "variant_hash": "c33e063eea824086c97421c7192bd8020cc158db5a37550616b0f5508b417f5c",
+  "plan_bundle_candidate_hash": "755f64ae2639ad143ee7dd8aa4853a422dab75770825eab00e7727ac3066e4e0",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+  "plans_file_sha256": "b100954c99f8d0e9e2b3729e491b383f0d113cd39390a8d3fd6ba733a1bf3e54",
+  "expected_wall_piece_count": 36,
+  "actual_wall_piece_count": 36,
+  "expected_host_piece_count": 2,
+  "actual_host_piece_count": 2,
+  "non_host_atom_count_errors": [],
+  "topology_errors": [],
+  "gap_overlap_errors": [],
+  "gap_host_parameter_interval": [
+    0.33388978322862445,
+    0.6694491442586847
+  ],
+  "source_gap_segment_m": [
+    [
+      1.478324,
+      14.25353
+    ],
+    [
+      2.94933,
+      14.25353
+    ]
+  ],
+  "projected_gap_segment_m": [
+    [
+      1.4783240000000002,
+      14.25353
+    ],
+    [
+      2.94933,
+      14.25353
+    ]
+  ],
+  "gap_width_m": 1.4710059999999996,
+  "gap_center_m": [
+    2.213826894760132,
+    14.25352954864502
+  ],
+  "closeup_camera_ortho_scale_m": 3.6775149999999988,
+  "closeup_render_resolution_px": [
+    1200,
+    1200
+  ],
+  "projection_mode": "centerline_collinear",
+  "wall_height_m": 2.8,
+  "hidden_startup_objects": [
+    "Cube",
+    "Light",
+    "Camera"
+  ],
+  "opening_elements": 0,
+  "one_opening_only": true,
+  "gap_z_policy": "full_height_visualization_only",
+  "xy_experiment_confirmation": false,
+  "cut_confirmation": false,
+  "pair_confirmation": false,
+  "adjacency_confirmation": false,
+  "semantic_promotion": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "research_only": true,
+  "not_for_construction": true,
+  "pass": true
+}

@@ -1,0 +1,2320 @@
+{
+  "schema": "opening-xy-cross-provider-review-bundle-v2",
+  "evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+  "evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+  "opening_ids": [
+    "OP001",
+    "OP002",
+    "OP003",
+    "OP004",
+    "OP006",
+    "OP007",
+    "OP008",
+    "OP009",
+    "OP010"
+  ],
+  "rows": [
+    {
+      "opening_id": "OP001",
+      "evidence_host_atom_id": "ATOM-WB016-02",
+      "attempts": {
+        "gemini": {
+          "model": "google/gemini-2.5-flash",
+          "result_file_sha256": "11ab8243d2f30965c94c34eee224bdb2d13bb83f0113791b5e408e0ba4a615c7",
+          "raw_response_sha256": "bd59efc8bdfd9e39b0833589bf748066c1703fdc4d02e008d3a3362e7e295c83",
+          "request_contract_sha256": "3582c78173900cc351c1287ff3106136623e69034ed3559d1107f4a8abafecda",
+          "parsed": {
+            "opening_id": "OP001",
+            "segment_on_visible_opening": "yes",
+            "visible_opening_endpoints": "yes",
+            "continuous_wall_across_segment": "no",
+            "door_leaf_or_swing_visible": "yes",
+            "glazed_interface_visible": "no",
+            "xy_gap_plausible": "yes",
+            "confidence": "high"
+          },
+          "cost_usd": 0.0004794,
+          "canonical_result": {
+            "schema": "fal-opening-xy-clean-review-v2",
+            "opening_id": "OP001",
+            "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+            "model": "google/gemini-2.5-flash",
+            "request_contract_sha256": "3582c78173900cc351c1287ff3106136623e69034ed3559d1107f4a8abafecda",
+            "prompt_sha256": "89badcc77508d92f35a97f723eda8d0decde49defcd447dbe363d9b9976d097b",
+            "system_sha256": "bba09658dcaf2454e82ccc7e4da97d2d351d0f659112e5abb6e7d54cdf49e8ce",
+            "evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+            "evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+            "image_bindings": [
+              {
+                "role": "locator",
+                "filename": "OP001-locator.png",
+                "bytes": 1620665,
+                "sha256": "d89af868e29a9b2c01c188279af4ccafbe6d395bd713ffcdee1e69df6b73b98e"
+              },
+              {
+                "role": "raw_crop",
+                "filename": "OP001-raw-crop.png",
+                "bytes": 41299,
+                "sha256": "9e7719d5f015e8b922b7cb4d5308247359ad0d34e8198e76199a3c10a56fbc2f"
+              }
+            ],
+            "local_segment_px": [
+              [
+                120.99994961832067,
+                120.99997060360602
+              ],
+              [
+                248.30147022900792,
+                120.99997060360602
+              ]
+            ],
+            "http_status": 200,
+            "parsed": {
+              "opening_id": "OP001",
+              "segment_on_visible_opening": "yes",
+              "visible_opening_endpoints": "yes",
+              "continuous_wall_across_segment": "no",
+              "door_leaf_or_swing_visible": "yes",
+              "glazed_interface_visible": "no",
+              "xy_gap_plausible": "yes",
+              "confidence": "high"
+            },
+            "validation_error": null,
+            "transport_error": null,
+            "usable_advisory": true,
+            "usage": {
+              "prompt_tokens": 723,
+              "completion_tokens": 105,
+              "total_tokens": 828,
+              "cost": 0.0004794,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0
+              }
+            },
+            "raw_response": {
+              "id": "gen-1788342287-XdDrgLkQ5Cx8Hu5tK9se",
+              "object": "chat.completion",
+              "created": 1788342287,
+              "model": "google/gemini-2.5-flash",
+              "provider": "Google",
+              "system_fingerprint": null,
+              "service_tier": "default",
+              "choices": [
+                {
+                  "index": 0,
+                  "logprobs": null,
+                  "finish_reason": "stop",
+                  "native_finish_reason": "STOP",
+                  "message": {
+                    "role": "assistant",
+                    "content": "{\n  \"opening_id\": \"OP001\",\n  \"segment_on_visible_opening\": \"yes\",\n  \"visible_opening_endpoints\": \"yes\",\n  \"continuous_wall_across_segment\": \"no\",\n  \"door_leaf_or_swing_visible\": \"yes\",\n  \"glazed_interface_visible\": \"no\",\n  \"xy_gap_plausible\": \"yes\",\n  \"confidence\": \"high\"\n}",
+                    "refusal": null,
+                    "reasoning": null
+                  }
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 723,
+                "completion_tokens": 105,
+                "total_tokens": 828,
+                "cost": 0.0004794,
+                "prompt_tokens_details": {
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0
+                }
+              }
+            },
+            "raw_response_sha256": "bd59efc8bdfd9e39b0833589bf748066c1703fdc4d02e008d3a3362e7e295c83",
+            "cut_confirmation": false,
+            "pair_confirmation": false,
+            "adjacency_confirmation": false,
+            "semantic_promotion": false,
+            "score_effect": "none",
+            "build_authorized": false
+          }
+        },
+        "openai": {
+          "model": "openai/gpt-4o-mini",
+          "result_file_sha256": "f8b39c8694f92e12a32bdb805e7d3d6544b101ddd733d037ecc407999f68a589",
+          "raw_response_sha256": "1181380f3f5ea2c0debc14c0b7bff5d2517f85cf6ce2f2a9a92e2711feb0c7d2",
+          "request_contract_sha256": "6aafc0df52d2bf90edc2ab335421dbe97228d7a5e577943382b8fd2016266d15",
+          "parsed": {
+            "opening_id": "OP001",
+            "segment_on_visible_opening": "yes",
+            "visible_opening_endpoints": "yes",
+            "continuous_wall_across_segment": "no",
+            "door_leaf_or_swing_visible": "yes",
+            "glazed_interface_visible": "no",
+            "xy_gap_plausible": "yes",
+            "confidence": "high"
+          },
+          "cost_usd": 0.00688755,
+          "canonical_result": {
+            "schema": "fal-opening-xy-clean-review-v2",
+            "opening_id": "OP001",
+            "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+            "model": "openai/gpt-4o-mini",
+            "request_contract_sha256": "6aafc0df52d2bf90edc2ab335421dbe97228d7a5e577943382b8fd2016266d15",
+            "prompt_sha256": "89badcc77508d92f35a97f723eda8d0decde49defcd447dbe363d9b9976d097b",
+            "system_sha256": "bba09658dcaf2454e82ccc7e4da97d2d351d0f659112e5abb6e7d54cdf49e8ce",
+            "evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+            "evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+            "image_bindings": [
+              {
+                "role": "locator",
+                "filename": "OP001-locator.png",
+                "bytes": 1620665,
+                "sha256": "d89af868e29a9b2c01c188279af4ccafbe6d395bd713ffcdee1e69df6b73b98e"
+              },
+              {
+                "role": "raw_crop",
+                "filename": "OP001-raw-crop.png",
+                "bytes": 41299,
+                "sha256": "9e7719d5f015e8b922b7cb4d5308247359ad0d34e8198e76199a3c10a56fbc2f"
+              }
+            ],
+            "local_segment_px": [
+              [
+                120.99994961832067,
+                120.99997060360602
+              ],
+              [
+                248.30147022900792,
+                120.99997060360602
+              ]
+            ],
+            "http_status": 200,
+            "parsed": {
+              "opening_id": "OP001",
+              "segment_on_visible_opening": "yes",
+              "visible_opening_endpoints": "yes",
+              "continuous_wall_across_segment": "no",
+              "door_leaf_or_swing_visible": "yes",
+              "glazed_interface_visible": "no",
+              "xy_gap_plausible": "yes",
+              "confidence": "high"
+            },
+            "validation_error": null,
+            "transport_error": null,
+            "usable_advisory": true,
+            "usage": {
+              "prompt_tokens": 45681,
+              "completion_tokens": 59,
+              "total_tokens": 45740,
+              "cost": 0.00688755,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0
+              }
+            },
+            "raw_response": {
+              "id": "gen-1788342485-kBmZTh7uvu02BRjm2JNQ",
+              "object": "chat.completion",
+              "created": 1788342485,
+              "model": "openai/gpt-4o-mini",
+              "provider": "OpenAI",
+              "system_fingerprint": "fp_9b48c9e51a",
+              "service_tier": null,
+              "choices": [
+                {
+                  "index": 0,
+                  "logprobs": null,
+                  "finish_reason": "stop",
+                  "native_finish_reason": "stop",
+                  "message": {
+                    "role": "assistant",
+                    "content": "{\"opening_id\":\"OP001\",\"segment_on_visible_opening\":\"yes\",\"visible_opening_endpoints\":\"yes\",\"continuous_wall_across_segment\":\"no\",\"door_leaf_or_swing_visible\":\"yes\",\"glazed_interface_visible\":\"no\",\"xy_gap_plausible\":\"yes\",\"confidence\":\"high\"}",
+                    "refusal": null,
+                    "reasoning": null
+                  }
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 45681,
+                "completion_tokens": 59,
+                "total_tokens": 45740,
+                "cost": 0.00688755,
+                "prompt_tokens_details": {
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0
+                }
+              }
+            },
+            "raw_response_sha256": "1181380f3f5ea2c0debc14c0b7bff5d2517f85cf6ce2f2a9a92e2711feb0c7d2",
+            "cut_confirmation": false,
+            "pair_confirmation": false,
+            "adjacency_confirmation": false,
+            "semantic_promotion": false,
+            "score_effect": "none",
+            "build_authorized": false
+          }
+        }
+      },
+      "core_consensus": {
+        "segment_on_visible_opening": true,
+        "continuous_wall_across_segment": true,
+        "xy_gap_plausible": true
+      },
+      "cue_disagreements": [],
+      "included_for_xy_experiment": true
+    },
+    {
+      "opening_id": "OP002",
+      "evidence_host_atom_id": "ATOM-WB006-02",
+      "attempts": {
+        "gemini": {
+          "model": "google/gemini-2.5-flash",
+          "result_file_sha256": "62cbc244424cab1bcf291978db7de12007e58d57b55acf37118d0c3a3cc28042",
+          "raw_response_sha256": "06ade301569cfff57707da36550037131b95e5a1f109cbd08a598abcf9dde0eb",
+          "request_contract_sha256": "b7fbf2851812fec4cdee57ca6edc5184b3d8a2eb780dbf93a6cda5eb047bb751",
+          "parsed": {
+            "opening_id": "OP002",
+            "segment_on_visible_opening": "yes",
+            "visible_opening_endpoints": "yes",
+            "continuous_wall_across_segment": "no",
+            "door_leaf_or_swing_visible": "yes",
+            "glazed_interface_visible": "no",
+            "xy_gap_plausible": "yes",
+            "confidence": "high"
+          },
+          "cost_usd": 0.0004794,
+          "canonical_result": {
+            "schema": "fal-opening-xy-clean-review-v2",
+            "opening_id": "OP002",
+            "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+            "model": "google/gemini-2.5-flash",
+            "request_contract_sha256": "b7fbf2851812fec4cdee57ca6edc5184b3d8a2eb780dbf93a6cda5eb047bb751",
+            "prompt_sha256": "b72734a92d5feab9d26990ac0f5952bb47a0eea92ba8e5bcbba67bf6f94ec33e",
+            "system_sha256": "bba09658dcaf2454e82ccc7e4da97d2d351d0f659112e5abb6e7d54cdf49e8ce",
+            "evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+            "evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+            "image_bindings": [
+              {
+                "role": "locator",
+                "filename": "OP002-locator.png",
+                "bytes": 1621038,
+                "sha256": "fe328f5cd15fa16e559d7dba45292eb71e3c1ab75a0bf76563f72bd9f109603d"
+              },
+              {
+                "role": "raw_crop",
+                "filename": "OP002-raw-crop.png",
+                "bytes": 20540,
+                "sha256": "dd688d7feaf037e2ff45a3cb46500b52d65fd6dc2817ff5fb37e34e60e2ca132"
+              }
+            ],
+            "local_segment_px": [
+              [
+                120.50000000000023,
+                120.99999999999977
+              ],
+              [
+                120.50000000000023,
+                242.99999999999977
+              ]
+            ],
+            "http_status": 200,
+            "parsed": {
+              "opening_id": "OP002",
+              "segment_on_visible_opening": "yes",
+              "visible_opening_endpoints": "yes",
+              "continuous_wall_across_segment": "no",
+              "door_leaf_or_swing_visible": "yes",
+              "glazed_interface_visible": "no",
+              "xy_gap_plausible": "yes",
+              "confidence": "high"
+            },
+            "validation_error": null,
+            "transport_error": null,
+            "usable_advisory": true,
+            "usage": {
+              "prompt_tokens": 723,
+              "completion_tokens": 105,
+              "total_tokens": 828,
+              "cost": 0.0004794,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0
+              }
+            },
+            "raw_response": {
+              "id": "gen-1788342288-OAaNaYBtpW6a01stJTR7",
+              "object": "chat.completion",
+              "created": 1788342288,
+              "model": "google/gemini-2.5-flash",
+              "provider": "Google",
+              "system_fingerprint": null,
+              "service_tier": "default",
+              "choices": [
+                {
+                  "index": 0,
+                  "logprobs": null,
+                  "finish_reason": "stop",
+                  "native_finish_reason": "STOP",
+                  "message": {
+                    "role": "assistant",
+                    "content": "{\n  \"opening_id\": \"OP002\",\n  \"segment_on_visible_opening\": \"yes\",\n  \"visible_opening_endpoints\": \"yes\",\n  \"continuous_wall_across_segment\": \"no\",\n  \"door_leaf_or_swing_visible\": \"yes\",\n  \"glazed_interface_visible\": \"no\",\n  \"xy_gap_plausible\": \"yes\",\n  \"confidence\": \"high\"\n}",
+                    "refusal": null,
+                    "reasoning": null
+                  }
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 723,
+                "completion_tokens": 105,
+                "total_tokens": 828,
+                "cost": 0.0004794,
+                "prompt_tokens_details": {
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0
+                }
+              }
+            },
+            "raw_response_sha256": "06ade301569cfff57707da36550037131b95e5a1f109cbd08a598abcf9dde0eb",
+            "cut_confirmation": false,
+            "pair_confirmation": false,
+            "adjacency_confirmation": false,
+            "semantic_promotion": false,
+            "score_effect": "none",
+            "build_authorized": false
+          }
+        },
+        "openai": {
+          "model": "openai/gpt-4o-mini",
+          "result_file_sha256": "f432e0c48e0f2ff26d6b81e9338bd0a8ddbda2332016e1b196b3d342c7e1e75c",
+          "raw_response_sha256": "0a155d0691357ef247f55d9ddfc83f613e3a23b9b8b167a3c13666134aa1626c",
+          "request_contract_sha256": "d5a2716a28bc9e8cf636a17a3049c4d58a147d04118262799c2c7f64df1fc655",
+          "parsed": {
+            "opening_id": "OP002",
+            "segment_on_visible_opening": "yes",
+            "visible_opening_endpoints": "yes",
+            "continuous_wall_across_segment": "no",
+            "door_leaf_or_swing_visible": "yes",
+            "glazed_interface_visible": "no",
+            "xy_gap_plausible": "yes",
+            "confidence": "high"
+          },
+          "cost_usd": 0.00688755,
+          "canonical_result": {
+            "schema": "fal-opening-xy-clean-review-v2",
+            "opening_id": "OP002",
+            "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+            "model": "openai/gpt-4o-mini",
+            "request_contract_sha256": "d5a2716a28bc9e8cf636a17a3049c4d58a147d04118262799c2c7f64df1fc655",
+            "prompt_sha256": "b72734a92d5feab9d26990ac0f5952bb47a0eea92ba8e5bcbba67bf6f94ec33e",
+            "system_sha256": "bba09658dcaf2454e82ccc7e4da97d2d351d0f659112e5abb6e7d54cdf49e8ce",
+            "evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+            "evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+            "image_bindings": [
+              {
+                "role": "locator",
+                "filename": "OP002-locator.png",
+                "bytes": 1621038,
+                "sha256": "fe328f5cd15fa16e559d7dba45292eb71e3c1ab75a0bf76563f72bd9f109603d"
+              },
+              {
+                "role": "raw_crop",
+                "filename": "OP002-raw-crop.png",
+                "bytes": 20540,
+                "sha256": "dd688d7feaf037e2ff45a3cb46500b52d65fd6dc2817ff5fb37e34e60e2ca132"
+              }
+            ],
+            "local_segment_px": [
+              [
+                120.50000000000023,
+                120.99999999999977
+              ],
+              [
+                120.50000000000023,
+                242.99999999999977
+              ]
+            ],
+            "http_status": 200,
+            "parsed": {
+              "opening_id": "OP002",
+              "segment_on_visible_opening": "yes",
+              "visible_opening_endpoints": "yes",
+              "continuous_wall_across_segment": "no",
+              "door_leaf_or_swing_visible": "yes",
+              "glazed_interface_visible": "no",
+              "xy_gap_plausible": "yes",
+              "confidence": "high"
+            },
+            "validation_error": null,
+            "transport_error": null,
+            "usable_advisory": true,
+            "usage": {
+              "prompt_tokens": 45681,
+              "completion_tokens": 59,
+              "total_tokens": 45740,
+              "cost": 0.00688755,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0
+              }
+            },
+            "raw_response": {
+              "id": "gen-1788342487-EWbqpHQ3wrAeQ9gnjman",
+              "object": "chat.completion",
+              "created": 1788342487,
+              "model": "openai/gpt-4o-mini",
+              "provider": "OpenAI",
+              "system_fingerprint": "fp_9b48c9e51a",
+              "service_tier": null,
+              "choices": [
+                {
+                  "index": 0,
+                  "logprobs": null,
+                  "finish_reason": "stop",
+                  "native_finish_reason": "stop",
+                  "message": {
+                    "role": "assistant",
+                    "content": "{\"opening_id\":\"OP002\",\"segment_on_visible_opening\":\"yes\",\"visible_opening_endpoints\":\"yes\",\"continuous_wall_across_segment\":\"no\",\"door_leaf_or_swing_visible\":\"yes\",\"glazed_interface_visible\":\"no\",\"xy_gap_plausible\":\"yes\",\"confidence\":\"high\"}",
+                    "refusal": null,
+                    "reasoning": null
+                  }
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 45681,
+                "completion_tokens": 59,
+                "total_tokens": 45740,
+                "cost": 0.00688755,
+                "prompt_tokens_details": {
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0
+                }
+              }
+            },
+            "raw_response_sha256": "0a155d0691357ef247f55d9ddfc83f613e3a23b9b8b167a3c13666134aa1626c",
+            "cut_confirmation": false,
+            "pair_confirmation": false,
+            "adjacency_confirmation": false,
+            "semantic_promotion": false,
+            "score_effect": "none",
+            "build_authorized": false
+          }
+        }
+      },
+      "core_consensus": {
+        "segment_on_visible_opening": true,
+        "continuous_wall_across_segment": true,
+        "xy_gap_plausible": true
+      },
+      "cue_disagreements": [],
+      "included_for_xy_experiment": true
+    },
+    {
+      "opening_id": "OP003",
+      "evidence_host_atom_id": "ATOM-WB010-01",
+      "attempts": {
+        "gemini": {
+          "model": "google/gemini-2.5-flash",
+          "result_file_sha256": "2b8d287a0ca54cc2d1f0abd3063348b80f5aa11781e9061e23e8c4cfe1feaf92",
+          "raw_response_sha256": "33cd34a26c1ecf50af3aca6803e0d5bedde7a572b6daf90b7959647af0607832",
+          "request_contract_sha256": "e6cceccbcd7895a6ebb8b5f2441892d8401cb28f3a353a59dbc68134348a10be",
+          "parsed": {
+            "opening_id": "OP003",
+            "segment_on_visible_opening": "yes",
+            "visible_opening_endpoints": "yes",
+            "continuous_wall_across_segment": "no",
+            "door_leaf_or_swing_visible": "yes",
+            "glazed_interface_visible": "no",
+            "xy_gap_plausible": "yes",
+            "confidence": "high"
+          },
+          "cost_usd": 0.0004788,
+          "canonical_result": {
+            "schema": "fal-opening-xy-clean-review-v2",
+            "opening_id": "OP003",
+            "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+            "model": "google/gemini-2.5-flash",
+            "request_contract_sha256": "e6cceccbcd7895a6ebb8b5f2441892d8401cb28f3a353a59dbc68134348a10be",
+            "prompt_sha256": "e322e1ba85bb04595a3a693a3f6e89d342702964463b3807e68ac5c1c07891b4",
+            "system_sha256": "bba09658dcaf2454e82ccc7e4da97d2d351d0f659112e5abb6e7d54cdf49e8ce",
+            "evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+            "evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+            "image_bindings": [
+              {
+                "role": "locator",
+                "filename": "OP003-locator.png",
+                "bytes": 1620864,
+                "sha256": "82a68f66dca3759351e99f69cc5e4b64aab37fb2dcf35e294d9c92e63ed172ea"
+              },
+              {
+                "role": "raw_crop",
+                "filename": "OP003-raw-crop.png",
+                "bytes": 30038,
+                "sha256": "6670987f2c2268faf85f341151763e074b4550f5cf392a9d065f70ce40fb3a6b"
+              }
+            ],
+            "local_segment_px": [
+              [
+                120.00001755725191,
+                120.0000323360332
+              ],
+              [
+                246.00003053435114,
+                120.0000323360332
+              ]
+            ],
+            "http_status": 200,
+            "parsed": {
+              "opening_id": "OP003",
+              "segment_on_visible_opening": "yes",
+              "visible_opening_endpoints": "yes",
+              "continuous_wall_across_segment": "no",
+              "door_leaf_or_swing_visible": "yes",
+              "glazed_interface_visible": "no",
+              "xy_gap_plausible": "yes",
+              "confidence": "high"
+            },
+            "validation_error": null,
+            "transport_error": null,
+            "usable_advisory": true,
+            "usage": {
+              "prompt_tokens": 721,
+              "completion_tokens": 105,
+              "total_tokens": 826,
+              "cost": 0.0004788,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0
+              }
+            },
+            "raw_response": {
+              "id": "gen-1788342287-Zxjk0fomqsG9484pVhdi",
+              "object": "chat.completion",
+              "created": 1788342287,
+              "model": "google/gemini-2.5-flash",
+              "provider": "Google",
+              "system_fingerprint": null,
+              "service_tier": "default",
+              "choices": [
+                {
+                  "index": 0,
+                  "logprobs": null,
+                  "finish_reason": "stop",
+                  "native_finish_reason": "STOP",
+                  "message": {
+                    "role": "assistant",
+                    "content": "{\n  \"opening_id\": \"OP003\",\n  \"segment_on_visible_opening\": \"yes\",\n  \"visible_opening_endpoints\": \"yes\",\n  \"continuous_wall_across_segment\": \"no\",\n  \"door_leaf_or_swing_visible\": \"yes\",\n  \"glazed_interface_visible\": \"no\",\n  \"xy_gap_plausible\": \"yes\",\n  \"confidence\": \"high\"\n}",
+                    "refusal": null,
+                    "reasoning": null
+                  }
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 721,
+                "completion_tokens": 105,
+                "total_tokens": 826,
+                "cost": 0.0004788,
+                "prompt_tokens_details": {
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0
+                }
+              }
+            },
+            "raw_response_sha256": "33cd34a26c1ecf50af3aca6803e0d5bedde7a572b6daf90b7959647af0607832",
+            "cut_confirmation": false,
+            "pair_confirmation": false,
+            "adjacency_confirmation": false,
+            "semantic_promotion": false,
+            "score_effect": "none",
+            "build_authorized": false
+          }
+        },
+        "openai": {
+          "model": "openai/gpt-4o-mini",
+          "result_file_sha256": "8cf88c7cf35921dd3bc7779debff4f3538f8401a98791705cd2ff6997fefe176",
+          "raw_response_sha256": "29018356b4eb10d9bb89f6b1c3997f708b7f92b3296e0e8e63c805250be4fd14",
+          "request_contract_sha256": "1129a20e46c7f016feeb496033aa1c7baeda2f082583cf4aee7978de7160ca1c",
+          "parsed": {
+            "opening_id": "OP003",
+            "segment_on_visible_opening": "yes",
+            "visible_opening_endpoints": "yes",
+            "continuous_wall_across_segment": "no",
+            "door_leaf_or_swing_visible": "yes",
+            "glazed_interface_visible": "no",
+            "xy_gap_plausible": "yes",
+            "confidence": "high"
+          },
+          "cost_usd": 0.00688755,
+          "canonical_result": {
+            "schema": "fal-opening-xy-clean-review-v2",
+            "opening_id": "OP003",
+            "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+            "model": "openai/gpt-4o-mini",
+            "request_contract_sha256": "1129a20e46c7f016feeb496033aa1c7baeda2f082583cf4aee7978de7160ca1c",
+            "prompt_sha256": "e322e1ba85bb04595a3a693a3f6e89d342702964463b3807e68ac5c1c07891b4",
+            "system_sha256": "bba09658dcaf2454e82ccc7e4da97d2d351d0f659112e5abb6e7d54cdf49e8ce",
+            "evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+            "evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+            "image_bindings": [
+              {
+                "role": "locator",
+                "filename": "OP003-locator.png",
+                "bytes": 1620864,
+                "sha256": "82a68f66dca3759351e99f69cc5e4b64aab37fb2dcf35e294d9c92e63ed172ea"
+              },
+              {
+                "role": "raw_crop",
+                "filename": "OP003-raw-crop.png",
+                "bytes": 30038,
+                "sha256": "6670987f2c2268faf85f341151763e074b4550f5cf392a9d065f70ce40fb3a6b"
+              }
+            ],
+            "local_segment_px": [
+              [
+                120.00001755725191,
+                120.0000323360332
+              ],
+              [
+                246.00003053435114,
+                120.0000323360332
+              ]
+            ],
+            "http_status": 200,
+            "parsed": {
+              "opening_id": "OP003",
+              "segment_on_visible_opening": "yes",
+              "visible_opening_endpoints": "yes",
+              "continuous_wall_across_segment": "no",
+              "door_leaf_or_swing_visible": "yes",
+              "glazed_interface_visible": "no",
+              "xy_gap_plausible": "yes",
+              "confidence": "high"
+            },
+            "validation_error": null,
+            "transport_error": null,
+            "usable_advisory": true,
+            "usage": {
+              "prompt_tokens": 45681,
+              "completion_tokens": 59,
+              "total_tokens": 45740,
+              "cost": 0.00688755,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0
+              }
+            },
+            "raw_response": {
+              "id": "gen-1788342483-KlTQ2M8TBO5Dad5Nfyy3",
+              "object": "chat.completion",
+              "created": 1788342483,
+              "model": "openai/gpt-4o-mini",
+              "provider": "OpenAI",
+              "system_fingerprint": "fp_9b48c9e51a",
+              "service_tier": null,
+              "choices": [
+                {
+                  "index": 0,
+                  "logprobs": null,
+                  "finish_reason": "stop",
+                  "native_finish_reason": "stop",
+                  "message": {
+                    "role": "assistant",
+                    "content": "{\"opening_id\":\"OP003\",\"segment_on_visible_opening\":\"yes\",\"visible_opening_endpoints\":\"yes\",\"continuous_wall_across_segment\":\"no\",\"door_leaf_or_swing_visible\":\"yes\",\"glazed_interface_visible\":\"no\",\"xy_gap_plausible\":\"yes\",\"confidence\":\"high\"}",
+                    "refusal": null,
+                    "reasoning": null
+                  }
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 45681,
+                "completion_tokens": 59,
+                "total_tokens": 45740,
+                "cost": 0.00688755,
+                "prompt_tokens_details": {
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0
+                }
+              }
+            },
+            "raw_response_sha256": "29018356b4eb10d9bb89f6b1c3997f708b7f92b3296e0e8e63c805250be4fd14",
+            "cut_confirmation": false,
+            "pair_confirmation": false,
+            "adjacency_confirmation": false,
+            "semantic_promotion": false,
+            "score_effect": "none",
+            "build_authorized": false
+          }
+        }
+      },
+      "core_consensus": {
+        "segment_on_visible_opening": true,
+        "continuous_wall_across_segment": true,
+        "xy_gap_plausible": true
+      },
+      "cue_disagreements": [],
+      "included_for_xy_experiment": true
+    },
+    {
+      "opening_id": "OP004",
+      "evidence_host_atom_id": "ATOM-WB007-01",
+      "attempts": {
+        "gemini": {
+          "model": "google/gemini-2.5-flash",
+          "result_file_sha256": "80d3ec4daac017e83ac3c2f558d9b97b0be105dbbb150f1fd2ab0eda9316339a",
+          "raw_response_sha256": "e374f9bb13f329b6a3ccaebf55e12809576d01484b053eb0ab2db256780eaf54",
+          "request_contract_sha256": "f815e5ccd4ed9ca12cf7e31700943c85a6f5c85b544d4e7f95f57a2f938747ec",
+          "parsed": {
+            "opening_id": "OP004",
+            "segment_on_visible_opening": "yes",
+            "visible_opening_endpoints": "yes",
+            "continuous_wall_across_segment": "no",
+            "door_leaf_or_swing_visible": "yes",
+            "glazed_interface_visible": "no",
+            "xy_gap_plausible": "yes",
+            "confidence": "high"
+          },
+          "cost_usd": 0.0004794,
+          "canonical_result": {
+            "schema": "fal-opening-xy-clean-review-v2",
+            "opening_id": "OP004",
+            "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+            "model": "google/gemini-2.5-flash",
+            "request_contract_sha256": "f815e5ccd4ed9ca12cf7e31700943c85a6f5c85b544d4e7f95f57a2f938747ec",
+            "prompt_sha256": "2c61f94049895ed7e4edcc925c7daf1ad4262948393dc953da8bc9a687e3d827",
+            "system_sha256": "bba09658dcaf2454e82ccc7e4da97d2d351d0f659112e5abb6e7d54cdf49e8ce",
+            "evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+            "evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+            "image_bindings": [
+              {
+                "role": "locator",
+                "filename": "OP004-locator.png",
+                "bytes": 1620823,
+                "sha256": "ee37cefe1fb552ca12a291b38dd02e4556b26afaaa661eb9159db573154723cc"
+              },
+              {
+                "role": "raw_crop",
+                "filename": "OP004-raw-crop.png",
+                "bytes": 36462,
+                "sha256": "b0749036a8f96b4cd3da0115b68152086e9657f740ffda55f2179c07579befd8"
+              }
+            ],
+            "local_segment_px": [
+              [
+                120.50001374045814,
+                120.00002743663435
+              ],
+              [
+                120.50001374045814,
+                245.00000979879792
+              ]
+            ],
+            "http_status": 200,
+            "parsed": {
+              "opening_id": "OP004",
+              "segment_on_visible_opening": "yes",
+              "visible_opening_endpoints": "yes",
+              "continuous_wall_across_segment": "no",
+              "door_leaf_or_swing_visible": "yes",
+              "glazed_interface_visible": "no",
+              "xy_gap_plausible": "yes",
+              "confidence": "high"
+            },
+            "validation_error": null,
+            "transport_error": null,
+            "usable_advisory": true,
+            "usage": {
+              "prompt_tokens": 723,
+              "completion_tokens": 105,
+              "total_tokens": 828,
+              "cost": 0.0004794,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0
+              }
+            },
+            "raw_response": {
+              "id": "gen-1788342335-Em5ghUZhf8PeOvRasW0H",
+              "object": "chat.completion",
+              "created": 1788342335,
+              "model": "google/gemini-2.5-flash",
+              "provider": "Google",
+              "system_fingerprint": null,
+              "service_tier": "default",
+              "choices": [
+                {
+                  "index": 0,
+                  "logprobs": null,
+                  "finish_reason": "stop",
+                  "native_finish_reason": "STOP",
+                  "message": {
+                    "role": "assistant",
+                    "content": "{\n  \"opening_id\": \"OP004\",\n  \"segment_on_visible_opening\": \"yes\",\n  \"visible_opening_endpoints\": \"yes\",\n  \"continuous_wall_across_segment\": \"no\",\n  \"door_leaf_or_swing_visible\": \"yes\",\n  \"glazed_interface_visible\": \"no\",\n  \"xy_gap_plausible\": \"yes\",\n  \"confidence\": \"high\"\n}",
+                    "refusal": null,
+                    "reasoning": null
+                  }
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 723,
+                "completion_tokens": 105,
+                "total_tokens": 828,
+                "cost": 0.0004794,
+                "prompt_tokens_details": {
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0
+                }
+              }
+            },
+            "raw_response_sha256": "e374f9bb13f329b6a3ccaebf55e12809576d01484b053eb0ab2db256780eaf54",
+            "cut_confirmation": false,
+            "pair_confirmation": false,
+            "adjacency_confirmation": false,
+            "semantic_promotion": false,
+            "score_effect": "none",
+            "build_authorized": false
+          }
+        },
+        "openai": {
+          "model": "openai/gpt-4o-mini",
+          "result_file_sha256": "5d81821c9b38f788f5864078c0f6cf2951052aba5e04812f678858eeb592361a",
+          "raw_response_sha256": "bc86bc5968ce3a212b5d207c281f3fc10080e551c81387e20a752ee210d64545",
+          "request_contract_sha256": "c6a42c7cca5c6a27aa435acd35380b85ff1875eaeeb2f87638c73638378a8253",
+          "parsed": {
+            "opening_id": "OP004",
+            "segment_on_visible_opening": "yes",
+            "visible_opening_endpoints": "no",
+            "continuous_wall_across_segment": "no",
+            "door_leaf_or_swing_visible": "yes",
+            "glazed_interface_visible": "no",
+            "xy_gap_plausible": "yes",
+            "confidence": "high"
+          },
+          "cost_usd": 0.00688755,
+          "canonical_result": {
+            "schema": "fal-opening-xy-clean-review-v2",
+            "opening_id": "OP004",
+            "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+            "model": "openai/gpt-4o-mini",
+            "request_contract_sha256": "c6a42c7cca5c6a27aa435acd35380b85ff1875eaeeb2f87638c73638378a8253",
+            "prompt_sha256": "2c61f94049895ed7e4edcc925c7daf1ad4262948393dc953da8bc9a687e3d827",
+            "system_sha256": "bba09658dcaf2454e82ccc7e4da97d2d351d0f659112e5abb6e7d54cdf49e8ce",
+            "evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+            "evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+            "image_bindings": [
+              {
+                "role": "locator",
+                "filename": "OP004-locator.png",
+                "bytes": 1620823,
+                "sha256": "ee37cefe1fb552ca12a291b38dd02e4556b26afaaa661eb9159db573154723cc"
+              },
+              {
+                "role": "raw_crop",
+                "filename": "OP004-raw-crop.png",
+                "bytes": 36462,
+                "sha256": "b0749036a8f96b4cd3da0115b68152086e9657f740ffda55f2179c07579befd8"
+              }
+            ],
+            "local_segment_px": [
+              [
+                120.50001374045814,
+                120.00002743663435
+              ],
+              [
+                120.50001374045814,
+                245.00000979879792
+              ]
+            ],
+            "http_status": 200,
+            "parsed": {
+              "opening_id": "OP004",
+              "segment_on_visible_opening": "yes",
+              "visible_opening_endpoints": "no",
+              "continuous_wall_across_segment": "no",
+              "door_leaf_or_swing_visible": "yes",
+              "glazed_interface_visible": "no",
+              "xy_gap_plausible": "yes",
+              "confidence": "high"
+            },
+            "validation_error": null,
+            "transport_error": null,
+            "usable_advisory": true,
+            "usage": {
+              "prompt_tokens": 45681,
+              "completion_tokens": 59,
+              "total_tokens": 45740,
+              "cost": 0.00688755,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0
+              }
+            },
+            "raw_response": {
+              "id": "gen-1788342705-kq5HvLF4BVITtzzYcvZo",
+              "object": "chat.completion",
+              "created": 1788342705,
+              "model": "openai/gpt-4o-mini",
+              "provider": "OpenAI",
+              "system_fingerprint": "fp_9b48c9e51a",
+              "service_tier": null,
+              "choices": [
+                {
+                  "index": 0,
+                  "logprobs": null,
+                  "finish_reason": "stop",
+                  "native_finish_reason": "stop",
+                  "message": {
+                    "role": "assistant",
+                    "content": "{\"opening_id\":\"OP004\",\"segment_on_visible_opening\":\"yes\",\"visible_opening_endpoints\":\"no\",\"continuous_wall_across_segment\":\"no\",\"door_leaf_or_swing_visible\":\"yes\",\"glazed_interface_visible\":\"no\",\"xy_gap_plausible\":\"yes\",\"confidence\":\"high\"}",
+                    "refusal": null,
+                    "reasoning": null
+                  }
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 45681,
+                "completion_tokens": 59,
+                "total_tokens": 45740,
+                "cost": 0.00688755,
+                "prompt_tokens_details": {
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0
+                }
+              }
+            },
+            "raw_response_sha256": "bc86bc5968ce3a212b5d207c281f3fc10080e551c81387e20a752ee210d64545",
+            "cut_confirmation": false,
+            "pair_confirmation": false,
+            "adjacency_confirmation": false,
+            "semantic_promotion": false,
+            "score_effect": "none",
+            "build_authorized": false
+          }
+        }
+      },
+      "core_consensus": {
+        "segment_on_visible_opening": true,
+        "continuous_wall_across_segment": true,
+        "xy_gap_plausible": true
+      },
+      "cue_disagreements": [
+        "visible_opening_endpoints"
+      ],
+      "included_for_xy_experiment": true
+    },
+    {
+      "opening_id": "OP006",
+      "evidence_host_atom_id": "ATOM-WB007-02",
+      "attempts": {
+        "gemini": {
+          "model": "google/gemini-2.5-flash",
+          "result_file_sha256": "c9293af68522775b10bf57566afce6fd235d4fb48917369dafb7e942de53f59b",
+          "raw_response_sha256": "ac6aa76d37f49258b7030a5ef09aac43b34ac327ecc9001241fe227fda0db186",
+          "request_contract_sha256": "5b156bbb89d4f50c61ad32f31e6a86af7f8975a06be0b08ae5ad3869ce6f15ef",
+          "parsed": {
+            "opening_id": "OP006",
+            "segment_on_visible_opening": "yes",
+            "visible_opening_endpoints": "yes",
+            "continuous_wall_across_segment": "no",
+            "door_leaf_or_swing_visible": "yes",
+            "glazed_interface_visible": "no",
+            "xy_gap_plausible": "yes",
+            "confidence": "high"
+          },
+          "cost_usd": 0.0004794,
+          "canonical_result": {
+            "schema": "fal-opening-xy-clean-review-v2",
+            "opening_id": "OP006",
+            "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+            "model": "google/gemini-2.5-flash",
+            "request_contract_sha256": "5b156bbb89d4f50c61ad32f31e6a86af7f8975a06be0b08ae5ad3869ce6f15ef",
+            "prompt_sha256": "446b0a6a930ca3f879b5ab23c3749b1691d0efbde8bc67dfba1fb3347d9ebbcf",
+            "system_sha256": "bba09658dcaf2454e82ccc7e4da97d2d351d0f659112e5abb6e7d54cdf49e8ce",
+            "evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+            "evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+            "image_bindings": [
+              {
+                "role": "locator",
+                "filename": "OP006-locator.png",
+                "bytes": 1621270,
+                "sha256": "dac2cd9a0edbefe2b66a74eed7dc8e21c7d556d395785d9551397ddb085fb7b4"
+              },
+              {
+                "role": "raw_crop",
+                "filename": "OP006-raw-crop.png",
+                "bytes": 17295,
+                "sha256": "e395128bfcdaba269314be6d7cbe6490abd814060925acd93ab57f6b0bc481df"
+              }
+            ],
+            "local_segment_px": [
+              [
+                120.50001374045814,
+                120.99993500130631
+              ],
+              [
+                120.50001374045814,
+                248.99996864384616
+              ]
+            ],
+            "http_status": 200,
+            "parsed": {
+              "opening_id": "OP006",
+              "segment_on_visible_opening": "yes",
+              "visible_opening_endpoints": "yes",
+              "continuous_wall_across_segment": "no",
+              "door_leaf_or_swing_visible": "yes",
+              "glazed_interface_visible": "no",
+              "xy_gap_plausible": "yes",
+              "confidence": "high"
+            },
+            "validation_error": null,
+            "transport_error": null,
+            "usable_advisory": true,
+            "usage": {
+              "prompt_tokens": 723,
+              "completion_tokens": 105,
+              "total_tokens": 828,
+              "cost": 0.0004794,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0
+              }
+            },
+            "raw_response": {
+              "id": "gen-1788342336-M9POdjcdLXV7XXHTt1vd",
+              "object": "chat.completion",
+              "created": 1788342336,
+              "model": "google/gemini-2.5-flash",
+              "provider": "Google",
+              "system_fingerprint": null,
+              "service_tier": "default",
+              "choices": [
+                {
+                  "index": 0,
+                  "logprobs": null,
+                  "finish_reason": "stop",
+                  "native_finish_reason": "STOP",
+                  "message": {
+                    "role": "assistant",
+                    "content": "{\n  \"opening_id\": \"OP006\",\n  \"segment_on_visible_opening\": \"yes\",\n  \"visible_opening_endpoints\": \"yes\",\n  \"continuous_wall_across_segment\": \"no\",\n  \"door_leaf_or_swing_visible\": \"yes\",\n  \"glazed_interface_visible\": \"no\",\n  \"xy_gap_plausible\": \"yes\",\n  \"confidence\": \"high\"\n}",
+                    "refusal": null,
+                    "reasoning": null
+                  }
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 723,
+                "completion_tokens": 105,
+                "total_tokens": 828,
+                "cost": 0.0004794,
+                "prompt_tokens_details": {
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0
+                }
+              }
+            },
+            "raw_response_sha256": "ac6aa76d37f49258b7030a5ef09aac43b34ac327ecc9001241fe227fda0db186",
+            "cut_confirmation": false,
+            "pair_confirmation": false,
+            "adjacency_confirmation": false,
+            "semantic_promotion": false,
+            "score_effect": "none",
+            "build_authorized": false
+          }
+        },
+        "openai": {
+          "model": "openai/gpt-4o-mini",
+          "result_file_sha256": "20030afd4ea94b000991836194fda1cbe34bc947d73446e37ddd9d83450f745e",
+          "raw_response_sha256": "4be2c092259e21efa03ebb9293cb22fd1e745669c4fcef3f3c4a0af0f62371cb",
+          "request_contract_sha256": "24bf5b3590c1944eee6df0f43a824395716a2e15b3e066460397b800c6fb333c",
+          "parsed": {
+            "opening_id": "OP006",
+            "segment_on_visible_opening": "yes",
+            "visible_opening_endpoints": "yes",
+            "continuous_wall_across_segment": "no",
+            "door_leaf_or_swing_visible": "yes",
+            "glazed_interface_visible": "no",
+            "xy_gap_plausible": "yes",
+            "confidence": "high"
+          },
+          "cost_usd": 0.00688755,
+          "canonical_result": {
+            "schema": "fal-opening-xy-clean-review-v2",
+            "opening_id": "OP006",
+            "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+            "model": "openai/gpt-4o-mini",
+            "request_contract_sha256": "24bf5b3590c1944eee6df0f43a824395716a2e15b3e066460397b800c6fb333c",
+            "prompt_sha256": "446b0a6a930ca3f879b5ab23c3749b1691d0efbde8bc67dfba1fb3347d9ebbcf",
+            "system_sha256": "bba09658dcaf2454e82ccc7e4da97d2d351d0f659112e5abb6e7d54cdf49e8ce",
+            "evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+            "evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+            "image_bindings": [
+              {
+                "role": "locator",
+                "filename": "OP006-locator.png",
+                "bytes": 1621270,
+                "sha256": "dac2cd9a0edbefe2b66a74eed7dc8e21c7d556d395785d9551397ddb085fb7b4"
+              },
+              {
+                "role": "raw_crop",
+                "filename": "OP006-raw-crop.png",
+                "bytes": 17295,
+                "sha256": "e395128bfcdaba269314be6d7cbe6490abd814060925acd93ab57f6b0bc481df"
+              }
+            ],
+            "local_segment_px": [
+              [
+                120.50001374045814,
+                120.99993500130631
+              ],
+              [
+                120.50001374045814,
+                248.99996864384616
+              ]
+            ],
+            "http_status": 200,
+            "parsed": {
+              "opening_id": "OP006",
+              "segment_on_visible_opening": "yes",
+              "visible_opening_endpoints": "yes",
+              "continuous_wall_across_segment": "no",
+              "door_leaf_or_swing_visible": "yes",
+              "glazed_interface_visible": "no",
+              "xy_gap_plausible": "yes",
+              "confidence": "high"
+            },
+            "validation_error": null,
+            "transport_error": null,
+            "usable_advisory": true,
+            "usage": {
+              "prompt_tokens": 45681,
+              "completion_tokens": 59,
+              "total_tokens": 45740,
+              "cost": 0.00688755,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0
+              }
+            },
+            "raw_response": {
+              "id": "gen-1788342537-WTNsXPWMaPMU6SJRqxgI",
+              "object": "chat.completion",
+              "created": 1788342537,
+              "model": "openai/gpt-4o-mini",
+              "provider": "OpenAI",
+              "system_fingerprint": "fp_9b48c9e51a",
+              "service_tier": null,
+              "choices": [
+                {
+                  "index": 0,
+                  "logprobs": null,
+                  "finish_reason": "stop",
+                  "native_finish_reason": "stop",
+                  "message": {
+                    "role": "assistant",
+                    "content": "{\"opening_id\":\"OP006\",\"segment_on_visible_opening\":\"yes\",\"visible_opening_endpoints\":\"yes\",\"continuous_wall_across_segment\":\"no\",\"door_leaf_or_swing_visible\":\"yes\",\"glazed_interface_visible\":\"no\",\"xy_gap_plausible\":\"yes\",\"confidence\":\"high\"}",
+                    "refusal": null,
+                    "reasoning": null
+                  }
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 45681,
+                "completion_tokens": 59,
+                "total_tokens": 45740,
+                "cost": 0.00688755,
+                "prompt_tokens_details": {
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0
+                }
+              }
+            },
+            "raw_response_sha256": "4be2c092259e21efa03ebb9293cb22fd1e745669c4fcef3f3c4a0af0f62371cb",
+            "cut_confirmation": false,
+            "pair_confirmation": false,
+            "adjacency_confirmation": false,
+            "semantic_promotion": false,
+            "score_effect": "none",
+            "build_authorized": false
+          }
+        }
+      },
+      "core_consensus": {
+        "segment_on_visible_opening": true,
+        "continuous_wall_across_segment": true,
+        "xy_gap_plausible": true
+      },
+      "cue_disagreements": [],
+      "included_for_xy_experiment": true
+    },
+    {
+      "opening_id": "OP007",
+      "evidence_host_atom_id": "ATOM-WB019-01",
+      "attempts": {
+        "gemini": {
+          "model": "google/gemini-2.5-flash",
+          "result_file_sha256": "5beafe13db2c9bdc943291b23b7cbf8354085cf59d2fecab264015fe7d365caa",
+          "raw_response_sha256": "64b3ab1044900788e1e9504847a2a3f040ccfc2b2e8d423793b0a93e1b449a41",
+          "request_contract_sha256": "fd77e3772ea18a086a23503fdc27c3739707bd2d3ae5da561d35120b1d9a8ae6",
+          "parsed": {
+            "opening_id": "OP007",
+            "segment_on_visible_opening": "yes",
+            "visible_opening_endpoints": "yes",
+            "continuous_wall_across_segment": "no",
+            "door_leaf_or_swing_visible": "yes",
+            "glazed_interface_visible": "no",
+            "xy_gap_plausible": "yes",
+            "confidence": "high"
+          },
+          "cost_usd": 0.0004794,
+          "canonical_result": {
+            "schema": "fal-opening-xy-clean-review-v2",
+            "opening_id": "OP007",
+            "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+            "model": "google/gemini-2.5-flash",
+            "request_contract_sha256": "fd77e3772ea18a086a23503fdc27c3739707bd2d3ae5da561d35120b1d9a8ae6",
+            "prompt_sha256": "b0ed8a8f23cc6bde4f1d4f1f017205503611d7f5c845e2076f152ba6c238fe84",
+            "system_sha256": "bba09658dcaf2454e82ccc7e4da97d2d351d0f659112e5abb6e7d54cdf49e8ce",
+            "evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+            "evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+            "image_bindings": [
+              {
+                "role": "locator",
+                "filename": "OP007-locator.png",
+                "bytes": 1621102,
+                "sha256": "65ca3d054e1ea348009adddc024614dda6b11b3d6125a48a75adac0b3a172d45"
+              },
+              {
+                "role": "raw_crop",
+                "filename": "OP007-raw-crop.png",
+                "bytes": 32665,
+                "sha256": "c6be613d107324422411b9b2f843e41e0ad4df9f1a2cdb4841432bc742050521"
+              }
+            ],
+            "local_segment_px": [
+              [
+                120.49994580152679,
+                120.99997256336565
+              ],
+              [
+                120.49994580152679,
+                225.00000849229173
+              ]
+            ],
+            "http_status": 200,
+            "parsed": {
+              "opening_id": "OP007",
+              "segment_on_visible_opening": "yes",
+              "visible_opening_endpoints": "yes",
+              "continuous_wall_across_segment": "no",
+              "door_leaf_or_swing_visible": "yes",
+              "glazed_interface_visible": "no",
+              "xy_gap_plausible": "yes",
+              "confidence": "high"
+            },
+            "validation_error": null,
+            "transport_error": null,
+            "usable_advisory": true,
+            "usage": {
+              "prompt_tokens": 723,
+              "completion_tokens": 105,
+              "total_tokens": 828,
+              "cost": 0.0004794,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0
+              }
+            },
+            "raw_response": {
+              "id": "gen-1788342335-vwAsYs1xUQPWYGqXwkz2",
+              "object": "chat.completion",
+              "created": 1788342335,
+              "model": "google/gemini-2.5-flash",
+              "provider": "Google",
+              "system_fingerprint": null,
+              "service_tier": "default",
+              "choices": [
+                {
+                  "index": 0,
+                  "logprobs": null,
+                  "finish_reason": "stop",
+                  "native_finish_reason": "STOP",
+                  "message": {
+                    "role": "assistant",
+                    "content": "{\n  \"opening_id\": \"OP007\",\n  \"segment_on_visible_opening\": \"yes\",\n  \"visible_opening_endpoints\": \"yes\",\n  \"continuous_wall_across_segment\": \"no\",\n  \"door_leaf_or_swing_visible\": \"yes\",\n  \"glazed_interface_visible\": \"no\",\n  \"xy_gap_plausible\": \"yes\",\n  \"confidence\": \"high\"\n}",
+                    "refusal": null,
+                    "reasoning": null
+                  }
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 723,
+                "completion_tokens": 105,
+                "total_tokens": 828,
+                "cost": 0.0004794,
+                "prompt_tokens_details": {
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0
+                }
+              }
+            },
+            "raw_response_sha256": "64b3ab1044900788e1e9504847a2a3f040ccfc2b2e8d423793b0a93e1b449a41",
+            "cut_confirmation": false,
+            "pair_confirmation": false,
+            "adjacency_confirmation": false,
+            "semantic_promotion": false,
+            "score_effect": "none",
+            "build_authorized": false
+          }
+        },
+        "openai": {
+          "model": "openai/gpt-4o-mini",
+          "result_file_sha256": "91d53a5c954c39169a8ec11ab10755f5b9006757a09663dcaaa7d687740a83b3",
+          "raw_response_sha256": "33c7b9fccf33dba630f591d2341ba1f063e5abe8107c299678b735a5a90f2bd5",
+          "request_contract_sha256": "5b8e4b0732e6cfea1ec11458e73f8c4cca560b46994a5c9f189707cc2d8dcfd4",
+          "parsed": {
+            "opening_id": "OP007",
+            "segment_on_visible_opening": "yes",
+            "visible_opening_endpoints": "yes",
+            "continuous_wall_across_segment": "no",
+            "door_leaf_or_swing_visible": "yes",
+            "glazed_interface_visible": "no",
+            "xy_gap_plausible": "yes",
+            "confidence": "high"
+          },
+          "cost_usd": 0.00688755,
+          "canonical_result": {
+            "schema": "fal-opening-xy-clean-review-v2",
+            "opening_id": "OP007",
+            "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+            "model": "openai/gpt-4o-mini",
+            "request_contract_sha256": "5b8e4b0732e6cfea1ec11458e73f8c4cca560b46994a5c9f189707cc2d8dcfd4",
+            "prompt_sha256": "b0ed8a8f23cc6bde4f1d4f1f017205503611d7f5c845e2076f152ba6c238fe84",
+            "system_sha256": "bba09658dcaf2454e82ccc7e4da97d2d351d0f659112e5abb6e7d54cdf49e8ce",
+            "evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+            "evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+            "image_bindings": [
+              {
+                "role": "locator",
+                "filename": "OP007-locator.png",
+                "bytes": 1621102,
+                "sha256": "65ca3d054e1ea348009adddc024614dda6b11b3d6125a48a75adac0b3a172d45"
+              },
+              {
+                "role": "raw_crop",
+                "filename": "OP007-raw-crop.png",
+                "bytes": 32665,
+                "sha256": "c6be613d107324422411b9b2f843e41e0ad4df9f1a2cdb4841432bc742050521"
+              }
+            ],
+            "local_segment_px": [
+              [
+                120.49994580152679,
+                120.99997256336565
+              ],
+              [
+                120.49994580152679,
+                225.00000849229173
+              ]
+            ],
+            "http_status": 200,
+            "parsed": {
+              "opening_id": "OP007",
+              "segment_on_visible_opening": "yes",
+              "visible_opening_endpoints": "yes",
+              "continuous_wall_across_segment": "no",
+              "door_leaf_or_swing_visible": "yes",
+              "glazed_interface_visible": "no",
+              "xy_gap_plausible": "yes",
+              "confidence": "high"
+            },
+            "validation_error": null,
+            "transport_error": null,
+            "usable_advisory": true,
+            "usage": {
+              "prompt_tokens": 45681,
+              "completion_tokens": 59,
+              "total_tokens": 45740,
+              "cost": 0.00688755,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0
+              }
+            },
+            "raw_response": {
+              "id": "gen-1788342540-3KhR70nDh8Tcw3Fi9TDY",
+              "object": "chat.completion",
+              "created": 1788342540,
+              "model": "openai/gpt-4o-mini",
+              "provider": "OpenAI",
+              "system_fingerprint": "fp_9b48c9e51a",
+              "service_tier": null,
+              "choices": [
+                {
+                  "index": 0,
+                  "logprobs": null,
+                  "finish_reason": "stop",
+                  "native_finish_reason": "stop",
+                  "message": {
+                    "role": "assistant",
+                    "content": "{\"opening_id\":\"OP007\",\"segment_on_visible_opening\":\"yes\",\"visible_opening_endpoints\":\"yes\",\"continuous_wall_across_segment\":\"no\",\"door_leaf_or_swing_visible\":\"yes\",\"glazed_interface_visible\":\"no\",\"xy_gap_plausible\":\"yes\",\"confidence\":\"high\"}",
+                    "refusal": null,
+                    "reasoning": null
+                  }
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 45681,
+                "completion_tokens": 59,
+                "total_tokens": 45740,
+                "cost": 0.00688755,
+                "prompt_tokens_details": {
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0
+                }
+              }
+            },
+            "raw_response_sha256": "33c7b9fccf33dba630f591d2341ba1f063e5abe8107c299678b735a5a90f2bd5",
+            "cut_confirmation": false,
+            "pair_confirmation": false,
+            "adjacency_confirmation": false,
+            "semantic_promotion": false,
+            "score_effect": "none",
+            "build_authorized": false
+          }
+        }
+      },
+      "core_consensus": {
+        "segment_on_visible_opening": true,
+        "continuous_wall_across_segment": true,
+        "xy_gap_plausible": true
+      },
+      "cue_disagreements": [],
+      "included_for_xy_experiment": true
+    },
+    {
+      "opening_id": "OP008",
+      "evidence_host_atom_id": "ATOM-WB018-01",
+      "attempts": {
+        "gemini": {
+          "model": "google/gemini-2.5-flash",
+          "result_file_sha256": "4f5d124d52a5e7747490aebda844ff3e39e9444e719abc016a798f160da2141d",
+          "raw_response_sha256": "95f9c0735af15e2df1828d7283e05bede8b9785342687b039b0387d3a72dc3bb",
+          "request_contract_sha256": "8155109752979ef91404808cc8f92747e230ab200a94f9d0caa8995067fb012e",
+          "parsed": {
+            "opening_id": "OP008",
+            "segment_on_visible_opening": "yes",
+            "visible_opening_endpoints": "yes",
+            "continuous_wall_across_segment": "no",
+            "door_leaf_or_swing_visible": "yes",
+            "glazed_interface_visible": "no",
+            "xy_gap_plausible": "yes",
+            "confidence": "high"
+          },
+          "cost_usd": 0.0004794,
+          "canonical_result": {
+            "schema": "fal-opening-xy-clean-review-v2",
+            "opening_id": "OP008",
+            "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+            "model": "google/gemini-2.5-flash",
+            "request_contract_sha256": "8155109752979ef91404808cc8f92747e230ab200a94f9d0caa8995067fb012e",
+            "prompt_sha256": "51eefb7faf2e00f01b44b927c35bdea5a1abbcd617a6195080a735f14622e61d",
+            "system_sha256": "bba09658dcaf2454e82ccc7e4da97d2d351d0f659112e5abb6e7d54cdf49e8ce",
+            "evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+            "evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+            "image_bindings": [
+              {
+                "role": "locator",
+                "filename": "OP008-locator.png",
+                "bytes": 1621194,
+                "sha256": "0b120fb5e14e58feca88dafed20939cc0aa9783463396045cee691ec1d6cbb1c"
+              },
+              {
+                "role": "raw_crop",
+                "filename": "OP008-raw-crop.png",
+                "bytes": 49957,
+                "sha256": "acfc3cfef1072a5de68e278bea5c620bc68f35f77fc53657f3b45599792fbba5"
+              }
+            ],
+            "local_segment_px": [
+              [
+                120.00006259541988,
+                120.00003854193892
+              ],
+              [
+                249.99997404580154,
+                120.00003854193892
+              ]
+            ],
+            "http_status": 200,
+            "parsed": {
+              "opening_id": "OP008",
+              "segment_on_visible_opening": "yes",
+              "visible_opening_endpoints": "yes",
+              "continuous_wall_across_segment": "no",
+              "door_leaf_or_swing_visible": "yes",
+              "glazed_interface_visible": "no",
+              "xy_gap_plausible": "yes",
+              "confidence": "high"
+            },
+            "validation_error": null,
+            "transport_error": null,
+            "usable_advisory": true,
+            "usage": {
+              "prompt_tokens": 723,
+              "completion_tokens": 105,
+              "total_tokens": 828,
+              "cost": 0.0004794,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0
+              }
+            },
+            "raw_response": {
+              "id": "gen-1788342383-87sDxQcTWdPqMDuQ5qgn",
+              "object": "chat.completion",
+              "created": 1788342383,
+              "model": "google/gemini-2.5-flash",
+              "provider": "Google",
+              "system_fingerprint": null,
+              "service_tier": "default",
+              "choices": [
+                {
+                  "index": 0,
+                  "logprobs": null,
+                  "finish_reason": "stop",
+                  "native_finish_reason": "STOP",
+                  "message": {
+                    "role": "assistant",
+                    "content": "{\n  \"opening_id\": \"OP008\",\n  \"segment_on_visible_opening\": \"yes\",\n  \"visible_opening_endpoints\": \"yes\",\n  \"continuous_wall_across_segment\": \"no\",\n  \"door_leaf_or_swing_visible\": \"yes\",\n  \"glazed_interface_visible\": \"no\",\n  \"xy_gap_plausible\": \"yes\",\n  \"confidence\": \"high\"\n}",
+                    "refusal": null,
+                    "reasoning": null
+                  }
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 723,
+                "completion_tokens": 105,
+                "total_tokens": 828,
+                "cost": 0.0004794,
+                "prompt_tokens_details": {
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0
+                }
+              }
+            },
+            "raw_response_sha256": "95f9c0735af15e2df1828d7283e05bede8b9785342687b039b0387d3a72dc3bb",
+            "cut_confirmation": false,
+            "pair_confirmation": false,
+            "adjacency_confirmation": false,
+            "semantic_promotion": false,
+            "score_effect": "none",
+            "build_authorized": false
+          }
+        },
+        "openai": {
+          "model": "openai/gpt-4o-mini",
+          "result_file_sha256": "f28486ec9f98560e1a7baae08d6f33e3c9d9e76b9178ff3c50491664e0731a72",
+          "raw_response_sha256": "799c1db825ddd8e73099dc745bc920f4ad6caeef5dbc25f57d114a5fa3519e4e",
+          "request_contract_sha256": "4a38408fc586ab58152a1694cf3b684804907934383ce5f5d70b3f2d9fac33ba",
+          "parsed": {
+            "opening_id": "OP008",
+            "segment_on_visible_opening": "yes",
+            "visible_opening_endpoints": "yes",
+            "continuous_wall_across_segment": "no",
+            "door_leaf_or_swing_visible": "yes",
+            "glazed_interface_visible": "no",
+            "xy_gap_plausible": "yes",
+            "confidence": "high"
+          },
+          "cost_usd": 0.00688755,
+          "canonical_result": {
+            "schema": "fal-opening-xy-clean-review-v2",
+            "opening_id": "OP008",
+            "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+            "model": "openai/gpt-4o-mini",
+            "request_contract_sha256": "4a38408fc586ab58152a1694cf3b684804907934383ce5f5d70b3f2d9fac33ba",
+            "prompt_sha256": "51eefb7faf2e00f01b44b927c35bdea5a1abbcd617a6195080a735f14622e61d",
+            "system_sha256": "bba09658dcaf2454e82ccc7e4da97d2d351d0f659112e5abb6e7d54cdf49e8ce",
+            "evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+            "evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+            "image_bindings": [
+              {
+                "role": "locator",
+                "filename": "OP008-locator.png",
+                "bytes": 1621194,
+                "sha256": "0b120fb5e14e58feca88dafed20939cc0aa9783463396045cee691ec1d6cbb1c"
+              },
+              {
+                "role": "raw_crop",
+                "filename": "OP008-raw-crop.png",
+                "bytes": 49957,
+                "sha256": "acfc3cfef1072a5de68e278bea5c620bc68f35f77fc53657f3b45599792fbba5"
+              }
+            ],
+            "local_segment_px": [
+              [
+                120.00006259541988,
+                120.00003854193892
+              ],
+              [
+                249.99997404580154,
+                120.00003854193892
+              ]
+            ],
+            "http_status": 200,
+            "parsed": {
+              "opening_id": "OP008",
+              "segment_on_visible_opening": "yes",
+              "visible_opening_endpoints": "yes",
+              "continuous_wall_across_segment": "no",
+              "door_leaf_or_swing_visible": "yes",
+              "glazed_interface_visible": "no",
+              "xy_gap_plausible": "yes",
+              "confidence": "high"
+            },
+            "validation_error": null,
+            "transport_error": null,
+            "usable_advisory": true,
+            "usage": {
+              "prompt_tokens": 45681,
+              "completion_tokens": 59,
+              "total_tokens": 45740,
+              "cost": 0.00688755,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0
+              }
+            },
+            "raw_response": {
+              "id": "gen-1788342651-yyUNmfCvcf5kWBwWizrq",
+              "object": "chat.completion",
+              "created": 1788342651,
+              "model": "openai/gpt-4o-mini",
+              "provider": "OpenAI",
+              "system_fingerprint": "fp_9b48c9e51a",
+              "service_tier": null,
+              "choices": [
+                {
+                  "index": 0,
+                  "logprobs": null,
+                  "finish_reason": "stop",
+                  "native_finish_reason": "stop",
+                  "message": {
+                    "role": "assistant",
+                    "content": "{\"opening_id\":\"OP008\",\"segment_on_visible_opening\":\"yes\",\"visible_opening_endpoints\":\"yes\",\"continuous_wall_across_segment\":\"no\",\"door_leaf_or_swing_visible\":\"yes\",\"glazed_interface_visible\":\"no\",\"xy_gap_plausible\":\"yes\",\"confidence\":\"high\"}",
+                    "refusal": null,
+                    "reasoning": null
+                  }
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 45681,
+                "completion_tokens": 59,
+                "total_tokens": 45740,
+                "cost": 0.00688755,
+                "prompt_tokens_details": {
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0
+                }
+              }
+            },
+            "raw_response_sha256": "799c1db825ddd8e73099dc745bc920f4ad6caeef5dbc25f57d114a5fa3519e4e",
+            "cut_confirmation": false,
+            "pair_confirmation": false,
+            "adjacency_confirmation": false,
+            "semantic_promotion": false,
+            "score_effect": "none",
+            "build_authorized": false
+          }
+        }
+      },
+      "core_consensus": {
+        "segment_on_visible_opening": true,
+        "continuous_wall_across_segment": true,
+        "xy_gap_plausible": true
+      },
+      "cue_disagreements": [],
+      "included_for_xy_experiment": true
+    },
+    {
+      "opening_id": "OP009",
+      "evidence_host_atom_id": "ATOM-WB005-01",
+      "attempts": {
+        "gemini": {
+          "model": "google/gemini-2.5-flash",
+          "result_file_sha256": "d532369bb6aa216db3b3eb577d6058cbb5f65b492f2134fa3b6d97dfcfee9ab4",
+          "raw_response_sha256": "16394899ab974cb4b1445466ee9d40c365e3a9115576b57a3f933d609d0a4fa6",
+          "request_contract_sha256": "d6d25844c27e7d998603090bf9a1dbaf0a58a2398853bd2974c5a6f6d4f29140",
+          "parsed": {
+            "opening_id": "OP009",
+            "segment_on_visible_opening": "yes",
+            "visible_opening_endpoints": "yes",
+            "continuous_wall_across_segment": "no",
+            "door_leaf_or_swing_visible": "yes",
+            "glazed_interface_visible": "no",
+            "xy_gap_plausible": "yes",
+            "confidence": "high"
+          },
+          "cost_usd": 0.0004791,
+          "canonical_result": {
+            "schema": "fal-opening-xy-clean-review-v2",
+            "opening_id": "OP009",
+            "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+            "model": "google/gemini-2.5-flash",
+            "request_contract_sha256": "d6d25844c27e7d998603090bf9a1dbaf0a58a2398853bd2974c5a6f6d4f29140",
+            "prompt_sha256": "8002e4b31710bd25e96ac3962e8aa90fcd0aaed9d8650fa11630b6b615156e16",
+            "system_sha256": "bba09658dcaf2454e82ccc7e4da97d2d351d0f659112e5abb6e7d54cdf49e8ce",
+            "evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+            "evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+            "image_bindings": [
+              {
+                "role": "locator",
+                "filename": "OP009-locator.png",
+                "bytes": 1620220,
+                "sha256": "6fbce58d32aaaaad277b6e5f31a93bfec30b8a62742e5e3d6a8a99b1a666c1af"
+              },
+              {
+                "role": "raw_crop",
+                "filename": "OP009-raw-crop.png",
+                "bytes": 68345,
+                "sha256": "2b42b05feb3c56fb43df185d7069f4dd6397eda8332eb3ca7ca50842c108bfa5"
+              }
+            ],
+            "local_segment_px": [
+              [
+                120.99999694656492,
+                120.99995753854182
+              ],
+              [
+                322.0000534351145,
+                120.99995753854182
+              ]
+            ],
+            "http_status": 200,
+            "parsed": {
+              "opening_id": "OP009",
+              "segment_on_visible_opening": "yes",
+              "visible_opening_endpoints": "yes",
+              "continuous_wall_across_segment": "no",
+              "door_leaf_or_swing_visible": "yes",
+              "glazed_interface_visible": "no",
+              "xy_gap_plausible": "yes",
+              "confidence": "high"
+            },
+            "validation_error": null,
+            "transport_error": null,
+            "usable_advisory": true,
+            "usage": {
+              "prompt_tokens": 722,
+              "completion_tokens": 105,
+              "total_tokens": 827,
+              "cost": 0.0004791,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0
+              }
+            },
+            "raw_response": {
+              "id": "gen-1788342386-xOFT7oOHUxbB2savSvd9",
+              "object": "chat.completion",
+              "created": 1788342386,
+              "model": "google/gemini-2.5-flash",
+              "provider": "Google",
+              "system_fingerprint": null,
+              "service_tier": "default",
+              "choices": [
+                {
+                  "index": 0,
+                  "logprobs": null,
+                  "finish_reason": "stop",
+                  "native_finish_reason": "STOP",
+                  "message": {
+                    "role": "assistant",
+                    "content": "{\n  \"opening_id\": \"OP009\",\n  \"segment_on_visible_opening\": \"yes\",\n  \"visible_opening_endpoints\": \"yes\",\n  \"continuous_wall_across_segment\": \"no\",\n  \"door_leaf_or_swing_visible\": \"yes\",\n  \"glazed_interface_visible\": \"no\",\n  \"xy_gap_plausible\": \"yes\",\n  \"confidence\": \"high\"\n}",
+                    "refusal": null,
+                    "reasoning": null
+                  }
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 722,
+                "completion_tokens": 105,
+                "total_tokens": 827,
+                "cost": 0.0004791,
+                "prompt_tokens_details": {
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0
+                }
+              }
+            },
+            "raw_response_sha256": "16394899ab974cb4b1445466ee9d40c365e3a9115576b57a3f933d609d0a4fa6",
+            "cut_confirmation": false,
+            "pair_confirmation": false,
+            "adjacency_confirmation": false,
+            "semantic_promotion": false,
+            "score_effect": "none",
+            "build_authorized": false
+          }
+        },
+        "openai": {
+          "model": "openai/gpt-4o-mini",
+          "result_file_sha256": "720783be585c3a74784e7ec374da82af28922a77ca0500c952febfbc0534d817",
+          "raw_response_sha256": "478d84fcb0239615872e6f48556c2c2daf304c1992c5bef62033570d4645e241",
+          "request_contract_sha256": "ac6a4cdfd17c7ee9f7e3bcea25173c57be1473051d73d37f9d5a731684f9c43c",
+          "parsed": {
+            "opening_id": "OP009",
+            "segment_on_visible_opening": "yes",
+            "visible_opening_endpoints": "yes",
+            "continuous_wall_across_segment": "no",
+            "door_leaf_or_swing_visible": "no",
+            "glazed_interface_visible": "yes",
+            "xy_gap_plausible": "yes",
+            "confidence": "high"
+          },
+          "cost_usd": 0.00688755,
+          "canonical_result": {
+            "schema": "fal-opening-xy-clean-review-v2",
+            "opening_id": "OP009",
+            "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+            "model": "openai/gpt-4o-mini",
+            "request_contract_sha256": "ac6a4cdfd17c7ee9f7e3bcea25173c57be1473051d73d37f9d5a731684f9c43c",
+            "prompt_sha256": "8002e4b31710bd25e96ac3962e8aa90fcd0aaed9d8650fa11630b6b615156e16",
+            "system_sha256": "bba09658dcaf2454e82ccc7e4da97d2d351d0f659112e5abb6e7d54cdf49e8ce",
+            "evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+            "evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+            "image_bindings": [
+              {
+                "role": "locator",
+                "filename": "OP009-locator.png",
+                "bytes": 1620220,
+                "sha256": "6fbce58d32aaaaad277b6e5f31a93bfec30b8a62742e5e3d6a8a99b1a666c1af"
+              },
+              {
+                "role": "raw_crop",
+                "filename": "OP009-raw-crop.png",
+                "bytes": 68345,
+                "sha256": "2b42b05feb3c56fb43df185d7069f4dd6397eda8332eb3ca7ca50842c108bfa5"
+              }
+            ],
+            "local_segment_px": [
+              [
+                120.99999694656492,
+                120.99995753854182
+              ],
+              [
+                322.0000534351145,
+                120.99995753854182
+              ]
+            ],
+            "http_status": 200,
+            "parsed": {
+              "opening_id": "OP009",
+              "segment_on_visible_opening": "yes",
+              "visible_opening_endpoints": "yes",
+              "continuous_wall_across_segment": "no",
+              "door_leaf_or_swing_visible": "no",
+              "glazed_interface_visible": "yes",
+              "xy_gap_plausible": "yes",
+              "confidence": "high"
+            },
+            "validation_error": null,
+            "transport_error": null,
+            "usable_advisory": true,
+            "usage": {
+              "prompt_tokens": 45681,
+              "completion_tokens": 59,
+              "total_tokens": 45740,
+              "cost": 0.00688755,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0
+              }
+            },
+            "raw_response": {
+              "id": "gen-1788342652-Syw3GoQNcq77XpuyoQkM",
+              "object": "chat.completion",
+              "created": 1788342652,
+              "model": "openai/gpt-4o-mini",
+              "provider": "OpenAI",
+              "system_fingerprint": "fp_9b48c9e51a",
+              "service_tier": null,
+              "choices": [
+                {
+                  "index": 0,
+                  "logprobs": null,
+                  "finish_reason": "stop",
+                  "native_finish_reason": "stop",
+                  "message": {
+                    "role": "assistant",
+                    "content": "{\"opening_id\":\"OP009\",\"segment_on_visible_opening\":\"yes\",\"visible_opening_endpoints\":\"yes\",\"continuous_wall_across_segment\":\"no\",\"door_leaf_or_swing_visible\":\"no\",\"glazed_interface_visible\":\"yes\",\"xy_gap_plausible\":\"yes\",\"confidence\":\"high\"}",
+                    "refusal": null,
+                    "reasoning": null
+                  }
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 45681,
+                "completion_tokens": 59,
+                "total_tokens": 45740,
+                "cost": 0.00688755,
+                "prompt_tokens_details": {
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0
+                }
+              }
+            },
+            "raw_response_sha256": "478d84fcb0239615872e6f48556c2c2daf304c1992c5bef62033570d4645e241",
+            "cut_confirmation": false,
+            "pair_confirmation": false,
+            "adjacency_confirmation": false,
+            "semantic_promotion": false,
+            "score_effect": "none",
+            "build_authorized": false
+          }
+        }
+      },
+      "core_consensus": {
+        "segment_on_visible_opening": true,
+        "continuous_wall_across_segment": true,
+        "xy_gap_plausible": true
+      },
+      "cue_disagreements": [
+        "door_leaf_or_swing_visible",
+        "glazed_interface_visible"
+      ],
+      "included_for_xy_experiment": true
+    },
+    {
+      "opening_id": "OP010",
+      "evidence_host_atom_id": "ATOM-WB003-03",
+      "attempts": {
+        "gemini": {
+          "model": "google/gemini-2.5-flash",
+          "result_file_sha256": "89a4b647ecfbdc9d792c41550366629085f6452f9d2ad3514394587dba64ab46",
+          "raw_response_sha256": "95e4860f71f4f99b6c13164329a5366e669ee033e1ee21df45c36475c7a0f894",
+          "request_contract_sha256": "6dc0b86e44895b90c4084673e64a8c6955214bb6bed827b4aa107b2f035d2450",
+          "parsed": {
+            "opening_id": "OP010",
+            "segment_on_visible_opening": "yes",
+            "visible_opening_endpoints": "yes",
+            "continuous_wall_across_segment": "no",
+            "door_leaf_or_swing_visible": "no",
+            "glazed_interface_visible": "no",
+            "xy_gap_plausible": "yes",
+            "confidence": "high"
+          },
+          "cost_usd": 0.0004794,
+          "canonical_result": {
+            "schema": "fal-opening-xy-clean-review-v2",
+            "opening_id": "OP010",
+            "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+            "model": "google/gemini-2.5-flash",
+            "request_contract_sha256": "6dc0b86e44895b90c4084673e64a8c6955214bb6bed827b4aa107b2f035d2450",
+            "prompt_sha256": "f91361b16f4d86e25a9bceca8f89c32b067ad6a7809006079c5bdedb79a0c01d",
+            "system_sha256": "bba09658dcaf2454e82ccc7e4da97d2d351d0f659112e5abb6e7d54cdf49e8ce",
+            "evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+            "evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+            "image_bindings": [
+              {
+                "role": "locator",
+                "filename": "OP010-locator.png",
+                "bytes": 1620613,
+                "sha256": "efb668761e8a3ba7b659a5f2f83f145ae24403180d065c542c4cc9d262e6f508"
+              },
+              {
+                "role": "raw_crop",
+                "filename": "OP010-raw-crop.png",
+                "bytes": 55749,
+                "sha256": "f4298efe7daf6396f45fd3c8ed5993d21ecfb17d8e78bb8b4d810e78fbc44ccc"
+              }
+            ],
+            "local_segment_px": [
+              [
+                120.00004961832065,
+                120.50001437157061
+              ],
+              [
+                322.99998702290077,
+                120.50001437157061
+              ]
+            ],
+            "http_status": 200,
+            "parsed": {
+              "opening_id": "OP010",
+              "segment_on_visible_opening": "yes",
+              "visible_opening_endpoints": "yes",
+              "continuous_wall_across_segment": "no",
+              "door_leaf_or_swing_visible": "no",
+              "glazed_interface_visible": "no",
+              "xy_gap_plausible": "yes",
+              "confidence": "high"
+            },
+            "validation_error": null,
+            "transport_error": null,
+            "usable_advisory": true,
+            "usage": {
+              "prompt_tokens": 723,
+              "completion_tokens": 105,
+              "total_tokens": 828,
+              "cost": 0.0004794,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0
+              }
+            },
+            "raw_response": {
+              "id": "gen-1788342386-VBkdKr3zUGtSHwMkPf1e",
+              "object": "chat.completion",
+              "created": 1788342386,
+              "model": "google/gemini-2.5-flash",
+              "provider": "Google",
+              "system_fingerprint": null,
+              "service_tier": "default",
+              "choices": [
+                {
+                  "index": 0,
+                  "logprobs": null,
+                  "finish_reason": "stop",
+                  "native_finish_reason": "STOP",
+                  "message": {
+                    "role": "assistant",
+                    "content": "{\n  \"opening_id\": \"OP010\",\n  \"segment_on_visible_opening\": \"yes\",\n  \"visible_opening_endpoints\": \"yes\",\n  \"continuous_wall_across_segment\": \"no\",\n  \"door_leaf_or_swing_visible\": \"no\",\n  \"glazed_interface_visible\": \"no\",\n  \"xy_gap_plausible\": \"yes\",\n  \"confidence\": \"high\"\n}",
+                    "refusal": null,
+                    "reasoning": null
+                  }
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 723,
+                "completion_tokens": 105,
+                "total_tokens": 828,
+                "cost": 0.0004794,
+                "prompt_tokens_details": {
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0
+                }
+              }
+            },
+            "raw_response_sha256": "95e4860f71f4f99b6c13164329a5366e669ee033e1ee21df45c36475c7a0f894",
+            "cut_confirmation": false,
+            "pair_confirmation": false,
+            "adjacency_confirmation": false,
+            "semantic_promotion": false,
+            "score_effect": "none",
+            "build_authorized": false
+          }
+        },
+        "openai": {
+          "model": "openai/gpt-4o-mini",
+          "result_file_sha256": "8d9c82d73b0911d0dad26e93540cb6ad61c4dd3a0442f51008ae3db06e91e73c",
+          "raw_response_sha256": "81d0429c5948a97ee0f751333974f13bdacc71fc01650a0ff7db4f9cde2d2cf5",
+          "request_contract_sha256": "f83378e8bf3f9759c5db76991aa12c8d792052ca7b9e51a7b595bc2c2033f5f4",
+          "parsed": {
+            "opening_id": "OP010",
+            "segment_on_visible_opening": "yes",
+            "visible_opening_endpoints": "yes",
+            "continuous_wall_across_segment": "no",
+            "door_leaf_or_swing_visible": "yes",
+            "glazed_interface_visible": "no",
+            "xy_gap_plausible": "yes",
+            "confidence": "high"
+          },
+          "cost_usd": 0.00688755,
+          "canonical_result": {
+            "schema": "fal-opening-xy-clean-review-v2",
+            "opening_id": "OP010",
+            "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+            "model": "openai/gpt-4o-mini",
+            "request_contract_sha256": "f83378e8bf3f9759c5db76991aa12c8d792052ca7b9e51a7b595bc2c2033f5f4",
+            "prompt_sha256": "f91361b16f4d86e25a9bceca8f89c32b067ad6a7809006079c5bdedb79a0c01d",
+            "system_sha256": "bba09658dcaf2454e82ccc7e4da97d2d351d0f659112e5abb6e7d54cdf49e8ce",
+            "evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+            "evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+            "image_bindings": [
+              {
+                "role": "locator",
+                "filename": "OP010-locator.png",
+                "bytes": 1620613,
+                "sha256": "efb668761e8a3ba7b659a5f2f83f145ae24403180d065c542c4cc9d262e6f508"
+              },
+              {
+                "role": "raw_crop",
+                "filename": "OP010-raw-crop.png",
+                "bytes": 55749,
+                "sha256": "f4298efe7daf6396f45fd3c8ed5993d21ecfb17d8e78bb8b4d810e78fbc44ccc"
+              }
+            ],
+            "local_segment_px": [
+              [
+                120.00004961832065,
+                120.50001437157061
+              ],
+              [
+                322.99998702290077,
+                120.50001437157061
+              ]
+            ],
+            "http_status": 200,
+            "parsed": {
+              "opening_id": "OP010",
+              "segment_on_visible_opening": "yes",
+              "visible_opening_endpoints": "yes",
+              "continuous_wall_across_segment": "no",
+              "door_leaf_or_swing_visible": "yes",
+              "glazed_interface_visible": "no",
+              "xy_gap_plausible": "yes",
+              "confidence": "high"
+            },
+            "validation_error": null,
+            "transport_error": null,
+            "usable_advisory": true,
+            "usage": {
+              "prompt_tokens": 45681,
+              "completion_tokens": 59,
+              "total_tokens": 45740,
+              "cost": 0.00688755,
+              "prompt_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0
+              }
+            },
+            "raw_response": {
+              "id": "gen-1788342652-oNVLzREDK5pG6HKixZSg",
+              "object": "chat.completion",
+              "created": 1788342652,
+              "model": "openai/gpt-4o-mini",
+              "provider": "OpenAI",
+              "system_fingerprint": "fp_9b48c9e51a",
+              "service_tier": null,
+              "choices": [
+                {
+                  "index": 0,
+                  "logprobs": null,
+                  "finish_reason": "stop",
+                  "native_finish_reason": "stop",
+                  "message": {
+                    "role": "assistant",
+                    "content": "{\"opening_id\":\"OP010\",\"segment_on_visible_opening\":\"yes\",\"visible_opening_endpoints\":\"yes\",\"continuous_wall_across_segment\":\"no\",\"door_leaf_or_swing_visible\":\"yes\",\"glazed_interface_visible\":\"no\",\"xy_gap_plausible\":\"yes\",\"confidence\":\"high\"}",
+                    "refusal": null,
+                    "reasoning": null
+                  }
+                }
+              ],
+              "usage": {
+                "prompt_tokens": 45681,
+                "completion_tokens": 59,
+                "total_tokens": 45740,
+                "cost": 0.00688755,
+                "prompt_tokens_details": {
+                  "cached_tokens": 0,
+                  "cache_write_tokens": 0
+                }
+              }
+            },
+            "raw_response_sha256": "81d0429c5948a97ee0f751333974f13bdacc71fc01650a0ff7db4f9cde2d2cf5",
+            "cut_confirmation": false,
+            "pair_confirmation": false,
+            "adjacency_confirmation": false,
+            "semantic_promotion": false,
+            "score_effect": "none",
+            "build_authorized": false
+          }
+        }
+      },
+      "core_consensus": {
+        "segment_on_visible_opening": true,
+        "continuous_wall_across_segment": true,
+        "xy_gap_plausible": true
+      },
+      "cue_disagreements": [
+        "door_leaf_or_swing_visible"
+      ],
+      "included_for_xy_experiment": true
+    }
+  ],
+  "included_for_xy_experiment": [
+    "OP001",
+    "OP002",
+    "OP003",
+    "OP004",
+    "OP006",
+    "OP007",
+    "OP008",
+    "OP009",
+    "OP010"
+  ],
+  "cue_disagreements_by_opening": {
+    "OP004": [
+      "visible_opening_endpoints"
+    ],
+    "OP009": [
+      "door_leaf_or_swing_visible",
+      "glazed_interface_visible"
+    ],
+    "OP010": [
+      "door_leaf_or_swing_visible"
+    ]
+  },
+  "failed_attempts": [
+    {
+      "opening_id": "OP004",
+      "attempt_kind": "transport_failure_preserved",
+      "result_file_sha256": "cb883a7484137f60abf629b729c748f6c141649ba43854c829a7e567de272846",
+      "canonical_result": {
+        "schema": "fal-opening-xy-clean-review-v2",
+        "opening_id": "OP004",
+        "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+        "model": "openai/gpt-4o-mini",
+        "request_contract_sha256": "c6a42c7cca5c6a27aa435acd35380b85ff1875eaeeb2f87638c73638378a8253",
+        "prompt_sha256": "2c61f94049895ed7e4edcc925c7daf1ad4262948393dc953da8bc9a687e3d827",
+        "system_sha256": "bba09658dcaf2454e82ccc7e4da97d2d351d0f659112e5abb6e7d54cdf49e8ce",
+        "evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+        "evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+        "image_bindings": [
+          {
+            "role": "locator",
+            "filename": "OP004-locator.png",
+            "bytes": 1620823,
+            "sha256": "ee37cefe1fb552ca12a291b38dd02e4556b26afaaa661eb9159db573154723cc"
+          },
+          {
+            "role": "raw_crop",
+            "filename": "OP004-raw-crop.png",
+            "bytes": 36462,
+            "sha256": "b0749036a8f96b4cd3da0115b68152086e9657f740ffda55f2179c07579befd8"
+          }
+        ],
+        "local_segment_px": [
+          [
+            120.50001374045814,
+            120.00002743663435
+          ],
+          [
+            120.50001374045814,
+            245.00000979879792
+          ]
+        ],
+        "http_status": null,
+        "parsed": null,
+        "validation_error": "SSLError: HTTPSConnectionPool(host='fal.run', port=443): Max retries exceeded with url: /openrouter/router/openai/v1/chat/completions (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1081)')))",
+        "transport_error": "SSLError: HTTPSConnectionPool(host='fal.run', port=443): Max retries exceeded with url: /openrouter/router/openai/v1/chat/completions (Caused by SSLError(SSLEOFError(8, '[SSL: UNEXPECTED_EOF_WHILE_READING] EOF occurred in violation of protocol (_ssl.c:1081)')))",
+        "usable_advisory": false,
+        "usage": null,
+        "raw_response": null,
+        "raw_response_sha256": null,
+        "cut_confirmation": false,
+        "pair_confirmation": false,
+        "adjacency_confirmation": false,
+        "semantic_promotion": false,
+        "score_effect": "none",
+        "build_authorized": false
+      }
+    }
+  ],
+  "selected_review_cost_usd": 0.06630165,
+  "xy_experiment_confirmation": false,
+  "subtype_confirmation": false,
+  "traversability_confirmation": false,
+  "pair_confirmation": false,
+  "adjacency_confirmation": false,
+  "semantic_promotion": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "ready": false,
+  "candidate_hash": "94f186253bd854b6764e8178ff2672c13cc7b5dea918e209da58b8f7595b8dbe"
+}

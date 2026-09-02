@@ -1,0 +1,71 @@
+{
+  "schema": "blender-opening-gap-variant-validation-v2",
+  "branch_id": "1308-gap-OP002-v001",
+  "opening_id": "OP002",
+  "variant_hash": "ca443c90b54554b3ac9acdfb24d886f222abf2bebe43cfa1b81db98466bbd0ef",
+  "plan_bundle_candidate_hash": "755f64ae2639ad143ee7dd8aa4853a422dab75770825eab00e7727ac3066e4e0",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+  "plans_file_sha256": "b100954c99f8d0e9e2b3729e491b383f0d113cd39390a8d3fd6ba733a1bf3e54",
+  "expected_wall_piece_count": 36,
+  "actual_wall_piece_count": 36,
+  "expected_host_piece_count": 2,
+  "actual_host_piece_count": 2,
+  "non_host_atom_count_errors": [],
+  "topology_errors": [],
+  "gap_overlap_errors": [],
+  "gap_host_parameter_interval": [
+    0.28564029338460395,
+    0.41236069864622016
+  ],
+  "source_gap_segment_m": [
+    [
+      4.423994413407822,
+      10.690147268408552
+    ],
+    [
+      4.423994413407822,
+      9.802937767220904
+    ]
+  ],
+  "projected_gap_segment_m": [
+    [
+      4.423994118085932,
+      10.690147268408534
+    ],
+    [
+      4.423994170473138,
+      9.80293776722089
+    ]
+  ],
+  "gap_width_m": 0.8872095011876462,
+  "gap_center_m": [
+    4.423994064331055,
+    10.246542930603027
+  ],
+  "closeup_camera_ortho_scale_m": 2.4,
+  "closeup_render_resolution_px": [
+    1200,
+    1200
+  ],
+  "projection_mode": "centerline_collinear",
+  "wall_height_m": 2.8,
+  "hidden_startup_objects": [
+    "Cube",
+    "Light",
+    "Camera"
+  ],
+  "opening_elements": 0,
+  "one_opening_only": true,
+  "gap_z_policy": "full_height_visualization_only",
+  "xy_experiment_confirmation": false,
+  "cut_confirmation": false,
+  "pair_confirmation": false,
+  "adjacency_confirmation": false,
+  "semantic_promotion": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "research_only": true,
+  "not_for_construction": true,
+  "pass": true
+}

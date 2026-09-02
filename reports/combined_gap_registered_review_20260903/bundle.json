@@ -1,0 +1,263 @@
+{
+  "schema": "combined-gap-registered-review-bundle-v1",
+  "evidence_file_sha256": "1e5e23f2db05f5cda8a733bd295ce3738597c007de796b04e3610a5c767fcbfa",
+  "evidence_candidate_hash": "5b03f7aca9a669291a00829c4029dc16744d7da4ca485d4276cef7af3b59a039",
+  "plan_candidate_hash": "2020c5470db70792d4ebd5028bf283f650f17e24898c6dc24149989ca4bfc528",
+  "combined_manifest_file_sha256": "605c111f23634965fd91740294812977eeaece77bb9f47b7b442f39b124b0e33",
+  "combined_validation_file_sha256": "dd08c2e1c5a28934af70405144903825228ce26ffb4e7a8a139141a66007e424",
+  "opening_ids": [
+    "OP001",
+    "OP002",
+    "OP003",
+    "OP004",
+    "OP006",
+    "OP007",
+    "OP008",
+    "OP009",
+    "OP010"
+  ],
+  "selected_result": {
+    "result_file_sha256": "98d2c6597209e970a013afa00384b1fa263d8d77da3c64187af3e9ab5fb355cf",
+    "raw_response_sha256": "364dad3ba3b1d9a6803bad1446b4d6cf392469805be6efb1dbf6f62cb5ebb4e6",
+    "parsed": {
+      "full_plan_registration_readable": "yes",
+      "global_wall_alignment_plausible": "yes",
+      "all_nine_candidate_ids_locatable": "yes",
+      "unexpected_extra_full_height_gap_visible": "no",
+      "combined_xy_visual_result_valid": "yes",
+      "recommendation": "accept_combined_xy_research",
+      "confidence": "high",
+      "per_opening": [
+        {
+          "opening_id": "OP001",
+          "model_gap_centered_on_visible_source_opening": "yes",
+          "model_gap_width_matches_source_xy": "yes",
+          "neighboring_wall_or_junction_obstruction": "no"
+        },
+        {
+          "opening_id": "OP002",
+          "model_gap_centered_on_visible_source_opening": "yes",
+          "model_gap_width_matches_source_xy": "yes",
+          "neighboring_wall_or_junction_obstruction": "no"
+        },
+        {
+          "opening_id": "OP003",
+          "model_gap_centered_on_visible_source_opening": "yes",
+          "model_gap_width_matches_source_xy": "yes",
+          "neighboring_wall_or_junction_obstruction": "no"
+        },
+        {
+          "opening_id": "OP004",
+          "model_gap_centered_on_visible_source_opening": "yes",
+          "model_gap_width_matches_source_xy": "yes",
+          "neighboring_wall_or_junction_obstruction": "no"
+        },
+        {
+          "opening_id": "OP006",
+          "model_gap_centered_on_visible_source_opening": "yes",
+          "model_gap_width_matches_source_xy": "yes",
+          "neighboring_wall_or_junction_obstruction": "no"
+        },
+        {
+          "opening_id": "OP007",
+          "model_gap_centered_on_visible_source_opening": "yes",
+          "model_gap_width_matches_source_xy": "yes",
+          "neighboring_wall_or_junction_obstruction": "no"
+        },
+        {
+          "opening_id": "OP008",
+          "model_gap_centered_on_visible_source_opening": "yes",
+          "model_gap_width_matches_source_xy": "yes",
+          "neighboring_wall_or_junction_obstruction": "no"
+        },
+        {
+          "opening_id": "OP009",
+          "model_gap_centered_on_visible_source_opening": "yes",
+          "model_gap_width_matches_source_xy": "yes",
+          "neighboring_wall_or_junction_obstruction": "no"
+        },
+        {
+          "opening_id": "OP010",
+          "model_gap_centered_on_visible_source_opening": "yes",
+          "model_gap_width_matches_source_xy": "yes",
+          "neighboring_wall_or_junction_obstruction": "no"
+        }
+      ]
+    },
+    "accepted_for_combined_xy_research": true,
+    "cost_usd": 0.0023769,
+    "canonical_result": {
+      "schema": "fal-combined-gap-registered-review-v1",
+      "endpoint": "https://fal.run/openrouter/router/openai/v1/chat/completions",
+      "model": "google/gemini-2.5-flash",
+      "request_contract_sha256": "214031e3e90697c2f3b26c6681b027a0a48b60d455e2c9ee88776f93c6897c73",
+      "prompt_sha256": "1fe6b1ec956127af590d9cdce5653c9cb0f05c4a661abdb519e4873c764cbb30",
+      "system_sha256": "dd48f81cbbd650be70b54db2b9bdda7a54f40886f926a7743bcdd189580fe6be",
+      "evidence_file_sha256": "1e5e23f2db05f5cda8a733bd295ce3738597c007de796b04e3610a5c767fcbfa",
+      "evidence_candidate_hash": "5b03f7aca9a669291a00829c4029dc16744d7da4ca485d4276cef7af3b59a039",
+      "combined_plan_candidate_hash": "2020c5470db70792d4ebd5028bf283f650f17e24898c6dc24149989ca4bfc528",
+      "combined_manifest_file_sha256": "605c111f23634965fd91740294812977eeaece77bb9f47b7b442f39b124b0e33",
+      "image_bindings": [
+        {
+          "role": "full_registered_composite",
+          "filename": "full-registered-composite.png",
+          "bytes": 1181017,
+          "sha256": "2652ca15e6487aa1b7157d3755d1db42103cc28b13517deb8eca111a03bb8ba5"
+        },
+        {
+          "role": "nine_gap_contact_sheet",
+          "filename": "combined-nine-gap-contact-sheet.png",
+          "bytes": 1267194,
+          "sha256": "0fcbe0a0e89145b229bec83817b0ad03135524ec215dc6eb561b0c72f246f238"
+        },
+        {
+          "role": "full_registered_source_clean",
+          "filename": "full-registered-source-clean.png",
+          "bytes": 483777,
+          "sha256": "5753a8e93431ed70be566462d0f4fc6e41124d6539ce356e052c2794de6c9abb"
+        },
+        {
+          "role": "combined_model_top_clean",
+          "filename": "1308_combined_xy_gap_top.png",
+          "bytes": 746504,
+          "sha256": "2ca9b39ebdfd1386e0058319ea75a02de9130b127430e748ca7a39cea34a26bb"
+        }
+      ],
+      "http_status": 200,
+      "parsed": {
+        "full_plan_registration_readable": "yes",
+        "global_wall_alignment_plausible": "yes",
+        "all_nine_candidate_ids_locatable": "yes",
+        "unexpected_extra_full_height_gap_visible": "no",
+        "combined_xy_visual_result_valid": "yes",
+        "recommendation": "accept_combined_xy_research",
+        "confidence": "high",
+        "per_opening": [
+          {
+            "opening_id": "OP001",
+            "model_gap_centered_on_visible_source_opening": "yes",
+            "model_gap_width_matches_source_xy": "yes",
+            "neighboring_wall_or_junction_obstruction": "no"
+          },
+          {
+            "opening_id": "OP002",
+            "model_gap_centered_on_visible_source_opening": "yes",
+            "model_gap_width_matches_source_xy": "yes",
+            "neighboring_wall_or_junction_obstruction": "no"
+          },
+          {
+            "opening_id": "OP003",
+            "model_gap_centered_on_visible_source_opening": "yes",
+            "model_gap_width_matches_source_xy": "yes",
+            "neighboring_wall_or_junction_obstruction": "no"
+          },
+          {
+            "opening_id": "OP004",
+            "model_gap_centered_on_visible_source_opening": "yes",
+            "model_gap_width_matches_source_xy": "yes",
+            "neighboring_wall_or_junction_obstruction": "no"
+          },
+          {
+            "opening_id": "OP006",
+            "model_gap_centered_on_visible_source_opening": "yes",
+            "model_gap_width_matches_source_xy": "yes",
+            "neighboring_wall_or_junction_obstruction": "no"
+          },
+          {
+            "opening_id": "OP007",
+            "model_gap_centered_on_visible_source_opening": "yes",
+            "model_gap_width_matches_source_xy": "yes",
+            "neighboring_wall_or_junction_obstruction": "no"
+          },
+          {
+            "opening_id": "OP008",
+            "model_gap_centered_on_visible_source_opening": "yes",
+            "model_gap_width_matches_source_xy": "yes",
+            "neighboring_wall_or_junction_obstruction": "no"
+          },
+          {
+            "opening_id": "OP009",
+            "model_gap_centered_on_visible_source_opening": "yes",
+            "model_gap_width_matches_source_xy": "yes",
+            "neighboring_wall_or_junction_obstruction": "no"
+          },
+          {
+            "opening_id": "OP010",
+            "model_gap_centered_on_visible_source_opening": "yes",
+            "model_gap_width_matches_source_xy": "yes",
+            "neighboring_wall_or_junction_obstruction": "no"
+          }
+        ]
+      },
+      "validation_error": null,
+      "transport_error": null,
+      "usable_advisory": true,
+      "usage": {
+        "prompt_tokens": 1323,
+        "completion_tokens": 792,
+        "total_tokens": 2115,
+        "cost": 0.0023769,
+        "prompt_tokens_details": {
+          "cached_tokens": 0,
+          "cache_write_tokens": 0
+        }
+      },
+      "raw_response": {
+        "id": "gen-1788370249-IWlGlTdG4v9I2HAY0Kfn",
+        "object": "chat.completion",
+        "created": 1788370249,
+        "model": "google/gemini-2.5-flash",
+        "provider": "Google",
+        "system_fingerprint": null,
+        "service_tier": "default",
+        "choices": [
+          {
+            "index": 0,
+            "logprobs": null,
+            "finish_reason": "stop",
+            "native_finish_reason": "STOP",
+            "message": {
+              "role": "assistant",
+              "content": "{\n  \"full_plan_registration_readable\": \"yes\",\n  \"global_wall_alignment_plausible\": \"yes\",\n  \"all_nine_candidate_ids_locatable\": \"yes\",\n  \"unexpected_extra_full_height_gap_visible\": \"no\",\n  \"combined_xy_visual_result_valid\": \"yes\",\n  \"recommendation\": \"accept_combined_xy_research\",\n  \"confidence\": \"high\",\n  \"per_opening\": [\n    {\n      \"opening_id\": \"OP001\",\n      \"model_gap_centered_on_visible_source_opening\": \"yes\",\n      \"model_gap_width_matches_source_xy\": \"yes\",\n      \"neighboring_wall_or_junction_obstruction\": \"no\"\n    },\n    {\n      \"opening_id\": \"OP002\",\n      \"model_gap_centered_on_visible_source_opening\": \"yes\",\n      \"model_gap_width_matches_source_xy\": \"yes\",\n      \"neighboring_wall_or_junction_obstruction\": \"no\"\n    },\n    {\n      \"opening_id\": \"OP003\",\n      \"model_gap_centered_on_visible_source_opening\": \"yes\",\n      \"model_gap_width_matches_source_xy\": \"yes\",\n      \"neighboring_wall_or_junction_obstruction\": \"no\"\n    },\n    {\n      \"opening_id\": \"OP004\",\n      \"model_gap_centered_on_visible_source_opening\": \"yes\",\n      \"model_gap_width_matches_source_xy\": \"yes\",\n      \"neighboring_wall_or_junction_obstruction\": \"no\"\n    },\n    {\n      \"opening_id\": \"OP006\",\n      \"model_gap_centered_on_visible_source_opening\": \"yes\",\n      \"model_gap_width_matches_source_xy\": \"yes\",\n      \"neighboring_wall_or_junction_obstruction\": \"no\"\n    },\n    {\n      \"opening_id\": \"OP007\",\n      \"model_gap_centered_on_visible_source_opening\": \"yes\",\n      \"model_gap_width_matches_source_xy\": \"yes\",\n      \"neighboring_wall_or_junction_obstruction\": \"no\"\n    },\n    {\n      \"opening_id\": \"OP008\",\n      \"model_gap_centered_on_visible_source_opening\": \"yes\",\n      \"model_gap_width_matches_source_xy\": \"yes\",\n      \"neighboring_wall_or_junction_obstruction\": \"no\"\n    },\n    {\n      \"opening_id\": \"OP009\",\n      \"model_gap_centered_on_visible_source_opening\": \"yes\",\n      \"model_gap_width_matches_source_xy\": \"yes\",\n      \"neighboring_wall_or_junction_obstruction\": \"no\"\n    },\n    {\n      \"opening_id\": \"OP010\",\n      \"model_gap_centered_on_visible_source_opening\": \"yes\",\n      \"model_gap_width_matches_source_xy\": \"yes\",\n      \"neighboring_wall_or_junction_obstruction\": \"no\"\n    }\n  ]\n}",
+              "refusal": null,
+              "reasoning": null
+            }
+          }
+        ],
+        "usage": {
+          "prompt_tokens": 1323,
+          "completion_tokens": 792,
+          "total_tokens": 2115,
+          "cost": 0.0023769,
+          "prompt_tokens_details": {
+            "cached_tokens": 0,
+            "cache_write_tokens": 0
+          }
+        }
+      },
+      "raw_response_sha256": "364dad3ba3b1d9a6803bad1446b4d6cf392469805be6efb1dbf6f62cb5ebb4e6",
+      "source_correction_authorized": false,
+      "xy_experiment_confirmation": false,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false
+    }
+  },
+  "accepted_for_combined_xy_research": true,
+  "selected_review_cost_usd": 0.0023769,
+  "review_scope": "combined_xy_visual_research_only",
+  "source_correction_authorized": false,
+  "xy_experiment_confirmation": false,
+  "cut_confirmation": false,
+  "pair_confirmation": false,
+  "adjacency_confirmation": false,
+  "semantic_promotion": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "ready": false,
+  "candidate_hash": "b6f676ec6ece7b21cf487df6b6606e5dc373928e75624082866918f1584910d2"
+}

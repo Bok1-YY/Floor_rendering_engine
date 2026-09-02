@@ -1,0 +1,455 @@
+{
+  "schema": "opening-gap-composites-v2",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "plans_file_sha256": "b100954c99f8d0e9e2b3729e491b383f0d113cd39390a8d3fd6ba733a1bf3e54",
+  "plans_candidate_hash": "755f64ae2639ad143ee7dd8aa4853a422dab75770825eab00e7727ac3066e4e0",
+  "evidence_file_sha256": "1ecb0b7ddb522b8f0a5f8e25e75c6946ede0c6aa772e27f712b6af4036aebe34",
+  "evidence_candidate_hash": "924db8cf7820aebf804773a87b42155ab66f08477987a442145913d28e969610",
+  "review_file_sha256": "1f5b087161798ad4b01c9072e765ba57622b90f3590b9d94a48652133b79f8bb",
+  "review_candidate_hash": "94f186253bd854b6764e8178ff2672c13cc7b5dea918e209da58b8f7595b8dbe",
+  "opening_ids": [
+    "OP001",
+    "OP002",
+    "OP003",
+    "OP004",
+    "OP006",
+    "OP007",
+    "OP008",
+    "OP009",
+    "OP010"
+  ],
+  "rows": [
+    {
+      "opening_id": "OP001",
+      "variant_hash": "4f2fcac04d0dc2d27a7857ab0756882ee440113411158c24e7c156d6b7d4e5ef",
+      "variant_manifest_path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\artifacts\\goal_loop_v2\\1308\\opening_xy_variants_v001\\OP001\\artifact_manifest.json",
+      "variant_manifest_sha256": "6001231b62c9516294efeaa279e5a6ba3841fd839da3ddc080454d4f06150fe0",
+      "variant_validation_sha256": "b587411f0b5735be9e255df3a87e411c7bd469efd52ffdd37cc4442ca4d16bf6",
+      "source_local_segment_px": [
+        [
+          120.99994961832067,
+          120.99997060360602
+        ],
+        [
+          248.30147022900792,
+          120.99997060360602
+        ]
+      ],
+      "projected_gap_width_m": 0.931610131620668,
+      "source_crop": {
+        "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\opening_xy_clean_evidence_20260902\\OP001-raw-crop.png",
+        "bytes": 41299,
+        "sha256": "9e7719d5f015e8b922b7cb4d5308247359ad0d34e8198e76199a3c10a56fbc2f",
+        "source_pixels_untouched": true
+      },
+      "model_closeup": {
+        "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\artifacts\\goal_loop_v2\\1308\\opening_xy_variants_v001\\OP001\\1308_OP001_gap_variant_closeup_top.png",
+        "bytes": 717664,
+        "sha256": "fb8f39601b5d852f5a9813f3ff03a8790e187120e864d4faf793bfbadd28b485",
+        "opening_id": "OP001"
+      },
+      "composite": {
+        "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\opening_gap_composites_20260902\\OP001-composite.png",
+        "bytes": 311124,
+        "sha256": "0a7a6c707f83390d5a6db2dab0a1713c992803033eb582ac401a11562c5f1969",
+        "size": [
+          1600,
+          900
+        ]
+      },
+      "xy_experiment_confirmation": false,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false
+    },
+    {
+      "opening_id": "OP002",
+      "variant_hash": "ca443c90b54554b3ac9acdfb24d886f222abf2bebe43cfa1b81db98466bbd0ef",
+      "variant_manifest_path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\artifacts\\goal_loop_v2\\1308\\opening_xy_variants_v001\\OP002\\artifact_manifest.json",
+      "variant_manifest_sha256": "26d2a840cf4db50800e96deacd05aa06829c3b2197ed1d23982615847c6d8d18",
+      "variant_validation_sha256": "de6cee1d93c0efcfae6d85e352d48087bf46a300bffd47f5b0890a360c195054",
+      "source_local_segment_px": [
+        [
+          120.50000000000023,
+          120.99999999999977
+        ],
+        [
+          120.50000000000023,
+          242.99999999999977
+        ]
+      ],
+      "projected_gap_width_m": 0.8872095011876462,
+      "source_crop": {
+        "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\opening_xy_clean_evidence_20260902\\OP002-raw-crop.png",
+        "bytes": 20540,
+        "sha256": "dd688d7feaf037e2ff45a3cb46500b52d65fd6dc2817ff5fb37e34e60e2ca132",
+        "source_pixels_untouched": true
+      },
+      "model_closeup": {
+        "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\artifacts\\goal_loop_v2\\1308\\opening_xy_variants_v001\\OP002\\1308_OP002_gap_variant_closeup_top.png",
+        "bytes": 757888,
+        "sha256": "2d6bcacf769fb202a00ac8556c9bfcacf7e7511d37a2fcebe499adc8c54d0f46",
+        "opening_id": "OP002"
+      },
+      "composite": {
+        "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\opening_gap_composites_20260902\\OP002-composite.png",
+        "bytes": 249472,
+        "sha256": "3bf420a8afb4626b4be713de7b69adbf04b78785e971c8191954d3453f56564c",
+        "size": [
+          1600,
+          900
+        ]
+      },
+      "xy_experiment_confirmation": false,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false
+    },
+    {
+      "opening_id": "OP003",
+      "variant_hash": "2d00270904fba196e757bbe50933d5471113f7e83d6fcf91d8660205dfd4504e",
+      "variant_manifest_path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\artifacts\\goal_loop_v2\\1308\\opening_xy_variants_v001\\OP003\\artifact_manifest.json",
+      "variant_manifest_sha256": "4dd75b0f204a29dcdee0a72e9ca5de4578bdf6d1e3db6299073762c6116c7d01",
+      "variant_validation_sha256": "9eab03e0984744ccd83eb51bc5bcbedf7ed8cf8c080bf500f12b07dda343dbb2",
+      "source_local_segment_px": [
+        [
+          120.00001755725191,
+          120.0000323360332
+        ],
+        [
+          246.00003053435114,
+          120.0000323360332
+        ]
+      ],
+      "projected_gap_width_m": 0.9221230000000001,
+      "source_crop": {
+        "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\opening_xy_clean_evidence_20260902\\OP003-raw-crop.png",
+        "bytes": 30038,
+        "sha256": "6670987f2c2268faf85f341151763e074b4550f5cf392a9d065f70ce40fb3a6b",
+        "source_pixels_untouched": true
+      },
+      "model_closeup": {
+        "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\artifacts\\goal_loop_v2\\1308\\opening_xy_variants_v001\\OP003\\1308_OP003_gap_variant_closeup_top.png",
+        "bytes": 823545,
+        "sha256": "f6189abc42e2475011be832f1e28c4a5087d80805c8dc943917fd2c1ffc3c939",
+        "opening_id": "OP003"
+      },
+      "composite": {
+        "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\opening_gap_composites_20260902\\OP003-composite.png",
+        "bytes": 302473,
+        "sha256": "3db3b217a00ee1b5c5f4f9dc8fcbc1a0f9930eb9a1d33ed4683bf83ac7b1c7f1",
+        "size": [
+          1600,
+          900
+        ]
+      },
+      "xy_experiment_confirmation": false,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false
+    },
+    {
+      "opening_id": "OP004",
+      "variant_hash": "b5398086c2624a275965b14dc357a4247b27c3b5bcff88b7414753eba0e6392b",
+      "variant_manifest_path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\artifacts\\goal_loop_v2\\1308\\opening_xy_variants_v001\\OP004\\artifact_manifest.json",
+      "variant_manifest_sha256": "299c66f88f369ba0c926b3abdefc068acf6a024d567633403058d86a65d9cec3",
+      "variant_validation_sha256": "f8d1082835a66163621d9f7f2e6a3a355eb932a4bcc503c4fc14bfd1ec096342",
+      "source_local_segment_px": [
+        [
+          120.50001374045814,
+          120.00002743663435
+        ],
+        [
+          120.50001374045814,
+          245.00000979879792
+        ]
+      ],
+      "projected_gap_width_m": 0.909025999999999,
+      "source_crop": {
+        "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\opening_xy_clean_evidence_20260902\\OP004-raw-crop.png",
+        "bytes": 36462,
+        "sha256": "b0749036a8f96b4cd3da0115b68152086e9657f740ffda55f2179c07579befd8",
+        "source_pixels_untouched": true
+      },
+      "model_closeup": {
+        "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\artifacts\\goal_loop_v2\\1308\\opening_xy_variants_v001\\OP004\\1308_OP004_gap_variant_closeup_top.png",
+        "bytes": 719629,
+        "sha256": "c2101e1017eef6a2e9736d6b9e8aeffef5315d157e5779f744e8e201162cdb20",
+        "opening_id": "OP004"
+      },
+      "composite": {
+        "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\opening_gap_composites_20260902\\OP004-composite.png",
+        "bytes": 288621,
+        "sha256": "e509e2bf47fddc3f570be71123113fedb1fdc61490ccf288a4c05c057033f223",
+        "size": [
+          1600,
+          900
+        ]
+      },
+      "xy_experiment_confirmation": false,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false
+    },
+    {
+      "opening_id": "OP006",
+      "variant_hash": "03a4eaa8a28b60f28f19c81dae5164078aaf9a2f7675a0fa3549d0a4314a7dd1",
+      "variant_manifest_path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\artifacts\\goal_loop_v2\\1308\\opening_xy_variants_v001\\OP006\\artifact_manifest.json",
+      "variant_manifest_sha256": "c8413a856455d337aa37ba9b4c659bf9cdfe9e35c555457bb6fe71f9f64e2455",
+      "variant_validation_sha256": "ad2bdc7706191b36eeb5a37ec95b0771ef35ffd31aaf066f090645dd90942ca4",
+      "source_local_segment_px": [
+        [
+          120.50001374045814,
+          120.99993500130631
+        ],
+        [
+          120.50001374045814,
+          248.99996864384616
+        ]
+      ],
+      "projected_gap_width_m": 0.930842999999998,
+      "source_crop": {
+        "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\opening_xy_clean_evidence_20260902\\OP006-raw-crop.png",
+        "bytes": 17295,
+        "sha256": "e395128bfcdaba269314be6d7cbe6490abd814060925acd93ab57f6b0bc481df",
+        "source_pixels_untouched": true
+      },
+      "model_closeup": {
+        "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\artifacts\\goal_loop_v2\\1308\\opening_xy_variants_v001\\OP006\\1308_OP006_gap_variant_closeup_top.png",
+        "bytes": 735217,
+        "sha256": "8a5484f266fa0718f2516bda963e22b7ffea34c4e912f99d7f760db3fcea108d",
+        "opening_id": "OP006"
+      },
+      "composite": {
+        "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\opening_gap_composites_20260902\\OP006-composite.png",
+        "bytes": 229891,
+        "sha256": "a8b706eadd34d664c7dca8c51b2f09ea6a0ebdfc4e79147ef2ce43ab8044d479",
+        "size": [
+          1600,
+          900
+        ]
+      },
+      "xy_experiment_confirmation": false,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false
+    },
+    {
+      "opening_id": "OP007",
+      "variant_hash": "e1d3f348909863f1b6f5a2fa8d51a4b0be26935c1ec66c169b764cf3a50b0d6e",
+      "variant_manifest_path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\artifacts\\goal_loop_v2\\1308\\opening_xy_variants_v001\\OP007\\artifact_manifest.json",
+      "variant_manifest_sha256": "1045ec7ff439259cf283b85e3e5248265a6da830ec04a27cf83c8f6e49b132cb",
+      "variant_validation_sha256": "c690c6e5089885cefb75567c3c03c6e616811b4bc569980ea8c96ab91ea5d328",
+      "source_local_segment_px": [
+        [
+          120.49994580152679,
+          120.99997256336565
+        ],
+        [
+          120.49994580152679,
+          225.00000849229173
+        ]
+      ],
+      "projected_gap_width_m": 0.75631,
+      "source_crop": {
+        "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\opening_xy_clean_evidence_20260902\\OP007-raw-crop.png",
+        "bytes": 32665,
+        "sha256": "c6be613d107324422411b9b2f843e41e0ad4df9f1a2cdb4841432bc742050521",
+        "source_pixels_untouched": true
+      },
+      "model_closeup": {
+        "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\artifacts\\goal_loop_v2\\1308\\opening_xy_variants_v001\\OP007\\1308_OP007_gap_variant_closeup_top.png",
+        "bytes": 795050,
+        "sha256": "fa24e3fe72807f1ec80c2ceb5cf99b781f250dc3dbe6acb9a8bf48d058990c81",
+        "opening_id": "OP007"
+      },
+      "composite": {
+        "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\opening_gap_composites_20260902\\OP007-composite.png",
+        "bytes": 307191,
+        "sha256": "73e65d3cae9091f0ff36c8e8bf5bf45a6be27c5b9d973bc902d614fa9fab6aa1",
+        "size": [
+          1600,
+          900
+        ]
+      },
+      "xy_experiment_confirmation": false,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false
+    },
+    {
+      "opening_id": "OP008",
+      "variant_hash": "42661045e4288e85544c36f3f389de4547bf1437476956fc8422e3a1d3802e03",
+      "variant_manifest_path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\artifacts\\goal_loop_v2\\1308\\opening_xy_variants_v001\\OP008\\artifact_manifest.json",
+      "variant_manifest_sha256": "3e3499277a85ea094f7f8d5a3f8b4dcadcb394ad107333c2f7f2c3f6c54fcd9e",
+      "variant_validation_sha256": "c9b37a830a0a510c0367f7829ec2c38f052e8dad95d13929cd698e484cb2297d",
+      "source_local_segment_px": [
+        [
+          120.00006259541988,
+          120.00003854193892
+        ],
+        [
+          249.99997404580154,
+          120.00003854193892
+        ]
+      ],
+      "projected_gap_width_m": 0.9513959999999917,
+      "source_crop": {
+        "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\opening_xy_clean_evidence_20260902\\OP008-raw-crop.png",
+        "bytes": 49957,
+        "sha256": "acfc3cfef1072a5de68e278bea5c620bc68f35f77fc53657f3b45599792fbba5",
+        "source_pixels_untouched": true
+      },
+      "model_closeup": {
+        "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\artifacts\\goal_loop_v2\\1308\\opening_xy_variants_v001\\OP008\\1308_OP008_gap_variant_closeup_top.png",
+        "bytes": 795115,
+        "sha256": "1435fcbcd588f576405105b9cbcc456e4a963ad58a2922166bb0abc0284a5ed3",
+        "opening_id": "OP008"
+      },
+      "composite": {
+        "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\opening_gap_composites_20260902\\OP008-composite.png",
+        "bytes": 366076,
+        "sha256": "7df5d884598f125b80fd10303a56ac5999ef0686cbc0c1f04aeddb24a2918643",
+        "size": [
+          1600,
+          900
+        ]
+      },
+      "xy_experiment_confirmation": false,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false
+    },
+    {
+      "opening_id": "OP009",
+      "variant_hash": "c33e063eea824086c97421c7192bd8020cc158db5a37550616b0f5508b417f5c",
+      "variant_manifest_path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\artifacts\\goal_loop_v2\\1308\\opening_xy_variants_v001\\OP009\\artifact_manifest.json",
+      "variant_manifest_sha256": "b0ad2430d4b220b2449891d45112bf5dd3684aa2aaec53dd441959af636ce108",
+      "variant_validation_sha256": "6e9f0f5b222e28280244ebc329f3f241abc15babf692561b8dd4a660e3f4dc85",
+      "source_local_segment_px": [
+        [
+          120.99999694656492,
+          120.99995753854182
+        ],
+        [
+          322.0000534351145,
+          120.99995753854182
+        ]
+      ],
+      "projected_gap_width_m": 1.4710059999999996,
+      "source_crop": {
+        "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\opening_xy_clean_evidence_20260902\\OP009-raw-crop.png",
+        "bytes": 68345,
+        "sha256": "2b42b05feb3c56fb43df185d7069f4dd6397eda8332eb3ca7ca50842c108bfa5",
+        "source_pixels_untouched": true
+      },
+      "model_closeup": {
+        "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\artifacts\\goal_loop_v2\\1308\\opening_xy_variants_v001\\OP009\\1308_OP009_gap_variant_closeup_top.png",
+        "bytes": 724283,
+        "sha256": "9fb0411be0a4bad87a64515121ee4f522359051852b1dc56d5130cfee60ebba5",
+        "opening_id": "OP009"
+      },
+      "composite": {
+        "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\opening_gap_composites_20260902\\OP009-composite.png",
+        "bytes": 359717,
+        "sha256": "150f60b9855a061277c03fdeb00e7e8b28396a6658bd5e744dfe56d6f0852b1a",
+        "size": [
+          1600,
+          900
+        ]
+      },
+      "xy_experiment_confirmation": false,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false
+    },
+    {
+      "opening_id": "OP010",
+      "variant_hash": "b1cfd0a352eaa8497af84602cfb276e9f5cac5dbb2f363f32bb3aadfd989c729",
+      "variant_manifest_path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\artifacts\\goal_loop_v2\\1308\\opening_xy_variants_v001\\OP010\\artifact_manifest.json",
+      "variant_manifest_sha256": "740addb17d1520554789c3b829d435abcfdf089bd0fcb5c6a054a75714f2a0b3",
+      "variant_validation_sha256": "918a95c039e0099bdd71876734b79a67dec05f86ac5a05b519db6bf090272587",
+      "source_local_segment_px": [
+        [
+          120.00004961832065,
+          120.50001437157061
+        ],
+        [
+          322.99998702290077,
+          120.50001437157061
+        ]
+      ],
+      "projected_gap_width_m": 1.4856420000000004,
+      "source_crop": {
+        "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\opening_xy_clean_evidence_20260902\\OP010-raw-crop.png",
+        "bytes": 55749,
+        "sha256": "f4298efe7daf6396f45fd3c8ed5993d21ecfb17d8e78bb8b4d810e78fbc44ccc",
+        "source_pixels_untouched": true
+      },
+      "model_closeup": {
+        "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\artifacts\\goal_loop_v2\\1308\\opening_xy_variants_v001\\OP010\\1308_OP010_gap_variant_closeup_top.png",
+        "bytes": 692952,
+        "sha256": "2c4e834f56928f11fa2d7dec6b43533c9d07bb200cdffd6689e06649be3910f0",
+        "opening_id": "OP010"
+      },
+      "composite": {
+        "path": "C:\\Users\\1_1\\Desktop\\Floor_engine_GoalLoopV2_20260831\\reports\\opening_gap_composites_20260902\\OP010-composite.png",
+        "bytes": 311989,
+        "sha256": "a4fcbe0cc9b1c095537365f05ebafc3c6aa40c3b401aba03995986fc8e09db05",
+        "size": [
+          1600,
+          900
+        ]
+      },
+      "xy_experiment_confirmation": false,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false
+    }
+  ],
+  "xy_experiment_confirmation": false,
+  "cut_confirmation": false,
+  "pair_confirmation": false,
+  "adjacency_confirmation": false,
+  "semantic_promotion": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "ready": false,
+  "candidate_hash": "f9f7973e4fc4d3bcb12143f41de4a052fec2124a26381c98cf424bcf2772496a"
+}

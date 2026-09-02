@@ -1,0 +1,1152 @@
+{
+  "schema": "combined-gap-plan-v3",
+  "branch_kind": "combined_full_height_xy_gap_research_after_isolated_review",
+  "branch_id": "1308-combined-xy-gap-research-v001",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+  "gap_plans_file_sha256": "b100954c99f8d0e9e2b3729e491b383f0d113cd39390a8d3fd6ba733a1bf3e54",
+  "gap_plans_candidate_hash": "755f64ae2639ad143ee7dd8aa4853a422dab75770825eab00e7727ac3066e4e0",
+  "registered_review_file_sha256": "53224bf627784967cf8515d5690d0050819f07dce76d438502c25d424557c093",
+  "registered_review_candidate_hash": "cda181f0822ade777911f8452b02456f0d5488b8f760ed5abe8d6333976d1a8c",
+  "layer1_manifest_file_sha256": "fa37dfa1cff899bdb7b7214b87f0af6176bb5c0d706b0e4444f73634e866c911",
+  "layer1_blender_source_sha256": "4357010f124314954ec1a38316a6364a2474311441f87d96cd0a30b5839bb09d",
+  "layer1_wall_object_count": 35,
+  "included_opening_ids": [
+    "OP001",
+    "OP002",
+    "OP003",
+    "OP004",
+    "OP006",
+    "OP007",
+    "OP008",
+    "OP009",
+    "OP010"
+  ],
+  "excluded_opening_ids": [
+    "OP005",
+    "OP011",
+    "PORTAL-WB011-WB006-01",
+    "OP012"
+  ],
+  "host_atom_ids": [
+    "ATOM-WB016-02",
+    "ATOM-WB006-02",
+    "ATOM-WB010-01",
+    "ATOM-WB007-01",
+    "ATOM-WB007-02",
+    "ATOM-WB019-01",
+    "ATOM-WB018-01",
+    "ATOM-WB005-01",
+    "ATOM-WB003-03"
+  ],
+  "source_wall_atom_count": 35,
+  "untouched_atom_count": 26,
+  "host_piece_count": 17,
+  "expected_wall_piece_count": 43,
+  "plans": [
+    {
+      "variant_id": "GAP-OP001-ONLY",
+      "opening_id": "OP001",
+      "host_atom_id": "ATOM-WB016-02",
+      "host_centerline_m": [
+        [
+          2.180894,
+          5.62869
+        ],
+        [
+          4.398379888268156,
+          5.648684084986222
+        ]
+      ],
+      "host_thickness_m": 0.12,
+      "host_half_thickness_m": 0.06,
+      "source_gap_segment_m": [
+        [
+          3.432346,
+          5.62869
+        ],
+        [
+          4.363994000000001,
+          5.62869
+        ]
+      ],
+      "projection_mode": "orthogonal_projection_within_wall_solid",
+      "host_parameters": [
+        0.564310363371657,
+        0.9844132689680986
+      ],
+      "projected_segment_m": [
+        [
+          3.432244267380125,
+          5.639972869363858
+        ],
+        [
+          4.363816532160683,
+          5.648372442561312
+        ]
+      ],
+      "signed_perpendicular_offsets_m": [
+        0.011283327993453445,
+        0.01968324261937991
+      ],
+      "maximum_perpendicular_offset_m": 0.01968324261937991,
+      "projected_width_m": 0.931610131620668,
+      "source_width_m": 0.9316480000000009,
+      "host_length_m": 2.217576025326494,
+      "projection_within_host_segment": true,
+      "projection_within_wall_solid": true,
+      "projected_vs_source_width_delta_m": 3.78683793329504e-05,
+      "before_support_m": 1.2514011326562686,
+      "after_support_m": 0.03456476104955713,
+      "remaining_host_pieces": [
+        {
+          "host_parameter_interval": [
+            0.0,
+            0.564310363371657
+          ],
+          "centerline_m": [
+            [
+              2.180894,
+              5.62869
+            ],
+            [
+              3.432244267380125,
+              5.639972869363858
+            ]
+          ],
+          "length_m": 1.2514011326562686
+        },
+        {
+          "host_parameter_interval": [
+            0.9844132689680986,
+            1.0
+          ],
+          "centerline_m": [
+            [
+              4.363816532160683,
+              5.648372442561312
+            ],
+            [
+              4.398379888268156,
+              5.648684084986222
+            ]
+          ],
+          "length_m": 0.03456476104955713
+        }
+      ],
+      "short_residual_piece_count_below_0_05m": 1,
+      "expected_wall_object_count": 36,
+      "gap_z_policy": "full_height_visualization_only",
+      "source_segment_preserved_as_provenance": true,
+      "source_correction_authorized": false,
+      "xy_experiment_confirmation": false,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "variant_hash": "4f2fcac04d0dc2d27a7857ab0756882ee440113411158c24e7c156d6b7d4e5ef"
+    },
+    {
+      "variant_id": "GAP-OP002-ONLY",
+      "opening_id": "OP002",
+      "host_atom_id": "ATOM-WB006-02",
+      "host_centerline_m": [
+        [
+          4.423994,
+          12.690005
+        ],
+        [
+          4.423994413407822,
+          5.688689786747744
+        ]
+      ],
+      "host_thickness_m": 0.12,
+      "host_half_thickness_m": 0.06,
+      "source_gap_segment_m": [
+        [
+          4.423994413407822,
+          10.690147268408552
+        ],
+        [
+          4.423994413407822,
+          9.802937767220904
+        ]
+      ],
+      "projection_mode": "centerline_collinear",
+      "host_parameters": [
+        0.28564029338460395,
+        0.41236069864622016
+      ],
+      "projected_segment_m": [
+        [
+          4.423994118085932,
+          10.690147268408534
+        ],
+        [
+          4.423994170473138,
+          9.80293776722089
+        ]
+      ],
+      "signed_perpendicular_offsets_m": [
+        -2.9532189026016453e-07,
+        -2.429346835492701e-07
+      ],
+      "maximum_perpendicular_offset_m": 2.9532189026016453e-07,
+      "projected_width_m": 0.8872095011876462,
+      "source_width_m": 0.8872095011876482,
+      "host_length_m": 7.001315213252267,
+      "projection_within_host_segment": true,
+      "projection_within_wall_solid": true,
+      "projected_vs_source_width_delta_m": 1.9984014443252818e-15,
+      "before_support_m": 1.9998577315914685,
+      "after_support_m": 4.114247980473152,
+      "remaining_host_pieces": [
+        {
+          "host_parameter_interval": [
+            0.0,
+            0.28564029338460395
+          ],
+          "centerline_m": [
+            [
+              4.423994,
+              12.690005
+            ],
+            [
+              4.423994118085932,
+              10.690147268408534
+            ]
+          ],
+          "length_m": 1.9998577315914685
+        },
+        {
+          "host_parameter_interval": [
+            0.41236069864622016,
+            1.0
+          ],
+          "centerline_m": [
+            [
+              4.423994170473138,
+              9.80293776722089
+            ],
+            [
+              4.423994413407822,
+              5.688689786747744
+            ]
+          ],
+          "length_m": 4.114247980473152
+        }
+      ],
+      "short_residual_piece_count_below_0_05m": 0,
+      "expected_wall_object_count": 36,
+      "gap_z_policy": "full_height_visualization_only",
+      "source_segment_preserved_as_provenance": true,
+      "source_correction_authorized": false,
+      "xy_experiment_confirmation": false,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "variant_hash": "ca443c90b54554b3ac9acdfb24d886f222abf2bebe43cfa1b81db98466bbd0ef"
+    },
+    {
+      "variant_id": "GAP-OP003-ONLY",
+      "opening_id": "OP003",
+      "host_atom_id": "ATOM-WB010-01",
+      "host_centerline_m": [
+        [
+          0.014637,
+          10.341081
+        ],
+        [
+          1.3758660000000003,
+          10.341081
+        ]
+      ],
+      "host_thickness_m": 0.12,
+      "host_half_thickness_m": 0.06,
+      "source_gap_segment_m": [
+        [
+          0.014637,
+          10.341081
+        ],
+        [
+          0.93676,
+          10.341081
+        ]
+      ],
+      "projection_mode": "centerline_collinear",
+      "host_parameters": [
+        0.0,
+        0.6774194496297096
+      ],
+      "projected_segment_m": [
+        [
+          0.014637,
+          10.341081
+        ],
+        [
+          0.9367600000000001,
+          10.341081
+        ]
+      ],
+      "signed_perpendicular_offsets_m": [
+        0.0,
+        0.0
+      ],
+      "maximum_perpendicular_offset_m": 0.0,
+      "projected_width_m": 0.9221230000000001,
+      "source_width_m": 0.922123,
+      "host_length_m": 1.3612290000000002,
+      "projection_within_host_segment": true,
+      "projection_within_wall_solid": true,
+      "projected_vs_source_width_delta_m": 1.1102230246251565e-16,
+      "before_support_m": 0.0,
+      "after_support_m": 0.43910600000000016,
+      "remaining_host_pieces": [
+        {
+          "host_parameter_interval": [
+            0.6774194496297096,
+            1.0
+          ],
+          "centerline_m": [
+            [
+              0.9367600000000001,
+              10.341081
+            ],
+            [
+              1.3758660000000003,
+              10.341081
+            ]
+          ],
+          "length_m": 0.43910600000000016
+        }
+      ],
+      "short_residual_piece_count_below_0_05m": 0,
+      "expected_wall_object_count": 35,
+      "gap_z_policy": "full_height_visualization_only",
+      "source_segment_preserved_as_provenance": true,
+      "source_correction_authorized": false,
+      "xy_experiment_confirmation": false,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "variant_hash": "2d00270904fba196e757bbe50933d5471113f7e83d6fcf91d8660205dfd4504e"
+    },
+    {
+      "variant_id": "GAP-OP004-ONLY",
+      "opening_id": "OP004",
+      "host_atom_id": "ATOM-WB007-01",
+      "host_centerline_m": [
+        [
+          5.792542,
+          15.220733
+        ],
+        [
+          5.792542,
+          11.315557
+        ]
+      ],
+      "host_thickness_m": 0.12,
+      "host_half_thickness_m": 0.06,
+      "source_gap_segment_m": [
+        [
+          5.792542,
+          14.340796
+        ],
+        [
+          5.792542,
+          13.43177
+        ]
+      ],
+      "projection_mode": "centerline_collinear",
+      "host_parameters": [
+        0.22532582398334933,
+        0.458100479978367
+      ],
+      "projected_segment_m": [
+        [
+          5.792542,
+          14.340796
+        ],
+        [
+          5.792542,
+          13.43177
+        ]
+      ],
+      "signed_perpendicular_offsets_m": [
+        0.0,
+        0.0
+      ],
+      "maximum_perpendicular_offset_m": 0.0,
+      "projected_width_m": 0.909025999999999,
+      "source_width_m": 0.909025999999999,
+      "host_length_m": 3.905175999999999,
+      "projection_within_host_segment": true,
+      "projection_within_wall_solid": true,
+      "projected_vs_source_width_delta_m": 0.0,
+      "before_support_m": 0.879937,
+      "after_support_m": 2.116213,
+      "remaining_host_pieces": [
+        {
+          "host_parameter_interval": [
+            0.0,
+            0.22532582398334933
+          ],
+          "centerline_m": [
+            [
+              5.792542,
+              15.220733
+            ],
+            [
+              5.792542,
+              14.340796
+            ]
+          ],
+          "length_m": 0.879937
+        },
+        {
+          "host_parameter_interval": [
+            0.458100479978367,
+            1.0
+          ],
+          "centerline_m": [
+            [
+              5.792542,
+              13.43177
+            ],
+            [
+              5.792542,
+              11.315557
+            ]
+          ],
+          "length_m": 2.116213
+        }
+      ],
+      "short_residual_piece_count_below_0_05m": 0,
+      "expected_wall_object_count": 36,
+      "gap_z_policy": "full_height_visualization_only",
+      "source_segment_preserved_as_provenance": true,
+      "source_correction_authorized": false,
+      "xy_experiment_confirmation": false,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "variant_hash": "b5398086c2624a275965b14dc357a4247b27c3b5bcff88b7414753eba0e6392b"
+    },
+    {
+      "variant_id": "GAP-OP006-ONLY",
+      "opening_id": "OP006",
+      "host_atom_id": "ATOM-WB007-02",
+      "host_centerline_m": [
+        [
+          5.792542,
+          11.315557
+        ],
+        [
+          5.792541899441341,
+          7.801266508838006
+        ]
+      ],
+      "host_thickness_m": 0.12,
+      "host_half_thickness_m": 0.06,
+      "source_gap_segment_m": [
+        [
+          5.792542,
+          11.221019
+        ],
+        [
+          5.792542,
+          10.290176
+        ]
+      ],
+      "projection_mode": "centerline_collinear",
+      "host_parameters": [
+        0.026901020344718606,
+        0.29177468469914625
+      ],
+      "projected_segment_m": [
+        [
+          5.79254199729487,
+          11.221019
+        ],
+        [
+          5.792541970659529,
+          10.290176000000002
+        ]
+      ],
+      "signed_perpendicular_offsets_m": [
+        -2.7051305363675766e-09,
+        -2.934047107524086e-08
+      ],
+      "maximum_perpendicular_offset_m": 2.934047107524086e-08,
+      "projected_width_m": 0.930842999999998,
+      "source_width_m": 0.9308429999999994,
+      "host_length_m": 3.514290491161995,
+      "projection_within_host_segment": true,
+      "projection_within_wall_solid": true,
+      "projected_vs_source_width_delta_m": 1.4432899320127035e-15,
+      "before_support_m": 0.09453799999999997,
+      "after_support_m": 2.488909491161996,
+      "remaining_host_pieces": [
+        {
+          "host_parameter_interval": [
+            0.0,
+            0.026901020344718606
+          ],
+          "centerline_m": [
+            [
+              5.792542,
+              11.315557
+            ],
+            [
+              5.79254199729487,
+              11.221019
+            ]
+          ],
+          "length_m": 0.09453799999999997
+        },
+        {
+          "host_parameter_interval": [
+            0.29177468469914625,
+            1.0
+          ],
+          "centerline_m": [
+            [
+              5.792541970659529,
+              10.290176000000002
+            ],
+            [
+              5.792541899441341,
+              7.801266508838006
+            ]
+          ],
+          "length_m": 2.488909491161996
+        }
+      ],
+      "short_residual_piece_count_below_0_05m": 0,
+      "expected_wall_object_count": 36,
+      "gap_z_policy": "full_height_visualization_only",
+      "source_segment_preserved_as_provenance": true,
+      "source_correction_authorized": false,
+      "xy_experiment_confirmation": false,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "variant_hash": "03a4eaa8a28b60f28f19c81dae5164078aaf9a2f7675a0fa3549d0a4314a7dd1"
+    },
+    {
+      "variant_id": "GAP-OP007-ONLY",
+      "opening_id": "OP007",
+      "host_atom_id": "ATOM-WB019-01",
+      "host_centerline_m": [
+        [
+          1.350251,
+          4.225153
+        ],
+        [
+          1.350251,
+          3.207044
+        ]
+      ],
+      "host_thickness_m": 0.12,
+      "host_half_thickness_m": 0.06,
+      "source_gap_segment_m": [
+        [
+          1.350251,
+          4.028804
+        ],
+        [
+          1.350251,
+          3.272494
+        ]
+      ],
+      "projection_mode": "centerline_collinear",
+      "host_parameters": [
+        0.19285656054508868,
+        0.9357141524139357
+      ],
+      "projected_segment_m": [
+        [
+          1.350251,
+          4.028804
+        ],
+        [
+          1.350251,
+          3.272494
+        ]
+      ],
+      "signed_perpendicular_offsets_m": [
+        0.0,
+        0.0
+      ],
+      "maximum_perpendicular_offset_m": 0.0,
+      "projected_width_m": 0.75631,
+      "source_width_m": 0.75631,
+      "host_length_m": 1.018109,
+      "projection_within_host_segment": true,
+      "projection_within_wall_solid": true,
+      "projected_vs_source_width_delta_m": 0.0,
+      "before_support_m": 0.19634899999999966,
+      "after_support_m": 0.0654500000000003,
+      "remaining_host_pieces": [
+        {
+          "host_parameter_interval": [
+            0.0,
+            0.19285656054508868
+          ],
+          "centerline_m": [
+            [
+              1.350251,
+              4.225153
+            ],
+            [
+              1.350251,
+              4.028804
+            ]
+          ],
+          "length_m": 0.19634899999999966
+        },
+        {
+          "host_parameter_interval": [
+            0.9357141524139357,
+            1.0
+          ],
+          "centerline_m": [
+            [
+              1.350251,
+              3.272494
+            ],
+            [
+              1.350251,
+              3.207044
+            ]
+          ],
+          "length_m": 0.0654500000000003
+        }
+      ],
+      "short_residual_piece_count_below_0_05m": 0,
+      "expected_wall_object_count": 36,
+      "gap_z_policy": "full_height_visualization_only",
+      "source_segment_preserved_as_provenance": true,
+      "source_correction_authorized": false,
+      "xy_experiment_confirmation": false,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "variant_hash": "e1d3f348909863f1b6f5a2fa8d51a4b0be26935c1ec66c169b764cf3a50b0d6e"
+    },
+    {
+      "variant_id": "GAP-OP008-ONLY",
+      "opening_id": "OP008",
+      "host_atom_id": "ATOM-WB018-01",
+      "host_centerline_m": [
+        [
+          0.014637,
+          4.254242
+        ],
+        [
+          2.1208938568156426,
+          4.254242280285036
+        ]
+      ],
+      "host_thickness_m": 0.12,
+      "host_half_thickness_m": 0.06,
+      "source_gap_segment_m": [
+        [
+          1.134358,
+          4.254242
+        ],
+        [
+          2.085754,
+          4.254242
+        ]
+      ],
+      "projection_mode": "centerline_collinear",
+      "host_parameters": [
+        0.5316165482745714,
+        0.983316442768141
+      ],
+      "projected_segment_m": [
+        [
+          1.13435799999998,
+          4.254242149004163
+        ],
+        [
+          2.0857539999999632,
+          4.254242275608885
+        ]
+      ],
+      "signed_perpendicular_offsets_m": [
+        1.4900416340826777e-07,
+        2.756088846289757e-07
+      ],
+      "maximum_perpendicular_offset_m": 2.756088846289757e-07,
+      "projected_width_m": 0.9513959999999917,
+      "source_width_m": 0.9513960000000001,
+      "host_length_m": 2.106256856815661,
+      "projection_within_host_segment": true,
+      "projection_within_wall_solid": true,
+      "projected_vs_source_width_delta_m": 8.43769498715119e-15,
+      "before_support_m": 1.11972099999999,
+      "after_support_m": 0.035139856815679514,
+      "remaining_host_pieces": [
+        {
+          "host_parameter_interval": [
+            0.0,
+            0.5316165482745714
+          ],
+          "centerline_m": [
+            [
+              0.014637,
+              4.254242
+            ],
+            [
+              1.13435799999998,
+              4.254242149004163
+            ]
+          ],
+          "length_m": 1.11972099999999
+        },
+        {
+          "host_parameter_interval": [
+            0.983316442768141,
+            1.0
+          ],
+          "centerline_m": [
+            [
+              2.0857539999999632,
+              4.254242275608885
+            ],
+            [
+              2.1208938568156426,
+              4.254242280285036
+            ]
+          ],
+          "length_m": 0.035139856815679514
+        }
+      ],
+      "short_residual_piece_count_below_0_05m": 1,
+      "expected_wall_object_count": 36,
+      "gap_z_policy": "full_height_visualization_only",
+      "source_segment_preserved_as_provenance": true,
+      "source_correction_authorized": false,
+      "xy_experiment_confirmation": false,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "variant_hash": "42661045e4288e85544c36f3f389de4547bf1437476956fc8422e3a1d3802e03"
+    },
+    {
+      "variant_id": "GAP-OP009-ONLY",
+      "opening_id": "OP009",
+      "host_atom_id": "ATOM-WB005-01",
+      "host_centerline_m": [
+        [
+          0.014637,
+          14.25353
+        ],
+        [
+          4.39838,
+          14.25353
+        ]
+      ],
+      "host_thickness_m": 0.12,
+      "host_half_thickness_m": 0.06,
+      "source_gap_segment_m": [
+        [
+          1.478324,
+          14.25353
+        ],
+        [
+          2.94933,
+          14.25353
+        ]
+      ],
+      "projection_mode": "centerline_collinear",
+      "host_parameters": [
+        0.33388978322862445,
+        0.6694491442586847
+      ],
+      "projected_segment_m": [
+        [
+          1.4783240000000002,
+          14.25353
+        ],
+        [
+          2.94933,
+          14.25353
+        ]
+      ],
+      "signed_perpendicular_offsets_m": [
+        0.0,
+        0.0
+      ],
+      "maximum_perpendicular_offset_m": 0.0,
+      "projected_width_m": 1.4710059999999996,
+      "source_width_m": 1.4710059999999998,
+      "host_length_m": 4.383743000000001,
+      "projection_within_host_segment": true,
+      "projection_within_wall_solid": true,
+      "projected_vs_source_width_delta_m": 2.220446049250313e-16,
+      "before_support_m": 1.4636870000000002,
+      "after_support_m": 1.4490500000000008,
+      "remaining_host_pieces": [
+        {
+          "host_parameter_interval": [
+            0.0,
+            0.33388978322862445
+          ],
+          "centerline_m": [
+            [
+              0.014637,
+              14.25353
+            ],
+            [
+              1.4783240000000002,
+              14.25353
+            ]
+          ],
+          "length_m": 1.4636870000000002
+        },
+        {
+          "host_parameter_interval": [
+            0.6694491442586847,
+            1.0
+          ],
+          "centerline_m": [
+            [
+              2.94933,
+              14.25353
+            ],
+            [
+              4.39838,
+              14.25353
+            ]
+          ],
+          "length_m": 1.4490500000000008
+        }
+      ],
+      "short_residual_piece_count_below_0_05m": 0,
+      "expected_wall_object_count": 36,
+      "gap_z_policy": "full_height_visualization_only",
+      "source_segment_preserved_as_provenance": true,
+      "source_correction_authorized": false,
+      "xy_experiment_confirmation": false,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "variant_hash": "c33e063eea824086c97421c7192bd8020cc158db5a37550616b0f5508b417f5c"
+    },
+    {
+      "variant_id": "GAP-OP010-ONLY",
+      "opening_id": "OP010",
+      "host_atom_id": "ATOM-WB003-03",
+      "host_centerline_m": [
+        [
+          0.764777,
+          0.003636
+        ],
+        [
+          9.104134,
+          0.003636
+        ]
+      ],
+      "host_thickness_m": 0.2,
+      "host_half_thickness_m": 0.1,
+      "source_gap_segment_m": [
+        [
+          5.452235,
+          0.003636
+        ],
+        [
+          6.937877,
+          0.003636
+        ]
+      ],
+      "projection_mode": "centerline_collinear",
+      "host_parameters": [
+        0.5620886598331262,
+        0.7402369271395864
+      ],
+      "projected_segment_m": [
+        [
+          5.452235,
+          0.003636
+        ],
+        [
+          6.937877,
+          0.003636
+        ]
+      ],
+      "signed_perpendicular_offsets_m": [
+        0.0,
+        0.0
+      ],
+      "maximum_perpendicular_offset_m": 0.0,
+      "projected_width_m": 1.4856420000000004,
+      "source_width_m": 1.4856420000000004,
+      "host_length_m": 8.339357,
+      "projection_within_host_segment": true,
+      "projection_within_wall_solid": true,
+      "projected_vs_source_width_delta_m": 0.0,
+      "before_support_m": 4.6874579999999995,
+      "after_support_m": 2.166257,
+      "remaining_host_pieces": [
+        {
+          "host_parameter_interval": [
+            0.0,
+            0.5620886598331262
+          ],
+          "centerline_m": [
+            [
+              0.764777,
+              0.003636
+            ],
+            [
+              5.452235,
+              0.003636
+            ]
+          ],
+          "length_m": 4.6874579999999995
+        },
+        {
+          "host_parameter_interval": [
+            0.7402369271395864,
+            1.0
+          ],
+          "centerline_m": [
+            [
+              6.937877,
+              0.003636
+            ],
+            [
+              9.104134,
+              0.003636
+            ]
+          ],
+          "length_m": 2.166257
+        }
+      ],
+      "short_residual_piece_count_below_0_05m": 0,
+      "expected_wall_object_count": 36,
+      "gap_z_policy": "full_height_visualization_only",
+      "source_segment_preserved_as_provenance": true,
+      "source_correction_authorized": false,
+      "xy_experiment_confirmation": false,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "variant_hash": "b1cfd0a352eaa8497af84602cfb276e9f5cac5dbb2f363f32bb3aadfd989c729"
+    }
+  ],
+  "variant_artifact_bindings": [
+    {
+      "opening_id": "OP001",
+      "branch_id": "1308-gap-OP001-v001",
+      "variant_hash": "4f2fcac04d0dc2d27a7857ab0756882ee440113411158c24e7c156d6b7d4e5ef",
+      "manifest_path": "artifacts/goal_loop_v2/1308/opening_xy_variants_v001/OP001/artifact_manifest.json",
+      "manifest_file_sha256": "208a548ea171abe96f0878fada97427736952eb787dad3db13f92755033280c6",
+      "validation_path": "artifacts/goal_loop_v2/1308/opening_xy_variants_v001/OP001/validation.json",
+      "validation_file_sha256": "56acb4e253a8ba6add10cccd28d8acee2bb162882e4e861b0c7bd3fdaf3a617f",
+      "wall_piece_count": 36,
+      "blender_source_sha256": "837ed519ad1e1af52b442857dced4dbb7125f43b7471cb456795df5be89c9ad2",
+      "portable_glb_sha256": "25c582048165ee9979fc25539dc3d94371f49586118c7f241522fd7c154ce641",
+      "render_closeup_top_sha256": "37242aef60994478434649c163e0dc2023b32726aa74580a883b08c1afa05b9e"
+    },
+    {
+      "opening_id": "OP002",
+      "branch_id": "1308-gap-OP002-v001",
+      "variant_hash": "ca443c90b54554b3ac9acdfb24d886f222abf2bebe43cfa1b81db98466bbd0ef",
+      "manifest_path": "artifacts/goal_loop_v2/1308/opening_xy_variants_v001/OP002/artifact_manifest.json",
+      "manifest_file_sha256": "73a42d2ebe035f5c0dfbe855b501b5cbaf5eac7f54d70f118e1ea6d1aa4242d1",
+      "validation_path": "artifacts/goal_loop_v2/1308/opening_xy_variants_v001/OP002/validation.json",
+      "validation_file_sha256": "6426e78a90d55f27ecdbaaa3eb13df726eff00bb238b3683fe64e7d40386a681",
+      "wall_piece_count": 36,
+      "blender_source_sha256": "455c5c0f61548e97fe0d70d5c9494923c734d52b858b61fe574eb13aa0ad0ab1",
+      "portable_glb_sha256": "e26eac35cd415fa14cc3cd1375fb36177a10fcffc1db477c2cc6135f09b6784d",
+      "render_closeup_top_sha256": "bec5aa9018f263fc5724c3bd10130f34b11c56b4fd34a0c5526f301947693219"
+    },
+    {
+      "opening_id": "OP003",
+      "branch_id": "1308-gap-OP003-v001",
+      "variant_hash": "2d00270904fba196e757bbe50933d5471113f7e83d6fcf91d8660205dfd4504e",
+      "manifest_path": "artifacts/goal_loop_v2/1308/opening_xy_variants_v001/OP003/artifact_manifest.json",
+      "manifest_file_sha256": "8bdac1b3b4c602f6d45d2c95f4eacc59c177bbbadae826ffe3d66cebbb886f28",
+      "validation_path": "artifacts/goal_loop_v2/1308/opening_xy_variants_v001/OP003/validation.json",
+      "validation_file_sha256": "6041f37e6d6ec67fe25ab2c0d84725b39aca915b84756be7b1a97dcd49063392",
+      "wall_piece_count": 35,
+      "blender_source_sha256": "bef346497b7617ff87ab5fee33ade83c7092cb6e7c13fd4282ba4b3c31446626",
+      "portable_glb_sha256": "5800cedfd4c97cfdc18305f79e5c21a2b224e1f316be56c658da1d067bfe73bf",
+      "render_closeup_top_sha256": "c43e99a03ef3ccdd5406690ce0c16e6f9343cfe0dffc93715e2b4420cd77f5ab"
+    },
+    {
+      "opening_id": "OP004",
+      "branch_id": "1308-gap-OP004-v001",
+      "variant_hash": "b5398086c2624a275965b14dc357a4247b27c3b5bcff88b7414753eba0e6392b",
+      "manifest_path": "artifacts/goal_loop_v2/1308/opening_xy_variants_v001/OP004/artifact_manifest.json",
+      "manifest_file_sha256": "b283a5cfe440e8090e6955cf6a4972479db80a208d825d23f2fe223d1ff7d601",
+      "validation_path": "artifacts/goal_loop_v2/1308/opening_xy_variants_v001/OP004/validation.json",
+      "validation_file_sha256": "a407767b0cceb5ac8737c74fe18c84ff7657bd2ec80978c2ac6a61653ca61622",
+      "wall_piece_count": 36,
+      "blender_source_sha256": "fa21473f8f3a76afac74e0815c61fc53fa3e46f12429e70141279c8e704d00f9",
+      "portable_glb_sha256": "020949ac614f6e40e628ef1db24744d22745c676e5940f12b76f9c94d8c01910",
+      "render_closeup_top_sha256": "a8f9e1cfb35a0a43890b776d19c07599c3bea31047c2c201f62c97f275ebfba8"
+    },
+    {
+      "opening_id": "OP006",
+      "branch_id": "1308-gap-OP006-v001",
+      "variant_hash": "03a4eaa8a28b60f28f19c81dae5164078aaf9a2f7675a0fa3549d0a4314a7dd1",
+      "manifest_path": "artifacts/goal_loop_v2/1308/opening_xy_variants_v001/OP006/artifact_manifest.json",
+      "manifest_file_sha256": "ae61d88b136e4edb158ff8cfe7a000f149bc3f43ec3f581b882100658a833797",
+      "validation_path": "artifacts/goal_loop_v2/1308/opening_xy_variants_v001/OP006/validation.json",
+      "validation_file_sha256": "a3332d805bfff9ba43f5d81fc808fa5ceb1bd47f16b0eb90f2513a6d98a29856",
+      "wall_piece_count": 36,
+      "blender_source_sha256": "9b672f354f1f539497dfb2b36f4c9e10f4f4c7c370f39d1ef49ce9c794754667",
+      "portable_glb_sha256": "298347faadb56443ce401227f847574545f27e2d546a04b1396e489e7502e044",
+      "render_closeup_top_sha256": "45a20f22a2f122634edd4d1ee159f6da8a7b734e0a9e94f711f05d0942646fff"
+    },
+    {
+      "opening_id": "OP007",
+      "branch_id": "1308-gap-OP007-v001",
+      "variant_hash": "e1d3f348909863f1b6f5a2fa8d51a4b0be26935c1ec66c169b764cf3a50b0d6e",
+      "manifest_path": "artifacts/goal_loop_v2/1308/opening_xy_variants_v001/OP007/artifact_manifest.json",
+      "manifest_file_sha256": "526e9c25ac1fed2d1cd7b19d80512ef1e89f998d9e8b75cd539574a30e19a106",
+      "validation_path": "artifacts/goal_loop_v2/1308/opening_xy_variants_v001/OP007/validation.json",
+      "validation_file_sha256": "5d4b8e4b18a54df6a8bf6c63e4561a221c28b25033588a2493d8ea65bf16f939",
+      "wall_piece_count": 36,
+      "blender_source_sha256": "c8ba75902495a2aa276f7c9fd7eeff858cf9cc29b71e76f20ad605ce7b38f174",
+      "portable_glb_sha256": "bba98351a3d69d74bcd9152b8258b893484e5289d2a1bebc9893dd5142a84a30",
+      "render_closeup_top_sha256": "afe65d258eb63fadabc5e41691b72dbf09467066e87c4b1fcdb195f3f091cf40"
+    },
+    {
+      "opening_id": "OP008",
+      "branch_id": "1308-gap-OP008-v001",
+      "variant_hash": "42661045e4288e85544c36f3f389de4547bf1437476956fc8422e3a1d3802e03",
+      "manifest_path": "artifacts/goal_loop_v2/1308/opening_xy_variants_v001/OP008/artifact_manifest.json",
+      "manifest_file_sha256": "0b047a2301160c6c4c144cb035e108e481c41894fb3c1a1adcd936d8304eb9d8",
+      "validation_path": "artifacts/goal_loop_v2/1308/opening_xy_variants_v001/OP008/validation.json",
+      "validation_file_sha256": "6cc041889a3360685edbbaca53303a187636582abf7daf5a1d59d8b607e26ef6",
+      "wall_piece_count": 36,
+      "blender_source_sha256": "07f3aceea9dd3464fb5e72b0976f1516eb131bd1a6db923ac5fd13fded1ea61e",
+      "portable_glb_sha256": "121849f10c6d1c56d20cceee0d428d015bdd8d4c28cc187ffb910572fb8a8a64",
+      "render_closeup_top_sha256": "eedb27d148e161581517877937beb64ed87d44f915123243960deb7d4a103c97"
+    },
+    {
+      "opening_id": "OP009",
+      "branch_id": "1308-gap-OP009-v001",
+      "variant_hash": "c33e063eea824086c97421c7192bd8020cc158db5a37550616b0f5508b417f5c",
+      "manifest_path": "artifacts/goal_loop_v2/1308/opening_xy_variants_v001/OP009/artifact_manifest.json",
+      "manifest_file_sha256": "f4702678c1f7a373d240a82949f751fb5ab260645d23f6a680b0f231821d3966",
+      "validation_path": "artifacts/goal_loop_v2/1308/opening_xy_variants_v001/OP009/validation.json",
+      "validation_file_sha256": "b3ad4d3945ec9f0e8c5629f8a778738cb41c3913457d34164a3748d636b45065",
+      "wall_piece_count": 36,
+      "blender_source_sha256": "a4188db0a1e099b9ac7cd600f43799e76bfff096799b4f3185cbea789943115e",
+      "portable_glb_sha256": "621835e61516c3fd07249e20e0cdff7f5b32b2434d4a6e7f88d591429b12ce6a",
+      "render_closeup_top_sha256": "3396dd824a538c3fcab4672685d4ebd3c4c07098c4416110c54d018e9060b41b"
+    },
+    {
+      "opening_id": "OP010",
+      "branch_id": "1308-gap-OP010-v001",
+      "variant_hash": "b1cfd0a352eaa8497af84602cfb276e9f5cac5dbb2f363f32bb3aadfd989c729",
+      "manifest_path": "artifacts/goal_loop_v2/1308/opening_xy_variants_v001/OP010/artifact_manifest.json",
+      "manifest_file_sha256": "0cda5a838a7fa179aa0f8828b2c105122ff600bf9f408db19edd4ef5237c06c3",
+      "validation_path": "artifacts/goal_loop_v2/1308/opening_xy_variants_v001/OP010/validation.json",
+      "validation_file_sha256": "e063cc230c507db57e2198332ef93cf90391d422782c90803d4e0db435ca3ea3",
+      "wall_piece_count": 36,
+      "blender_source_sha256": "3d69e267dfb48216744690231df7c9d5d1cccf252041cebe1478770fe33abddc",
+      "portable_glb_sha256": "b0e68822b37bca68f9cf94c584f10090af1483fd19faa011fd34f61e014d161b",
+      "render_closeup_top_sha256": "96c4da1d342e94fbd105fcabe1d741b929e0cf736e24e315fb5743ee51d87d66"
+    }
+  ],
+  "op001_projection_source_distinction": {
+    "projection_mode": "orthogonal_projection_within_wall_solid",
+    "source_gap_segment_m": [
+      [
+        3.432346,
+        5.62869
+      ],
+      [
+        4.363994000000001,
+        5.62869
+      ]
+    ],
+    "projected_gap_segment_m": [
+      [
+        3.432244267380125,
+        5.639972869363858
+      ],
+      [
+        4.363816532160683,
+        5.648372442561312
+      ]
+    ],
+    "maximum_perpendicular_offset_m": 0.01968324261937991,
+    "source_segment_preserved_as_provenance": true,
+    "segments_are_distinct": true
+  },
+  "op003_endpoint_residual_rule": {
+    "gap_starts_at_host_parameter_zero": true,
+    "zero_length_endpoint_residual_omitted": true,
+    "remaining_host_piece_count": 1,
+    "short_residual_piece_count_below_0_05m": 0
+  },
+  "reproducibility_scope": "current_evidence_workspace",
+  "portable_bundle": false,
+  "portability_blocker": "upstream_manifests_embed_machine_absolute_artifact_paths",
+  "artifact_labels": [
+    "COMBINED LAYER 2",
+    "XY GAP RESEARCH ONLY",
+    "NINE CANDIDATE GAPS",
+    "FULL-HEIGHT VISUALIZATION ONLY",
+    "NOT SOURCE-CONFIRMED",
+    "NO DOOR/WINDOW SEMANTICS",
+    "NO Z/HEAD/SILL CLAIM",
+    "NO TRAVERSABILITY / ADJACENCY",
+    "NOT FOR CONSTRUCTION"
+  ],
+  "gap_z_policy": "full_height_visualization_only",
+  "source_correction_authorized": false,
+  "xy_experiment_confirmation": false,
+  "cut_confirmation": false,
+  "pair_confirmation": false,
+  "adjacency_confirmation": false,
+  "semantic_promotion": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "ready": false,
+  "candidate_hash": "2020c5470db70792d4ebd5028bf283f650f17e24898c6dc24149989ca4bfc528"
+}

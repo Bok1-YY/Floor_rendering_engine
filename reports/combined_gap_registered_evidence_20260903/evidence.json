@@ -1,0 +1,761 @@
+{
+  "schema": "combined-gap-registered-evidence-v2",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+  "source_image": {
+    "path": "data/goal_loop_v2/references/1308/canonical-raw-portrait.png",
+    "bytes": 1621238,
+    "sha256": "b85ff7446e2d1a123e3a41dc541ea9d6e081f3978d3460d6de8ef9906119bc07",
+    "size": [
+      2245,
+      3043
+    ]
+  },
+  "plan_file_sha256": "d25639a04cd66d62d1c285e5bfe5567ea6a8e034ef21dc1e9655075c168a287b",
+  "plan_candidate_hash": "2020c5470db70792d4ebd5028bf283f650f17e24898c6dc24149989ca4bfc528",
+  "combined_builder_sha256": "a8237144a42eba225007db09e50abc8fb61f527915fbbf0aa2377789c987ab90",
+  "combined_manifest_file_sha256": "605c111f23634965fd91740294812977eeaece77bb9f47b7b442f39b124b0e33",
+  "combined_validation_file_sha256": "dd08c2e1c5a28934af70405144903825228ce26ffb4e7a8a139141a66007e424",
+  "combined_blender_source_sha256": "bc504578fb38f1413cf0fbab2a83d0ee1eb98afdb855a1c740ddb7b99ac70d32",
+  "combined_portable_glb_sha256": "d1b1cd9aadee6d8d4a8c631a0b414e00fb8291b13a365c4dab6e7e7ffbb1aa8c",
+  "opening_ids": [
+    "OP001",
+    "OP002",
+    "OP003",
+    "OP004",
+    "OP006",
+    "OP007",
+    "OP008",
+    "OP009",
+    "OP010"
+  ],
+  "excluded_opening_ids": [
+    "OP005",
+    "OP011",
+    "PORTAL-WB011-WB006-01",
+    "OP012"
+  ],
+  "full_plan": {
+    "metric_window": {
+      "center_m": [
+        4.577681541442871,
+        7.6576361656188965
+      ],
+      "ortho_scale_m": 17.05880038663745,
+      "resolution_px": [
+        1200,
+        1200
+      ],
+      "meters_per_pixel": 0.014215666988864542
+    },
+    "output_px_to_source_px_3x3": [
+      [
+        1.9424461000051552,
+        0.0,
+        -42.967663118914516
+      ],
+      [
+        0.0,
+        1.9547935074183345,
+        156.1238871463488
+      ],
+      [
+        0.0,
+        0.0,
+        1.0
+      ]
+    ],
+    "center_registration_error_px": 2.2737367544323206e-13,
+    "registered_source": {
+      "relative_path": "full-registered-source-clean.png",
+      "bytes": 483777,
+      "sha256": "5753a8e93431ed70be566462d0f4fc6e41124d6539ce356e052c2794de6c9abb",
+      "size": [
+        1200,
+        1200
+      ]
+    },
+    "combined_model_top": {
+      "path": "artifacts/goal_loop_v2/1308/research_combined_xy_gap_v001/1308_combined_xy_gap_top.png",
+      "bytes": 746504,
+      "sha256": "2ca9b39ebdfd1386e0058319ea75a02de9130b127430e748ca7a39cea34a26bb",
+      "size": [
+        1200,
+        1200
+      ]
+    },
+    "source_gap_locator": {
+      "relative_path": "full-source-gap-locator.png",
+      "bytes": 462346,
+      "sha256": "435dd4ff0a7803f2df9eb0f799e16d939ba0e5ed3f095d639059227774ad6bd0",
+      "size": [
+        1200,
+        1200
+      ]
+    },
+    "composite": {
+      "relative_path": "full-registered-composite.png",
+      "bytes": 1181017,
+      "sha256": "2652ca15e6487aa1b7157d3755d1db42103cc28b13517deb8eca111a03bb8ba5",
+      "size": [
+        3760,
+        1370
+      ]
+    }
+  },
+  "rows": [
+    {
+      "opening_id": "OP001",
+      "variant_hash": "4f2fcac04d0dc2d27a7857ab0756882ee440113411158c24e7c156d6b7d4e5ef",
+      "metric_window": {
+        "center_m": [
+          3.898030399770404,
+          5.644172655962585
+        ],
+        "ortho_scale_m": 2.4,
+        "resolution_px": [
+          1200,
+          1200
+        ]
+      },
+      "output_px_to_source_px_3x3": [
+        [
+          0.27328244274809166,
+          0.0,
+          865.6621691289331
+        ],
+        [
+          0.0,
+          0.27501959759602823,
+          1440.859195139715
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "center_registration_error_px": 0.0,
+      "registered_source": {
+        "relative_path": "OP001-registered-source-clean.png",
+        "bytes": 358368,
+        "sha256": "901a13356e4c274f9ebc2edffc872bbebc22d05da5eb446599c1a123674af2c3",
+        "size": [
+          1200,
+          1200
+        ]
+      },
+      "combined_model_closeup": {
+        "path": "artifacts/goal_loop_v2/1308/research_combined_xy_gap_v001/1308_combined_xy_gap_OP001_closeup_top.png",
+        "bytes": 717668,
+        "sha256": "1cfbdb55b493862f3443cac96ed72f5ff21353cf7cc755f1c962a8fda4f10c5d",
+        "size": [
+          1200,
+          1200
+        ]
+      },
+      "composite": {
+        "relative_path": "OP001-registered-composite.png",
+        "bytes": 936041,
+        "sha256": "df886bad95aab9e00f9887845702d3544a79d9fe96f4b8957d9f106d4be68951",
+        "size": [
+          2520,
+          1370
+        ]
+      },
+      "xy_candidate": true,
+      "source_correction_authorized": false,
+      "xy_experiment_confirmation": false,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false
+    },
+    {
+      "opening_id": "OP002",
+      "variant_hash": "ca443c90b54554b3ac9acdfb24d886f222abf2bebe43cfa1b81db98466bbd0ef",
+      "metric_window": {
+        "center_m": [
+          4.4239941442795345,
+          10.246542517814712
+        ],
+        "ortho_scale_m": 2.4,
+        "resolution_px": [
+          1200,
+          1200
+        ]
+      },
+      "output_px_to_source_px_3x3": [
+        [
+          0.27328244274809166,
+          0.0,
+          937.5304975771272
+        ],
+        [
+          0.0,
+          0.27501959759602823,
+          807.9882414423851
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "center_registration_error_px": 2.2737367544323206e-13,
+      "registered_source": {
+        "relative_path": "OP002-registered-source-clean.png",
+        "bytes": 213803,
+        "sha256": "f60f73c8c9882ae88afdd5723cc19cd2f04fec70e1b9943e4958699b170b45ea",
+        "size": [
+          1200,
+          1200
+        ]
+      },
+      "combined_model_closeup": {
+        "path": "artifacts/goal_loop_v2/1308/research_combined_xy_gap_v001/1308_combined_xy_gap_OP002_closeup_top.png",
+        "bytes": 757892,
+        "sha256": "3635967702ccd607880dbc2d13352807f6063786e2305742231c8832cee03583",
+        "size": [
+          1200,
+          1200
+        ]
+      },
+      "composite": {
+        "relative_path": "OP002-registered-composite.png",
+        "bytes": 821991,
+        "sha256": "7968dd5ac5633ec77cd00c52596de5ff3421d7d6626fea07feaea376c1c5594f",
+        "size": [
+          2520,
+          1370
+        ]
+      },
+      "xy_candidate": true,
+      "source_correction_authorized": false,
+      "xy_experiment_confirmation": false,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false
+    },
+    {
+      "opening_id": "OP003",
+      "variant_hash": "2d00270904fba196e757bbe50933d5471113f7e83d6fcf91d8660205dfd4504e",
+      "metric_window": {
+        "center_m": [
+          0.4756985000000001,
+          10.341081
+        ],
+        "ortho_scale_m": 2.4,
+        "resolution_px": [
+          1200,
+          1200
+        ]
+      },
+      "output_px_to_source_px_3x3": [
+        [
+          0.27328244274809166,
+          0.0,
+          398.03055839694656
+        ],
+        [
+          0.0,
+          0.27501959759602823,
+          794.9882737784164
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "center_registration_error_px": 2.2737367544323206e-13,
+      "registered_source": {
+        "relative_path": "OP003-registered-source-clean.png",
+        "bytes": 293576,
+        "sha256": "ec89ff5a0b51e12ea1c27fa855f4c70e2aacc0c2b01f04a4b4037056831ab6bd",
+        "size": [
+          1200,
+          1200
+        ]
+      },
+      "combined_model_closeup": {
+        "path": "artifacts/goal_loop_v2/1308/research_combined_xy_gap_v001/1308_combined_xy_gap_OP003_closeup_top.png",
+        "bytes": 823549,
+        "sha256": "efc89f47b15769d47d09f7329617895e537e688870ef3fd13a696e55449584c2",
+        "size": [
+          1200,
+          1200
+        ]
+      },
+      "composite": {
+        "relative_path": "OP003-registered-composite.png",
+        "bytes": 964489,
+        "sha256": "d14fa78fd60049309f3c2fccee5d885e7ffd4d679963e72f317d2299d01f6b36",
+        "size": [
+          2520,
+          1370
+        ]
+      },
+      "xy_candidate": true,
+      "source_correction_authorized": false,
+      "xy_experiment_confirmation": false,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false
+    },
+    {
+      "opening_id": "OP004",
+      "variant_hash": "b5398086c2624a275965b14dc357a4247b27c3b5bcff88b7414753eba0e6392b",
+      "metric_window": {
+        "center_m": [
+          5.792542,
+          13.886282999999999
+        ],
+        "ortho_scale_m": 2.4,
+        "resolution_px": [
+          1200,
+          1200
+        ]
+      },
+      "output_px_to_source_px_3x3": [
+        [
+          0.27328244274809166,
+          0.0,
+          1124.5305480916031
+        ],
+        [
+          0.0,
+          0.27501959759602823,
+          307.4882600600995
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "center_registration_error_px": 1.7053025658242404e-13,
+      "registered_source": {
+        "relative_path": "OP004-registered-source-clean.png",
+        "bytes": 392531,
+        "sha256": "095c00f428564a40b0b94862c480de0529ffaec05b7f75a5344edfdba9c020b1",
+        "size": [
+          1200,
+          1200
+        ]
+      },
+      "combined_model_closeup": {
+        "path": "artifacts/goal_loop_v2/1308/research_combined_xy_gap_v001/1308_combined_xy_gap_OP004_closeup_top.png",
+        "bytes": 719633,
+        "sha256": "f8a15a12f92e78b9a145c13afe34819b3e7da9ce03fd24c008987fa60644dbf5",
+        "size": [
+          1200,
+          1200
+        ]
+      },
+      "composite": {
+        "relative_path": "OP004-registered-composite.png",
+        "bytes": 978194,
+        "sha256": "64203320802e577feebb85458b58257b69913e92397cf38b87a89877c98b1efe",
+        "size": [
+          2520,
+          1370
+        ]
+      },
+      "xy_candidate": true,
+      "source_correction_authorized": false,
+      "xy_experiment_confirmation": false,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false
+    },
+    {
+      "opening_id": "OP006",
+      "variant_hash": "03a4eaa8a28b60f28f19c81dae5164078aaf9a2f7675a0fa3549d0a4314a7dd1",
+      "metric_window": {
+        "center_m": [
+          5.792541983977199,
+          10.7555975
+        ],
+        "ortho_scale_m": 2.4,
+        "resolution_px": [
+          1200,
+          1200
+        ]
+      },
+      "output_px_to_source_px_3x3": [
+        [
+          0.27328244274809166,
+          0.0,
+          1124.530545902228
+        ],
+        [
+          0.0,
+          0.27501959759602823,
+          737.9881932649594
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "center_registration_error_px": 0.0,
+      "registered_source": {
+        "relative_path": "OP006-registered-source-clean.png",
+        "bytes": 169373,
+        "sha256": "cc71906e398255af6f0b24de3a42e63d6b03ad170ed2ec98455f5169014c4d32",
+        "size": [
+          1200,
+          1200
+        ]
+      },
+      "combined_model_closeup": {
+        "path": "artifacts/goal_loop_v2/1308/research_combined_xy_gap_v001/1308_combined_xy_gap_OP006_closeup_top.png",
+        "bytes": 735221,
+        "sha256": "b2e03e860fc07f27c14932565ae428c9bd29230e067a455d71425a68cb423e10",
+        "size": [
+          1200,
+          1200
+        ]
+      },
+      "composite": {
+        "relative_path": "OP006-registered-composite.png",
+        "bytes": 753027,
+        "sha256": "c503d27b1cce0315fb7ba242a5b75d21b046aebcf67ac407ce5a31131d34b9f7",
+        "size": [
+          2520,
+          1370
+        ]
+      },
+      "xy_candidate": true,
+      "source_correction_authorized": false,
+      "xy_experiment_confirmation": false,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false
+    },
+    {
+      "opening_id": "OP007",
+      "variant_hash": "e1d3f348909863f1b6f5a2fa8d51a4b0be26935c1ec66c169b764cf3a50b0d6e",
+      "metric_window": {
+        "center_m": [
+          1.350251,
+          3.650649
+        ],
+        "ortho_scale_m": 2.4,
+        "resolution_px": [
+          1200,
+          1200
+        ]
+      },
+      "output_px_to_source_px_3x3": [
+        [
+          0.27328244274809166,
+          0.0,
+          517.5304801526718
+        ],
+        [
+          0.0,
+          0.27501959759602823,
+          1714.9882319702117
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "center_registration_error_px": 0.0,
+      "registered_source": {
+        "relative_path": "OP007-registered-source-clean.png",
+        "bytes": 389492,
+        "sha256": "885fc4729b661b6050934973d53ec51861d451fe5b8613f4331daa941c91a6b8",
+        "size": [
+          1200,
+          1200
+        ]
+      },
+      "combined_model_closeup": {
+        "path": "artifacts/goal_loop_v2/1308/research_combined_xy_gap_v001/1308_combined_xy_gap_OP007_closeup_top.png",
+        "bytes": 784185,
+        "sha256": "e669c0c7ce67167a475384f63c7fd5936128aae0037612dfa156a76228c2a1fc",
+        "size": [
+          1200,
+          1200
+        ]
+      },
+      "composite": {
+        "relative_path": "OP007-registered-composite.png",
+        "bytes": 1033183,
+        "sha256": "a23c8d7b4d0fac0a579a78434616bc56b5c4874ea9d9c1a4624578603e2a2c82",
+        "size": [
+          2520,
+          1370
+        ]
+      },
+      "xy_candidate": true,
+      "source_correction_authorized": false,
+      "xy_experiment_confirmation": false,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false
+    },
+    {
+      "opening_id": "OP008",
+      "variant_hash": "42661045e4288e85544c36f3f389de4547bf1437476956fc8422e3a1d3802e03",
+      "metric_window": {
+        "center_m": [
+          1.6100559999999717,
+          4.254242212306524
+        ],
+        "ortho_scale_m": 2.4,
+        "resolution_px": [
+          1200,
+          1200
+        ]
+      },
+      "output_px_to_source_px_3x3": [
+        [
+          0.27328244274809166,
+          0.0,
+          553.0305526717518
+        ],
+        [
+          0.0,
+          0.27501959759602823,
+          1631.9882507900943
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "center_registration_error_px": 2.2737367544323206e-13,
+      "registered_source": {
+        "relative_path": "OP008-registered-source-clean.png",
+        "bytes": 437155,
+        "sha256": "615b182d7e199f70b45e39e802a8686256ad2c55724f6ff3a665b4f9b6628ac8",
+        "size": [
+          1200,
+          1200
+        ]
+      },
+      "combined_model_closeup": {
+        "path": "artifacts/goal_loop_v2/1308/research_combined_xy_gap_v001/1308_combined_xy_gap_OP008_closeup_top.png",
+        "bytes": 775997,
+        "sha256": "e2803c6574699cb74eabbca29e23eb4e1bb9d91a511d7930d1acd3ad207a31df",
+        "size": [
+          1200,
+          1200
+        ]
+      },
+      "composite": {
+        "relative_path": "OP008-registered-composite.png",
+        "bytes": 1076880,
+        "sha256": "a6a753ac79a8c065437e3450744f1c54c7a18414c0928cb8be03af2f013668bf",
+        "size": [
+          2520,
+          1370
+        ]
+      },
+      "xy_candidate": true,
+      "source_correction_authorized": false,
+      "xy_experiment_confirmation": false,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false
+    },
+    {
+      "opening_id": "OP009",
+      "variant_hash": "c33e063eea824086c97421c7192bd8020cc158db5a37550616b0f5508b417f5c",
+      "metric_window": {
+        "center_m": [
+          2.213827,
+          14.25353
+        ],
+        "ortho_scale_m": 3.6775149999999988,
+        "resolution_px": [
+          1200,
+          1200
+        ]
+      },
+      "output_px_to_source_px_3x3": [
+        [
+          0.4187501176844783,
+          0.0,
+          548.2499545801528
+        ],
+        [
+          0.0,
+          0.42141195643889895,
+          169.1527836752025
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "center_registration_error_px": 5.684341886080802e-14,
+      "registered_source": {
+        "relative_path": "OP009-registered-source-clean.png",
+        "bytes": 470491,
+        "sha256": "dc5fac77b1d9e14e6200f827d8c31bc6732284c9a8865a2f00b0b6c3393f3c0a",
+        "size": [
+          1200,
+          1200
+        ]
+      },
+      "combined_model_closeup": {
+        "path": "artifacts/goal_loop_v2/1308/research_combined_xy_gap_v001/1308_combined_xy_gap_OP009_closeup_top.png",
+        "bytes": 724287,
+        "sha256": "b3919b94203464f20789d11412f8f718fb15d5ed93e8c0bed5a6d863c92462cf",
+        "size": [
+          1200,
+          1200
+        ]
+      },
+      "composite": {
+        "relative_path": "OP009-registered-composite.png",
+        "bytes": 1070993,
+        "sha256": "830d7a82b2ba2f06b23f5671aa215bbc5283efe5b6b9c2853d8c9ec50295318e",
+        "size": [
+          2520,
+          1370
+        ]
+      },
+      "xy_candidate": true,
+      "source_correction_authorized": false,
+      "xy_experiment_confirmation": false,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false
+    },
+    {
+      "opening_id": "OP010",
+      "variant_hash": "b1cfd0a352eaa8497af84602cfb276e9f5cac5dbb2f363f32bb3aadfd989c729",
+      "metric_window": {
+        "center_m": [
+          6.195056,
+          0.003636
+        ],
+        "ortho_scale_m": 3.714105000000001,
+        "resolution_px": [
+          1200,
+          1200
+        ]
+      },
+      "output_px_to_source_px_3x3": [
+        [
+          0.4229165362595421,
+          0.0,
+          1089.7500965648856
+        ],
+        [
+          0.0,
+          0.4256048593872486,
+          2126.137098739221
+        ],
+        [
+          0.0,
+          0.0,
+          1.0
+        ]
+      ],
+      "center_registration_error_px": 4.547473508864641e-13,
+      "registered_source": {
+        "relative_path": "OP010-registered-source-clean.png",
+        "bytes": 597588,
+        "sha256": "17b59b107f0feace5bc010807c270ba9ec933ce316c139f1e122fb5ae3b7c767",
+        "size": [
+          1200,
+          1200
+        ]
+      },
+      "combined_model_closeup": {
+        "path": "artifacts/goal_loop_v2/1308/research_combined_xy_gap_v001/1308_combined_xy_gap_OP010_closeup_top.png",
+        "bytes": 692956,
+        "sha256": "8ce85b3b837aa8935b10fe07cb9fb9d833cfb33ce970e835ced80d71342e3749",
+        "size": [
+          1200,
+          1200
+        ]
+      },
+      "composite": {
+        "relative_path": "OP010-registered-composite.png",
+        "bytes": 1172547,
+        "sha256": "7b7716b1509d0e36a7df4f61f3e9c5abb6f4296489438b4387733fad2421274c",
+        "size": [
+          2520,
+          1370
+        ]
+      },
+      "xy_candidate": true,
+      "source_correction_authorized": false,
+      "xy_experiment_confirmation": false,
+      "cut_confirmation": false,
+      "pair_confirmation": false,
+      "adjacency_confirmation": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false
+    }
+  ],
+  "contact_sheet": {
+    "relative_path": "combined-nine-gap-contact-sheet.png",
+    "bytes": 1267194,
+    "sha256": "0fcbe0a0e89145b229bec83817b0ad03135524ec215dc6eb561b0c72f246f238",
+    "size": [
+      3000,
+      1650
+    ]
+  },
+  "registration_contract": "same_center_same_ortho_scale_same_orientation_same_1200x1200_resolution",
+  "model_scope": "single_combined_43_piece_wall_set",
+  "output_path_mode": "relative_to_evidence_file",
+  "evidence_plan_portable": false,
+  "source_correction_authorized": false,
+  "xy_experiment_confirmation": false,
+  "cut_confirmation": false,
+  "pair_confirmation": false,
+  "adjacency_confirmation": false,
+  "semantic_promotion": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "ready": false,
+  "candidate_hash": "5b03f7aca9a669291a00829c4029dc16744d7da4ca485d4276cef7af3b59a039"
+}
