@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Any, Mapping
 from tools.fastloop_research.contract import canonical_json
 from tools.fastloop_research.v21_contract import validate_v21_document
+from tools.goal_loop_v2.opening_side_candidates import validate_opening_side_space_candidate
+from tools.goal_loop_v2.target_aware_wall_solids import validate_target_aware_wall_solids
 
 SCHEMA = "op004-geometry-adjudication-candidate-v1"
 OPENING_ID = "OP004"
@@ -41,6 +43,8 @@ def build_op004_geometry_adjudication_candidate(document: Mapping[str,Any], evid
     if host is None: raise ValueError("OP004 host candidate missing")
     side = json.loads(Path(opening_side_candidate).read_text(encoding="utf-8")) if isinstance(opening_side_candidate,(str,Path)) else dict(opening_side_candidate)
     wall = json.loads(Path(target_aware_wall_candidate).read_text(encoding="utf-8")) if isinstance(target_aware_wall_candidate,(str,Path)) else dict(target_aware_wall_candidate)
+    side = validate_opening_side_space_candidate(doc, side)
+    wall = validate_target_aware_wall_solids(doc, wall)
     result={"schema":SCHEMA,"source_structure_hash":doc["structure_hash"],"opening_id":OPENING_ID,"source_evidence_binding":_file_binding("source_evidence",evidence_file),"opening_side_candidate_hash":side.get("candidate_hash"),"target_aware_wall_candidate_hash":wall.get("candidate_hash"),"registration":{"max_endpoint_error_px":row["registration"]["max_endpoint_error_px"],"tolerance_px":1.0,"passed":row["registration"]["max_endpoint_error_px"]<=1.0},"host_candidate":{"atom_id":HOST_ID,"segment_m":deepcopy(host["segment_m"]),"endpoint_distance_sum_m":host["endpoint_distance_sum_m"]},"room_pair_candidate":deepcopy(PAIR),"jamb_support":_support(row["source_segment_m"],host["segment_m"]),"remaining_blockers":deepcopy(BLOCKERS),"decision":"unresolved_candidate","status":"pending_human_review","cut_confirmation":False,"source_confirmation":False,"pair_confirmation":False,"semantic_promotion":False,"score_effect":"none","build_authorized":False,"ready":False,"candidate_hash":"0"*64}
     result["candidate_hash"]=_hash({k:v for k,v in result.items() if k!="candidate_hash"})
     return result if _skip_validate else validate_op004_geometry_adjudication_candidate(doc,evidence_file,opening_side_candidate,target_aware_wall_candidate,result)
