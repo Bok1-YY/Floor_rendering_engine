@@ -1,0 +1,135 @@
+{
+  "application_authorized": false,
+  "build_authorized": false,
+  "candidate_hash": "444e271b4717d70d02497b1513972c1997f91eef06cc260caec579036e988a3f",
+  "candidates": [
+    {
+      "application_authorized": false,
+      "build_authorized": false,
+      "directed_side_assignment": {
+        "side_a": "bedroom_corridor",
+        "side_b": "bedroom_01"
+      },
+      "host_atom_id": "ATOM-WB006-02",
+      "minimum_jamb_m": 1.999857732,
+      "opening_id": "OP002",
+      "packet_hash": "73089032f97e108ad759d27b662e7d19a68e5d98ca644b51b5924ae353f14466",
+      "remaining_blockers": [
+        "SOURCE_APPLICATION_REVIEW",
+        "VERTICAL_POLICY_PENDING",
+        "TRAVERSABILITY_PENDING",
+        "ADJACENCY_PENDING",
+        "HUMAN_ACCEPTANCE_PENDING"
+      ],
+      "score_effect": "none",
+      "segment_m": [
+        [
+          4.423994413407822,
+          10.690147268408552
+        ],
+        [
+          4.423994413407822,
+          9.802937767220904
+        ]
+      ],
+      "semantic_promotion": false,
+      "source_candidate_file_sha256": "2846644a6b6f8cbb596579da59467c0e588187c7b29e2e797409539f0371b4d4",
+      "source_candidate_hash": "a2b868370a82eaf7fde8e70e24840ccad0be25f0c6c783bf9677bd212a3a2130",
+      "visual_advisory": "door",
+      "width_m": 0.8872095011876482
+    },
+    {
+      "application_authorized": false,
+      "build_authorized": false,
+      "directed_side_assignment": {
+        "contract": "side_a=left_of_source_p0_to_p1; side_b=right_of_source_p0_to_p1",
+        "side_a": "bedroom_02",
+        "side_b": "north_toilet",
+        "signed_normal_offsets_m": {
+          "bedroom_02": 1.68324,
+          "north_toilet": -0.684274
+        }
+      },
+      "host_atom_id": "ATOM-WB007-01",
+      "minimum_jamb_m": 0.879937,
+      "opening_id": "OP004",
+      "packet_hash": "bdc1ed691dbfb799ebe2e6ed70bf3a9eb9fb897fe48f944099d344cb4bdf0b6c",
+      "remaining_blockers": [
+        "SOURCE_APPLICATION_REVIEW",
+        "VERTICAL_POLICY_PENDING",
+        "TRAVERSABILITY_PENDING",
+        "ADJACENCY_PENDING",
+        "HUMAN_ACCEPTANCE_PENDING"
+      ],
+      "score_effect": "none",
+      "segment_m": [
+        [
+          5.792542,
+          14.340796
+        ],
+        [
+          5.792542,
+          13.43177
+        ]
+      ],
+      "semantic_promotion": false,
+      "source_candidate_file_sha256": "a31e82ca1c4e58f1ac132129765509cbf57a4aa2d89f12c235e57041dd6f4244",
+      "source_candidate_hash": "0043b67b78ffa2db2a7f75e2822d54027ab25d906bfd6060f0af36c2067560c9",
+      "visual_advisory": "door",
+      "width_m": 0.909026
+    },
+    {
+      "application_authorized": false,
+      "build_authorized": false,
+      "directed_side_assignment": {
+        "contract": "side_a=left_of_source_p0_to_p1; side_b=right_of_source_p0_to_p1",
+        "side_a": "rear_balcony",
+        "side_b": "bedroom_01",
+        "signed_normal_offsets_m": {
+          "bedroom_01": -2.7179885,
+          "rear_balcony": 0.530871
+        }
+      },
+      "host_atom_id": "ATOM-WB005-01",
+      "minimum_jamb_m": 1.44905,
+      "opening_id": "OP009",
+      "packet_hash": "a6d4371a7525ec945d6715c7e756fcb44b83af4d1d306e27651464b57d19a052",
+      "remaining_blockers": [
+        "SOURCE_APPLICATION_REVIEW",
+        "VERTICAL_POLICY_PENDING",
+        "TRAVERSABILITY_PENDING",
+        "ADJACENCY_PENDING",
+        "HUMAN_ACCEPTANCE_PENDING",
+        "TYPE_CONFLICT_PENDING"
+      ],
+      "score_effect": "none",
+      "segment_m": [
+        [
+          1.478324,
+          14.25353
+        ],
+        [
+          2.94933,
+          14.25353
+        ]
+      ],
+      "semantic_promotion": false,
+      "source_candidate_file_sha256": "a31e82ca1c4e58f1ac132129765509cbf57a4aa2d89f12c235e57041dd6f4244",
+      "source_candidate_hash": "0043b67b78ffa2db2a7f75e2822d54027ab25d906bfd6060f0af36c2067560c9",
+      "visual_advisory": "glazed_interface",
+      "width_m": 1.471006
+    }
+  ],
+  "human_review_pending": true,
+  "opening_ids": [
+    "OP002",
+    "OP004",
+    "OP009"
+  ],
+  "ready": false,
+  "schema": "non-applying-2d-correction-candidate-registry-v1",
+  "score_effect": "none",
+  "semantic_promotion": false,
+  "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1"
+}
