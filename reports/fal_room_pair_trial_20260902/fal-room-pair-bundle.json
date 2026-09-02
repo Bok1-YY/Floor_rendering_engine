@@ -1,0 +1,291 @@
+{
+  "adjacency_confirmation": false,
+  "agreement_counts": {
+    "both_top_ranked": 7,
+    "no_top_ranked": 0,
+    "partial_top_ranked": 3,
+    "unusable": 1
+  },
+  "build_authorized": false,
+  "candidate_hash": "d5ce610645e5ca81d6d93cb547107b4b45c9a65f5813aabd5cec81f7966718b4",
+  "covered_opening_ids": [
+    "OP001",
+    "OP002",
+    "OP003",
+    "OP004",
+    "OP005",
+    "OP006",
+    "OP007",
+    "OP008",
+    "OP009",
+    "OP010",
+    "OP011"
+  ],
+  "manifest_file_sha256": "0a1403a34354f407032075d5acddbd8a08d5b99ac488235624ccf866c63df239",
+  "method_disposition": "insufficient_for_pair_confirmation",
+  "pair_confirmation": false,
+  "ready": false,
+  "reviews": [
+    {
+      "adjacency_confirmation": false,
+      "advisory_pair_candidate": [
+        "lift_shaft",
+        "lobby"
+      ],
+      "build_authorized": false,
+      "cost_usd": 0.0003092,
+      "opening_id": "OP001",
+      "pair_confirmation": false,
+      "parsed": {
+        "confidence": "high",
+        "opening_id": "OP001",
+        "review_status": "agree",
+        "side_a_label": "A2",
+        "side_b_label": "B1"
+      },
+      "result_canonical_sha256": "7a756771bc3991899da6bdd2551058bfc608ef6e5db753ddc2d20f86f0b7561b",
+      "result_file_sha256": "b40cee7e051c8c70bee550b5ea2070574d5dd9f1bebf2741d5a3dfd612057fbf",
+      "score_effect": "none",
+      "semantic_promotion": false,
+      "top_rank_agreement": "partial_top_ranked",
+      "usable_advisory": true
+    },
+    {
+      "adjacency_confirmation": false,
+      "advisory_pair_candidate": null,
+      "build_authorized": false,
+      "cost_usd": 0.0003217,
+      "opening_id": "OP002",
+      "pair_confirmation": false,
+      "parsed": null,
+      "result_canonical_sha256": "81f54a22697b1422e8fd73686073d8e32f59fe72d395504ae682bbd59233f23c",
+      "result_file_sha256": "29781a55141f79f85417a453197485e9dd22c62ddbf5ff75344ac53e9daee81e",
+      "score_effect": "none",
+      "semantic_promotion": false,
+      "top_rank_agreement": "unusable",
+      "usable_advisory": false
+    },
+    {
+      "adjacency_confirmation": false,
+      "advisory_pair_candidate": [
+        "rear_balcony",
+        "west_toilet"
+      ],
+      "build_authorized": false,
+      "cost_usd": 0.0003092,
+      "opening_id": "OP003",
+      "pair_confirmation": false,
+      "parsed": {
+        "confidence": "high",
+        "opening_id": "OP003",
+        "review_status": "agree",
+        "side_a_label": "A2",
+        "side_b_label": "B1"
+      },
+      "result_canonical_sha256": "8adaa715e1d45c0b57d4e086c4fc8a9df97d749cd6a3e607a92ece38a41f5664",
+      "result_file_sha256": "9c4dba324bcf251ccabfa035de5fc7cf034b114fd1a2039a063a0ccd66b350cd",
+      "score_effect": "none",
+      "semantic_promotion": false,
+      "top_rank_agreement": "partial_top_ranked",
+      "usable_advisory": true
+    },
+    {
+      "adjacency_confirmation": false,
+      "advisory_pair_candidate": [
+        "bedroom_02",
+        "north_toilet"
+      ],
+      "build_authorized": false,
+      "cost_usd": 0.0003092,
+      "opening_id": "OP004",
+      "pair_confirmation": false,
+      "parsed": {
+        "confidence": "high",
+        "opening_id": "OP004",
+        "review_status": "agree",
+        "side_a_label": "A1",
+        "side_b_label": "B1"
+      },
+      "result_canonical_sha256": "ef3dc53f7eb0c5194fd54d969584642bd70167c425b15c1825ce165fda9d1889",
+      "result_file_sha256": "f8b1d6543b1f73dec3b270190f306a12ad7989232535a1ef862ac02f32f77080",
+      "score_effect": "none",
+      "semantic_promotion": false,
+      "top_rank_agreement": "both_top_ranked",
+      "usable_advisory": true
+    },
+    {
+      "adjacency_confirmation": false,
+      "advisory_pair_candidate": [
+        "bedroom_01",
+        "bedroom_corridor"
+      ],
+      "build_authorized": false,
+      "cost_usd": 0.0003092,
+      "opening_id": "OP005",
+      "pair_confirmation": false,
+      "parsed": {
+        "confidence": "high",
+        "opening_id": "OP005",
+        "review_status": "agree",
+        "side_a_label": "A1",
+        "side_b_label": "B1"
+      },
+      "result_canonical_sha256": "4aefa0da89037ab2aeb082f5b18fca643f17b6b3d6fead56a3e7493c119459be",
+      "result_file_sha256": "d740dd22000ae7e925d87d95db0e4c0fdf38fc611bde04c5fef3656e41937ea8",
+      "score_effect": "none",
+      "semantic_promotion": false,
+      "top_rank_agreement": "both_top_ranked",
+      "usable_advisory": true
+    },
+    {
+      "adjacency_confirmation": false,
+      "advisory_pair_candidate": [
+        "bedroom_03",
+        "bedroom_corridor"
+      ],
+      "build_authorized": false,
+      "cost_usd": 0.0003092,
+      "opening_id": "OP006",
+      "pair_confirmation": false,
+      "parsed": {
+        "confidence": "high",
+        "opening_id": "OP006",
+        "review_status": "agree",
+        "side_a_label": "A1",
+        "side_b_label": "B1"
+      },
+      "result_canonical_sha256": "3c9ff4f234d1ffb1f3e4f0344177c03550255064082a499a11d38e40c694f2ce",
+      "result_file_sha256": "c1304610b19bd3730570a4c8d5026bcbbc7f114b409350128c65d466e18e5568",
+      "score_effect": "none",
+      "semantic_promotion": false,
+      "top_rank_agreement": "both_top_ranked",
+      "usable_advisory": true
+    },
+    {
+      "adjacency_confirmation": false,
+      "advisory_pair_candidate": [
+        "lobby",
+        "wc"
+      ],
+      "build_authorized": false,
+      "cost_usd": 0.0003092,
+      "opening_id": "OP007",
+      "pair_confirmation": false,
+      "parsed": {
+        "confidence": "high",
+        "opening_id": "OP007",
+        "review_status": "agree",
+        "side_a_label": "A2",
+        "side_b_label": "B1"
+      },
+      "result_canonical_sha256": "e135bdec75846598212fae0d8bffb0082e50faf5e1b9ad1f79e5e444f789b067",
+      "result_file_sha256": "4c1499d9b18ae5b9669905dda35dc51559475a0ebbc30063dd80e0e4957e85aa",
+      "score_effect": "none",
+      "semantic_promotion": false,
+      "top_rank_agreement": "partial_top_ranked",
+      "usable_advisory": true
+    },
+    {
+      "adjacency_confirmation": false,
+      "advisory_pair_candidate": [
+        "bath",
+        "wc"
+      ],
+      "build_authorized": false,
+      "cost_usd": 0.0003092,
+      "opening_id": "OP008",
+      "pair_confirmation": false,
+      "parsed": {
+        "confidence": "high",
+        "opening_id": "OP008",
+        "review_status": "agree",
+        "side_a_label": "A1",
+        "side_b_label": "B1"
+      },
+      "result_canonical_sha256": "3bd1b1fe36f5ba46d0655c0ed31d870285f6be67f6c48cb165a326686bfda7d6",
+      "result_file_sha256": "3a66d226d9a557e9b069cf225e435c6debd6b30a67ee75ad25036bae5068d5f6",
+      "score_effect": "none",
+      "semantic_promotion": false,
+      "top_rank_agreement": "both_top_ranked",
+      "usable_advisory": true
+    },
+    {
+      "adjacency_confirmation": false,
+      "advisory_pair_candidate": [
+        "rear_balcony",
+        "north_toilet"
+      ],
+      "build_authorized": false,
+      "cost_usd": 0.0003056,
+      "opening_id": "OP009",
+      "pair_confirmation": false,
+      "parsed": {
+        "confidence": "high",
+        "opening_id": "OP009",
+        "review_status": "agree",
+        "side_a_label": "A1",
+        "side_b_label": "B1"
+      },
+      "result_canonical_sha256": "dbe049a8ba23fdc1f27d7b997129b6e5755aab424f7c356d14e2fe1cc0060b2b",
+      "result_file_sha256": "d65fb81fbd1091bcbbcdab0e20a542a9cfbb68efed8e50b191506ba94f5cda75",
+      "score_effect": "none",
+      "semantic_promotion": false,
+      "top_rank_agreement": "both_top_ranked",
+      "usable_advisory": true
+    },
+    {
+      "adjacency_confirmation": false,
+      "advisory_pair_candidate": [
+        "kitchen",
+        "front_balcony"
+      ],
+      "build_authorized": false,
+      "cost_usd": 0.0003056,
+      "opening_id": "OP010",
+      "pair_confirmation": false,
+      "parsed": {
+        "confidence": "high",
+        "opening_id": "OP010",
+        "review_status": "agree",
+        "side_a_label": "A1",
+        "side_b_label": "B1"
+      },
+      "result_canonical_sha256": "181c9baa1325a1a319f154ab5bc0ffea1bba8b0cdf52c695875701b6b679f52b",
+      "result_file_sha256": "3ff8b37c88c36619a65910cd5eb2cf6a56ff5c02e43f97169c3dd91d8d0ff27f",
+      "score_effect": "none",
+      "semantic_promotion": false,
+      "top_rank_agreement": "both_top_ranked",
+      "usable_advisory": true
+    },
+    {
+      "adjacency_confirmation": false,
+      "advisory_pair_candidate": [
+        "bath",
+        "wc"
+      ],
+      "build_authorized": false,
+      "cost_usd": 0.0003092,
+      "opening_id": "OP011",
+      "pair_confirmation": false,
+      "parsed": {
+        "confidence": "high",
+        "opening_id": "OP011",
+        "review_status": "agree",
+        "side_a_label": "A1",
+        "side_b_label": "B1"
+      },
+      "result_canonical_sha256": "53636891e426feb9ff38f7358364df42541d8e6c75a79476a3460f6bd961ef8a",
+      "result_file_sha256": "7b7591ffe3ea573e78cf664244571ccbb5ba012058e48f6e03fe282c561d4598",
+      "score_effect": "none",
+      "semantic_promotion": false,
+      "top_rank_agreement": "both_top_ranked",
+      "usable_advisory": true
+    }
+  ],
+  "schema": "fal-room-pair-advisory-bundle-v1",
+  "score_effect": "none",
+  "semantic_promotion": false,
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "total_cost_usd": 0.0034065,
+  "usable_count": 10
+}
