@@ -1,0 +1,2103 @@
+{
+  "schema": "source-bound-edge-admissibility-register-v1",
+  "source_structure_hash": "700bb25a37a6b944bb792c1837ee2c47fcfa0437e315cbcc333fb880057299c1",
+  "source_document_sha256": "db4fa7a656b8a0267494d4e299a436503d219ba57f06f168dd5150427f299eb1",
+  "input_bindings": {
+    "layer3a": {
+      "file_sha256": "c428b5c277e89b817139b61ccc22310847f62e47182c4eb6dead496afc046a26",
+      "candidate_hash": "4ff72ad28612b4959049195bc7ea9f2b5bd61dd2c5ef11f960f007c773d6fdb4"
+    },
+    "cut_matrix": {
+      "file_sha256": "8feb38e0e1169b9fe0750578836dacd4073c5461014d9af3755f8c0e7317e0fa",
+      "candidate_hash": "ffe9dc923fd998ab28e984d75951b913f21af8e15f0c45cb9d4a42de6ef8f613"
+    },
+    "partition_pairs": {
+      "file_sha256": "041a86ffc8740c38f23ade29b9455d2fdc9af397a6fb68f0e0e1c56b4322cf72",
+      "candidate_hash": "5fb410dcee736042652f2a8b290305737b3e4e10178e7263b9ef8e998400dae2"
+    },
+    "correction_registry": {
+      "file_sha256": "efbfecf27c3e0556485ed9852ee7aa10c9acfec315076c926a74067df7869648",
+      "candidate_hash": "2d776f3a8df6d15269bd36c7fc37372ce81ae460667a8481ef990bdbc8ca5d93"
+    },
+    "unit_reachability": {
+      "file_sha256": "65822f1374559b8168430b89fd659b4db96ec632fbad4cf832f6706fe93d3f20",
+      "candidate_hash": "338422f1e49b58f985d280e2f50c541b79ec53a7a38b5737391bfb0718b77966"
+    },
+    "op001_scope": {
+      "file_sha256": "bf0d8118ebe1584d4d33586e884332a58144f96e9c3d7826098566ec31f7a117",
+      "candidate_hash": "052125fe3027f9ee3025c72a9755b71d7a25b4f43125cae29cb80354b2c4a858"
+    },
+    "source_connectivity": {
+      "file_sha256": "c33a2395405ac8ba955541cb32f4b30e8f0cf81ad83bca181d18c4fdb0c34df3",
+      "candidate_hash": "748489439400876d7d8d97ecb82ab05e6248969f8cd4ceaa5219d872c58f30be"
+    },
+    "root_policy": {
+      "file_sha256": "0548e30e53d177ed6c5544a67b56b740698114c1c11f071cc42ee0637a43b955",
+      "candidate_hash": "b16e3aa63a985dd0534db476cf949bf10e2c3dbe76e4e6da38fe9be0a0cd4514"
+    },
+    "live_gates": {
+      "file_sha256": "91cd797a9d060a1397175ff6b7c7fe4d021b6872949cd44da326d5c3221ff282",
+      "candidate_hash": null
+    }
+  },
+  "demoted_portal_deny_candidate_hash": "f12daabb6c8562b960a9f2c007f604300c4d15b48abf834e1a83ef3be9bd00dd",
+  "row_ids": [
+    "OP001",
+    "OP002",
+    "OP003",
+    "OP004",
+    "OP005",
+    "OP006",
+    "OP007",
+    "OP008",
+    "OP009",
+    "OP010",
+    "OP011",
+    "PORTAL-WB011-WB006-01",
+    "OP012"
+  ],
+  "row_count": 13,
+  "rows": [
+    {
+      "edge_id": "EDGE-REGISTER-OP001",
+      "opening_id": "OP001",
+      "source_record_state": {
+        "opening_status": "candidate",
+        "build_disposition": "cut",
+        "build_kind": "entrance",
+        "source_observation_kind": "entrance_symbol",
+        "source_observation_status": "confirmed",
+        "source_segment_m": [
+          [
+            3.432346,
+            5.62869
+          ],
+          [
+            4.39838,
+            5.62869
+          ]
+        ],
+        "source_host_atom_id": "ATOM-WB016-02",
+        "effective_void_record_status": "confirmed",
+        "effective_void_record_segment_m": [
+          [
+            3.432346,
+            5.62869
+          ],
+          [
+            4.363994000000001,
+            5.62869
+          ]
+        ],
+        "jamb_before_record_status": "confirmed",
+        "jamb_after_record_status": "confirmed",
+        "source_side_a_space_id": null,
+        "source_side_b_space_id": null,
+        "source_traversable_value": false,
+        "record_fields_are_edge_confirmations": false
+      },
+      "registered_segment_m": [
+        [
+          3.432346,
+          5.62869
+        ],
+        [
+          4.363994000000001,
+          5.62869
+        ]
+      ],
+      "host_atom_id": "ATOM-WB016-02",
+      "host_status": "source_record_present_not_edge_confirmation",
+      "wall_break_status": "research_cut_impact_candidate",
+      "cut_impact_classification": "no_topology_change",
+      "effective_void_status": "source_record_present_not_edge_confirmation",
+      "jamb_status": "source_record_confirmed_not_edge_confirmation",
+      "visual_subtype": {
+        "candidate": "door",
+        "status": "visual_advisory_only",
+        "source_subtype_confirmation": false
+      },
+      "pair_evidence": [
+        {
+          "evidence_source": "op001_unit_scope_hypothesis",
+          "space_a_id": "common_core_circulation",
+          "space_b_id": "lobby",
+          "unordered_pair": [
+            "common_core_circulation",
+            "lobby"
+          ],
+          "authority": "unit_scope_hypothesis_not_adjacency",
+          "confirmation": false
+        },
+        {
+          "evidence_source": "unit_scope_reachability_tier_d_research_edge",
+          "space_a_id": "common_core_circulation",
+          "space_b_id": "lobby",
+          "unordered_pair": [
+            "common_core_circulation",
+            "lobby"
+          ],
+          "authority": "research_graph_edge_confirmation_false",
+          "confirmation": false,
+          "edge_kind": "unit_scope_entrance_hypothesis"
+        }
+      ],
+      "pair_ambiguity_evidence": [],
+      "pair_candidate_sets": [
+        [
+          "common_core_circulation",
+          "lobby"
+        ]
+      ],
+      "pair_candidate_count": 1,
+      "pair_status": "unique_candidate_pair_unconfirmed",
+      "selected_pair": null,
+      "candidate_graph_membership": [
+        {
+          "unordered_pair": [
+            "common_core_circulation",
+            "lobby"
+          ],
+          "space_membership": {
+            "common_core_circulation": "candidate_reachable",
+            "lobby": "candidate_reachable"
+          },
+          "crosses_candidate_reachable_boundary": false,
+          "internal_to_candidate_unreachable_component": false,
+          "confirmation": false
+        }
+      ],
+      "crosses_candidate_reachable_boundary": false,
+      "internal_to_candidate_unreachable_component": false,
+      "root_relevance": "unit_scope_hypothesis_only",
+      "source_connectivity_evidence": null,
+      "priority": {
+        "rank": 4,
+        "label_zh": "高"
+      },
+      "human_readable_status_zh": "内部单位范围候选；ENTRY 不是楼栋外部入口。",
+      "remaining_blockers": [
+        "BUILDING_EXTERIOR_ROOT_FALSE",
+        "UNIT_ROOT_POLICY_PENDING",
+        "TRAVERSABILITY_UNCONFIRMED",
+        "ADJACENCY_UNCONFIRMED",
+        "HUMAN_ACCEPTANCE_PENDING"
+      ],
+      "eligible_for_targeted_room_side_review": true,
+      "pair_confirmation": false,
+      "host_confirmation": false,
+      "effective_void_confirmation": false,
+      "jamb_confirmation": false,
+      "traversability_confirmation": false,
+      "adjacency_confirmation": false,
+      "root_confirmation": false,
+      "edge_confirmation": false,
+      "graph_edge_admitted": false,
+      "source_application_authorized": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "human_readable_boundary": {
+        "named_sides_are_not_a_confirmed_pair": true,
+        "visual_subtype_is_not_edge_confirmation": true,
+        "cuttable_is_not_wall_break_authority": true,
+        "candidate_reachability_is_not_reachability_confirmation": true,
+        "coverage_is_not_completion": true
+      },
+      "candidate_hash": "1d670a9c1b77fff676a5d9a2da37e3227259cf765f3cdc52baa63ccd7f4840ff"
+    },
+    {
+      "edge_id": "EDGE-REGISTER-OP002",
+      "opening_id": "OP002",
+      "source_record_state": {
+        "opening_status": "candidate",
+        "build_disposition": "cut",
+        "build_kind": "door",
+        "source_observation_kind": "door",
+        "source_observation_status": "candidate",
+        "source_segment_m": [
+          [
+            4.423994413407822,
+            10.690147268408552
+          ],
+          [
+            4.423994413407822,
+            9.802937767220904
+          ]
+        ],
+        "source_host_atom_id": "ATOM-WB006-02",
+        "effective_void_record_status": "candidate",
+        "effective_void_record_segment_m": [
+          [
+            4.423994413407822,
+            10.690147268408552
+          ],
+          [
+            4.423994413407822,
+            9.802937767220904
+          ]
+        ],
+        "jamb_before_record_status": "candidate",
+        "jamb_after_record_status": "candidate",
+        "source_side_a_space_id": "bedroom_01",
+        "source_side_b_space_id": "bedroom_corridor",
+        "source_traversable_value": true,
+        "record_fields_are_edge_confirmations": false
+      },
+      "registered_segment_m": [
+        [
+          4.423994413407822,
+          10.690147268408552
+        ],
+        [
+          4.423994413407822,
+          9.802937767220904
+        ]
+      ],
+      "host_atom_id": "ATOM-WB006-02",
+      "host_status": "source_record_present_not_edge_confirmation",
+      "wall_break_status": "research_cut_impact_candidate",
+      "cut_impact_classification": "group_ambiguous",
+      "effective_void_status": "source_record_present_not_edge_confirmation",
+      "jamb_status": "source_record_candidate",
+      "visual_subtype": {
+        "candidate": "door",
+        "status": "visual_advisory_only",
+        "source_subtype_confirmation": false
+      },
+      "pair_evidence": [
+        {
+          "evidence_source": "source_opening_record_sides",
+          "space_a_id": "bedroom_01",
+          "space_b_id": "bedroom_corridor",
+          "unordered_pair": [
+            "bedroom_01",
+            "bedroom_corridor"
+          ],
+          "authority": "source_record_candidate_not_edge_confirmation",
+          "confirmation": false
+        },
+        {
+          "evidence_source": "source_adjacency_candidate",
+          "space_a_id": "bedroom_01",
+          "space_b_id": "common_core_circulation",
+          "unordered_pair": [
+            "bedroom_01",
+            "common_core_circulation"
+          ],
+          "authority": "source_adjacency_status_candidate",
+          "confirmation": false,
+          "edge_id": "EDGE-OP002",
+          "source_edge_status": "candidate"
+        },
+        {
+          "evidence_source": "correction_registry_candidate",
+          "space_a_id": "bedroom_corridor",
+          "space_b_id": "bedroom_01",
+          "unordered_pair": [
+            "bedroom_01",
+            "bedroom_corridor"
+          ],
+          "authority": "non_applying_2d_correction_candidate",
+          "confirmation": false,
+          "packet_hash": "90123fd563e87ab04c4cd8165d49f1ff45c8e1849d7a92ed4a0971f4d83f2625"
+        },
+        {
+          "evidence_source": "partition_resolved_candidate",
+          "space_a_id": "bedroom_corridor",
+          "space_b_id": "bedroom_01",
+          "unordered_pair": [
+            "bedroom_01",
+            "bedroom_corridor"
+          ],
+          "authority": "research_partition_candidate",
+          "confirmation": false,
+          "sensitivity_stable": true
+        },
+        {
+          "evidence_source": "unit_scope_reachability_tier_d_research_edge",
+          "space_a_id": "bedroom_corridor",
+          "space_b_id": "bedroom_01",
+          "unordered_pair": [
+            "bedroom_01",
+            "bedroom_corridor"
+          ],
+          "authority": "research_graph_edge_confirmation_false",
+          "confirmation": false,
+          "edge_kind": "verified_2d_correction_candidate"
+        }
+      ],
+      "pair_ambiguity_evidence": [],
+      "pair_candidate_sets": [
+        [
+          "bedroom_01",
+          "bedroom_corridor"
+        ],
+        [
+          "bedroom_01",
+          "common_core_circulation"
+        ]
+      ],
+      "pair_candidate_count": 2,
+      "pair_status": "conflicting_candidates",
+      "selected_pair": null,
+      "candidate_graph_membership": [
+        {
+          "unordered_pair": [
+            "bedroom_01",
+            "bedroom_corridor"
+          ],
+          "space_membership": {
+            "bedroom_01": "candidate_reachable",
+            "bedroom_corridor": "candidate_reachable"
+          },
+          "crosses_candidate_reachable_boundary": false,
+          "internal_to_candidate_unreachable_component": false,
+          "confirmation": false
+        },
+        {
+          "unordered_pair": [
+            "bedroom_01",
+            "common_core_circulation"
+          ],
+          "space_membership": {
+            "bedroom_01": "candidate_reachable",
+            "common_core_circulation": "candidate_reachable"
+          },
+          "crosses_candidate_reachable_boundary": false,
+          "internal_to_candidate_unreachable_component": false,
+          "confirmation": false
+        }
+      ],
+      "crosses_candidate_reachable_boundary": false,
+      "internal_to_candidate_unreachable_component": false,
+      "root_relevance": "none",
+      "source_connectivity_evidence": null,
+      "priority": {
+        "rank": 1,
+        "label_zh": "最高（下一条）"
+      },
+      "human_readable_status_zh": "二维开口候选较强，但两侧空间证据互相冲突，尚未加入连接图。",
+      "remaining_blockers": [
+        "PAIR_SOURCE_CONFLICT",
+        "SOURCE_EFFECTIVE_VOID_CANDIDATE",
+        "SOURCE_APPLICATION_PENDING",
+        "PAIR_CANDIDATES_DISAGREE",
+        "TRAVERSABILITY_UNCONFIRMED",
+        "ADJACENCY_UNCONFIRMED",
+        "HUMAN_ACCEPTANCE_PENDING"
+      ],
+      "eligible_for_targeted_room_side_review": true,
+      "pair_confirmation": false,
+      "host_confirmation": false,
+      "effective_void_confirmation": false,
+      "jamb_confirmation": false,
+      "traversability_confirmation": false,
+      "adjacency_confirmation": false,
+      "root_confirmation": false,
+      "edge_confirmation": false,
+      "graph_edge_admitted": false,
+      "source_application_authorized": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "human_readable_boundary": {
+        "named_sides_are_not_a_confirmed_pair": true,
+        "visual_subtype_is_not_edge_confirmation": true,
+        "cuttable_is_not_wall_break_authority": true,
+        "candidate_reachability_is_not_reachability_confirmation": true,
+        "coverage_is_not_completion": true
+      },
+      "candidate_hash": "dafd9152678a3ced84b5ee0621fd039a9802e3c3ea1988337652307692de06d8"
+    },
+    {
+      "edge_id": "EDGE-REGISTER-OP003",
+      "opening_id": "OP003",
+      "source_record_state": {
+        "opening_status": "candidate",
+        "build_disposition": "exclude_pending_resolution",
+        "build_kind": null,
+        "source_observation_kind": "door",
+        "source_observation_status": "candidate",
+        "source_segment_m": [
+          [
+            0.014637,
+            10.341081
+          ],
+          [
+            0.93676,
+            10.341081
+          ]
+        ],
+        "source_host_atom_id": null,
+        "effective_void_record_status": null,
+        "effective_void_record_segment_m": null,
+        "jamb_before_record_status": null,
+        "jamb_after_record_status": null,
+        "source_side_a_space_id": null,
+        "source_side_b_space_id": null,
+        "source_traversable_value": false,
+        "record_fields_are_edge_confirmations": false
+      },
+      "registered_segment_m": [
+        [
+          0.014637,
+          10.341081
+        ],
+        [
+          0.93676,
+          10.341081
+        ]
+      ],
+      "host_atom_id": "ATOM-WB010-01",
+      "host_status": "registered_evidence_candidate",
+      "wall_break_status": "research_cut_impact_candidate",
+      "cut_impact_classification": "unique_single_to_single_pair",
+      "effective_void_status": "missing_or_quarantined",
+      "jamb_status": "missing_or_unresolved",
+      "visual_subtype": {
+        "candidate": "door",
+        "status": "visual_advisory_only",
+        "source_subtype_confirmation": false
+      },
+      "pair_evidence": [
+        {
+          "evidence_source": "source_adjacency_candidate",
+          "space_a_id": "bedroom_01",
+          "space_b_id": "west_toilet",
+          "unordered_pair": [
+            "bedroom_01",
+            "west_toilet"
+          ],
+          "authority": "source_adjacency_status_candidate",
+          "confirmation": false,
+          "edge_id": "EDGE-OP003",
+          "source_edge_status": "candidate"
+        },
+        {
+          "evidence_source": "unit_scope_reachability_tier_d_research_edge",
+          "space_a_id": "bedroom_01",
+          "space_b_id": "west_toilet",
+          "unordered_pair": [
+            "bedroom_01",
+            "west_toilet"
+          ],
+          "authority": "research_graph_edge_confirmation_false",
+          "confirmation": false,
+          "edge_kind": "return_wall_candidate_targeted_review_protocol_failed"
+        }
+      ],
+      "pair_ambiguity_evidence": [],
+      "pair_candidate_sets": [
+        [
+          "bedroom_01",
+          "west_toilet"
+        ]
+      ],
+      "pair_candidate_count": 1,
+      "pair_status": "unique_candidate_pair_unconfirmed",
+      "selected_pair": null,
+      "candidate_graph_membership": [
+        {
+          "unordered_pair": [
+            "bedroom_01",
+            "west_toilet"
+          ],
+          "space_membership": {
+            "bedroom_01": "candidate_reachable",
+            "west_toilet": "candidate_reachable"
+          },
+          "crosses_candidate_reachable_boundary": false,
+          "internal_to_candidate_unreachable_component": false,
+          "confirmation": false
+        }
+      ],
+      "crosses_candidate_reachable_boundary": false,
+      "internal_to_candidate_unreachable_component": false,
+      "root_relevance": "near_miss_not_root",
+      "source_connectivity_evidence": null,
+      "priority": {
+        "rank": 5,
+        "label_zh": "高"
+      },
+      "human_readable_status_zh": "距西外边界 0.014637 m 的内部 near-miss；不是边界接触、穿越或 root。",
+      "remaining_blockers": [
+        "RETURN_WALL_ENDPOINT_UNRESOLVED",
+        "SOURCE_HOST_EFFECTIVE_VOID_MISSING",
+        "TRAVERSABILITY_UNCONFIRMED",
+        "ADJACENCY_UNCONFIRMED",
+        "HUMAN_ACCEPTANCE_PENDING"
+      ],
+      "eligible_for_targeted_room_side_review": true,
+      "pair_confirmation": false,
+      "host_confirmation": false,
+      "effective_void_confirmation": false,
+      "jamb_confirmation": false,
+      "traversability_confirmation": false,
+      "adjacency_confirmation": false,
+      "root_confirmation": false,
+      "edge_confirmation": false,
+      "graph_edge_admitted": false,
+      "source_application_authorized": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "human_readable_boundary": {
+        "named_sides_are_not_a_confirmed_pair": true,
+        "visual_subtype_is_not_edge_confirmation": true,
+        "cuttable_is_not_wall_break_authority": true,
+        "candidate_reachability_is_not_reachability_confirmation": true,
+        "coverage_is_not_completion": true
+      },
+      "candidate_hash": "41dd970f56ee5529e4e5a2776c0da739fa577c09f6eb32f9ee5182049eed7c7e"
+    },
+    {
+      "edge_id": "EDGE-REGISTER-OP004",
+      "opening_id": "OP004",
+      "source_record_state": {
+        "opening_status": "candidate",
+        "build_disposition": "exclude_pending_resolution",
+        "build_kind": null,
+        "source_observation_kind": "door",
+        "source_observation_status": "candidate",
+        "source_segment_m": [
+          [
+            5.792542,
+            14.340796
+          ],
+          [
+            5.792542,
+            13.43177
+          ]
+        ],
+        "source_host_atom_id": null,
+        "effective_void_record_status": null,
+        "effective_void_record_segment_m": null,
+        "jamb_before_record_status": null,
+        "jamb_after_record_status": null,
+        "source_side_a_space_id": null,
+        "source_side_b_space_id": null,
+        "source_traversable_value": false,
+        "record_fields_are_edge_confirmations": false
+      },
+      "registered_segment_m": [
+        [
+          5.792542,
+          14.340796
+        ],
+        [
+          5.792542,
+          13.43177
+        ]
+      ],
+      "host_atom_id": "ATOM-WB007-01",
+      "host_status": "registered_evidence_candidate",
+      "wall_break_status": "research_cut_impact_candidate",
+      "cut_impact_classification": "unique_single_to_single_pair",
+      "effective_void_status": "missing_or_quarantined",
+      "jamb_status": "registry_scalar_candidate",
+      "visual_subtype": {
+        "candidate": "door",
+        "status": "visual_advisory_only",
+        "source_subtype_confirmation": false
+      },
+      "pair_evidence": [
+        {
+          "evidence_source": "source_adjacency_candidate",
+          "space_a_id": "north_toilet",
+          "space_b_id": "bedroom_02",
+          "unordered_pair": [
+            "bedroom_02",
+            "north_toilet"
+          ],
+          "authority": "source_adjacency_status_candidate",
+          "confirmation": false,
+          "edge_id": "EDGE-OP004",
+          "source_edge_status": "candidate"
+        },
+        {
+          "evidence_source": "correction_registry_candidate",
+          "space_a_id": "bedroom_02",
+          "space_b_id": "north_toilet",
+          "unordered_pair": [
+            "bedroom_02",
+            "north_toilet"
+          ],
+          "authority": "non_applying_2d_correction_candidate",
+          "confirmation": false,
+          "packet_hash": "cadd3f0eaeaf51d8d4bc44466ac5960c0c67812dea9f7c496aa1bb26744702bd"
+        },
+        {
+          "evidence_source": "unit_scope_reachability_tier_d_research_edge",
+          "space_a_id": "bedroom_02",
+          "space_b_id": "north_toilet",
+          "unordered_pair": [
+            "bedroom_02",
+            "north_toilet"
+          ],
+          "authority": "research_graph_edge_confirmation_false",
+          "confirmation": false,
+          "edge_kind": "verified_2d_correction_candidate"
+        }
+      ],
+      "pair_ambiguity_evidence": [],
+      "pair_candidate_sets": [
+        [
+          "bedroom_02",
+          "north_toilet"
+        ]
+      ],
+      "pair_candidate_count": 1,
+      "pair_status": "unique_candidate_pair_unconfirmed",
+      "selected_pair": null,
+      "candidate_graph_membership": [
+        {
+          "unordered_pair": [
+            "bedroom_02",
+            "north_toilet"
+          ],
+          "space_membership": {
+            "bedroom_02": "candidate_unreachable",
+            "north_toilet": "candidate_unreachable"
+          },
+          "crosses_candidate_reachable_boundary": false,
+          "internal_to_candidate_unreachable_component": true,
+          "confirmation": false
+        }
+      ],
+      "crosses_candidate_reachable_boundary": false,
+      "internal_to_candidate_unreachable_component": true,
+      "root_relevance": "none",
+      "source_connectivity_evidence": {
+        "opening_id": "OP004",
+        "authority": "validated_correction_registry",
+        "relation": [
+          "bedroom_02",
+          "north_toilet"
+        ],
+        "internal_to_unreachable": true,
+        "crosses_reachable_component": false,
+        "listed_in_candidate_graph": true,
+        "confirmed_admitted": false,
+        "application_authorized": false,
+        "remaining_blockers": [
+          "SOURCE_APPLICATION_REVIEW",
+          "VERTICAL_POLICY_PENDING",
+          "TRAVERSABILITY_PENDING",
+          "ADJACENCY_PENDING",
+          "HUMAN_ACCEPTANCE_PENDING"
+        ],
+        "confirmation": false
+      },
+      "priority": {
+        "rank": 6,
+        "label_zh": "高"
+      },
+      "human_readable_status_zh": "两侧候选指向二号卧室与北侧卫生间，但两者仍处于未接入区域。",
+      "remaining_blockers": [
+        "SOURCE_HOST_EFFECTIVE_VOID_MISSING",
+        "UNREACHABLE_COMPONENT_INTERNAL_ONLY",
+        "TRAVERSABILITY_UNCONFIRMED",
+        "ADJACENCY_UNCONFIRMED",
+        "HUMAN_ACCEPTANCE_PENDING"
+      ],
+      "eligible_for_targeted_room_side_review": true,
+      "pair_confirmation": false,
+      "host_confirmation": false,
+      "effective_void_confirmation": false,
+      "jamb_confirmation": false,
+      "traversability_confirmation": false,
+      "adjacency_confirmation": false,
+      "root_confirmation": false,
+      "edge_confirmation": false,
+      "graph_edge_admitted": false,
+      "source_application_authorized": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "human_readable_boundary": {
+        "named_sides_are_not_a_confirmed_pair": true,
+        "visual_subtype_is_not_edge_confirmation": true,
+        "cuttable_is_not_wall_break_authority": true,
+        "candidate_reachability_is_not_reachability_confirmation": true,
+        "coverage_is_not_completion": true
+      },
+      "candidate_hash": "dcaf0b5369cfacbdfe4bc30eb9a4119542a95063ad09ec64078772b69e31b9e2"
+    },
+    {
+      "edge_id": "EDGE-REGISTER-OP005",
+      "opening_id": "OP005",
+      "source_record_state": {
+        "opening_status": "candidate",
+        "build_disposition": "evidence_only",
+        "build_kind": null,
+        "source_observation_kind": "unknown",
+        "source_observation_status": "candidate",
+        "source_segment_m": [
+          [
+            4.483994,
+            11.315557244655583
+          ],
+          [
+            5.408324022346369,
+            11.315557244655583
+          ]
+        ],
+        "source_host_atom_id": null,
+        "effective_void_record_status": null,
+        "effective_void_record_segment_m": null,
+        "jamb_before_record_status": null,
+        "jamb_after_record_status": null,
+        "source_side_a_space_id": null,
+        "source_side_b_space_id": null,
+        "source_traversable_value": false,
+        "record_fields_are_edge_confirmations": false
+      },
+      "registered_segment_m": [
+        [
+          4.483994,
+          11.315557244655583
+        ],
+        [
+          5.408324022346369,
+          11.315557244655583
+        ]
+      ],
+      "host_atom_id": null,
+      "host_status": "missing_or_quarantined",
+      "wall_break_status": "missing_or_not_cuttable",
+      "cut_impact_classification": "not_cuttable",
+      "effective_void_status": "missing_or_quarantined",
+      "jamb_status": "missing_or_unresolved",
+      "visual_subtype": null,
+      "pair_evidence": [],
+      "pair_ambiguity_evidence": [],
+      "pair_candidate_sets": [],
+      "pair_candidate_count": 0,
+      "pair_status": "missing",
+      "selected_pair": null,
+      "candidate_graph_membership": [],
+      "crosses_candidate_reachable_boundary": false,
+      "internal_to_candidate_unreachable_component": false,
+      "root_relevance": "none",
+      "source_connectivity_evidence": null,
+      "priority": {
+        "rank": null,
+        "label_zh": "当前排除"
+      },
+      "human_readable_status_zh": "当前源记录为 unknown/evidence-only，不能建立候选边。",
+      "remaining_blockers": [
+        "UNKNOWN_EVIDENCE_ONLY",
+        "PAIR_MISSING",
+        "CURRENT_NORMAL_PATH_EXCLUDED",
+        "PAIR_CANDIDATE_MISSING"
+      ],
+      "eligible_for_targeted_room_side_review": false,
+      "pair_confirmation": false,
+      "host_confirmation": false,
+      "effective_void_confirmation": false,
+      "jamb_confirmation": false,
+      "traversability_confirmation": false,
+      "adjacency_confirmation": false,
+      "root_confirmation": false,
+      "edge_confirmation": false,
+      "graph_edge_admitted": false,
+      "source_application_authorized": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "human_readable_boundary": {
+        "named_sides_are_not_a_confirmed_pair": true,
+        "visual_subtype_is_not_edge_confirmation": true,
+        "cuttable_is_not_wall_break_authority": true,
+        "candidate_reachability_is_not_reachability_confirmation": true,
+        "coverage_is_not_completion": true
+      },
+      "candidate_hash": "848dce6d5067051d4b8a51b794eff87c92bf35931e688f24f23e22f4cfae6b37"
+    },
+    {
+      "edge_id": "EDGE-REGISTER-OP006",
+      "opening_id": "OP006",
+      "source_record_state": {
+        "opening_status": "candidate",
+        "build_disposition": "exclude_pending_resolution",
+        "build_kind": null,
+        "source_observation_kind": "door",
+        "source_observation_status": "confirmed",
+        "source_segment_m": [
+          [
+            5.792542,
+            11.221019
+          ],
+          [
+            5.792542,
+            10.290176
+          ]
+        ],
+        "source_host_atom_id": null,
+        "effective_void_record_status": null,
+        "effective_void_record_segment_m": null,
+        "jamb_before_record_status": null,
+        "jamb_after_record_status": null,
+        "source_side_a_space_id": null,
+        "source_side_b_space_id": null,
+        "source_traversable_value": false,
+        "record_fields_are_edge_confirmations": false
+      },
+      "registered_segment_m": [
+        [
+          5.792542,
+          11.221019
+        ],
+        [
+          5.792542,
+          10.290176
+        ]
+      ],
+      "host_atom_id": "ATOM-WB007-02",
+      "host_status": "registered_evidence_candidate",
+      "wall_break_status": "research_cut_impact_candidate",
+      "cut_impact_classification": "group_ambiguous",
+      "effective_void_status": "missing_or_quarantined",
+      "jamb_status": "missing_or_unresolved",
+      "visual_subtype": {
+        "candidate": "door",
+        "status": "visual_advisory_only",
+        "source_subtype_confirmation": false
+      },
+      "pair_evidence": [
+        {
+          "evidence_source": "partition_resolved_candidate",
+          "space_a_id": "bedroom_03",
+          "space_b_id": "bedroom_corridor",
+          "unordered_pair": [
+            "bedroom_03",
+            "bedroom_corridor"
+          ],
+          "authority": "research_partition_candidate",
+          "confirmation": false,
+          "sensitivity_stable": true
+        },
+        {
+          "evidence_source": "unit_scope_reachability_tier_d_research_edge",
+          "space_a_id": "bedroom_03",
+          "space_b_id": "bedroom_corridor",
+          "unordered_pair": [
+            "bedroom_03",
+            "bedroom_corridor"
+          ],
+          "authority": "research_graph_edge_confirmation_false",
+          "confirmation": false,
+          "edge_kind": "geometry_candidate_targeted_review_protocol_failed"
+        }
+      ],
+      "pair_ambiguity_evidence": [],
+      "pair_candidate_sets": [
+        [
+          "bedroom_03",
+          "bedroom_corridor"
+        ]
+      ],
+      "pair_candidate_count": 1,
+      "pair_status": "unique_candidate_pair_unconfirmed",
+      "selected_pair": null,
+      "candidate_graph_membership": [
+        {
+          "unordered_pair": [
+            "bedroom_03",
+            "bedroom_corridor"
+          ],
+          "space_membership": {
+            "bedroom_03": "candidate_reachable",
+            "bedroom_corridor": "candidate_reachable"
+          },
+          "crosses_candidate_reachable_boundary": false,
+          "internal_to_candidate_unreachable_component": false,
+          "confirmation": false
+        }
+      ],
+      "crosses_candidate_reachable_boundary": false,
+      "internal_to_candidate_unreachable_component": false,
+      "root_relevance": "none",
+      "source_connectivity_evidence": null,
+      "priority": {
+        "rank": 7,
+        "label_zh": "高"
+      },
+      "human_readable_status_zh": "卧室三与走廊是候选两侧；交叉墙节点和开口证据仍未闭环。",
+      "remaining_blockers": [
+        "J007_CROSSING_CONTEXT",
+        "SOURCE_HOST_EFFECTIVE_VOID_MISSING",
+        "TRAVERSABILITY_UNCONFIRMED",
+        "ADJACENCY_UNCONFIRMED",
+        "HUMAN_ACCEPTANCE_PENDING"
+      ],
+      "eligible_for_targeted_room_side_review": true,
+      "pair_confirmation": false,
+      "host_confirmation": false,
+      "effective_void_confirmation": false,
+      "jamb_confirmation": false,
+      "traversability_confirmation": false,
+      "adjacency_confirmation": false,
+      "root_confirmation": false,
+      "edge_confirmation": false,
+      "graph_edge_admitted": false,
+      "source_application_authorized": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "human_readable_boundary": {
+        "named_sides_are_not_a_confirmed_pair": true,
+        "visual_subtype_is_not_edge_confirmation": true,
+        "cuttable_is_not_wall_break_authority": true,
+        "candidate_reachability_is_not_reachability_confirmation": true,
+        "coverage_is_not_completion": true
+      },
+      "candidate_hash": "25b71601d81454b6a54a1f9cf65b766414bcb55c47b9ef0cb9c23bfe1a78a6a6"
+    },
+    {
+      "edge_id": "EDGE-REGISTER-OP007",
+      "opening_id": "OP007",
+      "source_record_state": {
+        "opening_status": "candidate",
+        "build_disposition": "exclude_pending_resolution",
+        "build_kind": null,
+        "source_observation_kind": "door",
+        "source_observation_status": "candidate",
+        "source_segment_m": [
+          [
+            1.350251,
+            4.028804
+          ],
+          [
+            1.350251,
+            3.272494
+          ]
+        ],
+        "source_host_atom_id": null,
+        "effective_void_record_status": null,
+        "effective_void_record_segment_m": null,
+        "jamb_before_record_status": null,
+        "jamb_after_record_status": null,
+        "source_side_a_space_id": null,
+        "source_side_b_space_id": null,
+        "source_traversable_value": false,
+        "record_fields_are_edge_confirmations": false
+      },
+      "registered_segment_m": [
+        [
+          1.350251,
+          4.028804
+        ],
+        [
+          1.350251,
+          3.272494
+        ]
+      ],
+      "host_atom_id": "ATOM-WB019-01",
+      "host_status": "registered_evidence_candidate",
+      "wall_break_status": "research_cut_impact_candidate",
+      "cut_impact_classification": "group_ambiguous",
+      "effective_void_status": "missing_or_quarantined",
+      "jamb_status": "missing_or_unresolved",
+      "visual_subtype": {
+        "candidate": "door",
+        "status": "visual_advisory_only",
+        "source_subtype_confirmation": false
+      },
+      "pair_evidence": [
+        {
+          "evidence_source": "partition_resolved_candidate",
+          "space_a_id": "lobby",
+          "space_b_id": "wc",
+          "unordered_pair": [
+            "lobby",
+            "wc"
+          ],
+          "authority": "research_partition_candidate",
+          "confirmation": false,
+          "sensitivity_stable": true
+        },
+        {
+          "evidence_source": "unit_scope_reachability_tier_d_research_edge",
+          "space_a_id": "lobby",
+          "space_b_id": "wc",
+          "unordered_pair": [
+            "lobby",
+            "wc"
+          ],
+          "authority": "research_graph_edge_confirmation_false",
+          "confirmation": false,
+          "edge_kind": "geometry_candidate_targeted_review_protocol_failed"
+        }
+      ],
+      "pair_ambiguity_evidence": [],
+      "pair_candidate_sets": [
+        [
+          "lobby",
+          "wc"
+        ]
+      ],
+      "pair_candidate_count": 1,
+      "pair_status": "unique_candidate_pair_unconfirmed",
+      "selected_pair": null,
+      "candidate_graph_membership": [
+        {
+          "unordered_pair": [
+            "lobby",
+            "wc"
+          ],
+          "space_membership": {
+            "lobby": "candidate_reachable",
+            "wc": "candidate_reachable"
+          },
+          "crosses_candidate_reachable_boundary": false,
+          "internal_to_candidate_unreachable_component": false,
+          "confirmation": false
+        }
+      ],
+      "crosses_candidate_reachable_boundary": false,
+      "internal_to_candidate_unreachable_component": false,
+      "root_relevance": "none",
+      "source_connectivity_evidence": null,
+      "priority": {
+        "rank": 10,
+        "label_zh": "中高"
+      },
+      "human_readable_status_zh": "lobby 与 WC 是候选两侧；公共区标签不能直接变成房间连接。",
+      "remaining_blockers": [
+        "PUBLIC_WC_SEMANTIC_RISK",
+        "SOURCE_HOST_EFFECTIVE_VOID_MISSING",
+        "TRAVERSABILITY_UNCONFIRMED",
+        "ADJACENCY_UNCONFIRMED",
+        "HUMAN_ACCEPTANCE_PENDING"
+      ],
+      "eligible_for_targeted_room_side_review": true,
+      "pair_confirmation": false,
+      "host_confirmation": false,
+      "effective_void_confirmation": false,
+      "jamb_confirmation": false,
+      "traversability_confirmation": false,
+      "adjacency_confirmation": false,
+      "root_confirmation": false,
+      "edge_confirmation": false,
+      "graph_edge_admitted": false,
+      "source_application_authorized": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "human_readable_boundary": {
+        "named_sides_are_not_a_confirmed_pair": true,
+        "visual_subtype_is_not_edge_confirmation": true,
+        "cuttable_is_not_wall_break_authority": true,
+        "candidate_reachability_is_not_reachability_confirmation": true,
+        "coverage_is_not_completion": true
+      },
+      "candidate_hash": "8a8f6dd9b64405d469c794124524f5d8f1ab1e15babaf062d44fcbbce1261f3f"
+    },
+    {
+      "edge_id": "EDGE-REGISTER-OP008",
+      "opening_id": "OP008",
+      "source_record_state": {
+        "opening_status": "candidate",
+        "build_disposition": "exclude_pending_resolution",
+        "build_kind": null,
+        "source_observation_kind": "door",
+        "source_observation_status": "candidate",
+        "source_segment_m": [
+          [
+            1.134358,
+            4.254242
+          ],
+          [
+            2.085754,
+            4.254242
+          ]
+        ],
+        "source_host_atom_id": null,
+        "effective_void_record_status": null,
+        "effective_void_record_segment_m": null,
+        "jamb_before_record_status": null,
+        "jamb_after_record_status": null,
+        "source_side_a_space_id": null,
+        "source_side_b_space_id": null,
+        "source_traversable_value": false,
+        "record_fields_are_edge_confirmations": false
+      },
+      "registered_segment_m": [
+        [
+          1.134358,
+          4.254242
+        ],
+        [
+          2.085754,
+          4.254242
+        ]
+      ],
+      "host_atom_id": "ATOM-WB018-01",
+      "host_status": "registered_evidence_candidate",
+      "wall_break_status": "research_cut_impact_candidate",
+      "cut_impact_classification": "group_ambiguous",
+      "effective_void_status": "missing_or_quarantined",
+      "jamb_status": "missing_or_unresolved",
+      "visual_subtype": {
+        "candidate": "door",
+        "status": "visual_advisory_only",
+        "source_subtype_confirmation": false
+      },
+      "pair_evidence": [
+        {
+          "evidence_source": "unit_scope_reachability_tier_d_research_edge",
+          "space_a_id": "bath",
+          "space_b_id": "lobby",
+          "unordered_pair": [
+            "bath",
+            "lobby"
+          ],
+          "authority": "research_graph_edge_confirmation_false",
+          "confirmation": false,
+          "edge_kind": "return_wall_candidate_room_pair_vlm_conflict"
+        }
+      ],
+      "pair_ambiguity_evidence": [
+        {
+          "evidence_source": "partition_resolved_candidate",
+          "public_space_id": "lobby",
+          "other_side_space_options": [
+            "bath",
+            "wc"
+          ],
+          "classification": "group_ambiguous",
+          "confirmation": false
+        }
+      ],
+      "pair_candidate_sets": [
+        [
+          "bath",
+          "lobby"
+        ]
+      ],
+      "pair_candidate_count": 1,
+      "pair_status": "ambiguous_candidates",
+      "selected_pair": null,
+      "candidate_graph_membership": [
+        {
+          "unordered_pair": [
+            "bath",
+            "lobby"
+          ],
+          "space_membership": {
+            "bath": "candidate_reachable",
+            "lobby": "candidate_reachable"
+          },
+          "crosses_candidate_reachable_boundary": false,
+          "internal_to_candidate_unreachable_component": false,
+          "confirmation": false
+        }
+      ],
+      "crosses_candidate_reachable_boundary": false,
+      "internal_to_candidate_unreachable_component": false,
+      "root_relevance": "none",
+      "source_connectivity_evidence": null,
+      "priority": {
+        "rank": 2,
+        "label_zh": "最高"
+      },
+      "human_readable_status_zh": "bath 与 lobby 只是一个候选；bath/WC 侧仍有明显歧义。",
+      "remaining_blockers": [
+        "PAIR_AMBIGUOUS_BATH_OR_WC",
+        "RETURN_WALL_VLM_CONFLICT",
+        "PAIR_CANDIDATES_NOT_UNIQUE",
+        "TRAVERSABILITY_UNCONFIRMED",
+        "ADJACENCY_UNCONFIRMED",
+        "HUMAN_ACCEPTANCE_PENDING"
+      ],
+      "eligible_for_targeted_room_side_review": true,
+      "pair_confirmation": false,
+      "host_confirmation": false,
+      "effective_void_confirmation": false,
+      "jamb_confirmation": false,
+      "traversability_confirmation": false,
+      "adjacency_confirmation": false,
+      "root_confirmation": false,
+      "edge_confirmation": false,
+      "graph_edge_admitted": false,
+      "source_application_authorized": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "human_readable_boundary": {
+        "named_sides_are_not_a_confirmed_pair": true,
+        "visual_subtype_is_not_edge_confirmation": true,
+        "cuttable_is_not_wall_break_authority": true,
+        "candidate_reachability_is_not_reachability_confirmation": true,
+        "coverage_is_not_completion": true
+      },
+      "candidate_hash": "634e52b9a7088f0130a8f7ea07d548ebf883e9e7052bea68a1e3b74e4b9e44ba"
+    },
+    {
+      "edge_id": "EDGE-REGISTER-OP009",
+      "opening_id": "OP009",
+      "source_record_state": {
+        "opening_status": "candidate",
+        "build_disposition": "exclude_pending_resolution",
+        "build_kind": null,
+        "source_observation_kind": "glazed_access_door",
+        "source_observation_status": "candidate",
+        "source_segment_m": [
+          [
+            1.478324,
+            14.25353
+          ],
+          [
+            2.94933,
+            14.25353
+          ]
+        ],
+        "source_host_atom_id": null,
+        "effective_void_record_status": null,
+        "effective_void_record_segment_m": null,
+        "jamb_before_record_status": null,
+        "jamb_after_record_status": null,
+        "source_side_a_space_id": null,
+        "source_side_b_space_id": null,
+        "source_traversable_value": false,
+        "record_fields_are_edge_confirmations": false
+      },
+      "registered_segment_m": [
+        [
+          1.478324,
+          14.25353
+        ],
+        [
+          2.94933,
+          14.25353
+        ]
+      ],
+      "host_atom_id": "ATOM-WB005-01",
+      "host_status": "registered_evidence_candidate",
+      "wall_break_status": "research_cut_impact_candidate",
+      "cut_impact_classification": "unique_single_to_single_pair",
+      "effective_void_status": "missing_or_quarantined",
+      "jamb_status": "registry_scalar_candidate",
+      "visual_subtype": {
+        "candidate": "glazed_interface_or_sliding_access",
+        "status": "visual_advisory_only",
+        "source_subtype_confirmation": false
+      },
+      "pair_evidence": [
+        {
+          "evidence_source": "source_adjacency_candidate",
+          "space_a_id": "rear_balcony",
+          "space_b_id": "bedroom_01",
+          "unordered_pair": [
+            "bedroom_01",
+            "rear_balcony"
+          ],
+          "authority": "source_adjacency_status_candidate",
+          "confirmation": false,
+          "edge_id": "EDGE-OP009",
+          "source_edge_status": "candidate"
+        },
+        {
+          "evidence_source": "correction_registry_candidate",
+          "space_a_id": "rear_balcony",
+          "space_b_id": "bedroom_01",
+          "unordered_pair": [
+            "bedroom_01",
+            "rear_balcony"
+          ],
+          "authority": "non_applying_2d_correction_candidate",
+          "confirmation": false,
+          "packet_hash": "40a80585724254976fe9b4c216a68be1b1e53ddc6af7295ec737d2cd298a704f"
+        },
+        {
+          "evidence_source": "unit_scope_reachability_tier_d_research_edge",
+          "space_a_id": "rear_balcony",
+          "space_b_id": "bedroom_01",
+          "unordered_pair": [
+            "bedroom_01",
+            "rear_balcony"
+          ],
+          "authority": "research_graph_edge_confirmation_false",
+          "confirmation": false,
+          "edge_kind": "verified_2d_correction_candidate"
+        }
+      ],
+      "pair_ambiguity_evidence": [],
+      "pair_candidate_sets": [
+        [
+          "bedroom_01",
+          "rear_balcony"
+        ]
+      ],
+      "pair_candidate_count": 1,
+      "pair_status": "unique_candidate_pair_unconfirmed",
+      "selected_pair": null,
+      "candidate_graph_membership": [
+        {
+          "unordered_pair": [
+            "bedroom_01",
+            "rear_balcony"
+          ],
+          "space_membership": {
+            "bedroom_01": "candidate_reachable",
+            "rear_balcony": "candidate_reachable"
+          },
+          "crosses_candidate_reachable_boundary": false,
+          "internal_to_candidate_unreachable_component": false,
+          "confirmation": false
+        }
+      ],
+      "crosses_candidate_reachable_boundary": false,
+      "internal_to_candidate_unreachable_component": false,
+      "root_relevance": "balcony_interface_not_building_root",
+      "source_connectivity_evidence": null,
+      "priority": {
+        "rank": 8,
+        "label_zh": "高"
+      },
+      "human_readable_status_zh": "后阳台界面两侧候选一致，但 glazed 类型和可开启/通行仍未确认。",
+      "remaining_blockers": [
+        "GLAZED_OPERATION_UNCONFIRMED",
+        "SOURCE_HOST_EFFECTIVE_VOID_MISSING",
+        "TRAVERSABILITY_UNCONFIRMED",
+        "ADJACENCY_UNCONFIRMED",
+        "HUMAN_ACCEPTANCE_PENDING"
+      ],
+      "eligible_for_targeted_room_side_review": true,
+      "pair_confirmation": false,
+      "host_confirmation": false,
+      "effective_void_confirmation": false,
+      "jamb_confirmation": false,
+      "traversability_confirmation": false,
+      "adjacency_confirmation": false,
+      "root_confirmation": false,
+      "edge_confirmation": false,
+      "graph_edge_admitted": false,
+      "source_application_authorized": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "human_readable_boundary": {
+        "named_sides_are_not_a_confirmed_pair": true,
+        "visual_subtype_is_not_edge_confirmation": true,
+        "cuttable_is_not_wall_break_authority": true,
+        "candidate_reachability_is_not_reachability_confirmation": true,
+        "coverage_is_not_completion": true
+      },
+      "candidate_hash": "b5a634988ab7f6cdf740114daab4b4402ab0599fec3dcd2b7d8580aa376a0ac3"
+    },
+    {
+      "edge_id": "EDGE-REGISTER-OP010",
+      "opening_id": "OP010",
+      "source_record_state": {
+        "opening_status": "candidate",
+        "build_disposition": "exclude_pending_resolution",
+        "build_kind": null,
+        "source_observation_kind": "glazed_access_door",
+        "source_observation_status": "candidate",
+        "source_segment_m": [
+          [
+            5.452235,
+            0.003636
+          ],
+          [
+            6.937877,
+            0.003636
+          ]
+        ],
+        "source_host_atom_id": null,
+        "effective_void_record_status": null,
+        "effective_void_record_segment_m": null,
+        "jamb_before_record_status": null,
+        "jamb_after_record_status": null,
+        "source_side_a_space_id": null,
+        "source_side_b_space_id": null,
+        "source_traversable_value": false,
+        "record_fields_are_edge_confirmations": false
+      },
+      "registered_segment_m": [
+        [
+          5.452235,
+          0.003636
+        ],
+        [
+          6.937877,
+          0.003636
+        ]
+      ],
+      "host_atom_id": "ATOM-WB003-03",
+      "host_status": "registered_evidence_candidate",
+      "wall_break_status": "research_cut_impact_candidate",
+      "cut_impact_classification": "group_ambiguous",
+      "effective_void_status": "missing_or_quarantined",
+      "jamb_status": "missing_or_unresolved",
+      "visual_subtype": {
+        "candidate": "door",
+        "status": "visual_advisory_only",
+        "source_subtype_confirmation": false
+      },
+      "pair_evidence": [
+        {
+          "evidence_source": "partition_resolved_candidate",
+          "space_a_id": "kitchen",
+          "space_b_id": "front_balcony",
+          "unordered_pair": [
+            "front_balcony",
+            "kitchen"
+          ],
+          "authority": "research_partition_candidate",
+          "confirmation": false,
+          "sensitivity_stable": true
+        },
+        {
+          "evidence_source": "unit_scope_reachability_tier_d_research_edge",
+          "space_a_id": "kitchen",
+          "space_b_id": "front_balcony",
+          "unordered_pair": [
+            "front_balcony",
+            "kitchen"
+          ],
+          "authority": "research_graph_edge_confirmation_false",
+          "confirmation": false,
+          "edge_kind": "geometry_candidate_targeted_review_protocol_failed"
+        }
+      ],
+      "pair_ambiguity_evidence": [],
+      "pair_candidate_sets": [
+        [
+          "front_balcony",
+          "kitchen"
+        ]
+      ],
+      "pair_candidate_count": 1,
+      "pair_status": "unique_candidate_pair_unconfirmed",
+      "selected_pair": null,
+      "candidate_graph_membership": [
+        {
+          "unordered_pair": [
+            "front_balcony",
+            "kitchen"
+          ],
+          "space_membership": {
+            "front_balcony": "candidate_reachable",
+            "kitchen": "candidate_reachable"
+          },
+          "crosses_candidate_reachable_boundary": false,
+          "internal_to_candidate_unreachable_component": false,
+          "confirmation": false
+        }
+      ],
+      "crosses_candidate_reachable_boundary": false,
+      "internal_to_candidate_unreachable_component": false,
+      "root_relevance": "balcony_interface_not_building_root",
+      "source_connectivity_evidence": null,
+      "priority": {
+        "rank": 9,
+        "label_zh": "高"
+      },
+      "human_readable_status_zh": "厨房与前阳台是候选两侧；宽玻璃界面不等于楼栋外部 root。",
+      "remaining_blockers": [
+        "BROAD_GLAZED_INTERFACE_UNRESOLVED",
+        "SOURCE_HOST_EFFECTIVE_VOID_MISSING",
+        "TRAVERSABILITY_UNCONFIRMED",
+        "ADJACENCY_UNCONFIRMED",
+        "HUMAN_ACCEPTANCE_PENDING"
+      ],
+      "eligible_for_targeted_room_side_review": true,
+      "pair_confirmation": false,
+      "host_confirmation": false,
+      "effective_void_confirmation": false,
+      "jamb_confirmation": false,
+      "traversability_confirmation": false,
+      "adjacency_confirmation": false,
+      "root_confirmation": false,
+      "edge_confirmation": false,
+      "graph_edge_admitted": false,
+      "source_application_authorized": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "human_readable_boundary": {
+        "named_sides_are_not_a_confirmed_pair": true,
+        "visual_subtype_is_not_edge_confirmation": true,
+        "cuttable_is_not_wall_break_authority": true,
+        "candidate_reachability_is_not_reachability_confirmation": true,
+        "coverage_is_not_completion": true
+      },
+      "candidate_hash": "62bc62f253e2441049c72a8ef757bc9d663d3e2441963644043155d3c3e31d23"
+    },
+    {
+      "edge_id": "EDGE-REGISTER-OP011",
+      "opening_id": "OP011",
+      "source_record_state": {
+        "opening_status": "unresolved",
+        "build_disposition": "exclude_pending_resolution",
+        "build_kind": null,
+        "source_observation_kind": "glazed_interface",
+        "source_observation_status": "confirmed",
+        "source_segment_m": [
+          [
+            0.764777,
+            3.134322
+          ],
+          [
+            0.764777,
+            2.341651
+          ]
+        ],
+        "source_host_atom_id": null,
+        "effective_void_record_status": null,
+        "effective_void_record_segment_m": null,
+        "jamb_before_record_status": null,
+        "jamb_after_record_status": null,
+        "source_side_a_space_id": null,
+        "source_side_b_space_id": null,
+        "source_traversable_value": false,
+        "record_fields_are_edge_confirmations": false
+      },
+      "registered_segment_m": [
+        [
+          0.764777,
+          3.134322
+        ],
+        [
+          0.764777,
+          2.341651
+        ]
+      ],
+      "host_atom_id": "ATOM-WB022-01",
+      "host_status": "validated_host_scope_candidate",
+      "wall_break_status": "missing_or_not_cuttable",
+      "cut_impact_classification": "not_cuttable",
+      "effective_void_status": "missing_or_quarantined",
+      "jamb_status": "host_scope_scalar_candidate",
+      "visual_subtype": {
+        "candidate": "glazed_interface_with_provider_conflict",
+        "status": "source_vlm_conflict",
+        "source_subtype_confirmation": false
+      },
+      "pair_evidence": [
+        {
+          "evidence_source": "validated_op011_host_scope_with_review_conflict",
+          "space_a_id": "kitchen",
+          "space_b_id": "dry_balcony",
+          "unordered_pair": [
+            "dry_balcony",
+            "kitchen"
+          ],
+          "authority": "validated_host_scope_with_clean_review_conflict",
+          "confirmation": false,
+          "clean_provider_disagreement": true
+        }
+      ],
+      "pair_ambiguity_evidence": [],
+      "pair_candidate_sets": [
+        [
+          "dry_balcony",
+          "kitchen"
+        ]
+      ],
+      "pair_candidate_count": 1,
+      "pair_status": "unique_candidate_pair_unconfirmed",
+      "selected_pair": null,
+      "candidate_graph_membership": [
+        {
+          "unordered_pair": [
+            "dry_balcony",
+            "kitchen"
+          ],
+          "space_membership": {
+            "dry_balcony": "candidate_unreachable",
+            "kitchen": "candidate_reachable"
+          },
+          "crosses_candidate_reachable_boundary": true,
+          "internal_to_candidate_unreachable_component": false,
+          "confirmation": false
+        }
+      ],
+      "crosses_candidate_reachable_boundary": true,
+      "internal_to_candidate_unreachable_component": false,
+      "root_relevance": "none",
+      "source_connectivity_evidence": {
+        "opening_id": "OP011",
+        "authority": "validated_host_scope_with_clean_review_conflict",
+        "relation": [
+          "kitchen",
+          "dry_balcony"
+        ],
+        "internal_to_unreachable": false,
+        "crosses_reachable_component": true,
+        "listed_in_candidate_graph": false,
+        "confirmed_admitted": false,
+        "clean_provider_disagreement": true,
+        "review_decision": "unresolved_source_visual_ambiguity",
+        "traversability_confirmation": false,
+        "remaining_blockers": [
+          "HOST_SOURCE_AUTHORITY_PENDING",
+          "GLAZED_SUBTYPE_CONFLICT",
+          "TRAVERSABILITY_PENDING",
+          "TARGETED_TYPE_REVIEW_PENDING",
+          "EFFECTIVE_VOID_PENDING",
+          "ADJACENCY_PENDING",
+          "HUMAN_ACCEPTANCE_PENDING"
+        ],
+        "confirmation": false
+      },
+      "priority": {
+        "rank": 3,
+        "label_zh": "最高"
+      },
+      "human_readable_status_zh": "厨房到 dry_balcony（候选阳台）可能跨出当前候选连通区，但类型审查冲突，不能入图。",
+      "remaining_blockers": [
+        "SOURCE_VLM_TYPE_CONFLICT",
+        "EFFECTIVE_VOID_MISSING",
+        "CANDIDATE_COMPONENT_BOUNDARY_NOT_ADMITTED",
+        "TRAVERSABILITY_UNCONFIRMED",
+        "ADJACENCY_UNCONFIRMED",
+        "HUMAN_ACCEPTANCE_PENDING"
+      ],
+      "eligible_for_targeted_room_side_review": false,
+      "pair_confirmation": false,
+      "host_confirmation": false,
+      "effective_void_confirmation": false,
+      "jamb_confirmation": false,
+      "traversability_confirmation": false,
+      "adjacency_confirmation": false,
+      "root_confirmation": false,
+      "edge_confirmation": false,
+      "graph_edge_admitted": false,
+      "source_application_authorized": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "human_readable_boundary": {
+        "named_sides_are_not_a_confirmed_pair": true,
+        "visual_subtype_is_not_edge_confirmation": true,
+        "cuttable_is_not_wall_break_authority": true,
+        "candidate_reachability_is_not_reachability_confirmation": true,
+        "coverage_is_not_completion": true
+      },
+      "candidate_hash": "b241f4d868eee65ca9d3827def5c3ad0cef882ab776f6aa5b503ecb9c36bf5b9"
+    },
+    {
+      "edge_id": "EDGE-REGISTER-PORTAL-WB011-WB006-01",
+      "opening_id": "PORTAL-WB011-WB006-01",
+      "source_record_state": {
+        "opening_status": "candidate",
+        "build_disposition": "evidence_only",
+        "build_kind": null,
+        "source_observation_kind": "unknown",
+        "source_observation_status": "candidate",
+        "source_segment_m": [
+          [
+            3.4616201117318437,
+            9.715671258907363
+          ],
+          [
+            4.363994000000001,
+            9.715671258907363
+          ]
+        ],
+        "source_host_atom_id": null,
+        "effective_void_record_status": null,
+        "effective_void_record_segment_m": null,
+        "jamb_before_record_status": null,
+        "jamb_after_record_status": null,
+        "source_side_a_space_id": null,
+        "source_side_b_space_id": null,
+        "source_traversable_value": false,
+        "record_fields_are_edge_confirmations": false
+      },
+      "registered_segment_m": [
+        [
+          3.4616201117318437,
+          9.715671258907363
+        ],
+        [
+          4.363994000000001,
+          9.715671258907363
+        ]
+      ],
+      "host_atom_id": null,
+      "host_status": "hard_denied",
+      "wall_break_status": "missing_or_not_cuttable",
+      "cut_impact_classification": "not_cuttable",
+      "effective_void_status": "missing_or_quarantined",
+      "jamb_status": "missing_or_unresolved",
+      "visual_subtype": null,
+      "pair_evidence": [],
+      "pair_ambiguity_evidence": [],
+      "pair_candidate_sets": [],
+      "pair_candidate_count": 0,
+      "pair_status": "hard_denied",
+      "selected_pair": null,
+      "candidate_graph_membership": [],
+      "crosses_candidate_reachable_boundary": false,
+      "internal_to_candidate_unreachable_component": false,
+      "root_relevance": "hard_denied",
+      "source_connectivity_evidence": null,
+      "priority": {
+        "rank": null,
+        "label_zh": "硬拒绝"
+      },
+      "human_readable_status_zh": "历史降级 portal，当前硬拒绝，不进入 opening edge。",
+      "remaining_blockers": [
+        "HARD_DENIED_DUPLICATE_OR_WRONG_AXIS",
+        "ALL_EDGE_CONSUMERS_FORBIDDEN"
+      ],
+      "eligible_for_targeted_room_side_review": false,
+      "pair_confirmation": false,
+      "host_confirmation": false,
+      "effective_void_confirmation": false,
+      "jamb_confirmation": false,
+      "traversability_confirmation": false,
+      "adjacency_confirmation": false,
+      "root_confirmation": false,
+      "edge_confirmation": false,
+      "graph_edge_admitted": false,
+      "source_application_authorized": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "human_readable_boundary": {
+        "named_sides_are_not_a_confirmed_pair": true,
+        "visual_subtype_is_not_edge_confirmation": true,
+        "cuttable_is_not_wall_break_authority": true,
+        "candidate_reachability_is_not_reachability_confirmation": true,
+        "coverage_is_not_completion": true
+      },
+      "candidate_hash": "fcadb5d0b9cf64640ab7088d10c2e8b79dd9ae0dd1c0e2f27a4c470158454c4b"
+    },
+    {
+      "edge_id": "EDGE-REGISTER-OP012",
+      "opening_id": "OP012",
+      "source_record_state": {
+        "opening_status": "not_in_source_opening_contract",
+        "build_disposition": "quarantined_history",
+        "build_kind": null,
+        "source_observation_kind": null,
+        "source_observation_status": null,
+        "source_segment_m": null,
+        "source_host_atom_id": null,
+        "effective_void_record_status": null,
+        "effective_void_record_segment_m": null,
+        "jamb_before_record_status": null,
+        "jamb_after_record_status": null,
+        "source_side_a_space_id": null,
+        "source_side_b_space_id": null,
+        "source_traversable_value": false,
+        "record_fields_are_edge_confirmations": false
+      },
+      "registered_segment_m": null,
+      "host_atom_id": null,
+      "host_status": "missing_or_quarantined",
+      "wall_break_status": "missing_or_not_cuttable",
+      "cut_impact_classification": "not_in_cut_matrix",
+      "effective_void_status": "missing_or_quarantined",
+      "jamb_status": "missing_or_unresolved",
+      "visual_subtype": null,
+      "pair_evidence": [],
+      "pair_ambiguity_evidence": [],
+      "pair_candidate_sets": [],
+      "pair_candidate_count": 0,
+      "pair_status": "quarantined_history",
+      "selected_pair": null,
+      "candidate_graph_membership": [],
+      "crosses_candidate_reachable_boundary": false,
+      "internal_to_candidate_unreachable_component": false,
+      "root_relevance": "quarantined_history",
+      "source_connectivity_evidence": {
+        "opening_id": "OP012",
+        "authority": "validated_rejected_history_quarantine",
+        "listed_in_candidate_graph": false,
+        "confirmed_admitted": false,
+        "counted_for_components": false,
+        "recovery_confirmation": false,
+        "review_decision": "quarantined_review_conflict",
+        "distinct_swing_established": false,
+        "confirmation": false
+      },
+      "priority": {
+        "rank": null,
+        "label_zh": "已隔离"
+      },
+      "human_readable_status_zh": "历史恢复假设已隔离，不属于当前 source opening，也不进入连接图。",
+      "remaining_blockers": [
+        "NOT_IN_SOURCE_OPENINGS",
+        "RECOVERY_REVIEW_CONFLICT",
+        "QUARANTINED_HISTORY"
+      ],
+      "eligible_for_targeted_room_side_review": false,
+      "pair_confirmation": false,
+      "host_confirmation": false,
+      "effective_void_confirmation": false,
+      "jamb_confirmation": false,
+      "traversability_confirmation": false,
+      "adjacency_confirmation": false,
+      "root_confirmation": false,
+      "edge_confirmation": false,
+      "graph_edge_admitted": false,
+      "source_application_authorized": false,
+      "source_correction_authorized": false,
+      "semantic_promotion": false,
+      "score_effect": "none",
+      "build_authorized": false,
+      "ready": false,
+      "human_readable_boundary": {
+        "named_sides_are_not_a_confirmed_pair": true,
+        "visual_subtype_is_not_edge_confirmation": true,
+        "cuttable_is_not_wall_break_authority": true,
+        "candidate_reachability_is_not_reachability_confirmation": true,
+        "coverage_is_not_completion": true
+      },
+      "candidate_hash": "e8f01a6e2d3f944c0c834666e8bfbe6d62e3c9e5bebe4b345262c44ef02356b7"
+    }
+  ],
+  "pair_status_counts": {
+    "ambiguous_candidates": 1,
+    "conflicting_candidates": 1,
+    "hard_denied": 1,
+    "missing": 1,
+    "quarantined_history": 1,
+    "unique_candidate_pair_unconfirmed": 8
+  },
+  "conflicting_pair_ids": [
+    "OP002"
+  ],
+  "ambiguous_pair_ids": [
+    "OP008"
+  ],
+  "missing_pair_ids": [
+    "OP005"
+  ],
+  "hard_denied_ids": [
+    "PORTAL-WB011-WB006-01"
+  ],
+  "quarantined_history_ids": [
+    "OP012"
+  ],
+  "candidate_reachable_space_ids": [
+    "bath",
+    "bedroom_01",
+    "bedroom_03",
+    "bedroom_corridor",
+    "common_core_circulation",
+    "front_balcony",
+    "kitchen",
+    "living_hall",
+    "lobby",
+    "rear_balcony",
+    "wc",
+    "west_toilet"
+  ],
+  "candidate_unreachable_space_ids": [
+    "bedroom_02",
+    "dry_balcony",
+    "north_toilet"
+  ],
+  "next_target": {
+    "opening_id": "OP002",
+    "task": "targeted_source_bound_room_side_evidence",
+    "reason": "strong geometry chain but source adjacency conflicts with source-record/correction bedroom-corridor side",
+    "required_output": "candidate evidence only; no pair, traversal, adjacency, root, score, or build promotion"
+  },
+  "human_table": {
+    "title": "Opening 两侧空间核对表（候选，不是房间确认）",
+    "notice": "以下两侧空间均为候选，不是已确认的房间对；候选边不等于真实开口、可通行或已加入邻接图。",
+    "columns": [
+      "编号",
+      "两侧空间候选",
+      "当前人话结论",
+      "下一步",
+      "优先级"
+    ],
+    "rows": [
+      {
+        "opening_id": "OP001",
+        "pair_display": "common_core_circulation ↔ lobby",
+        "status": "内部单位范围候选；ENTRY 不是楼栋外部入口。",
+        "priority": "高",
+        "next_action": "查看冲突与缺失证据"
+      },
+      {
+        "opening_id": "OP002",
+        "pair_display": "bedroom_01 ↔ bedroom_corridor / bedroom_01 ↔ common_core_circulation",
+        "status": "二维开口候选较强，但两侧空间证据互相冲突，尚未加入连接图。",
+        "priority": "最高（下一条）",
+        "next_action": "生成 OP002 独立两侧空间复核任务"
+      },
+      {
+        "opening_id": "OP003",
+        "pair_display": "bedroom_01 ↔ west_toilet",
+        "status": "距西外边界 0.014637 m 的内部 near-miss；不是边界接触、穿越或 root。",
+        "priority": "高",
+        "next_action": "查看冲突与缺失证据"
+      },
+      {
+        "opening_id": "OP004",
+        "pair_display": "bedroom_02 ↔ north_toilet",
+        "status": "两侧候选指向二号卧室与北侧卫生间，但两者仍处于未接入区域。",
+        "priority": "高",
+        "next_action": "查看冲突与缺失证据"
+      },
+      {
+        "opening_id": "OP005",
+        "pair_display": "不显示两侧空间",
+        "status": "当前源记录为 unknown/evidence-only，不能建立候选边。",
+        "priority": "当前排除",
+        "next_action": "保持排除/隔离"
+      },
+      {
+        "opening_id": "OP006",
+        "pair_display": "bedroom_03 ↔ bedroom_corridor",
+        "status": "卧室三与走廊是候选两侧；交叉墙节点和开口证据仍未闭环。",
+        "priority": "高",
+        "next_action": "查看冲突与缺失证据"
+      },
+      {
+        "opening_id": "OP007",
+        "pair_display": "lobby ↔ wc",
+        "status": "lobby 与 WC 是候选两侧；公共区标签不能直接变成房间连接。",
+        "priority": "中高",
+        "next_action": "查看冲突与缺失证据"
+      },
+      {
+        "opening_id": "OP008",
+        "pair_display": "bath ↔ lobby",
+        "status": "bath 与 lobby 只是一个候选；bath/WC 侧仍有明显歧义。",
+        "priority": "最高",
+        "next_action": "查看冲突与缺失证据"
+      },
+      {
+        "opening_id": "OP009",
+        "pair_display": "bedroom_01 ↔ rear_balcony",
+        "status": "后阳台界面两侧候选一致，但 glazed 类型和可开启/通行仍未确认。",
+        "priority": "高",
+        "next_action": "查看冲突与缺失证据"
+      },
+      {
+        "opening_id": "OP010",
+        "pair_display": "front_balcony ↔ kitchen",
+        "status": "厨房与前阳台是候选两侧；宽玻璃界面不等于楼栋外部 root。",
+        "priority": "高",
+        "next_action": "查看冲突与缺失证据"
+      },
+      {
+        "opening_id": "OP011",
+        "pair_display": "dry_balcony ↔ kitchen",
+        "status": "厨房到 dry_balcony（候选阳台）可能跨出当前候选连通区，但类型审查冲突，不能入图。",
+        "priority": "最高",
+        "next_action": "查看冲突与缺失证据"
+      },
+      {
+        "opening_id": "PORTAL-WB011-WB006-01",
+        "pair_display": "不显示两侧空间",
+        "status": "历史降级 portal，当前硬拒绝，不进入 opening edge。",
+        "priority": "硬拒绝",
+        "next_action": "保持排除/隔离"
+      },
+      {
+        "opening_id": "OP012",
+        "pair_display": "不显示两侧空间",
+        "status": "历史恢复假设已隔离，不属于当前 source opening，也不进入连接图。",
+        "priority": "已隔离",
+        "next_action": "保持排除/隔离"
+      }
+    ],
+    "forbidden_current_actions": [
+      "确认房间连接",
+      "确认入口",
+      "确认可通行",
+      "加入邻接图",
+      "生成正式墙洞",
+      "提升评分",
+      "完成构建"
+    ]
+  },
+  "score_and_gate_impact": {
+    "source_score_before": 65,
+    "source_score_after": 65,
+    "hard_failures_before": [
+      "S06_OPENINGS",
+      "S07_SPACES_ADJACENCY_REACHABILITY",
+      "S08_PROVENANCE_UNRESOLVED"
+    ],
+    "hard_failures_after": [
+      "S06_OPENINGS",
+      "S07_SPACES_ADJACENCY_REACHABILITY",
+      "S08_PROVENANCE_UNRESOLVED"
+    ],
+    "blocker_counts_before": {
+      "S01_SOURCE_IDENTITY": 0,
+      "S02_ORIENTATION_COORDINATE_CHAIN": 0,
+      "S03_SCALE_AND_DIMENSIONS": 0,
+      "S04_OUTER_BOUNDARY": 0,
+      "S05_WALL_GRAPH": 0,
+      "S06_OPENINGS": 33,
+      "S07_SPACES_ADJACENCY_REACHABILITY": 37,
+      "S08_PROVENANCE_UNRESOLVED": 2
+    },
+    "blocker_counts_after": {
+      "S01_SOURCE_IDENTITY": 0,
+      "S02_ORIENTATION_COORDINATE_CHAIN": 0,
+      "S03_SCALE_AND_DIMENSIONS": 0,
+      "S04_OUTER_BOUNDARY": 0,
+      "S05_WALL_GRAPH": 0,
+      "S06_OPENINGS": 33,
+      "S07_SPACES_ADJACENCY_REACHABILITY": 37,
+      "S08_PROVENANCE_UNRESOLVED": 2
+    },
+    "blocker_count_delta": {
+      "S01_SOURCE_IDENTITY": 0,
+      "S02_ORIENTATION_COORDINATE_CHAIN": 0,
+      "S03_SCALE_AND_DIMENSIONS": 0,
+      "S04_OUTER_BOUNDARY": 0,
+      "S05_WALL_GRAPH": 0,
+      "S06_OPENINGS": 0,
+      "S07_SPACES_ADJACENCY_REACHABILITY": 0,
+      "S08_PROVENANCE_UNRESOLVED": 0
+    }
+  },
+  "current_pointer_update_authorized": false,
+  "current_pointer_update_next": "only_after_independent_matrix_verification",
+  "any_pair_confirmed": false,
+  "any_edge_admitted": false,
+  "root_confirmation": false,
+  "traversability_confirmation": false,
+  "pair_confirmation": false,
+  "adjacency_confirmation": false,
+  "reachability_confirmation": false,
+  "source_application_authorized": false,
+  "source_correction_authorized": false,
+  "semantic_promotion": false,
+  "score_effect": "none",
+  "build_authorized": false,
+  "ready": false,
+  "candidate_hash": "b25257d2b4f9649627b1fec781f92438fc4b31ee2515457ab42a76025049d197"
+}
