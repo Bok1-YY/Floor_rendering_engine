@@ -15,9 +15,11 @@ export function useJobStream(
 ) {
   useEffect(() => {
     if (!jobId) return;
+    let active = true;
     const es = new EventSource(`${API}/api/jobs/${jobId}/stream`);
 
     const apply = (e: MessageEvent) => {
+      if (!active) return;
       try {
         onUpdate(JSON.parse(e.data) as JobView);
       } catch {
@@ -35,6 +37,6 @@ export function useJobStream(
       if ((e as MessageEvent).data) es.close();
     });
 
-    return () => es.close();
+    return () => { active = false; es.onmessage = null; es.close(); };
   }, [jobId, onUpdate]);
 }

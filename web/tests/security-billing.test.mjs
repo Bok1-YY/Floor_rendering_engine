@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const settings = readFileSync(new URL("../src/app/settings/page.tsx", import.meta.url), "utf8");
-const jobCard = readFileSync(new URL("../src/components/JobCard.tsx", import.meta.url), "utf8");
+const jobCard = ["JobActionBar.tsx", "useJobActions.ts"].map(file => readFileSync(new URL(`../src/components/job-card/${file}`, import.meta.url), "utf8")).join("\n");
 const usage = readFileSync(new URL("../src/app/usage/page.tsx", import.meta.url), "utf8");
 const api = readFileSync(new URL("../src/lib/api.ts", import.meta.url), "utf8");
 const storageHook = readFileSync(new URL("../src/hooks/useStorageMaintenance.ts", import.meta.url), "utf8");
