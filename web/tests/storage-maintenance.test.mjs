@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const settings = readFileSync(new URL("../src/app/settings/page.tsx", import.meta.url), "utf8");
-const page = readFileSync(new URL("../src/components/GenerationWorkspace.tsx", import.meta.url), "utf8");
+const page = ["GenerationResults.tsx", "useGenerationJobs.ts"].map(file => readFileSync(new URL(`../src/components/generation/${file}`, import.meta.url), "utf8")).join("\n");
 const api = readFileSync(new URL("../src/lib/api.ts", import.meta.url), "utf8");
 
 test("storage maintenance is an explicit scan then cleanup flow", () => {

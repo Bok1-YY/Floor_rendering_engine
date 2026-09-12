@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const form = readFileSync(new URL("../src/components/ParamsForm.tsx", import.meta.url), "utf8");
-const page = readFileSync(new URL("../src/components/GenerationWorkspace.tsx", import.meta.url), "utf8");
+const page = readFileSync(new URL("../src/components/generation/useGenerationState.ts", import.meta.url), "utf8");
 const scene = readFileSync(new URL("../src/lib/scene.ts", import.meta.url), "utf8");
 const types = readFileSync(new URL("../src/lib/types.ts", import.meta.url), "utf8");
 
@@ -17,9 +17,9 @@ test("scene controls expose presets, spatial dimensions, grouped views and summa
 });
 
 test("drafts, reuse and live edits pass through scene normalization", () => {
-  assert.match(page, /hydrateSceneParams\(\{ \.\.\.buildDefaultParams\(o\), \.\.\.reuse\.params \}/);
-  assert.match(page, /hydrateSceneParams\(draft\?\.params/);
-  assert.match(page, /applySceneChange\(paramsRef\.current, patch, options\.scene_catalog\)/);
+  assert.match(page, /const source = reuse\?\.params \? reuse : draft/);
+  assert.match(page, /hydrateSceneParams\(\{ \.\.\.buildDefaultParams\(options\), \.\.\.source\?\.params \}/);
+  assert.match(page, /applySceneChange\(s\.params, patch, s\.options\.scene_catalog\)/);
   assert.match(page, /为保持场景合理，已联动/);
 });
 

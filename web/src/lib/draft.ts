@@ -26,7 +26,7 @@ export function loadDraft(): Partial<GenerateDraft> | null {
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as Partial<GenerateDraft>) : null;
+    return raw ? normalizeDraft(JSON.parse(raw)) : null;
   } catch {
     return null; // JSON 损坏 / 存储被禁用等，当作没有草稿
   }
@@ -87,9 +87,56 @@ export function takeReuseRequest(): ReuseRequest | null {
   try {
     const raw = window.localStorage.getItem(REUSE_KEY);
     if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    const normalized = normalizeDraft(parsed);
+    if (!normalized?.params || !isObject(parsed)) { window.localStorage.removeItem(REUSE_KEY); return null; }
+    const result: ReuseRequest = { params: normalized.params, modelFilter: normalized.modelFilter,
+      modelTargets: normalized.modelTargets, sdOptions: normalized.sdOptions, freePrompt: normalized.freePrompt };
+    for (const key of ['floorPath', 'roomPath', 'refPath'] as const) if (typeof parsed[key] === 'string') result[key] = parsed[key];
+    if (Array.isArray(parsed.freeImagePaths)) result.freeImagePaths = parsed.freeImagePaths.filter((v): v is string => typeof v === 'string').slice(0, 3);
     window.localStorage.removeItem(REUSE_KEY);
-    return JSON.parse(raw) as ReuseRequest;
+    return result;
   } catch {
     return null;
   }
+}
+
+const isObject = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
+const isSwatch = (value: unknown): value is Swatch => isObject(value) && ['path', 'name', 'url', 'thumb'].every(key => typeof value[key] === 'string');
+/** Accept legacy slices, dropping malformed fields before hydration or rendering. */
+export function normalizeDraft(value: unknown): Partial<GenerateDraft> | null {
+  if (!isObject(value)) return null;
+  const result: Partial<GenerateDraft> = {};
+  if (isObject(value.params)) {
+    const numbers = new Set(['film_width_mm', 'film_repeat_length_mm', 'film_slit_origin_mm', 'floor_coverage_min', 'floor_coverage_max']);
+    const arrays = new Set(['avoid_items', 'cn_space_features', 'cn_facilities']);
+    const booleans = new Set(['cn_mode', 'cinematic_enabled']);
+    const nullable = new Set(['film_width_mm', 'film_repeat_length_mm', 'film_slit_origin_mm', 'cn_space_features', 'cn_facilities']);
+    const params = Object.fromEntries(Object.entries(value.params).filter(([key, v]) => {
+      if (v === null) return nullable.has(key);
+      if (numbers.has(key)) return typeof v === 'number' && Number.isFinite(v);
+      if (arrays.has(key)) return Array.isArray(v) && v.every(x => typeof x === 'string');
+      if (booleans.has(key)) return typeof v === 'boolean';
+      return typeof v === 'string';
+    }));
+    if (typeof params.workflow_mode !== 'string') delete params.workflow_mode;
+    result.params = params as unknown as GenParams;
+  }
+  if (value.modelFilter === 'b2' || value.modelFilter === 'pro' || value.modelFilter === 'both') result.modelFilter = value.modelFilter;
+  if (Array.isArray(value.modelTargets)) result.modelTargets = [...new Set(value.modelTargets.filter((key): key is ModelKey => key === 'b2' || key === 'pro' || key === 'sd35'))];
+  if (isObject(value.sdOptions)) {
+    const sd: Partial<SDOptions> = {};
+    for (const key of ['steps', 'guidance_scale', 'reference_strength', 'seed'] as const) {
+      const n = value.sdOptions[key]; if (typeof n === 'number' && Number.isFinite(n)) sd[key] = n;
+    }
+    if (value.sdOptions.seed === null) sd.seed = null;
+    for (const key of ['positive_addition', 'negative_addition'] as const) if (typeof value.sdOptions[key] === 'string') sd[key] = value.sdOptions[key];
+    result.sdOptions = sd as SDOptions;
+  }
+  for (const key of ['floor', 'refImg', 'roomImg'] as const) if (value[key] === null || isSwatch(value[key])) result[key] = value[key];
+  if (typeof value.freePrompt === 'string') result.freePrompt = value.freePrompt;
+  if (Array.isArray(value.freeImages)) result.freeImages = value.freeImages.filter(isSwatch).slice(0, 3);
+  if (Array.isArray(value.recipes)) result.recipes = value.recipes.filter((r): r is ResolvedRecipe => isObject(r) && typeof r.key === 'string' && typeof r.label === 'string' &&
+    ['sub', 'style_type', 'lighting', 'angle', 'aspect_ratio', 'resolution'].every(key => r[key] === undefined || typeof r[key] === 'string'));
+  return result;
 }

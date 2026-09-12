@@ -227,7 +227,7 @@ export const api = {
   // ── 快速预览（Nano Banana 2 Lite · 1K，与 4K 队列解耦；短轮询状态）──
   createPreview: (req: PreviewRequest) =>
     jsend<{ preview_id: string; status: string }>("/api/preview", "POST", req),
-  previewStatus: (pid: string) => jget<PreviewView>(`/api/preview/${pid}`),
+  previewStatus: (pid: string, signal?: AbortSignal) => jget<PreviewView>(`/api/preview/${pid}`, signal),
   cancelPreview: (pid: string) =>
     jsend<{ cancelled: boolean }>(`/api/preview/${pid}/cancel`, "POST"),
 
