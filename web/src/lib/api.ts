@@ -355,7 +355,8 @@ export const api = {
     jsend<InpaintSegmentView>(`/api/inpaint/segment`, "POST", b, signal),
   submitInpaint: (b: GenericInpaintRequest) =>
     jsend<InpaintSubmitView>(`/api/inpaint`, "POST", b),
-  inpaintStatus: (iid: string) => jget<InpaintStatusView>(`/api/inpaint/${iid}`),
+  inpaintStatus: (iid: string, signal?: AbortSignal) =>
+    jget<InpaintStatusView>(`/api/inpaint/${iid}`, signal),
   applyInpaint: (iid: string, index: number) =>
     jsend<InpaintApplyResponse>(`/api/inpaint/${iid}/apply`, "POST", { index }),
   cancelInpaint: (iid: string) =>
