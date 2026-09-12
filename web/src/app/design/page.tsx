@@ -19,12 +19,11 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
-import { api } from "@/lib/api";
+import { useDesignDraft } from "@/hooks/useDesignDraft";
+import { api, ApiError } from "@/lib/api";
 import type {
   DesignFloorplanUpload,
-  DesignPlanRoom,
   DesignPlanAnchor,
-  DesignReferenceUpload,
   WholeHomeDesignCandidate,
   DesignModelRun,
   WholeHomeDesignPaidPreview,
@@ -53,9 +52,7 @@ const REVIEW_ITEMS = [
 
 const ACTIVE = new Set(["analyzing_plan", "verifying_plan", "generating_drafts", "refining", "interrupted"]);
 
-function csv(value: string[]) {
-  return value.join("\n");
-}
+
 
 function rows(value: string) {
   return value.split(/\r?\n|，|,/).map((item) => item.trim()).filter(Boolean);
@@ -98,21 +95,23 @@ export default function WholeHomeDesignPage() {
   const fileInput = useRef<HTMLInputElement>(null);
   const referenceInput = useRef<HTMLInputElement>(null);
   const [projects, setProjects] = useState<WholeHomeDesignProjectListItem[]>([]);
-  const [project, setProject] = useState<WholeHomeDesignProject | null>(null);
+  const [project, setProjectState] = useState<WholeHomeDesignProject | null>(null);
+  const selectedProject = useRef<string | null>(null);
+  const requestSequence = useRef(0);
+  const projectRequest = useRef<AbortController | null>(null);
+  const setProject = useCallback((value: WholeHomeDesignProject | null) => {
+    if (value && selectedProject.current && value.project_id !== selectedProject.current) return;
+    selectedProject.current = value?.project_id || null;
+    ++requestSequence.current;
+    setProjectState(value);
+  }, []);
   const [uploadResult, setUploadResult] = useState<DesignFloorplanUpload | null>(null);
   const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState("");
-  const [references, setReferences] = useState<DesignReferenceUpload[]>([]);
-  const [requirements, setRequirements] = useState("");
-  const [roomsState, setRoomsState] = useState<DesignPlanRoom[]>([]);
   const [hasGemini, setHasGemini] = useState<boolean | null>(null);
-  const [declaredLayout, setDeclaredLayout] = useState({ bedrooms: 0, halls: 0, bathrooms: 0, source_text: "", confidence: 0 });
-  const [declaredArea, setDeclaredArea] = useState(0);
-  const [overallDimensions, setOverallDimensions] = useState({ width: 0, depth: 0, evidence: [] as string[], confidence: 0 });
-  const [listFields, setListFields] = useState({
-    entrances: "", openings_summary: "", wet_zones: "", balconies: "",
-    dimension_evidence: "", must_preserve: "", uncertainties: "",
-  });
+  const { references, setReferences, requirements, setRequirements, roomsState, setRoomsState,
+    declaredLayout, setDeclaredLayout, declaredArea, setDeclaredArea, overallDimensions,
+    setOverallDimensions, listFields, setListFields, baseRevision, markSaved, editToken, rebase } = useDesignDraft(project);
   const [preview, setPreview] = useState<WholeHomeDesignPaidPreview | null>(null);
   const [confirmation, setConfirmation] = useState("");
   const [zoomUrl, setZoomUrl] = useState<string | null>(null);
@@ -121,12 +120,24 @@ export default function WholeHomeDesignPage() {
   const [reviewChecks, setReviewChecks] = useState<Record<string, boolean>>({});
   const [reviewNote, setReviewNote] = useState("");
 
-  const refreshProject = useCallback((id: string) => {
-    api.getWholeHomeDesignProject(id).then((value) => {
-      setProject(value);
+  const refreshProject = useCallback(async (id: string, select = false) => {
+    if (select) selectedProject.current = id;
+    if (selectedProject.current !== id) return;
+    projectRequest.current?.abort();
+    const controller = new AbortController();
+    projectRequest.current = controller;
+    const sequence = ++requestSequence.current;
+    try {
+      const value = await api.getWholeHomeDesignProject(id, controller.signal);
+      if (controller.signal.aborted || selectedProject.current !== id || sequence !== requestSequence.current) return;
+      setProjectState(value);
       setProjects((items) => [value, ...items.filter((item) => item.project_id !== value.project_id)]);
-    }).catch((error) => toast.error(String(error)));
+    } catch (error) {
+      if (!controller.signal.aborted) toast.error(String(error));
+    }
   }, []);
+
+  useEffect(() => () => { projectRequest.current?.abort(); ++requestSequence.current; }, []);
 
   useEffect(() => {
     let active = true;
@@ -143,7 +154,7 @@ export default function WholeHomeDesignPage() {
 
         const detail = await api.getWholeHomeDesignProject(items[0].project_id);
         if (!active) return;
-        setProject((current) => current ?? detail);
+        if (!selectedProject.current) setProject(detail);
         setProjects((current) => [
           detail,
           ...current.filter((item) => item.project_id !== detail.project_id),
@@ -153,35 +164,20 @@ export default function WholeHomeDesignPage() {
       }
     })();
     return () => { active = false; };
-  }, []);
+  }, [setProject]);
 
+  const activeProjectId = project && (ACTIVE.has(project.status) || (project.model_runs || []).some((run) => ["queued", "building"].includes(run.status))) ? project.project_id : null;
   useEffect(() => {
-    if (!project || (!ACTIVE.has(project.status) && !(project.model_runs || []).some((run) => ["queued", "building"].includes(run.status)))) return;
-    const id = project.project_id;
-    const timer = window.setInterval(() => refreshProject(id), 2000);
-    return () => window.clearInterval(timer);
-  }, [project, refreshProject]);
-
-  useEffect(() => {
-    if (!project) return;
-    const timer = window.setTimeout(() => {
-      setRoomsState(project.plan_summary?.rooms || []);
-      setDeclaredLayout(project.plan_summary?.declared_layout || { bedrooms: 0, halls: 0, bathrooms: 0, source_text: "", confidence: 0 });
-      setDeclaredArea(project.plan_summary?.declared_area_m2 || 0);
-      setOverallDimensions(project.plan_summary?.overall_dimensions_mm || { width: 0, depth: 0, evidence: [], confidence: 0 });
-      setListFields({
-        entrances: csv(project.plan_summary?.entrances || []),
-        openings_summary: csv(project.plan_summary?.openings_summary || []),
-        wet_zones: csv(project.plan_summary?.wet_zones || []),
-        balconies: csv(project.plan_summary?.balconies || []),
-        dimension_evidence: csv(project.plan_summary?.dimension_evidence || []),
-        must_preserve: csv(project.plan_summary?.must_preserve || []),
-        uncertainties: csv(project.plan_summary?.uncertainties || []),
-      });
-      setRequirements(project.brief?.requirements_text || "");
-    }, 0);
-    return () => window.clearTimeout(timer);
-  }, [project]);
+    if (!activeProjectId) return;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      await refreshProject(activeProjectId);
+      if (!stopped) timer = setTimeout(poll, 2000);
+    };
+    timer = setTimeout(poll, 2000);
+    return () => { stopped = true; clearTimeout(timer); projectRequest.current?.abort(); };
+  }, [activeProjectId, refreshProject]);
 
   async function uploadPlan(file: File) {
     setUploading(true);
@@ -200,6 +196,7 @@ export default function WholeHomeDesignPage() {
     setBusy("create");
     try {
       const value = await api.createWholeHomeDesignProject(path, name);
+      selectedProject.current = value.project_id;
       setProject(value);
       setProjects((items) => [value, ...items]);
       setUploadResult(null);
@@ -214,9 +211,10 @@ export default function WholeHomeDesignPage() {
   async function savePlanSummary() {
     if (!project) return;
     setBusy("summary");
+    const token = editToken("summary");
     try {
       const value = await api.saveWholeHomeDesignPlanSummary(project.project_id, {
-        base_revision: project.revision,
+        base_revision: baseRevision("summary"),
         room_count: roomsState.length,
         rooms: roomsState,
         declared_layout: declaredLayout,
@@ -234,10 +232,21 @@ export default function WholeHomeDesignPage() {
         uncertainties: rows(listFields.uncertainties),
         confirmed: true,
       });
+      markSaved("summary", value.project_id, token, value.revision);
       setProject(value);
       toast.success("户型摘要已确认；原图仍是唯一结构权威");
     } catch (error) {
-      toast.error(String(error));
+      if (error instanceof ApiError && error.status === 409) {
+        toast.error("项目版本已变化，输入已保留。载入最新版本并核对后可再次保存。", {
+          action: { label: "载入最新版本", onClick: async () => {
+            try {
+              const latest = await api.getWholeHomeDesignProject(project.project_id);
+              rebase("summary", latest.project_id, latest.revision);
+              setProject(latest);
+            } catch (refreshError) { toast.error(String(refreshError)); }
+          } },
+        });
+      } else toast.error(String(error));
     } finally {
       setBusy("");
     }
@@ -300,16 +309,28 @@ export default function WholeHomeDesignPage() {
   async function saveBrief() {
     if (!project || !requirements.trim()) return toast.warning("请填写完整的自由设计需求");
     setBusy("brief");
+    const token = editToken("brief");
     try {
       const value = await api.saveWholeHomeDesignBrief(project.project_id, {
-        base_revision: project.revision,
+        base_revision: baseRevision("brief"),
         requirements_text: requirements,
         reference_paths: references.map((item) => item.path),
       });
+      markSaved("brief", value.project_id, token, value.revision);
       setProject(value);
       toast.success("设计要求已保存；修改要求会使旧候选自动过期");
     } catch (error) {
-      toast.error(String(error));
+      if (error instanceof ApiError && error.status === 409) {
+        toast.error("项目版本已变化，输入已保留。载入最新版本并核对后可再次保存。", {
+          action: { label: "载入最新版本", onClick: async () => {
+            try {
+              const latest = await api.getWholeHomeDesignProject(project.project_id);
+              rebase("brief", latest.project_id, latest.revision);
+              setProject(latest);
+            } catch (refreshError) { toast.error(String(refreshError)); }
+          } },
+        });
+      } else toast.error(String(error));
     } finally {
       setBusy("");
     }
@@ -522,7 +543,7 @@ export default function WholeHomeDesignPage() {
         </div>
         <div className="mt-3 space-y-2">
           {projects.map((item) => (
-            <button key={item.project_id} type="button" onClick={() => refreshProject(item.project_id)}
+            <button key={item.project_id} type="button" onClick={() => refreshProject(item.project_id, true)}
               className={`w-full rounded-xl border p-3 text-left transition ${project?.project_id === item.project_id ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"}`}>
               <div className="truncate text-sm font-bold">{item.source_name || item.project_id}</div>
               <div className="mt-1 flex items-center justify-between gap-2 text-[11px] text-muted-foreground"><span>{statusLabel(item)}</span><span>{new Date(item.updated_at * 1000).toLocaleDateString()}</span></div>
@@ -563,7 +584,7 @@ export default function WholeHomeDesignPage() {
               {hasGemini === false && <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"><b>当前未配置 Gemini Key，自动摘要不可用。</b><div className="mt-1 text-xs">可以先人工补录，但不能确认空摘要。推荐先到 <a className="font-bold underline" href="/settings/">设置</a> 配置 Gemini，然后回来点击“自动识别”。</div></div>}
               {project.error && <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">自动识别提示：{project.error}</div>}
               <FloorplanAnchorEditor key={`${project.project_id}-${project.anchor_set?.updated_at || 0}`} imageUrl={api.imgUrl(project.normalized_url)} initial={project.anchor_set?.anchors || []} busy={busy === "anchors"} onSave={saveAnchorsAndAnalyze} />
-              {project.anchor_verification?.status !== "not_run" && <div className={`mt-4 rounded-xl border p-3 text-xs ${project.anchor_verification.status === "verified" ? "border-emerald-300 bg-emerald-50 text-emerald-900" : "border-amber-300 bg-amber-50 text-amber-900"}`}><b>Gemini 复核：{project.anchor_verification.status}</b>{project.anchor_verification.changes?.map((value) => <div key={value}>• 修正：{value}</div>)}{project.anchor_verification.conflicts?.map((value) => <div key={value}>• 冲突：{value}</div>)}{project.anchor_verification.inferred_anchor_gaps?.map((value) => <div key={value}>• 自动补充提示：{value}</div>)}</div>}
+              {project.anchor_verification && project.anchor_verification.status !== "not_run" && <div className={`mt-4 rounded-xl border p-3 text-xs ${project.anchor_verification.status === "verified" ? "border-emerald-300 bg-emerald-50 text-emerald-900" : "border-amber-300 bg-amber-50 text-amber-900"}`}><b>Gemini 复核：{project.anchor_verification.status}</b>{project.anchor_verification.changes?.map((value) => <div key={value}>• 修正：{value}</div>)}{project.anchor_verification.conflicts?.map((value) => <div key={value}>• 冲突：{value}</div>)}{project.anchor_verification.inferred_anchor_gaps?.map((value) => <div key={value}>• 自动补充提示：{value}</div>)}</div>}
               <div className="my-4 border-t border-border" />
               <div className="grid grid-cols-[minmax(260px,0.8fr)_minmax(0,1.2fr)] gap-4 max-[900px]:grid-cols-1">
                 <div className="space-y-3">

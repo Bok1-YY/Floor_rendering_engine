@@ -2,6 +2,7 @@
 // Phased extraction target: route entrypoint lives in app/page.tsx.
 import { useEffect, useRef, useState } from "react";
 import { Eye, Grid2X2, LoaderCircle, Pencil, Plus, RefreshCw, Sparkles, Star, Trash2, Upload } from "lucide-react";
+import { usePreviewPolling } from "@/hooks/usePreviewPolling";
 import { api } from "@/lib/api";
 import { requestNotifyPermission } from "@/lib/notify";
 import type {
@@ -147,11 +148,11 @@ export default function GeneratePage() {
   const [preview, setPreview] = useState<PreviewView | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [zoom, setZoom] = useState<string | null>(null);
-  const previewTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   // 预览竞态防护：run=序号（关弹窗/新预览即 ++，令在途 createPreview 与旧轮询的响应全部过期）；
   // wanted=弹窗是否还想要本次预览（await 期间关弹窗时 state 是 stale closure，必须走 ref 判断）
   const previewRun = useRef(0);
   const previewWanted = useRef(false);
+  const { stopPreviewPoll, pollPreview } = usePreviewPolling(previewRun, setPreview);
   // 识色响应乱序防护：连续快换地板时丢弃过期响应
   const floorSeq = useRef(0);
   const floorUploaderRef = useRef<FloorUploaderHandle>(null);
@@ -238,12 +239,19 @@ export default function GeneratePage() {
     });
   }, [options, params, modelTargets, sdOptions, floor, refImg, roomImg, recipes, freePrompt, freeImages]);
 
-  // 队列整体进度：轮询任务列表（卡片各自走 SSE，这里只为聚合进度/新任务出现）
+  // Sequential polling: a slow response cannot overlap the next request.
   useEffect(() => {
-    const t = setInterval(() => {
-      api.listJobs(50).then(setJobs).catch(() => {});
-    }, 2500);
-    return () => clearInterval(t);
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const value = await api.listJobs(50);
+        if (!stopped) setJobs(value);
+      } catch { /* SSE continues supplying active job updates. */ }
+      if (!stopped) timer = setTimeout(poll, 2500);
+    };
+    timer = setTimeout(poll, 2500);
+    return () => { stopped = true; clearTimeout(timer); };
   }, []);
 
   const updateParams = (patch: Partial<GenParams>) => {
@@ -566,38 +574,6 @@ export default function GeneratePage() {
       batchLock.current = false;
       setBatchSubmitting(false);
     }
-  }
-
-  function stopPreviewPoll() {
-    if (previewTimer.current) {
-      clearInterval(previewTimer.current);
-      previewTimer.current = null;
-    }
-  }
-  // 组件卸载时停轮询，避免泄漏
-  useEffect(() => stopPreviewPoll, []);
-
-  function pollPreview(pid: string, run: number) {
-    stopPreviewPoll();
-    let fails = 0; // 连续失败计数：偶发一次 fetch 失败不放弃，连续 3 次才报错停止（不再静默转圈）
-    previewTimer.current = setInterval(async () => {
-      try {
-        const p = await api.previewStatus(pid);
-        if (run !== previewRun.current) return; // 过期轮询（弹窗已关/新预览已开），丢弃
-        fails = 0;
-        setPreview(p);
-        if (p.status === "done" || p.status === "failed") stopPreviewPoll();
-      } catch {
-        if (run !== previewRun.current) return;
-        if (++fails >= 3) {
-          stopPreviewPoll();
-          setPreview({
-            preview_id: pid, status: "failed", stage: "", url: "", thumb: "",
-            error: "预览状态查询连续失败（网络/后端不可达），已停止刷新",
-          });
-        }
-      }
-    }, 1000);
   }
 
   // 快速预览：用 NB2 Lite 出一张 1K 草图（几秒、便宜），满意再点「生成效果图」出 4K

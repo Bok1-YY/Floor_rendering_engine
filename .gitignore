@@ -42,3 +42,7 @@ data/
 HANDOFF_ASSETS/
 assets/clipseg/
 assets/depth_anything_v2/
+
+# Browser regression artifacts
+web/test-results/
+web/playwright-report/

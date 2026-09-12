@@ -36,7 +36,7 @@ export function StructureResearchPanel({ project, busy, onPrepare, onSubmit, onS
 
     {review?.status === "not_run" && <div className="mt-4 rounded-xl border border-dashed p-5 text-center"><p className="text-sm text-muted-foreground">确认户型摘要后，先让系统生成墙、门窗和连通候选，再回答九个普通问题。</p><Button className="mt-3" disabled={!project.plan_summary_confirmed || busy === "structure-prepare"} onClick={onPrepare}>{busy === "structure-prepare" ? <LoaderCircle className="animate-spin" /> : <RefreshCw />}准备九问与结构候选</Button></div>}
 
-    {review?.status !== "not_run" && <>
+    {review && review.status !== "not_run" && <>
       {review.error && <div className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900"><b>外部结构审查暂不可用。</b><div className="mt-1">{review.error}</div><div className="mt-1">这不会计入产品失败，也不会删除本地答案；待线路恢复后可重新准备。</div></div>}
       {review.scale_calibration && <div className="mt-4 rounded-xl border border-emerald-300 bg-emerald-50 p-3 text-xs text-emerald-900">人工比例尺：{review.scale_calibration.distance_mm.toLocaleString()} mm · {review.scale_calibration.metres_per_pixel.toFixed(6)} m/px</div>}
       <div className="mt-4 space-y-3">{(review.questions || []).map((question, index) => <article key={question.id} className="rounded-xl border border-border p-3">

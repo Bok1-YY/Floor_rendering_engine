@@ -60,21 +60,33 @@ export const API =
   process.env.NEXT_PUBLIC_API_BASE ||
   (typeof window !== "undefined" ? window.location.origin : "http://127.0.0.1:7870");
 
+export class ApiError extends Error {
+  constructor(public status: number, public detail: unknown, public retryAfter: string | null) {
+    const message = typeof detail === "string" ? detail
+      : detail && typeof detail === "object" && "message" in detail ? String(detail.message)
+      : JSON.stringify(detail);
+    super(message || `HTTP ${status}`);
+    this.name = "ApiError";
+  }
+  get code(): string | undefined {
+    return this.detail && typeof this.detail === "object" && "code" in this.detail
+      ? String(this.detail.code) : undefined;
+  }
+}
+
 async function handle<T>(r: Response): Promise<T> {
   if (!r.ok) {
-    let detail = `HTTP ${r.status}`;
+    let detail: unknown = `HTTP ${r.status}`;
     try {
-      const j = await r.json();
-      detail = (j && (j.detail || JSON.stringify(j))) || detail;
-    } catch {
-      /* 非 JSON 错误体，保留状态码 */
-    }
-    throw new Error(detail);
+      const body = await r.json();
+      detail = body?.detail ?? body;
+    } catch { /* Retain the HTTP status for non-JSON error bodies. */ }
+    throw new ApiError(r.status, detail, r.headers.get("Retry-After"));
   }
   return (await r.json()) as T;
 }
 
-const jget = <T>(p: string) => fetch(API + p).then((r) => handle<T>(r));
+const jget = <T>(p: string, signal?: AbortSignal) => fetch(API + p, { signal }).then((r) => handle<T>(r));
 
 const jsend = <T>(p: string, method: "POST" | "PUT", body?: unknown, signal?: AbortSignal) =>
   fetch(API + p, {
@@ -108,8 +120,8 @@ export const api = {
     jsend<WholeHomeDesignProject>("/api/whole-home-design/projects", "POST", { floorplan_path, source_name }),
   listWholeHomeDesignProjects: (limit = 50) =>
     jget<WholeHomeDesignProjectListItem[]>(`/api/whole-home-design/projects?limit=${limit}`),
-  getWholeHomeDesignProject: (id: string) =>
-    jget<WholeHomeDesignProject>(`/api/whole-home-design/projects/${encodeURIComponent(id)}`),
+  getWholeHomeDesignProject: (id: string, signal?: AbortSignal) =>
+    jget<WholeHomeDesignProject>(`/api/whole-home-design/projects/${encodeURIComponent(id)}`, signal),
   saveWholeHomeDesignAnchors: (id: string, body: {
     base_revision: number;
     coordinate_space: "normalized-evidence-1000-v1";

@@ -148,6 +148,7 @@ export interface FailureKB {
 
 /** /api/jobs 系列返回的任务视图（_job_view 的 JSON） */
 export interface JobView {
+  snapshot_at?: number;
   job_id: string;
   display_name: string;
   ts: string;

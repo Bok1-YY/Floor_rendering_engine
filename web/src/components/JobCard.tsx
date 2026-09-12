@@ -93,6 +93,7 @@ export function JobCard({
   // 候选切换的本地覆盖（不影响后端"当前下标"，仅前端浏览）
   const [view, setView] = useState<Partial<Record<ModelKey, SlotView>>>({});
 
+  const snapshotAt = useRef(initial.snapshot_at || 0);
   const prevStatus = useRef(initial.status);
   const prevOperationStatus = useRef(initial.operation_status);
   const totalsRef = useRef(
@@ -106,6 +107,8 @@ export function JobCard({
   // 仅当候选总数变化(新图落地)才清候选浏览覆盖，避免每秒把用户正在翻的 ‹n/N› 重置回去；
   // 非终态→终态时触发完成提醒(系统通知+提示音)——放在共用路径上，SSE 断流时轮询也能补上通知。
   const applySnapshot = useCallback((j: JobView) => {
+    if (j.snapshot_at && j.snapshot_at < snapshotAt.current) return;
+    snapshotAt.current = j.snapshot_at || snapshotAt.current;
     const was = prevStatus.current;
     const wasActive = was === "queued" || was === "running";
     const nowTerminal =
