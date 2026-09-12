@@ -20,7 +20,15 @@ router = APIRouter()
 
 
 # ── 快速预览：Nano Banana 2 Lite 出一张 1K 草图（不进队列、不写记录、恒 Google 直连）──
-async def _preview_bg(pid: str, req: 'PreviewRequest'):
+async def _preview_bg(pid, req):
+    async with state.model_semaphores['preview']:
+        if state.background.stopping.is_set():
+            state.PREVIEWS.update_fields(pid, status='failed', error='服务正在退出')
+            return
+        await _preview_execute(pid, req)
+
+
+async def _preview_execute(pid: str, req: 'PreviewRequest'):
     """借用 save_task_files_html(persist=False) 的提示词逻辑，用 Lite 出 1K 预览。
     prep(rp/sref/bevel_ref) 是 _run_job_bg(约 269-274 行) 的精简版；预览只用 Pro 提示词、无 retry_ctx。
     刻意在预览侧写精简副本、不重构 4K 热路径（4K 主编排是命脉，本仓库测试覆盖不到它）。"""
@@ -30,7 +38,7 @@ async def _preview_bg(pid: str, req: 'PreviewRequest'):
     def _on_stage(t):
         _set(stage=t)
 
-    should_cancel = lambda: state.PREVIEWS.is_cancelled(pid)
+    should_cancel = lambda: state.background.stopping.is_set() or state.PREVIEWS.is_cancelled(pid)
     api_key = (req.api_key or '').strip() or load_config().get('gemini_api_key', '').strip()
     p = req.params
     try:
@@ -99,7 +107,7 @@ async def create_preview(req: PreviewRequest):
     req.ref_path = require_upload_image_path(req.ref_path, '参照图')
     panel_require_second_image(req)
     pid = f'pv_{uuid.uuid4().hex}'
-    state.PREVIEWS.add(pid, {'status': 'running', 'stage': '', 'url': '', 'thumb': '', 'error': '', 'ts': time.time()})
+    state.admit_preview(pid, {'status': 'running', 'stage': '', 'url': '', 'thumb': '', 'error': '', 'ts': time.time()})
     state.spawn(_preview_bg(pid, req))   # 秒回 pid，前端轮询 /api/preview/{pid}
     return {'preview_id': pid, 'status': 'running'}
 

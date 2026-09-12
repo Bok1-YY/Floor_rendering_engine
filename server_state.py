@@ -7,10 +7,11 @@
 """
 import asyncio
 import os
+from copy import deepcopy
 from typing import Optional
 
 from .config import MAIN_OUTPUT_DIR, logger
-from .models import JobRecord
+from .models import JobRecord, job_is_active, JOB_STATE_LOCK
 from .records import persist_jobs
 from .task_registry import TaskRegistry
 
@@ -28,23 +29,78 @@ def init_runtime(concurrency_limit: int) -> None:
     # 生成式修补独立信号量(恒 1):修补与主生成互不阻塞、也不占 b2/pro 槽
     model_semaphores['inpaint'] = asyncio.Semaphore(1)
     task_prep_lock = asyncio.Lock()
+    model_semaphores['preview'] = asyncio.Semaphore(1)
+    model_semaphores['design_model'] = asyncio.Semaphore(1)
+    background.stopping.clear()
 
 
 # 后台任务强引用:asyncio 事件循环只对 task 持弱引用,无强引用者可能在完成前被 GC。
 # 所有后台生图/重试/重抽/磨缝/二改 task 统一经 spawn() 排程并收进此集合,done 回调里自动清理。
-_bg_tasks: set = set()
+from .background_tasks import BackgroundTasks
+
+background = BackgroundTasks(logger)
+_bg_tasks = background.tasks
 
 
-def spawn(coro):
-    """asyncio.create_task + 持强引用直到完成——避免事件循环仅持弱引用导致后台任务被 GC。"""
-    t = asyncio.create_task(coro)
-    _bg_tasks.add(t)
-    def _done(task):
-        _bg_tasks.discard(task)
-        if not task.cancelled() and task.exception() is not None:
-            logger.error(f"[后台任务] 未处理异常: {task.exception()}")
-    t.add_done_callback(_done)
-    return t
+def spawn(coro, *, kind='job', reference=''):
+    if not reference:
+        frame = getattr(coro, 'cr_frame', None)
+        values = frame.f_locals if frame else {}
+        reference = str(getattr(values.get('job'), 'job_id', '') or values.get('pid') or values.get('iid') or values.get('project_id') or '')
+    return background.spawn(coro, kind=kind, reference=reference)
+
+
+def require_accepting():
+    from fastapi import HTTPException
+    if background.stopping.is_set():
+        raise HTTPException(503, '服务正在退出', headers={'Retry-After': '5'})
+
+
+def admit_job(job):
+    from fastapi import HTTPException
+    require_accepting()
+    with JOBS.locked() as entries:
+        if sum(job_is_active(j) for j in entries.values()) >= 60:
+            raise HTTPException(429, {'code': 'queue_full', 'message': '任务队列已满，请稍后再试'}, headers={'Retry-After': '5'})
+        entries[job.job_id] = job
+    try:
+        JOBS.persist()
+    except Exception as exc:
+        JOBS.pop(job.job_id)
+        raise HTTPException(503, '任务无法保存，尚未启动生成') from exc
+    JOBS.trim()
+
+
+def claim_job(job, **fields):
+    """Atomically transition a resident terminal job into a new operation."""
+    from fastapi import HTTPException
+    require_accepting()
+    with JOBS.locked() as entries:
+        if entries.get(job.job_id) is not job:
+            raise HTTPException(404, 'job not found')
+        if job_is_active(job):
+            raise HTTPException(409, '任务进行中')
+        if sum(job_is_active(j) for j in entries.values()) >= 60:
+            raise HTTPException(429, {'code': 'queue_full', 'message': '任务队列已满，请稍后再试'}, headers={'Retry-After': '5'})
+        previous = deepcopy(job.__dict__)
+        for name, value in fields.items():
+            setattr(job, name, value)
+    try:
+        JOBS.persist()
+    except Exception as exc:
+        with JOBS.locked():
+            job.__dict__.update(previous)
+        raise HTTPException(503, '任务无法保存，尚未启动操作') from exc
+
+
+def admit_preview(pid, entry):
+    from fastapi import HTTPException
+    require_accepting()
+    with PREVIEWS.locked() as entries:
+        if sum(not preview_is_terminal(v) for v in entries.values()) >= 3:
+            raise HTTPException(429, {'code': 'preview_queue_full', 'message': '预览队列已满，请稍后再试'}, headers={'Retry-After': '5'})
+        entries[pid] = entry
+        PREVIEWS.trim_locked()
 
 
 # ── 任务队列 ─────────────────────────────────────────────────
@@ -55,14 +111,14 @@ MAX_RESIDENT_JOBS = 60
 
 def job_is_terminal(j: JobRecord) -> bool:
     """终态 = 已出结果且不在磨缝;queued/running/磨缝中 in-flight 永不被 trim。"""
-    return j.status in ('done', 'partial', 'failed') and not j.pro_polishing
+    return j.status in ('done', 'partial', 'failed') and not job_is_active(j)
 
 
 # 取消语义与 webui 同义 —— 单任务用取消集合(stop this one);
 # 全局用单调代次(stop all:in-flight 任务捕获的旧代次 < 新代次即自行退出)。
 # persist 经 records.persist_jobs 落盘(内部会剥掉 retry_ctx 里的 api_key,不存明文)。
 JOBS = TaskRegistry('jobs', max_entries=MAX_RESIDENT_JOBS, is_terminal=job_is_terminal,
-                    on_persist=persist_jobs, newest_first=True)
+                    on_persist=persist_jobs, newest_first=True, terminal_history_only=True, state_lock=JOB_STATE_LOCK)
 
 
 def prune_job_output_paths(paths) -> int:
@@ -127,7 +183,7 @@ def preview_is_terminal(v: dict) -> bool:
     return v.get('status') in ('done', 'failed')
 
 
-PREVIEWS = TaskRegistry('previews', max_entries=MAX_PREVIEWS, is_terminal=preview_is_terminal)
+PREVIEWS = TaskRegistry('previews', max_entries=MAX_PREVIEWS, is_terminal=preview_is_terminal, terminal_history_only=True)
 
 
 # ── 生成式修补会话表 ─────────────────────────────────────────

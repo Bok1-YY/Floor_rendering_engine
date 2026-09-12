@@ -4,6 +4,7 @@
 只测配置→分派的纯逻辑：默认值、非法值回落、comfyui 优先级、usage 标签一致性。
 不发任何网络请求。
 """
+from .provider_fakes import patch_provider
 import io
 import json
 
@@ -21,7 +22,7 @@ from Floor_engine_server.task_registry import TaskRegistry
 def _patch_config(monkeypatch, cfg: dict):
     """api 与 config 各自 import 了 load_config，两处都要 patch。"""
     monkeypatch.setattr(config_mod, "load_config", lambda: dict(cfg))
-    monkeypatch.setattr(api_mod, "load_config", lambda: dict(cfg))
+    patch_provider(monkeypatch, "load_config", lambda: dict(cfg))
 
 
 def test_default_models(monkeypatch):
@@ -97,7 +98,7 @@ def test_qwen_payload_shape(monkeypatch):
         captured["payload"] = payload
         return None, "stop-here"
 
-    monkeypatch.setattr(api_mod, "_call_fal_queue_json", fake_queue)
+    patch_provider(monkeypatch, "_call_fal_queue_json", fake_queue)
     api_mod.call_fal_qwen_inpaint("k", Image.new("RGB", (32, 32)), Image.new("L", (32, 32), 255),
                                   "顺便把地毯也去掉", mode="remove", seed=7)
     assert captured["endpoint"] == api_mod.QWEN_INPAINT_ENDPOINT
@@ -120,7 +121,7 @@ def test_gemini_mark_builds_marked_image(monkeypatch):
         captured["image_size"] = image_size
         return None, "stop-here"
 
-    monkeypatch.setattr(api_mod, "call_gemini_edit", fake_edit)
+    patch_provider(monkeypatch, "call_gemini_edit", fake_edit)
     img = Image.new("RGB", (100, 100), (0, 128, 0))
     mask = Image.new("L", (100, 100), 0)
     for x in range(40, 60):
@@ -196,7 +197,7 @@ def test_eraser_binarizes_mask(monkeypatch):
         captured["payload"] = payload
         return None, "stop-here"   # 不继续走网络
 
-    monkeypatch.setattr(api_mod, "_call_fal_queue_json", fake_queue)
+    patch_provider(monkeypatch, "_call_fal_queue_json", fake_queue)
     img = Image.new("RGB", (64, 64), (100, 100, 100))
     feathered = Image.new("L", (64, 64), 0)
     for x in range(64):
@@ -224,7 +225,7 @@ def test_lama_uses_mask_image_url_field(monkeypatch):
         captured["payload"] = payload
         return None, "stop-here"
 
-    monkeypatch.setattr(api_mod, "_call_fal_queue_json", fake_queue)
+    patch_provider(monkeypatch, "_call_fal_queue_json", fake_queue)
     api_mod.call_fal_mask_eraser("k", Image.new("RGB", (8, 8)), Image.new("L", (8, 8), 255),
                                  model_key="lama")
     assert captured["endpoint"] == api_mod.LAMA_ENDPOINT
@@ -343,7 +344,7 @@ def test_qwen_add_payload_wraps_user_prompt(monkeypatch):
         captured.update(payload)
         return None, "stop-here"
 
-    monkeypatch.setattr(api_mod, "_call_fal_queue_json", fake_queue)
+    patch_provider(monkeypatch, "_call_fal_queue_json", fake_queue)
     api_mod.call_fal_qwen_inpaint(
         "k", Image.new("RGB", (16, 16)), Image.new("L", (16, 16), 255),
         "一盆龟背竹", mode="add",

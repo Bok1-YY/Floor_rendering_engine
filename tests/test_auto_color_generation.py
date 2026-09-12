@@ -1,3 +1,4 @@
+from .job_fakes import patch_jobs
 import asyncio
 from types import SimpleNamespace
 
@@ -40,7 +41,7 @@ def test_auto_color_helper_changes_only_segmented_floor(tmp_path, monkeypatch):
         warnings=[],
         model='mobile_sam',
     )
-    monkeypatch.setattr(routes_jobs, 'segment_floor', lambda *args, **kwargs: (src, result))
+    patch_jobs(monkeypatch, 'segment_floor', lambda *args, **kwargs: (src, result))
 
     out, metadata, err = routes_jobs._auto_color_match_generated(
         src, str(raw_path), str(ref_path))
@@ -61,23 +62,21 @@ def _run_generated_model(monkeypatch, *, color_success):
     corrected_image = Image.new('RGB', (24, 18), (90, 140, 70))
     writes = []
 
-    monkeypatch.setattr(
-        routes_jobs,
+    patch_jobs(monkeypatch,
         'call_image_generate',
         lambda *args, **kwargs: (api_image, None, 'google'),
     )
-    monkeypatch.setattr(routes_jobs, 'save_api_result_jpg', lambda *args, **kwargs: 'raw.jpg')
-    monkeypatch.setattr(routes_jobs, 'save_api_result_png', lambda *args, **kwargs: 'corrected.png')
-    monkeypatch.setattr(routes_jobs, 'record_usage', lambda *args, **kwargs: None)
+    patch_jobs(monkeypatch, 'save_api_result_jpg', lambda *args, **kwargs: 'raw.jpg')
+    patch_jobs(monkeypatch, 'save_api_result_png', lambda *args, **kwargs: 'corrected.png')
+    patch_jobs(monkeypatch, 'record_usage', lambda *args, **kwargs: None)
 
     def write_record(*args, **kwargs):
         writes.append((args, kwargs))
         return 'raw-result-id' if 'API 原图' in args[1] else 'corrected-result-id'
 
-    monkeypatch.setattr(routes_jobs, 'api_write_to_record', write_record)
+    patch_jobs(monkeypatch, 'api_write_to_record', write_record)
     if color_success:
-        monkeypatch.setattr(
-            routes_jobs,
+        patch_jobs(monkeypatch,
             '_auto_color_match_generated',
             lambda *args: (
                 corrected_image,
@@ -86,8 +85,7 @@ def _run_generated_model(monkeypatch, *, color_success):
             ),
         )
     else:
-        monkeypatch.setattr(
-            routes_jobs,
+        patch_jobs(monkeypatch,
             '_auto_color_match_generated',
             lambda *args: (None, {'mask_confidence': 0.2}, '未识别到可靠地板区域'),
         )

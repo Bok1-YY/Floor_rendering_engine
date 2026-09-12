@@ -16,7 +16,7 @@ from PIL import Image, PngImagePlugin
 from .config import MAIN_OUTPUT_DIR, UPLOAD_DIR, THUMB_DIR, logger
 from .models import (
     JobRecord, LEGACY_JOB_FIELDS, ensure_candidate_lists, legacy_filter_from_targets,
-    migrate_legacy_job_payload,
+    migrate_legacy_job_payload, job_is_active,
 )
 from .reveal_security import obfuscate_text, deobfuscate_text, load_reveal_hash
 from .storage_assets import (
@@ -91,14 +91,30 @@ def create_free_generation_record(primary_image_path: str, prompt: str, image_pa
 # ── 渲染队列持久化：重启后恢复已完成的卡片（图片本就在盘上）──────────────
 # 从 webui 下沉到此（纯文件 IO）。webui 保留薄包装 _persist_jobs() 负责加锁取 _job_history 快照后调本函数。
 QUEUE_STATE_FILE = os.path.join(MAIN_OUTPUT_DIR, '.queue_state.json')
-QUEUE_PERSIST_MAX = 60  # 最多持久化最近 N 条
+QUEUE_PERSIST_MAX = 60  # 终态历史上限；所有在途任务保留
 _JOB_FIELDS = {f.name for f in dataclasses.fields(JobRecord)}
 
+_queue_write_lock = threading.Lock()
+
+
 def persist_jobs(jobs) -> None:
-    """把 jobs(最近 N 条)落盘供重启恢复；剥掉 retry_ctx 里的 api_key(不存明文)；全程吞异常。
-    jobs: 调用方传入的 JobRecord 列表快照（调用方负责加锁）。"""
+    """Serialize writes; failures propagate so paid submission can be stopped."""
+    with _queue_write_lock:
+        _persist_jobs_unlocked(jobs)
+
+
+def _persist_jobs_unlocked(jobs) -> None:
+    """Write an immutable caller snapshot, preserving active jobs and redacting secrets."""
     try:
-        jobs = list(jobs)[:QUEUE_PERSIST_MAX]
+        selected = []
+        terminal_count = 0
+        for job in jobs:
+            if job_is_active(job):
+                selected.append(job)
+            elif terminal_count < QUEUE_PERSIST_MAX:
+                selected.append(job)
+                terminal_count += 1
+        jobs = selected
         out = []
         for j in jobs:
             ensure_candidate_lists(j)
@@ -117,12 +133,19 @@ def persist_jobs(jobs) -> None:
                         ctx[f'{key}_obf'] = obfuscate_text(value)
                 d['retry_ctx'] = ctx
             out.append(d)
-        tmp = QUEUE_STATE_FILE + '.tmp'
-        with open(tmp, 'w', encoding='utf-8') as f:
-            json.dump(out, f, ensure_ascii=False)
-        os.replace(tmp, QUEUE_STATE_FILE)
+        fd, tmp = tempfile.mkstemp(prefix='.queue_', suffix='.tmp', dir=os.path.dirname(QUEUE_STATE_FILE))
+        try:
+            with os.fdopen(fd, 'w', encoding='utf-8') as f:
+                json.dump(out, f, ensure_ascii=False)
+                f.flush()
+                os.fsync(f.fileno())
+            os.replace(tmp, QUEUE_STATE_FILE)
+        finally:
+            if os.path.exists(tmp):
+                os.remove(tmp)
     except Exception as ex:
-        logger.warning(f"[队列] 持久化失败(忽略): {ex}")
+        logger.error(f"[队列] 持久化失败: {ex}")
+        raise
 
 def load_persisted_jobs() -> List[JobRecord]:
     """启动时读回队列；把中断态(queued/running)修正为 partial/failed。返回 JobRecord 列表。"""
@@ -156,6 +179,9 @@ def load_persisted_jobs() -> List[JobRecord]:
                 run['stage'] = ''
                 if run.get('status') in ('queued', 'running'):
                     run['status'] = 'partial' if run.get('paths') else 'failed'
+        if job.operation_status == 'running' and job.operation not in ('panorama_generate', 'panorama_repair', 'panorama_direct'):
+            job.operation_status = 'failed'
+            job.operation_error = '程序重启，操作已中断；未自动重新提交'
         if (job.operation in ('panorama_generate', 'panorama_repair', 'panorama_direct')
                 and job.operation_status == 'running'):
             # Fal queue handle is retained in the vr360 run.  A repeated commit

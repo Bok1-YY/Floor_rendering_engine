@@ -1,4 +1,5 @@
 """SD 3.5 独立线路的离线契约测试（不发网络请求、不产生 API 费用）。"""
+from .provider_fakes import patch_provider
 
 from PIL import Image
 
@@ -80,9 +81,8 @@ def test_sd_fal_payload_requires_ip_adapter(monkeypatch, swatch_image):
         captured.update(key=key, endpoint=endpoint, payload=payload)
         return {"images": [{"url": "mock://image"}], "seed": 1234}, None
 
-    monkeypatch.setattr(api, "_call_fal_queue_json", fake_call)
-    monkeypatch.setattr(
-        api, "_fal_image_from_result",
+    patch_provider(monkeypatch, "_call_fal_queue_json", fake_call)
+    patch_provider(monkeypatch, "_fal_image_from_result",
         lambda data, plural=True, direct=False: (Image.new("RGB", (64, 64)), None),
     )
     image, err, seed = api.call_fal_sd35_generate(
@@ -147,7 +147,7 @@ def test_fal_queue_submits_once_then_polls(monkeypatch):
         calls["result"] += 1
         return _Response({"images": [{"url": "mock://image"}]})
 
-    monkeypatch.setattr(api, "load_config", lambda: {"proxy": "", "fal_queue_timeout": 60})
+    patch_provider(monkeypatch, "load_config", lambda: {"proxy": "", "fal_queue_timeout": 60})
     session = _Session(post, get)
     monkeypatch.setattr(api._req, "Session", lambda: session)
     monkeypatch.setattr(api.time, "sleep", lambda _: None)
@@ -175,7 +175,7 @@ def test_fal_queue_persists_submitted_handle(monkeypatch):
             return _Response({"status": "COMPLETED"})
         return _Response({"images": [{"url": "mock://image"}]})
 
-    monkeypatch.setattr(api, "load_config", lambda: {"proxy": "", "fal_queue_timeout": 60})
+    patch_provider(monkeypatch, "load_config", lambda: {"proxy": "", "fal_queue_timeout": 60})
     monkeypatch.setattr(api._req, "Session", lambda: _Session(post, get))
     data, err = api._call_fal_queue_json(
         "secret", "fal-ai/demo", {"prompt": "x"}, on_submitted=captured.append,
@@ -214,7 +214,7 @@ def test_fal_queue_resumes_handle_without_resubmitting(monkeypatch):
         calls["result"] += 1
         return _Response({"images": [{"url": "mock://image"}]})
 
-    monkeypatch.setattr(api, "load_config", lambda: {"proxy": "", "fal_queue_timeout": 60})
+    patch_provider(monkeypatch, "load_config", lambda: {"proxy": "", "fal_queue_timeout": 60})
     monkeypatch.setattr(api._req, "Session", lambda: _Session(post, get))
     data, err = api._call_fal_queue_json(
         "secret", "fal-ai/demo", {"prompt": "x"}, resume_handle=handle,
@@ -231,7 +231,7 @@ def test_fal_queue_never_resubmits_after_unknown_network_failure(monkeypatch):
         calls["post"] += 1
         raise api._req.exceptions.ConnectionError("lost after submit")
 
-    monkeypatch.setattr(api, "load_config", lambda: {"proxy": ""})
+    patch_provider(monkeypatch, "load_config", lambda: {"proxy": ""})
     monkeypatch.setattr(api._req, "Session", lambda: _Session(post))
     data, err = api._call_fal_queue_json("secret", "fal-ai/demo", {"prompt": "x"})
     assert data is None

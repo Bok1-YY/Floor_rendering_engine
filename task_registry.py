@@ -5,7 +5,7 @@
 泛型容器,行为逐字对齐原三套实现:
 
 - **成员管理**加锁(add/get/pop/snapshot/replace/update_fields/view/trim/persist);
-  **条目内容的字段级修改不加锁**(JobRecord 属性赋值、entry dict 原地改),与原实现一致。
+  JobRecord 及模型更新通过共享状态锁与持久化快照互斥；原始 dict 修改须由调用方持锁。
 - **取消集合**的 add/discard/判断不加锁(GIL 下 set 原子操作),与原实现一致。
 - **trim 只删最旧的终态条目**,in-flight 永不删;内部按插入序存储(旧→新),
   等价于原 jobs 的「从列表尾向前扫」与 previews/inpaints 的「按 ts 升序删」
@@ -14,9 +14,10 @@
 
 复合操作(检查-转移状态、背压检查+插入等必须在一把锁内完成的逻辑)走 locked()
 逃生口;在 locked() 块内只允许直接操作 entries 与调用 trim_locked() / 取消集合方法,
-禁止再调 add/get/pop/snapshot/persist 等加锁方法(threading.Lock 不可重入,会死锁)。
+持锁时禁止 persist()（持久化锁有独立顺序）；其他成员操作使用可重入锁。
 """
 import threading
+from copy import deepcopy
 from contextlib import contextmanager
 from typing import Callable, Dict, Iterable, List, Optional, Tuple
 
@@ -36,14 +37,16 @@ class TaskRegistry:
 
     def __init__(self, name: str, *, max_entries: int,
                  is_terminal: Callable, on_evict: Optional[Callable] = None,
-                 on_persist: Optional[Callable] = None, newest_first: bool = False):
+                 on_persist: Optional[Callable] = None, newest_first: bool = False, terminal_history_only: bool = False, state_lock=None):
         self.name = name
         self._max = max_entries
+        self._terminal_history_only = terminal_history_only
         self._is_terminal = is_terminal
         self._on_evict = on_evict
         self._on_persist = on_persist
         self._newest_first = newest_first
-        self._lock = threading.Lock()
+        self._lock = state_lock if state_lock is not None else threading.RLock()
+        self._persist_lock = threading.Lock()
         self._entries: Dict = {}      # 插入序 = 旧→新
         self._cancelled: set = set()
         self._generation = 0          # 全局取消代次(cancel-all 用,见 is_cancelled)
@@ -135,7 +138,8 @@ class TaskRegistry:
         """收口到 max_entries - reserve:按旧→新只删终态条目,in-flight 永不删。
         终态不足以降到限额时容忍超限(与原实现一致)。调用方须已持锁。"""
         limit = max(0, self._max - max(0, reserve))
-        over = len(self._entries) - limit
+        size = sum(self._is_terminal(e) for e in self._entries.values()) if self._terminal_history_only else len(self._entries)
+        over = size - limit
         if over <= 0:
             return
         victims = [tid for tid, e in self._entries.items() if self._is_terminal(e)][:over]
@@ -150,7 +154,12 @@ class TaskRegistry:
         禁止在 locked() 块内调用(会死锁),与原「_persist_jobs 必须在锁外」同一约束。"""
         if self._on_persist is None:
             return
-        self._on_persist(self.snapshot())
+        # Order snapshot capture and writing together, preventing older writes
+        # from overtaking newer ones. Never hold the registry lock during IO.
+        with self._persist_lock:
+            with self._lock:
+                items = deepcopy(list(self._entries.values()))
+            self._on_persist(items[::-1] if self._newest_first else items)
 
     @contextmanager
     def locked(self):

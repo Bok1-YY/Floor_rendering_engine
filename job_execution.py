@@ -13,13 +13,14 @@ def model_queue_handle(job: JobRecord, key: str, name: str) -> dict:
 
 def set_model_queue_handle(job: JobRecord, key: str, name: str, handle) -> None:
     """Persist a provider queue handle immediately after successful submission."""
-    run = update_model_run(job, key)
-    settings = dict(run.get('settings') or {})
-    if handle:
-        settings[name] = dict(handle)
-    else:
-        settings.pop(name, None)
-    update_model_run(job, key, settings=settings)
+    with state.JOBS.locked():
+        run = update_model_run(job, key)
+        settings = dict(run.get('settings') or {})
+        if handle:
+            settings[name] = dict(handle)
+        else:
+            settings.pop(name, None)
+        update_model_run(job, key, settings=settings)
     state.JOBS.persist()
 
 

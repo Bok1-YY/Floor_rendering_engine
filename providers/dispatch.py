@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 
 from ..config import DEFAULT_IMAGE_PROVIDER, load_config, logger
-from .types import coerce_provider_outcome
+from .types import coerce_provider_outcome, ProviderError
 
 
 def is_safe_failover_error(error) -> bool:
@@ -23,7 +23,8 @@ def dispatch_image_generate(api_key: str, model_id: str, prompt_text: str, image
                             should_cancel=None, bevel_ref_image_path=None,
                             input_image_paths=None, cinematic_mode: bool = False, cfg: dict | None = None):
     # Lazy import keeps api.py as a compatibility facade without an import cycle.
-    from ..api import call_fal_generate, call_gemini_generate
+    from .fal import call_fal_generate
+    from .gemini import call_gemini_generate
 
     cfg = dict(cfg) if cfg is not None else load_config()
     provider = str(cfg.get('image_provider') or DEFAULT_IMAGE_PROVIDER).strip().lower()
@@ -64,7 +65,11 @@ def dispatch_image_generate(api_key: str, model_id: str, prompt_text: str, image
             return coerce_provider_outcome(
                 (fallback_image, fallback_error, 'fal'), provider='fal', model_id=model_id)
         return coerce_provider_outcome(
-            (None, f'直连失败({error})；Fal 备用也失败({fallback_error})', 'google'),
+            (None, ProviderError(f'直连失败({error})；Fal 备用也失败({fallback_error})',
+                failure_code=getattr(fallback_error, 'failure_code', 'provider_failure'),
+                retry_safety=getattr(fallback_error, 'retry_safety', 'fatal'),
+                may_have_been_billed=getattr(fallback_error, 'may_have_been_billed', False),
+                attempts=[*getattr(error, 'attempts', []), *getattr(fallback_error, 'attempts', [])]), 'fal'),
             provider='google', model_id=model_id)
     return coerce_provider_outcome((None, error, 'google'), provider='google', model_id=model_id)
 

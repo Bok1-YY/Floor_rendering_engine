@@ -1,3 +1,4 @@
+from .design_fakes import patch_design
 import asyncio
 import io
 import json
@@ -44,11 +45,11 @@ def design_store(tmp_path, monkeypatch):
     models = root / "models"
     for folder in (projects, assets, bundles, models):
         folder.mkdir(parents=True)
-    monkeypatch.setattr(design, "ROOT", str(root))
-    monkeypatch.setattr(design, "PROJECT_ROOT", str(projects))
-    monkeypatch.setattr(design, "ASSET_ROOT", str(assets))
-    monkeypatch.setattr(design, "BUNDLE_ROOT", str(bundles))
-    monkeypatch.setattr(design, "MODEL_ROOT", str(models))
+    patch_design(monkeypatch, "ROOT", str(root))
+    patch_design(monkeypatch, "PROJECT_ROOT", str(projects))
+    patch_design(monkeypatch, "ASSET_ROOT", str(assets))
+    patch_design(monkeypatch, "BUNDLE_ROOT", str(bundles))
+    patch_design(monkeypatch, "MODEL_ROOT", str(models))
     design._LOCKS.clear()
     source = tmp_path / "plan.png"
     image = Image.new("RGB", (1200, 900), "white")
@@ -111,7 +112,7 @@ def test_generation_crop_excludes_detached_thin_detail_but_keeps_main_plan(tmp_p
     root = tmp_path / "design"
     assets = root / "assets"
     assets.mkdir(parents=True)
-    monkeypatch.setattr(design, "ASSET_ROOT", str(assets))
+    patch_design(monkeypatch, "ASSET_ROOT", str(assets))
     source = tmp_path / "sheet.png"
     image = Image.new("RGB", (1200, 900), "white")
     draw = ImageDraw.Draw(image)
@@ -133,7 +134,7 @@ def test_generation_crop_excludes_detached_thin_detail_but_keeps_main_plan(tmp_p
 def test_annotation_cleanup_erases_only_safe_boxes(tmp_path, monkeypatch):
     assets = tmp_path / "assets"
     assets.mkdir()
-    monkeypatch.setattr(design, "ASSET_ROOT", str(assets))
+    patch_design(monkeypatch, "ASSET_ROOT", str(assets))
     raw = tmp_path / "raw.png"
     image = Image.new("RGB", (500, 500), "white")
     draw = ImageDraw.Draw(image)
@@ -247,7 +248,7 @@ def test_automatic_summary_prefills_evidence_confidence_and_title_facts(design_s
         "must_preserve": ["east bay window"], "uncertainties": ["bedroom role"],
         "verification": {"status": "verified", "conflicts": [], "changes": [], "inferred_anchor_gaps": []},
     }
-    monkeypatch.setattr(design, "call_gemini_json", lambda *_args, **_kwargs: (payload, None))
+    patch_design(monkeypatch, "call_gemini_json", lambda *_args, **_kwargs: (payload, None))
     result = design.analyze_plan(project["project_id"])
     summary = result["plan_summary"]
     assert summary["declared_layout"]["source_text"] == "1房1厅"
@@ -321,7 +322,7 @@ def test_input_change_marks_candidates_and_bundles_stale(design_store):
 def test_no_gemini_requires_manual_structure_review(design_store, monkeypatch):
     project = confirmed_project(design_store)
     candidate = design._save_candidate_image(project["project_id"], "draft", Image.new("RGB", (2000, 1500), "white"))
-    monkeypatch.setattr(design, "load_config", lambda: {})
+    patch_design(monkeypatch, "load_config", lambda: {})
     qa = design.evaluate_structure(project, candidate)
     assert qa["status"] == "manual_required"
     assert qa["hard_fail"] is False
@@ -482,7 +483,7 @@ def test_structure_review_compiles_metric_bundle_from_human_scale(design_store):
 
 def test_structure_review_keeps_external_failure_out_of_product_failure(design_store, monkeypatch):
     project = confirmed_project(design_store)
-    monkeypatch.setattr(design, "call_gemini_json", lambda *args, **kwargs: (None, "Gemini HTTP 400: region"))
+    patch_design(monkeypatch, "call_gemini_json", lambda *args, **kwargs: (None, "Gemini HTTP 400: region"))
     review = design.prepare_structure_review(project)
     assert review["status"] == "external_review_pending"
     assert review["provider"] == "gemini_unavailable"
@@ -544,6 +545,7 @@ def test_gemini_entrance_must_geometrically_match_human_anchor(design_store):
     assert any("人工entrance锚点" in item for item in result["unresolved"])
 
 
+@pytest.mark.integration
 def test_product_adapter_runs_real_blender_and_keeps_missing_gemini_as_external_wait(design_store, monkeypatch):
     project = confirmed_project(design_store)
     design.prepare_structure_review(project, payload_override=_two_room_structure_seed())
@@ -556,7 +558,7 @@ def test_product_adapter_runs_real_blender_and_keeps_missing_gemini_as_external_
     design.submit_structure_review(project, answers)
     row = design.create_model_run_record(project)
     design.save_project(project)
-    monkeypatch.setattr(design, "evaluate_structure", lambda *_args, **_kwargs: {
+    patch_design(monkeypatch, "evaluate_structure", lambda *_args, **_kwargs: {
         "version": design.QA_PROMPT_VERSION, "status": "manual_required", "hard_fail": False,
         "summary": "Gemini route unavailable", "checks": [], "provider": "gemini_unavailable",
     })
@@ -591,7 +593,7 @@ def test_ifc_dependency_block_cannot_be_promoted_by_gemini_pass(design_store, mo
         "status": "blocked_dependency_missing", "message": "IfcOpenShell missing",
         "artifacts": {"top.png": {"path": str(top), "bytes": top.stat().st_size, "sha256": design.file_sha256(str(top))}},
     })
-    monkeypatch.setattr(design, "evaluate_structure", lambda *_args, **_kwargs: {
+    patch_design(monkeypatch, "evaluate_structure", lambda *_args, **_kwargs: {
         "version": design.QA_PROMPT_VERSION, "status": "passed", "hard_fail": False,
         "summary": "visual pass", "checks": [], "provider": "fixture",
     })
@@ -639,3 +641,65 @@ def test_structure_and_model_run_routes_form_one_revision_bound_fast_lane(design
         idempotency_key="route-fast-lane-001")))
     assert started["model_runs"][0]["status"] == "queued"
     assert len(captured) == 1
+
+
+@pytest.mark.parametrize("change", ["edit", "cancel"])
+def test_old_analysis_cannot_overwrite_new_project(design_store, monkeypatch, change):
+    project = confirmed_project(design_store)
+    def delayed_failure(*args, **kwargs):
+        current = design.load_project(project["project_id"])
+        current["revision"] += 1
+        current["plan_summary"] = {"human_edit": "keep me"}
+        current["status"] = "cancelled" if change == "cancel" else "ready"
+        current["cancel_requested"] = change == "cancel"
+        design.save_project(current)
+        return None, "old failure"
+    patch_design(monkeypatch, "call_gemini_json", delayed_failure)
+    design.analyze_plan(project["project_id"])
+    current = design.load_project(project["project_id"])
+    assert current["plan_summary"] == {"human_edit": "keep me"}
+    assert current["status"] == ("cancelled" if change == "cancel" else "ready")
+
+
+def test_corrected_structure_answers_remove_only_answer_issues(monkeypatch):
+    project = {"structure_review": {
+        "questions": [{"id": "Q09_READY", "choices": [{"value": "yes"}, {"value": "unsure"}]}],
+        "seed_graph": {"test": True}, "unresolved": [],
+    }}
+    patch_design(monkeypatch, "_compile_structure_bundle", lambda *args: {"structure_hash": "test"})
+    design.submit_structure_review(project, {"Q09_READY": "unsure"})
+    assert project["structure_review"]["status"] == "needs_professional_review"
+    design.submit_structure_review(project, {"Q09_READY": "yes"})
+    assert project["structure_review"]["status"] == "verified"
+    assert project["structure_review"]["unresolved"] == []
+
+
+def test_model_review_releases_project_lock_and_rejects_stale_result(design_store, tmp_path, monkeypatch):
+    import threading
+    from Floor_engine_server.tools import fastloop_research
+    project = confirmed_project(design_store)
+    project['model_runs'] = [{'run_id': 'model-test', 'status': 'queued', 'structure_bundle': {}, 'output_root': str(tmp_path / 'model')}]
+    design.save_project(project)
+    top = tmp_path / 'top.png'
+    Image.new('RGB', (4, 4)).save(top)
+    monkeypatch.setattr(fastloop_research, 'run_research_model', lambda *_a, **_k: {'status': 'mechanical_verified'})
+    patch_design(monkeypatch, '_normalize_model_artifacts', lambda _: [{'kind': 'top', 'path': str(top)}])
+    acquired = threading.Event()
+    def review(*args):
+        def edit():
+            with design._project_lock(project['project_id']):
+                current = design.load_project(project['project_id'])
+                current['revision'] += 1
+                current['stage'] = 'new human edit'
+                design.save_project(current)
+                acquired.set()
+        thread = threading.Thread(target=edit)
+        thread.start()
+        assert acquired.wait(2), 'remote QA still holds the project lock'
+        thread.join()
+        return {'status': 'passed'}
+    patch_design(monkeypatch, 'evaluate_structure', review)
+    row = design.run_model_job(project['project_id'], 'model-test')
+    assert row['stale'] is True
+    assert row['status'] == 'interrupted'
+    assert design.load_project(project['project_id'])['stage'] == 'new human edit'

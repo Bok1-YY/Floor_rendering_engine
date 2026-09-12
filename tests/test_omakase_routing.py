@@ -1,3 +1,4 @@
+from .provider_fakes import patch_provider
 import asyncio
 import json
 
@@ -40,7 +41,7 @@ def test_gemini_scenes_uses_structured_output_and_normalizes_recommended(monkeyp
             "candidates": [{"content": {"parts": [{"text": content}]}}],
         })
 
-    monkeypatch.setattr(api, "load_config", lambda: {"tls_verify": True})
+    patch_provider(monkeypatch, "load_config", lambda: {"tls_verify": True})
     monkeypatch.setattr(api._req, "post", fake_post)
 
     options, err = api.call_gemini_scenes(
@@ -62,12 +63,12 @@ def test_gemini_scenes_uses_structured_output_and_normalizes_recommended(monkeyp
 
 
 def test_omakase_router_does_not_call_deepseek_when_gemini_succeeds(monkeypatch):
-    monkeypatch.setattr(api, "call_gemini_scenes", lambda *a, **k: (OPTIONS, None))
+    patch_provider(monkeypatch, "call_gemini_scenes", lambda *a, **k: (OPTIONS, None))
 
     def unexpected(*args, **kwargs):
         raise AssertionError("DeepSeek must not be called after Gemini succeeds")
 
-    monkeypatch.setattr(api, "call_deepseek_scenes", unexpected)
+    patch_provider(monkeypatch, "call_deepseek_scenes", unexpected)
     result = api.call_omakase_scenes(
         "idea", gemini_api_key="g", gemini_model="gemini-3.6-flash",
         deepseek_api_key="d")
@@ -76,9 +77,9 @@ def test_omakase_router_does_not_call_deepseek_when_gemini_succeeds(monkeypatch)
 
 
 def test_omakase_router_falls_back_to_deepseek(monkeypatch):
-    monkeypatch.setattr(api, "call_gemini_scenes",
+    patch_provider(monkeypatch, "call_gemini_scenes",
                         lambda *a, **k: ([], "Omakase Gemini HTTP 503"))
-    monkeypatch.setattr(api, "call_deepseek_scenes", lambda *a, **k: (OPTIONS, None))
+    patch_provider(monkeypatch, "call_deepseek_scenes", lambda *a, **k: (OPTIONS, None))
 
     result = api.call_omakase_scenes(
         "idea", gemini_api_key="g", gemini_model="gemini-3.6-flash",
@@ -88,7 +89,7 @@ def test_omakase_router_falls_back_to_deepseek(monkeypatch):
 
 
 def test_omakase_router_preserves_deepseek_only_config(monkeypatch):
-    monkeypatch.setattr(api, "call_deepseek_scenes", lambda *a, **k: (OPTIONS, None))
+    patch_provider(monkeypatch, "call_deepseek_scenes", lambda *a, **k: (OPTIONS, None))
 
     result = api.call_omakase_scenes(
         "idea", gemini_api_key="", gemini_model="gemini-3.6-flash",
@@ -98,9 +99,9 @@ def test_omakase_router_preserves_deepseek_only_config(monkeypatch):
 
 
 def test_omakase_router_reports_both_failures(monkeypatch):
-    monkeypatch.setattr(api, "call_gemini_scenes",
+    patch_provider(monkeypatch, "call_gemini_scenes",
                         lambda *a, **k: ([], "Omakase Gemini HTTP 503"))
-    monkeypatch.setattr(api, "call_deepseek_scenes",
+    patch_provider(monkeypatch, "call_deepseek_scenes",
                         lambda *a, **k: ([], "DeepSeek HTTP 429"))
 
     options, err, provider, fallback = api.call_omakase_scenes(
@@ -178,8 +179,7 @@ def test_image_model_defaults_use_stable_ids():
 
 
 def test_gemini_failure_is_logged_even_without_deepseek(monkeypatch, caplog):
-    monkeypatch.setattr(
-        api,
+    patch_provider(monkeypatch,
         "call_gemini_scenes",
         lambda *a, **k: (
             [],
@@ -284,16 +284,14 @@ def test_connection_check_includes_all_production_model_endpoints(monkeypatch):
 
     probed = []
     monkeypatch.setattr(api._req, "get", fake_get)
-    monkeypatch.setattr(api, "_verify_arg", lambda *a, **k: True)
-    monkeypatch.setattr(
-        api,
+    patch_provider(monkeypatch, "_verify_arg", lambda *a, **k: True)
+    patch_provider(monkeypatch,
         "_probe_gemini_model_endpoint",
         lambda _key, model, **kwargs: (
             probed.append(model) or "✅ 端点可用（未生成）"
         ),
     )
-    monkeypatch.setattr(
-        api,
+    patch_provider(monkeypatch,
         "get_omakase_gemini_model",
         lambda: "gemini-3.6-flash",
     )
@@ -330,12 +328,11 @@ def test_style_analysis_uses_current_text_model_without_temperature(
             }
         )
 
-    monkeypatch.setattr(
-        api,
+    patch_provider(monkeypatch,
         "load_config",
         lambda: {"style_analysis_cache": False, "tls_verify": True},
     )
-    monkeypatch.setattr(api, "get_text_models", lambda: ["gemini-3.6-flash"])
+    patch_provider(monkeypatch, "get_text_models", lambda: ["gemini-3.6-flash"])
     monkeypatch.setattr(api._req, "post", fake_post)
 
     text, err = api.analyze_style_image("key", swatch_image)

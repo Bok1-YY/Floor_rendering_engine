@@ -48,16 +48,38 @@ from .whole_home_design import (
 )
 
 router = APIRouter()
-_TASKS: set[asyncio.Task] = set()
+from contextlib import asynccontextmanager
+from . import server_state as state
+
+_TASKS = state.background.tasks
 MAX_DESIGN_PDF_PAGE_PIXELS = 40_000_000
 MAX_DESIGN_PDF_TOTAL_PIXELS = 240_000_000
 
 
-def _track(coro) -> asyncio.Task:
-    task = asyncio.create_task(coro)
-    _TASKS.add(task)
-    task.add_done_callback(_TASKS.discard)
-    return task
+def _track(coro):
+    return state.spawn(coro, kind='design')
+
+
+@asynccontextmanager
+async def _async_project_lock(project_id):
+    # Acquire on the event-loop thread so RLock ownership remains correct,
+    # but yield instead of blocking when a storage worker owns the lock.
+    lock = _project_lock(project_id)
+    while not lock.acquire(blocking=False):
+        await asyncio.sleep(0.01)
+    try:
+        yield
+    finally:
+        lock.release()
+
+
+async def _run_model_reserved(project_id, run_id):
+    try:
+        async with state.model_semaphores['design_model']:
+            if not state.background.stopping.is_set():
+                await asyncio.to_thread(run_model_job, project_id, run_id)
+    finally:
+        state.background.release('design_model')
 
 
 def has_active_tasks() -> bool:
@@ -376,7 +398,7 @@ async def retry_design_plan_analysis(project_id: str, req: PreviewRequest):
             "code": "gemini_key_required",
             "message": "自动户型摘要需要先在设置页配置 Gemini API Key",
         })
-    with _project_lock(project_id):
+    async with _async_project_lock(project_id):
         project = _project_or_404(project_id)
         _assert_revision(project, req.base_revision)
         if not (project.get("anchor_set") or {}).get("confirmed_complete"):
@@ -390,7 +412,10 @@ async def retry_design_plan_analysis(project_id: str, req: PreviewRequest):
         project["error"] = ""
         save_project(project)
         revision = project["revision"]
-    _track(asyncio.to_thread(analyze_plan, project_id))
+        project["analysis_operation_id"] = new_id("analysis")
+        project["cancel_requested"] = False
+        save_project(project)
+    _track(asyncio.to_thread(analyze_plan, project_id, project["analysis_operation_id"]))
     response = public_project(project)
     response["analysis_revision"] = revision
     return response
@@ -447,7 +472,7 @@ def save_design_brief(project_id: str, req: BriefPutRequest):
 
 @router.post("/api/whole-home-design/projects/{project_id}/structure-review")
 async def prepare_design_structure_review(project_id: str, req: PreviewRequest):
-    with _project_lock(project_id):
+    async with _async_project_lock(project_id):
         project = _project_or_404(project_id)
         _assert_revision(project, req.base_revision)
         if not project.get("plan_summary_confirmed"):
@@ -468,7 +493,7 @@ async def prepare_design_structure_review(project_id: str, req: PreviewRequest):
         await asyncio.to_thread(prepare_structure_review, project)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
-    with _project_lock(project_id):
+    async with _async_project_lock(project_id):
         current = _project_or_404(project_id)
         if int(current.get("revision") or 0) != revision:
             return public_project(current)
@@ -508,7 +533,7 @@ def save_design_structure_guidance(project_id: str, req: StructureGuidancePutReq
 
 @router.post("/api/whole-home-design/projects/{project_id}/model-runs")
 async def create_design_model_run(project_id: str, req: ModelRunCreateRequest):
-    with _project_lock(project_id):
+    async with _async_project_lock(project_id):
         project = _project_or_404(project_id)
         _assert_revision(project, req.base_revision)
         review = project.get("structure_review") or {}
@@ -523,19 +548,27 @@ async def create_design_model_run(project_id: str, req: ModelRunCreateRequest):
         row["idempotency_key"] = req.idempotency_key
         should_start = row.get("status") == "queued" and not row.get("background_started_at")
         if should_start:
+            state.require_accepting()
+            if not state.background.reserve('design_model', 3):
+                raise HTTPException(429, {'code': 'model_queue_full', 'message': '建模队列已满，请稍后再试'}, headers={'Retry-After': '5'})
             row["background_started_at"] = time.time()
         project["revision"] += 1
         project["stage"] = "正在启动本地 Blender 研究建模" if should_start else row.get("stage") or project.get("stage")
-        save_project(project)
+        try:
+            save_project(project)
+        except Exception:
+            if should_start:
+                state.background.release('design_model')
+            raise
         run_id = row["run_id"]
     if should_start:
-        _track(asyncio.to_thread(run_model_job, project_id, run_id))
+        _track(_run_model_reserved(project_id, run_id))
     return public_project(project)
 
 
 @router.post("/api/whole-home-design/projects/{project_id}/model-runs/{run_id}/review")
 async def retry_design_model_review(project_id: str, run_id: str, req: PreviewRequest):
-    with _project_lock(project_id):
+    async with _async_project_lock(project_id):
         project = _project_or_404(project_id)
         _assert_revision(project, req.base_revision)
         row = next((value for value in project.get("model_runs") or [] if value.get("run_id") == run_id), None)
@@ -687,7 +720,7 @@ def _new_candidate(project: dict, preview: dict, *, phase: Literal["draft", "fin
 @router.post("/api/whole-home-design/projects/{project_id}/drafts/commit")
 async def commit_design_drafts(project_id: str, req: CommitRequest):
     should_start = False
-    with _project_lock(project_id):
+    async with _async_project_lock(project_id):
         project = _project_or_404(project_id)
         preview = _validate_commit(project, req, "drafts")
         existing_ids = list(preview.get("candidate_ids") or [])
@@ -714,11 +747,15 @@ async def _run_candidate_batch(project_id: str, candidate_ids: list[str], previe
         asyncio.to_thread(_generate_one_candidate, project_id, candidate_id, preview, False)
         for candidate_id in candidate_ids
     ])
-    with _project_lock(project_id):
+    async with _async_project_lock(project_id):
         project = load_project(project_id)
         if not project:
             return
+        if project.get("cancel_requested"):
+            return
         rows = [_candidate(project, candidate_id) for candidate_id in candidate_ids]
+        if any(row.get("stale") for row in rows):
+            return
         done = [row for row in rows if row.get("status") == "done"]
         if preview["kind"] == "drafts":
             project["status"] = "needs_draft_selection" if done else "failed"
@@ -759,7 +796,7 @@ def _generate_one_candidate(project_id: str, candidate_id: str, preview: dict,
 
     def cancelled() -> bool:
         current = load_project(project_id) or {}
-        return bool(current.get("cancel_requested"))
+        return state.background.stopping.is_set() or bool(current.get("cancel_requested"))
 
     def stage(text: str) -> None:
         with _project_lock(project_id):
@@ -819,7 +856,7 @@ def _generate_one_candidate(project_id: str, candidate_id: str, preview: dict,
                    status="qa_running", stage="正在核对户型结构", error="")
         record_usage("全屋设计", row["model_label"], provider, True, "generate")
         save_project(project)
-    qa = evaluate_structure(project, path)
+    qa = evaluate_structure(project, path) if not cancelled() else {"status": "manual_required", "summary": "已取消自动审查"}
     with _project_lock(project_id):
         project = load_project(project_id)
         if not project:
@@ -943,6 +980,8 @@ def cancel_design_project(project_id: str):
     with _project_lock(project_id):
         project = _project_or_404(project_id)
         project["cancel_requested"] = True
+        project["revision"] += 1
+        project["analysis_operation_id"] = ""
         project["status"] = "cancelled"
         project["stage"] = "已取消；不会提交新的付费调用"
         save_project(project)

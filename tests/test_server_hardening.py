@@ -1,3 +1,5 @@
+from .job_fakes import patch_jobs
+from .provider_fakes import patch_provider
 import io
 import base64
 import json
@@ -298,8 +300,7 @@ def test_google_and_fal_free_inputs_keep_slot_order(tmp_path, monkeypatch):
         captured.append(kwargs["json"])
         return RejectedResponse()
 
-    monkeypatch.setattr(
-        api_mod,
+    patch_provider(monkeypatch,
         "load_config",
         lambda: {
             "retry_attempts": 1,
@@ -341,7 +342,7 @@ def test_create_free_job_registers_queue_without_starting_network(tmp_path, monk
     monkeypatch.setattr(server_helpers, "UPLOAD_DIR", str(uploads))
     monkeypatch.setattr(server_state, "JOBS", jobs)
     monkeypatch.setattr(server_state, "spawn", capture)
-    monkeypatch.setattr(routes_jobs, "load_config", lambda: {"gemini_api_key": "k"})
+    patch_jobs(monkeypatch, "load_config", lambda: {"gemini_api_key": "k"})
     request = FreeJobSubmitRequest(prompt="原样指令", image_paths=[str(slot)], model_targets=["pro"])
 
     view = asyncio.run(routes_jobs.create_free_job(request))

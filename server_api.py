@@ -66,7 +66,23 @@ async def lifespan(_app: FastAPI):
     logger.info(
         f"[server_api] 启动完成：迁移 {migrated} 个记录文件，恢复 {len(state.JOBS)} 条历史任务，"
         f"恢复 {resumed} 个已有 Fal 全屋设计请求，每模型并发 {lim}，数据目录={BASE_DIR}")
-    yield
+    try:
+        yield
+    finally:
+        state.background.stopping.set()
+        state.JOBS.bump_generation()
+        for job in state.JOBS.snapshot():
+            if state.job_is_active(job):
+                state.JOBS.request_cancel(job.job_id)
+        for entry_id in tuple(state.PREVIEWS._entries):
+            state.PREVIEWS.request_cancel(entry_id)
+        for entry_id in tuple(state.INPAINTS._entries):
+            state.INPAINTS.request_cancel(entry_id)
+        await state.background.shutdown(15)
+        try:
+            state.JOBS.persist()
+        except Exception:
+            logger.exception('退出时无法保存任务队列')
 
 
 app = FastAPI(title="Floor Engine API", version="step1", lifespan=lifespan)
@@ -85,6 +101,8 @@ app.add_middleware(
 
 @app.middleware('http')
 async def reject_cross_origin_mutations(request: Request, call_next):
+    if request.method not in ('GET', 'HEAD', 'OPTIONS') and state.background.stopping.is_set():
+        return Response('服务正在退出', status_code=503, headers={'Retry-After': '5'})
     origin = request.headers.get('origin')
     if request.method not in ('GET', 'HEAD', 'OPTIONS') and origin:
         # 同源豁免：浏览器对一切 POST 都带 Origin 头。生产静态站由本后端同源托管，

@@ -35,6 +35,13 @@ if _PACKAGE_NAME not in sys.modules:
 @pytest.fixture(autouse=True)
 def isolated_offline_env(monkeypatch, tmp_path):
     """每个测试：输出目录隔离到 tmp + 翻译离线确定。autouse，所有用例自动生效。"""
+    import threading
+    import requests
+    def deny_network(*args, **kwargs):
+        raise AssertionError("Offline test attempted an unmocked HTTP request")
+    monkeypatch.setattr(requests.sessions.Session, "request", deny_network)
+    from Floor_engine_server import server_state
+    monkeypatch.setattr(server_state.background, "stopping", threading.Event())
     out_dir = tmp_path / "output_files"
     out_dir.mkdir(parents=True, exist_ok=True)
     # get_json_path() 读的是 records 模块里的 MAIN_OUTPUT_DIR 这个名字，patch 它即可。

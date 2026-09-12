@@ -415,12 +415,26 @@ def color_match_segment(req: ColorMatchSegmentRequest):
 
 @router.post('/api/jobs/{jid}/color-match')
 async def job_color_match(jid: str, req: JobColorMatchRequest):
-    """提交（任务侧）：全分辨率处理 → 落盘 → 并入该 stage 候选（‹n/N› 可切回原图）→ 写记录。"""
     job = state.JOBS.get(jid)
     if not job:
         raise HTTPException(404, 'job not found')
-    if job.status in ('running', 'queued') or job.pro_polishing or job.operation_status == 'running':
-        raise HTTPException(409, '任务进行中，请稍后校色')
+    state.claim_job(job, operation='color_match', operation_status='running', operation_error='')
+    try:
+        state.JOBS.persist()
+        result = await _apply_job_color_match(job, req)
+        job.operation_status = 'done'
+        return result
+    except Exception as exc:
+        job.operation_status = 'failed'
+        job.operation_error = str(exc)
+        raise
+    finally:
+        state.JOBS.persist()
+
+
+async def _apply_job_color_match(job, req: JobColorMatchRequest):
+    jid = job.job_id
+    """提交（任务侧）：全分辨率处理 → 落盘 → 并入该 stage 候选（‹n/N› 可切回原图）→ 写记录。"""
     abs_src = require_output_image_rel(req.image_rel)
     ensure_model_runs(job)
     # 归属校验：必须是该任务对应 stage 的候选之一（防跨任务写入 + 免候选下标竞态）

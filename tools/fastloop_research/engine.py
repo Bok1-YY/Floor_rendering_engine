@@ -9,10 +9,25 @@ import os
 from pathlib import Path
 import shutil
 import subprocess
+import time
+from contextvars import ContextVar
+from contextlib import contextmanager
 import sys
 from typing import Any, Mapping, Sequence
 
 from .contract import ResearchModelError, canonical_json, stable_token, validate_bundle
+
+
+_cancel_check = ContextVar('research_cancel_check', default=lambda: False)
+
+
+@contextmanager
+def cancellation_scope(should_cancel):
+    token = _cancel_check.set(should_cancel)
+    try:
+        yield
+    finally:
+        _cancel_check.reset(token)
 
 
 ALLOWED_STATUSES = {
@@ -149,6 +164,8 @@ def _run_owned(
     stderr = ""
     timed_out = False
     try:
+        if _cancel_check.get()():
+            raise OSError("研究建模已取消")
         process = subprocess.Popen(
             list(arguments),
             cwd=os.fspath(cwd),
@@ -161,7 +178,15 @@ def _run_owned(
             errors="replace",
         )
         try:
-            stdout, stderr = process.communicate(timeout=timeout)
+            deadline = time.monotonic() + timeout
+            while True:
+                if _cancel_check.get()() or time.monotonic() >= deadline:
+                    raise subprocess.TimeoutExpired(arguments, timeout)
+                try:
+                    stdout, stderr = process.communicate(timeout=min(0.5, max(0.01, deadline - time.monotonic())))
+                    break
+                except subprocess.TimeoutExpired:
+                    continue
         except subprocess.TimeoutExpired:
             timed_out = True
             process.terminate()

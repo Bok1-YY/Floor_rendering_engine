@@ -1,3 +1,4 @@
+from .provider_fakes import patch_provider
 import asyncio
 import base64
 import io
@@ -35,7 +36,7 @@ def _image_payload():
 
 
 def _patch_generate_config(monkeypatch, attempts=3):
-    monkeypatch.setattr(api, "load_config", lambda: {
+    patch_provider(monkeypatch, "load_config", lambda: {
         "retry_attempts": attempts,
         "retry_backoffs": [0],
         "speed_profile": "fast",
@@ -81,17 +82,17 @@ def test_ambiguous_google_failure_never_auto_fails_over(monkeypatch):
         retry_safety="ambiguous", may_have_been_billed=True,
     )
     fal_calls = 0
-    monkeypatch.setattr(api, "load_config", lambda: {
+    patch_provider(monkeypatch, "load_config", lambda: {
         "image_provider": "google", "auto_failover": True, "fal_api_key": "f",
     })
-    monkeypatch.setattr(api, "call_gemini_generate", lambda *_a, **_k: (None, error))
+    patch_provider(monkeypatch, "call_gemini_generate", lambda *_a, **_k: (None, error))
 
     def fal(*_args, **_kwargs):
         nonlocal fal_calls
         fal_calls += 1
         return object(), None
 
-    monkeypatch.setattr(api, "call_fal_generate", fal)
+    patch_provider(monkeypatch, "call_fal_generate", fal)
     outcome = api.call_image_generate("g", "model", "prompt", "image.png")
     image, returned_error, provider = outcome
     assert image is None and returned_error is error and provider == "google"
@@ -117,7 +118,7 @@ def test_edit_read_timeout_is_not_retried(monkeypatch):
 def test_fal_direct_read_timeout_is_not_retried(tmp_path, monkeypatch):
     image = tmp_path / "sample.png"
     Image.new("RGB", (4, 4), "tan").save(image)
-    monkeypatch.setattr(api, "load_config", lambda: {
+    patch_provider(monkeypatch, "load_config", lambda: {
         "retry_attempts": 3, "retry_backoffs": [0], "fal_retry_attempts": 3,
         "fal_model_map": {"model": "fal-ai/demo"}, "tls_verify": True,
     })

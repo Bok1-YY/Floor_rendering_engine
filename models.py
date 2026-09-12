@@ -5,8 +5,21 @@
 
 import time
 import uuid
+import threading
+from functools import wraps
 from dataclasses import dataclass, field
 from typing import Optional, List, Dict
+
+
+JOB_STATE_LOCK = threading.RLock()
+
+
+def _locked_state(function):
+    @wraps(function)
+    def wrapped(*args, **kwargs):
+        with JOB_STATE_LOCK:
+            return function(*args, **kwargs)
+    return wrapped
 
 
 MODEL_LABELS = {
@@ -20,6 +33,10 @@ MODEL_LABELS = {
 @dataclass
 class JobRecord:
     """A single rendering job in the queue."""
+    def __setattr__(self, name, value):
+        with JOB_STATE_LOCK:
+            object.__setattr__(self, name, value)
+
     job_id: str
     display_name: str
     ts: str
@@ -69,6 +86,12 @@ class JobRecord:
 
 
 # ── JobRecord 相关纯逻辑（从 webui 下沉，无 UI/IO 依赖）─────────────────────
+
+def job_is_active(job: JobRecord) -> bool:
+    """One lifecycle predicate shared by admission, eviction and HTTP operations."""
+    return (job.status in ('queued', 'running') or job.pro_polishing
+            or job.operation_status == 'running')
+
 
 def new_job(display_name: str, ts: str, model_filter: str = 'both') -> JobRecord:
     """工厂：构造一个新的排队 JobRecord。入队由调用方负责。
@@ -182,6 +205,7 @@ def _normalize_candidate_meta(run: dict) -> None:
     run['candidate_meta'] = metas
 
 
+@_locked_state
 def ensure_model_runs(job: JobRecord) -> None:
     """迁移旧固定槽并维护通用运行结构；可重复调用。"""
     if not job.model_targets:
@@ -242,6 +266,7 @@ def ensure_model_runs(job: JobRecord) -> None:
         _normalize_candidate_meta(run)
 
 
+@_locked_state
 def _sync_legacy_view(job: JobRecord, key: str) -> None:
     if key not in ('b2', 'pro'):
         return
@@ -255,6 +280,7 @@ def _sync_legacy_view(job: JobRecord, key: str) -> None:
     setattr(job, f'{key}_secs', run.get('seconds'))
 
 
+@_locked_state
 def update_model_run(job: JobRecord, key: str, **values) -> dict:
     if key not in job.model_targets:
         job.model_targets.append(key)
@@ -266,6 +292,7 @@ def update_model_run(job: JobRecord, key: str, **values) -> dict:
     return run
 
 
+@_locked_state
 def add_model_candidate(job: JobRecord, key: str, path: str,
                         metadata: Optional[dict] = None) -> int:
     """Append to canonical model_runs and refresh derived legacy fields."""
@@ -288,6 +315,7 @@ def add_model_candidate(job: JobRecord, key: str, path: str,
     return len(paths) - 1
 
 
+@_locked_state
 def nav_model_candidate(job: JobRecord, key: str, index: int) -> tuple:
     ensure_model_runs(job)
     run = job.model_runs.get(key) or {}
@@ -321,6 +349,7 @@ def compute_runs_final_status(job: JobRecord) -> str:
     return 'partial' if successes else 'failed'
 
 
+@_locked_state
 def update_job(job: JobRecord, **kw) -> None:
     """批量 setattr 更新 job 字段（原 webui._update_job）。"""
     for k, v in kw.items():
@@ -383,11 +412,13 @@ CANDIDATE_SLOTS = ('b2', 'pro')
 MAX_CANDIDATES_PER_SLOT = 12
 
 
+@_locked_state
 def ensure_candidate_lists(job: JobRecord) -> None:
     """Compatibility entrypoint: derive B2/Pro fields from canonical model_runs."""
     ensure_model_runs(job)
 
 
+@_locked_state
 def add_candidate(job: JobRecord, slot: str, path: str) -> int:
     """Legacy helper routed to canonical model_runs."""
     return add_model_candidate(job, slot, path)

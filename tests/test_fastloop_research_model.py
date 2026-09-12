@@ -315,6 +315,7 @@ def test_dependency_discovery_contract() -> None:
     assert _python_has_ifcopenshell(Path("definitely-missing-python.exe")) is False
 
 
+@pytest.mark.integration
 def test_real_blender_and_ifc_small_model(tmp_path: Path) -> None:
     blender = _discover_blender(None)
     if blender is None:
@@ -328,6 +329,7 @@ def test_real_blender_and_ifc_small_model(tmp_path: Path) -> None:
     assert result["status"] == "mechanical_verified"
 
 
+@pytest.mark.integration
 def test_packaged_runtime_uses_in_process_ifc_builder(tmp_path: Path, monkeypatch) -> None:
     from tools.fastloop_research import engine
     blender = _discover_blender(None)

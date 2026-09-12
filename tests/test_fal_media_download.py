@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 from __future__ import annotations
+from .provider_fakes import patch_provider
 
 import io
 
@@ -73,7 +74,7 @@ def test_fal_media_download_resumes_partial_bytes_with_range(monkeypatch):
     ]
     FakeSession.instances = []
     monkeypatch.setattr(api._req, "Session", FakeSession)
-    monkeypatch.setattr(api, "load_config", lambda: {
+    patch_provider(monkeypatch, "load_config", lambda: {
         "proxy": "http://127.0.0.1:7890",
         "fal_media_download_attempts": 2,
         "fal_media_retry_backoffs": [0],
@@ -100,7 +101,7 @@ def test_fal_media_download_switches_from_proxy_to_direct(monkeypatch):
     ]
     FakeSession.instances = []
     monkeypatch.setattr(api._req, "Session", FakeSession)
-    monkeypatch.setattr(api, "load_config", lambda: {
+    patch_provider(monkeypatch, "load_config", lambda: {
         "proxy": "http://127.0.0.1:7890",
         "fal_queue_proxy": "",
         "fal_media_download_attempts": 3,

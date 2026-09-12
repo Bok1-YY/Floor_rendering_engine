@@ -7,6 +7,7 @@
 """
 import os
 import uuid
+import time
 from typing import Optional
 
 from fastapi import HTTPException, UploadFile
@@ -152,6 +153,7 @@ def job_view(job: JobRecord) -> dict:
             'candidates': candidates,
         }
     return {
+        'snapshot_at': time.time_ns() // 1000,
         'job_id': job.job_id,
         'display_name': job.display_name,
         'ts': job.ts,

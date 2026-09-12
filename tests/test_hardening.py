@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """风险修复的回归测试：job_id 唯一性、上传路径安全、TLS verify 取值、用量线路归账。"""
+from .provider_fakes import patch_provider
 import os
 
 import pytest
@@ -70,38 +71,38 @@ def test_verify_arg_true_when_ca_missing():
 # ── 4. 用量线路归账：自动转 Fal 后必须记 'fal'，不是配置里的 'google' ──────────
 def test_call_image_generate_reports_actual_provider_on_failover(monkeypatch):
     fake_img = object()
-    monkeypatch.setattr(api_mod, "load_config",
+    patch_provider(monkeypatch, "load_config",
                         lambda: {"image_provider": "google", "auto_failover": True, "fal_api_key": "k"})
     # google 直连返回网络类失败 → 触发自动转线
     safe_error = ProviderError(
         "HTTP 503: busy", failure_code="google_retryable_http_exhausted",
         retry_safety="safe", may_have_been_billed=False,
     )
-    monkeypatch.setattr(api_mod, "call_gemini_generate",
+    patch_provider(monkeypatch, "call_gemini_generate",
                         lambda *a, **k: (None, safe_error))
-    monkeypatch.setattr(api_mod, "call_fal_generate",
+    patch_provider(monkeypatch, "call_fal_generate",
                         lambda *a, **k: (fake_img, None))
     img, err, provider = call_image_generate("key", "m", "p", "img.png")
     assert img is fake_img and provider == "fal"
 
 def test_call_image_generate_google_success_is_google(monkeypatch):
     fake_img = object()
-    monkeypatch.setattr(api_mod, "load_config", lambda: {"image_provider": "google"})
-    monkeypatch.setattr(api_mod, "call_gemini_generate", lambda *a, **k: (fake_img, None))
+    patch_provider(monkeypatch, "load_config", lambda: {"image_provider": "google"})
+    patch_provider(monkeypatch, "call_gemini_generate", lambda *a, **k: (fake_img, None))
     img, err, provider = call_image_generate("key", "m", "p", "img.png")
     assert img is fake_img and provider == "google"
 
 def test_call_image_generate_fal_route_is_fal(monkeypatch):
     fake_img = object()
-    monkeypatch.setattr(api_mod, "load_config", lambda: {"image_provider": "fal", "fal_api_key": "k"})
-    monkeypatch.setattr(api_mod, "call_fal_generate", lambda *a, **k: (fake_img, None))
+    patch_provider(monkeypatch, "load_config", lambda: {"image_provider": "fal", "fal_api_key": "k"})
+    patch_provider(monkeypatch, "call_fal_generate", lambda *a, **k: (fake_img, None))
     img, err, provider = call_image_generate("key", "m", "p", "img.png")
     assert img is fake_img and provider == "fal"
 
 def test_call_image_generate_google_fail_no_failover_is_google(monkeypatch):
-    monkeypatch.setattr(api_mod, "load_config",
+    patch_provider(monkeypatch, "load_config",
                         lambda: {"image_provider": "google", "auto_failover": False})
-    monkeypatch.setattr(api_mod, "call_gemini_generate",
+    patch_provider(monkeypatch, "call_gemini_generate",
                         lambda *a, **k: (None, "网络错误: reset"))
     img, err, provider = call_image_generate("key", "m", "p", "img.png")
     assert img is None and provider == "google"
