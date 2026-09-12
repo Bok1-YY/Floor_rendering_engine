@@ -2,6 +2,7 @@
 // Phased implementation behind components/InpaintDialog.tsx.
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { reportCommitError } from "@/lib/result-commit";
 import { api } from "@/lib/api";
 import type {
   InpaintCandidate,
@@ -694,7 +695,7 @@ function InpaintSession({
       setTask({ iid: r.inpaint_id, stage: "" });
       pollStatus(r.inpaint_id);
     } catch (e) {
-      toast.error("提交失败：" + (e as Error).message);
+      reportCommitError(e, (result) => { onDone?.(result.job); onOpenChange(false); });
     } finally {
       submitLock.current = false;
       setSubmitting(false);

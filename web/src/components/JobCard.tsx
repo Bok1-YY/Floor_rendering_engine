@@ -16,6 +16,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import { reportCommitError } from "@/lib/result-commit";
 import { api } from "@/lib/api";
 import { useJobStream } from "@/hooks/useJobStream";
 import { notifyJobEnd } from "@/lib/notify";
@@ -146,9 +147,9 @@ export function JobCard({
     job.pro_polishing ||
     job.operation_status === "running";
   const ambiguousRuns = Object.values(job.model_runs || {}).filter(
-    (run) => run?.retry_safety === "ambiguous",
+    (run) => run?.retry_safety === "ambiguous" && run?.recovery_action !== "resume",
   );
-  const hasAmbiguousBilling = ambiguousRuns.length > 0 || job.operation_retry_safety === "ambiguous";
+  const hasAmbiguousBilling = ambiguousRuns.length > 0 || (job.operation_retry_safety === "ambiguous" && job.model_runs?.sd35?.recovery_action !== "resume");
   useJobStream(active ? job.job_id : null, applySnapshot);
   // 轮询兜底：SSE 断流(后端重启/流异常关闭)时，父级轮询的新快照仍能解冻卡片。
   // SSE 与轮询同源同结构，last-writer-wins，1s 周期的 SSE 会覆盖偶尔旧一拍的轮询数据。
@@ -169,7 +170,7 @@ export function JobCard({
       setView({}); // 用户主动操作后总是重置候选浏览
       if (okMsg) toast.success(okMsg);
     } catch (e) {
-      toast.error((e as Error).message);
+      reportCommitError(e, (result) => { if (result.job) applySnapshot(result.job); });
     }
   }
 
@@ -181,6 +182,13 @@ export function JobCard({
       () => api.retryJob(job.job_id, hasAmbiguousBilling),
       hasAmbiguousBilling ? "已确认可能重复计费并重新生成" : "已重试",
     );
+  }
+
+  async function retryUpscale() {
+    const needsConfirmation = job.model_runs?.sd35?.recovery_action === "confirm";
+    if (needsConfirmation && !window.confirm("上一次超分可能已经计费。重新提交可能产生重复费用，确认继续吗？")) return;
+    await act(() => api.retrySdUpscale(job.job_id, needsConfirmation),
+      job.model_runs?.sd35?.recovery_action === "resume" ? "正在恢复已有超分请求" : "已提交超分重试");
   }
 
   async function remove() {
@@ -710,6 +718,12 @@ export function JobCard({
               {hasAmbiguousBilling ? "再次生成（可能重复计费）" : "重试失败线路"}
             </button>
           )}
+        {terminal && job.pending_result_commit && (
+          <button className={actBtn} onClick={() => act(async () => {
+            const result = await api.retryResultCommit(job.pending_result_commit!);
+            return result.job || job;
+          }, "本地结果已恢复写入，未再次调用模型")}>图片已保留 · 恢复本地写入</button>
+        )}
         {terminal && job.pro_url && !isFree && (
           <button
             className={actBtn}
@@ -718,12 +732,12 @@ export function JobCard({
             <span className="inline-flex items-center gap-1.5"><Sparkles size={13} />磨缝</span>
           </button>
         )}
-        {terminal && job.model_runs?.sd35?.delivery_status === "upscale_failed" && (
+        {terminal && !job.pending_result_commit && job.model_runs?.sd35?.delivery_status === "upscale_failed" && (
           <button
             className={actBtn}
-            onClick={() => act(() => api.retrySdUpscale(job.job_id), "已重试 SD 超分")}
+            onClick={retryUpscale}
           >
-            <span className="inline-flex items-center gap-1.5"><RefreshCw size={13} />重试超分</span>
+            <span className="inline-flex items-center gap-1.5"><RefreshCw size={13} />{job.model_runs?.sd35?.recovery_action === "resume" ? "恢复已有超分请求" : job.model_runs?.sd35?.recovery_action === "confirm" ? "重新超分（可能重复计费）" : "重试超分"}</span>
           </button>
         )}
         {terminal && (job.pro_url || job.b2_url) && (

@@ -144,6 +144,19 @@ export default function RecordsPage() {
     };
   }, []);
 
+  useEffect(() => {
+    const restored = async () => {
+      if (!active) return;
+      const seq = ++openSeq.current;
+      try {
+        const [rows, files] = await Promise.all([api.loadRecord(active), api.listRecords()]);
+        if (seq === openSeq.current) { setRecords(rows); setFiles(files); }
+      } catch (error) { toast.error(String(error)); }
+    };
+    window.addEventListener('floor-result-restored', restored);
+    return () => window.removeEventListener('floor-result-restored', restored);
+  }, [active]);
+
   async function open(jsonPath: string) {
     const seq = ++openSeq.current;
     setActive(jsonPath);

@@ -1,4 +1,5 @@
 "use client";
+import { PendingResultCommits } from "@/components/PendingResultCommits";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -225,6 +226,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </div>
 
+        <PendingResultCommits />
         <div className="min-h-0 flex-1 overflow-hidden">{children}</div>
       </main>
 

@@ -107,6 +107,8 @@ export interface SDOptions {
 }
 
 export interface ModelRunView {
+  recovery_action?: "resume" | "retry" | "confirm";
+  billing_phase?: "sd" | "upscale";
   key: JobSlotKey;
   label: string;
   status: JobStatus | "idle";
@@ -148,6 +150,7 @@ export interface FailureKB {
 
 /** /api/jobs 系列返回的任务视图（_job_view 的 JSON） */
 export interface JobView {
+  pending_result_commit?: string | null;
   snapshot_at?: number;
   job_id: string;
   display_name: string;

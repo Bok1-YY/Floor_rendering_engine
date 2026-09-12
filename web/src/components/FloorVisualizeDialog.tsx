@@ -3,6 +3,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import { reportCommitError } from "@/lib/result-commit";
 import { api } from "@/lib/api";
 import type {
   FloorPoint,
@@ -376,7 +377,7 @@ function FloorVisualizeSession({
       }
       onOpenChange(false);
     } catch (error) {
-      toast.error("保存失败：" + (error as Error).message);
+      reportCommitError(error, (result) => { onDone?.(result.job); onOpenChange(false); });
     } finally {
       setApplying(false);
     }

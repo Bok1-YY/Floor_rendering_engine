@@ -2,6 +2,7 @@
 // Phased implementation behind components/ColorMatchDialog.tsx.
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { reportCommitError } from "@/lib/result-commit";
 import { api } from "@/lib/api";
 import type {
   ColorMatchAdjustments,
@@ -438,7 +439,7 @@ function ColorMatchSession({
       }
       onOpenChange(false);
     } catch (e) {
-      toast.error("保存失败：" + (e as Error).message);
+      reportCommitError(e, (result) => { onDone?.(result.job); onOpenChange(false); });
     } finally {
       setSaving(false);
     }

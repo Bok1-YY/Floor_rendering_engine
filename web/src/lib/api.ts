@@ -211,8 +211,11 @@ export const api = {
     jsend<JobView>(`/api/jobs/${id}/retry`, "POST", {
       confirm_possible_duplicate_charge: confirmPossibleDuplicateCharge,
     }),
-  retrySdUpscale: (id: string) =>
-    jsend<JobView>(`/api/jobs/${id}/sd-upscale`, "POST"),
+  retrySdUpscale: (id: string, confirmPossibleDuplicateCharge = false) =>
+    jsend<JobView>(`/api/jobs/${id}/sd-upscale`, "POST", { confirm_possible_duplicate_charge: confirmPossibleDuplicateCharge }),
+  pendingResultCommits: () => jget<Array<{ commit_id: string; result_url: string; label: string; can_restore: boolean }>>("/api/result-commits"),
+  retryResultCommit: (id: string) =>
+    jsend<import('./result-commit').ResultCommitView>(`/api/result-commits/${encodeURIComponent(id)}/retry`, "POST"),
   jobResult: (id: string, model: ModelKey, idx: number) =>
     jget<{ model: string; idx: number; total: number; url: string; thumb: string }>(
       `/api/jobs/${id}/result?model=${model}&idx=${idx}`,
