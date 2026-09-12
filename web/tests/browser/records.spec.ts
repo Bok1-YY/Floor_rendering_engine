@@ -35,3 +35,83 @@ test('record parameter reuse still restores the generation workbench', async ({ 
   await expect(page.getByRole('button', { name: '生成效果图', exact: true })).toBeEnabled();
   expect(await page.evaluate(() => JSON.parse(localStorage.getItem('floor-engine:generate-draft:v1')!).params.style_type)).toBe('fixture-style');
 });
+
+test('failed review keeps the dialog and its note', async ({ page }) => {
+  await recordsSetup(page);
+  await page.route('**/api/records/result/review', route => route.fulfill({ status: 503, json: { detail: 'review unavailable' } }));
+  await page.getByRole('button', { name: '标注', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('textbox').fill('keep this note');
+  await dialog.getByRole('button', { name: '保存', exact: true }).click();
+  await expect(page.getByText('review unavailable', { exact: true })).toBeVisible();
+  await expect(dialog.getByRole('textbox')).toHaveValue('keep this note');
+});
+
+test('switching files closes dialogs and restores target-specific drafts', async ({ page }) => {
+  await recordsSetup(page);
+  await page.getByRole('button', { name: '标注', exact: true }).click();
+  await page.getByRole('dialog').getByRole('textbox').fill('draft for A');
+  // Native click models a file switch while the modal owns pointer input.
+  await page.getByRole('button', { name: 'B.json (1)', exact: true, includeHidden: true }).evaluate((button: HTMLButtonElement) => button.click());
+  await expect(page.getByRole('dialog')).not.toBeVisible();
+  await expect(page.getByRole('img', { name: 'image-B', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '标注', exact: true }).click();
+  await expect(page.getByRole('dialog').getByRole('textbox')).toHaveValue('');
+  await page.getByRole('dialog').getByRole('textbox').fill('draft for B');
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'A.json (1)', exact: true }).click();
+  await page.getByRole('button', { name: '标注', exact: true }).click();
+  await expect(page.getByRole('dialog').getByRole('textbox')).toHaveValue('draft for A');
+});
+
+test('old mutation completion does not select or populate the previous file', async ({ page }) => {
+  await recordsSetup(page);
+  let respond: (() => Promise<void>) | undefined;
+  await page.route('**/api/records/result/favorite', route => { respond = () => route.fulfill({ json: { favorite: true } }); });
+  await page.getByRole('button', { name: '☆ 收藏', exact: true }).click();
+  await expect.poll(() => !!respond).toBe(true);
+  await page.getByRole('button', { name: 'B.json (1)', exact: true }).click();
+  await expect(page.getByRole('img', { name: 'image-B', exact: true })).toBeVisible();
+  await respond!();
+  await expect(page.getByText('已收藏', { exact: true })).toBeVisible();
+  await expect(page.getByRole('img', { name: 'image-B', exact: true })).toBeVisible();
+  await expect(page.getByRole('img', { name: 'image-A', exact: true })).toHaveCount(0);
+});
+
+test('typing during review save survives its acknowledgement and prevents duplicate writes', async ({ page }) => {
+  await recordsSetup(page); let respond: (() => Promise<void>) | undefined, writes = 0;
+  await page.route('**/api/records/result/review', route => { writes++; respond = () => route.fulfill({ json: { ok: true } }); });
+  await page.getByRole('button', { name: '标注', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('textbox').fill('submitted');
+  await dialog.getByRole('button', { name: '保存', exact: true }).dblclick();
+  await expect.poll(() => writes).toBe(1);
+  await dialog.getByRole('textbox').fill('newer edit');
+  await respond!();
+  await expect(page.getByText('已保存标注', { exact: true })).toBeVisible();
+  await expect(dialog.getByRole('textbox')).toHaveValue('newer edit');
+});
+
+test('a deleted result cannot return through a stale server read', async ({ page }) => {
+  await recordsSetup(page);
+  page.once('dialog', prompt => prompt.accept());
+  await page.getByRole('button', { name: '删除', exact: true }).last().click();
+  await expect(page.getByRole('img', { name: 'image-A', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: '刷新', exact: true }).click();
+  await expect(page.getByRole('img', { name: 'image-A', exact: true })).toHaveCount(0);
+});
+
+test('record edit draft survives a file round trip and submission failure', async ({ page }) => {
+  await recordsSetup(page);
+  await page.getByRole('button', { name: '✎ 二改', exact: true }).click();
+  await page.getByRole('dialog').getByRole('textbox').fill('keep edit A');
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'B.json (1)', exact: true }).click();
+  await page.getByRole('button', { name: 'A.json (1)', exact: true }).click();
+  await page.getByRole('button', { name: '✎ 二改', exact: true }).click();
+  await expect(page.getByRole('dialog').getByRole('textbox')).toHaveValue('keep edit A');
+  await page.route('**/api/records/edit', route => route.fulfill({ status: 503, json: { detail: 'record edit failed' } }));
+  await page.getByRole('dialog').getByRole('button', { name: '提交', exact: true }).click();
+  await expect(page.getByText('record edit failed', { exact: true })).toBeVisible();
+  await expect(page.getByRole('dialog').getByRole('textbox')).toHaveValue('keep edit A');
+});

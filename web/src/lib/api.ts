@@ -216,9 +216,9 @@ export const api = {
   pendingResultCommits: () => jget<Array<{ commit_id: string; result_url: string; label: string; can_restore: boolean }>>("/api/result-commits"),
   retryResultCommit: (id: string) =>
     jsend<import('./result-commit').ResultCommitView>(`/api/result-commits/${encodeURIComponent(id)}/retry`, "POST"),
-  jobResult: (id: string, model: ModelKey, idx: number) =>
+  jobResult: (id: string, model: ModelKey, idx: number, signal?: AbortSignal) =>
     jget<{ model: string; idx: number; total: number; url: string; thumb: string }>(
-      `/api/jobs/${id}/result?model=${model}&idx=${idx}`,
+      `/api/jobs/${id}/result?model=${model}&idx=${idx}`, signal,
     ),
   polishJob: (id: string) => jsend<JobView>(`/api/jobs/${id}/polish`, "POST"),
   editJob: (id: string, body: EditRequest) =>
@@ -234,10 +234,10 @@ export const api = {
   recentSwatches: (limit = 24) =>
     jget<Swatch[]>(`/api/swatches/recent?limit=${limit}`),
 
-  listRecords: () => jget<RecordFile[]>(`/api/records`),
-  loadRecord: (jsonPath: string) =>
+  listRecords: (signal?: AbortSignal) => jget<RecordFile[]>(`/api/records`, signal),
+  loadRecord: (jsonPath: string, signal?: AbortSignal) =>
     jget<RecordEntry[]>(
-      `/api/records/load?json_path=${encodeURIComponent(jsonPath)}`,
+      `/api/records/load?json_path=${encodeURIComponent(jsonPath)}`, signal,
     ),
   storageAudit: () => jget<StorageAuditView>(`/api/storage/audit`),
   cleanupStorage: (snapshot_id: string) =>
