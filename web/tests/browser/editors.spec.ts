@@ -43,7 +43,8 @@ test('color preview strength is local and save preserves effective parameters', 
   const save = dialog.getByRole('button', { name: '保存为新候选', exact: true });
   await expect(save).toBeEnabled();
   const before = previews.length;
-  const strength = dialog.getByText('地板自动校准', { exact: true }).locator('..').getByRole('slider').first();
+  const strength = dialog.getByText('地板自动校准', { exact: true }).locator('..').getByRole('slider');
+  await expect(strength).toHaveCount(1);
   await strength.focus(); await page.keyboard.press('Home');
   const pixel = () => dialog.locator('canvas').last().evaluate((canvas: HTMLCanvasElement) => Array.from(canvas.getContext('2d')!.getImageData(64, 48, 1, 1).data).slice(0, 3));
   await expect.poll(pixel).toEqual([255, 0, 0]);
