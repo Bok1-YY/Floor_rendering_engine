@@ -12,6 +12,8 @@ from fastapi.routing import APIRoute
 from Floor_engine_server.server_api import app
 
 EXPECTED_ROUTES = [
+    ("/api/result-commits", "GET"),
+    ("/api/result-commits/{commit_id}/retry", "POST"),
     ("/api/film/analyze", "POST"),
     ("/api/color-match/segment", "POST"),
     ("/api/color-match/preview", "POST"),
@@ -144,7 +146,7 @@ def test_route_contract_unchanged():
 
 
 def test_route_count():
-    assert len(_actual_routes()) == 99
+    assert len(_actual_routes()) == 101
 
 
 def test_retired_3d_and_panorama_write_routes_are_absent():

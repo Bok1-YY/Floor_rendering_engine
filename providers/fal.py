@@ -88,7 +88,7 @@ def _call_fal_json(api_key: str, endpoint: str, payload: dict, *, on_stage=None,
     last_err = ""
     for attempt in range(max_attempts):
         if should_cancel and should_cancel():
-            return None, "已取消"
+            return None, ambiguous_provider_error("已取消，服务端计费状态待确认", failure_code="fal_cancel_unconfirmed", attempts=[])
         if on_stage:
             _notify_stage(on_stage, "📡 连接中…" if attempt == 0 else f"🔁 网络重试 {attempt}/{max_attempts - 1}")
         try:
@@ -117,7 +117,7 @@ def _call_fal_json(api_key: str, endpoint: str, payload: dict, *, on_stage=None,
             end = time.time() + backoffs[min(attempt, len(backoffs) - 1)] + random.uniform(0, 1.5)
             while time.time() < end:
                 if should_cancel and should_cancel():
-                    return None, "已取消"
+                    return None, ambiguous_provider_error("已取消，服务端计费状态待确认", failure_code="fal_cancel_unconfirmed", attempts=[])
                 time.sleep(0.5)
     return None, last_err or "Fal 请求失败"
 
@@ -125,6 +125,8 @@ def _call_fal_queue_json(api_key: str, endpoint: str, payload: dict, *, on_stage
                          should_cancel=None, resume_handle: Optional[dict] = None,
                          on_submitted=None) -> Tuple[Optional[dict], Optional[str]]:
     """Fal 持久队列：只提交一次，随后轮询同一 request_id，避免长连接断线后重复计费。"""
+    if should_cancel and should_cancel() and not resume_handle:
+        return None, safe_provider_error('已取消', failure_code='cancelled_before_submit', attempts=[])
     cfg = load_config()
     # Google 代理常会破坏 FAL 的大 POST/长轮询；SD 队列默认直连，确有需要再单配 fal_queue_proxy。
     proxy = str(cfg.get("fal_queue_proxy") or "").strip()
@@ -133,109 +135,118 @@ def _call_fal_queue_json(api_key: str, endpoint: str, payload: dict, *, on_stage
         session.proxies.update({"http": proxy, "https": proxy})
     else:
         session.trust_env = False
-    headers = {"Authorization": f"Key {api_key}", "Content-Type": "application/json"}
-    verify = _verify_arg(cfg)
-
-    def _detail(response) -> str:
-        try:
-            value = response.json()
-            if isinstance(value, dict):
-                value = value.get("detail") or value.get("error") or value.get("message") or value
-            return short_text(value, 600)
-        except Exception:
-            return short_text(response.text, 600)
-
-    queued = dict(resume_handle or {})
-    if queued:
-        _notify_stage(on_stage, "🔄 恢复已有 Fal 队列任务…")
-    else:
-        try:
-            # Multi-channel 4K ERP edits carry several lossless PNG data URIs.
-            # ``requests`` applies the connect timeout while writing the request
-            # body as well, so the former 30 s value aborted a valid 10-20 MB
-            # upload before Fal could return a durable request_id.  This remains
-            # a single submit: a timeout is never retried automatically.
-            try:
-                submit_timeout = max(
-                    30, min(600, int(cfg.get('fal_queue_submit_timeout', 180))))
-            except Exception:
-                submit_timeout = 180
-            # 提交响应丢失时无法判断服务器是否已接单，因此绝不自动重交；由用户显式重试。
-            response = session.post(
-                f"https://queue.fal.run/{endpoint}", json=payload, headers=headers,
-                timeout=(submit_timeout, max(120, submit_timeout)), verify=verify,
-            )
-            if response.status_code not in (200, 201, 202):
-                return None, f"队列提交 HTTP {response.status_code}: {_detail(response)}"
-            queued = response.json()
-        except Exception as ex:
-            make_error = safe_provider_error if is_safe_pre_submit_exception(ex) else ambiguous_provider_error
-            return None, make_error(f"队列提交网络错误（未自动重交）: {_redact_api_key(ex)}",
-                                    failure_code='fal_queue_submit_unknown', attempts=[])
-
-    status_url = str(queued.get("status_url") or "")
-    response_url = str(queued.get("response_url") or "")
-    cancel_url = str(queued.get("cancel_url") or "")
-    if not status_url.startswith("https://queue.fal.run/") or not response_url.startswith("https://queue.fal.run/"):
-        return None, ambiguous_provider_error("Fal 队列响应缺少有效状态地址", failure_code="fal_queue_handle_invalid", attempts=[])
-    if not resume_handle and on_submitted:
-        handle = {
-            "endpoint": endpoint,
-            "request_id": str(queued.get("request_id") or ""),
-            "status_url": status_url,
-            "response_url": response_url,
-            "cancel_url": cancel_url,
-            "submitted_at": time.time(),
-        }
-        try:
-            on_submitted(handle)
-        except Exception as ex:
-            logger.warning(f"[Fal队列] 持久化请求句柄失败 endpoint={endpoint}: {ex}")
     try:
-        deadline = time.time() + max(60, min(3600, int(cfg.get("fal_queue_timeout", 900))))
-    except Exception:
-        deadline = time.time() + 900
-    last_status = ""
-    poll_errors = 0
-    while time.time() < deadline:
-        if should_cancel and should_cancel():
-            if cancel_url.startswith("https://queue.fal.run/"):
+        headers = {"Authorization": f"Key {api_key}", "Content-Type": "application/json"}
+        verify = _verify_arg(cfg)
+
+        def _detail(response) -> str:
+            try:
+                value = response.json()
+                if isinstance(value, dict):
+                    value = value.get("detail") or value.get("error") or value.get("message") or value
+                return short_text(value, 600)
+            except Exception:
+                return short_text(response.text, 600)
+
+        queued = dict(resume_handle or {})
+        if queued:
+            _notify_stage(on_stage, "🔄 恢复已有 Fal 队列任务…")
+        else:
+            try:
+                # Multi-channel 4K ERP edits carry several lossless PNG data URIs.
+                # ``requests`` applies the connect timeout while writing the request
+                # body as well, so the former 30 s value aborted a valid 10-20 MB
+                # upload before Fal could return a durable request_id.  This remains
+                # a single submit: a timeout is never retried automatically.
                 try:
-                    session.post(cancel_url, headers=headers, timeout=(10, 30), verify=verify)
-                except Exception as ex:
-                    logger.debug(f"[Fal队列] 取消请求发送失败(尽力而为): {ex}")
-            return None, "已取消"
-        try:
-            status_response = session.get(
-                status_url, params={"logs": 1}, headers=headers,
-                timeout=(15, 45), verify=verify,
-            )
-            # 排队/推理中 REST 状态接口使用 202；完成后使用 200。
-            if status_response.status_code not in (200, 202):
-                return None, ambiguous_provider_error(f"队列状态 HTTP {status_response.status_code}: {_detail(status_response)}", failure_code="fal_queue_poll_failed", attempts=[])
-            status_data = status_response.json()
-            status = str(status_data.get("status") or "").upper()
-            poll_errors = 0
-            if status != last_status and on_stage:
-                label = {"IN_QUEUE": "⏳ Fal 排队中…", "IN_PROGRESS": "🎨 Fal 推理中…"}.get(status)
-                if label:
-                    _notify_stage(on_stage, label)
-            last_status = status
-            if status == "COMPLETED":
-                result_response = session.get(
-                    response_url, headers=headers, timeout=(30, 180), verify=verify,
+                    submit_timeout = max(
+                        30, min(600, int(cfg.get('fal_queue_submit_timeout', 180))))
+                except Exception:
+                    submit_timeout = 180
+                # 提交响应丢失时无法判断服务器是否已接单，因此绝不自动重交；由用户显式重试。
+                response = session.post(
+                    f"https://queue.fal.run/{endpoint}", json=payload, headers=headers,
+                    timeout=(submit_timeout, max(120, submit_timeout)), verify=verify,
                 )
-                if result_response.status_code != 200:
-                    return None, ambiguous_provider_error(f"队列取结果 HTTP {result_response.status_code}: {_detail(result_response)}", failure_code="fal_queue_result_failed", attempts=[])
-                return result_response.json(), None
-            if status in ("FAILED", "CANCELLED"):
-                return None, f"Fal 队列任务{status}: {short_text(status_data, 600)}"
-        except Exception as ex:
-            poll_errors += 1
-            if poll_errors >= 5:
-                return None, ambiguous_provider_error(f"队列状态网络错误: {_redact_api_key(ex)}", failure_code="fal_queue_poll_failed", attempts=[])
-        time.sleep(1.5)
-    return None, ambiguous_provider_error("Fal 队列等待超时；任务可能仍在服务端运行，请稍后按原任务重试", failure_code="fal_queue_timeout", attempts=[])
+                if response.status_code not in (200, 201, 202):
+                    return None, f"队列提交 HTTP {response.status_code}: {_detail(response)}"
+                queued = response.json()
+            except Exception as ex:
+                make_error = safe_provider_error if is_safe_pre_submit_exception(ex) else ambiguous_provider_error
+                return None, make_error(f"队列提交网络错误（未自动重交）: {_redact_api_key(ex)}",
+                                        failure_code='fal_queue_submit_unknown', attempts=[])
+
+        status_url = str(queued.get("status_url") or "")
+        response_url = str(queued.get("response_url") or "")
+        cancel_url = str(queued.get("cancel_url") or "")
+        if not status_url.startswith("https://queue.fal.run/") or not response_url.startswith("https://queue.fal.run/"):
+            return None, ambiguous_provider_error("Fal 队列响应缺少有效状态地址", failure_code="fal_queue_handle_invalid", attempts=[])
+        if not resume_handle and on_submitted:
+            handle = {
+                "endpoint": endpoint,
+                "request_id": str(queued.get("request_id") or ""),
+                "status_url": status_url,
+                "response_url": response_url,
+                "cancel_url": cancel_url,
+                "submitted_at": time.time(),
+            }
+            try:
+                on_submitted(handle)
+            except Exception as ex:
+                logger.warning(f"[Fal队列] 持久化请求句柄失败 endpoint={endpoint}: {ex}")
+        try:
+            deadline = time.time() + max(60, min(3600, int(cfg.get("fal_queue_timeout", 900))))
+        except Exception:
+            deadline = time.time() + 900
+        last_status = ""
+        poll_errors = 0
+        while time.time() < deadline:
+            if should_cancel and should_cancel():
+                if cancel_url.startswith("https://queue.fal.run/"):
+                    try:
+                        session.post(cancel_url, headers=headers, timeout=(10, 30), verify=verify)
+                    except Exception as ex:
+                        logger.debug(f"[Fal队列] 取消请求发送失败(尽力而为): {ex}")
+                return None, ambiguous_provider_error("已取消，服务端计费状态待确认", failure_code="fal_cancel_unconfirmed", attempts=[])
+            try:
+                status_response = session.get(
+                    status_url, params={"logs": 1}, headers=headers,
+                    timeout=(15, 45), verify=verify,
+                )
+                # 排队/推理中 REST 状态接口使用 202；完成后使用 200。
+                if status_response.status_code not in (200, 202):
+                    return None, ambiguous_provider_error(f"队列状态 HTTP {status_response.status_code}: {_detail(status_response)}", failure_code="fal_queue_poll_failed", attempts=[])
+                status_data = status_response.json()
+                status = str(status_data.get("status") or "").upper()
+                poll_errors = 0
+                if status != last_status and on_stage:
+                    label = {"IN_QUEUE": "⏳ Fal 排队中…", "IN_PROGRESS": "🎨 Fal 推理中…"}.get(status)
+                    if label:
+                        _notify_stage(on_stage, label)
+                last_status = status
+                if status == "COMPLETED":
+                    result_response = session.get(
+                        response_url, headers=headers, timeout=(30, 180), verify=verify,
+                    )
+                    if result_response.status_code != 200:
+                        return None, ambiguous_provider_error(f"队列取结果 HTTP {result_response.status_code}: {_detail(result_response)}", failure_code="fal_queue_result_failed", attempts=[])
+                    return result_response.json(), None
+                if status in ("FAILED", "CANCELLED"):
+                    return None, f"Fal 队列任务{status}: {short_text(status_data, 600)}"
+            except Exception as ex:
+                poll_errors += 1
+                if poll_errors >= 5:
+                    return None, ambiguous_provider_error(f"队列状态网络错误: {_redact_api_key(ex)}", failure_code="fal_queue_poll_failed", attempts=[])
+            time.sleep(1.5)
+        return None, ambiguous_provider_error("Fal 队列等待超时；任务可能仍在服务端运行，请稍后按原任务重试", failure_code="fal_queue_timeout", attempts=[])
+    finally:
+        close = getattr(session, 'close', None)
+        if close:
+            try:
+                close()
+            except Exception as error:
+                logger.debug('[Fal队列] 连接清理失败: %s', _redact_api_key(error))
+
 
 _FAL_MEDIA_MAX_BYTES = 128 * 1024 * 1024
 
@@ -388,7 +399,7 @@ def _fal_image_from_result(data: dict, *, plural: bool = True, direct: bool = Fa
     item = ((data.get("images") or [None])[0] if plural else data.get("image")) if isinstance(data, dict) else None
     url = item.get("url") if isinstance(item, dict) else None
     if not url:
-        return None, "API 未返回图片"
+        return None, ambiguous_provider_error("API 未返回图片", failure_code="fal_result_missing", attempts=[])
     try:
         if url.startswith("data:"):
             raw = base64.b64decode(url.split(",", 1)[1])
@@ -400,7 +411,7 @@ def _fal_image_from_result(data: dict, *, plural: bool = True, direct: bool = Fa
         image = Image.open(_io_mod.BytesIO(raw)); image.load()
         return image, None
     except Exception as ex:
-        return None, f"解码失败: {_redact_api_key(ex)}"
+        return None, ambiguous_provider_error(f"解码失败: {_redact_api_key(ex)}", failure_code="fal_result_decode_failed", attempts=[])
 
 def call_fal_sd35_generate(api_key: str, positive_prompt: str, negative_prompt: str,
                            floor_image_path: str, aspect_ratio: str = "4:3", *,
@@ -408,26 +419,29 @@ def call_fal_sd35_generate(api_key: str, positive_prompt: str, negative_prompt: 
                            reference_strength: float = 0.5, on_stage=None,
                            should_cancel=None, queue_handle=None, on_queue_submitted=None):
     """Fal SD3.5 Large + InstantX IP-Adapter。返回 (PIL, error, seed)。"""
-    ref_uri = _file_to_data_uri(floor_image_path)
-    if not ref_uri:
-        return None, "地板小样不存在或无法读取", seed
-    payload = {
-        "prompt": positive_prompt,
-        "negative_prompt": negative_prompt,
-        "image_size": sd35_base_size(aspect_ratio),
-        "num_inference_steps": max(10, min(50, int(steps))),
-        "guidance_scale": max(1.0, min(10.0, float(guidance_scale))),
-        "num_images": 1,
-        "enable_safety_checker": True,
-        "output_format": "png",
-        "ip_adapter": {
-            "path": SD35_IP_ADAPTER_PATH,
-            "weight_name": SD35_IP_ADAPTER_WEIGHT,
-            "image_encoder_path": SD35_IMAGE_ENCODER,
-            "image_url": ref_uri,
-            "scale": max(0.1, min(1.0, float(reference_strength))),
-        },
-    }
+    if queue_handle:
+        payload = {}  # Recovery does not need the original input files.
+    else:
+        ref_uri = _file_to_data_uri(floor_image_path)
+        if not ref_uri:
+            return None, "地板小样不存在或无法读取", seed
+        payload = {
+            "prompt": positive_prompt,
+            "negative_prompt": negative_prompt,
+            "image_size": sd35_base_size(aspect_ratio),
+            "num_inference_steps": max(10, min(50, int(steps))),
+            "guidance_scale": max(1.0, min(10.0, float(guidance_scale))),
+            "num_images": 1,
+            "enable_safety_checker": True,
+            "output_format": "png",
+            "ip_adapter": {
+                "path": SD35_IP_ADAPTER_PATH,
+                "weight_name": SD35_IP_ADAPTER_WEIGHT,
+                "image_encoder_path": SD35_IMAGE_ENCODER,
+                "image_url": ref_uri,
+                "scale": max(0.1, min(1.0, float(reference_strength))),
+            },
+        }
     if seed is not None:
         payload["seed"] = int(seed)
     _notify_stage(on_stage, "🎨 SD 3.5 生成中…")
@@ -436,19 +450,22 @@ def call_fal_sd35_generate(api_key: str, positive_prompt: str, negative_prompt: 
         resume_handle=queue_handle, on_submitted=on_queue_submitted)
     if err:
         return None, err, seed
-    image, decode_err = _fal_image_from_result(data, plural=True, direct=True)
+    image, decode_err = _fal_image_from_result(data, plural=True, direct=True, on_stage=on_stage, should_cancel=should_cancel)
     return image, decode_err, data.get("seed", seed) if data else seed
 
 def call_fal_aura_upscale(api_key: str, image, *, on_stage=None, should_cancel=None,
                           queue_handle=None, on_queue_submitted=None):
     """AuraSR 4× 保守超分。返回 (PIL, error)。"""
     _notify_stage(on_stage, "🔎 4K 超分中…")
-    payload = {
-        "image_url": _pil_to_data_uri(image),
-        "upscale_factor": 4,
-        "overlapping_tiles": True,
-        "checkpoint": "v2",
-    }
+    if queue_handle:
+        payload = {}
+    else:
+        payload = {
+            "image_url": _pil_to_data_uri(image),
+            "upscale_factor": 4,
+            "overlapping_tiles": True,
+            "checkpoint": "v2",
+        }
     data, err = _call_fal_queue_json(
         api_key, AURA_SR_ENDPOINT, payload, on_stage=on_stage, should_cancel=should_cancel,
         resume_handle=queue_handle, on_submitted=on_queue_submitted)

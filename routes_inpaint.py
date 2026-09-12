@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """生成式修补路由 —— 两段式抽卡:生成候选 → 挑选提交(usage 生成时记,apply 不计费)。"""
+from . import result_commits
 import asyncio
 import hashlib
 import os
@@ -234,54 +235,49 @@ async def inpaint_apply(iid: str, req: InpaintApplyRequest):
             raise HTTPException(400, '候选序号无效')
         cand_path = candidates[req.index].get('path') or ''
         entry['status'] = 'applying'  # 锁内抢占；并发第二次 apply 会得到 409
+    job = None
     try:
-        if not os.path.isfile(cand_path):
-            raise HTTPException(410, '候选文件已被清理，请重新生成')
-        out = await asyncio.to_thread(lambda: (lambda im: (im.load(), im)[1])(Image.open(cand_path)))
         target = InpaintTarget(**entry['target'])
         mode = entry.get('mode') or 'remove'
         prompt = entry.get('prompt') or ''
         label = '生成式移除' if mode == 'remove' else '生成式添加'
-        if target.kind == 'job':
-            job = state.JOBS.get(target.jid)
-            if not job:
-                raise HTTPException(404, '任务卡已被清除，无法写回')
-            if job.status in ('running', 'queued') or job.pro_polishing or job.operation_status == 'running':
-                raise HTTPException(409, '任务进行中，请稍后提交')
-            ppath = await asyncio.to_thread(save_api_result_png, out, label, job.png_path or cand_path)
-            if not ppath:
-                raise HTTPException(500, '结果保存失败')
-            add_model_candidate(job, target.stage, ppath)
-            update_job(job, status=compute_runs_final_status(job))
-            if job.json_path and job.record_id:
-                try:
-                    await asyncio.to_thread(api_write_to_record, out, label, job.json_path, job.record_id, ppath)
-                except Exception as ex:
-                    logger.warning(f'[修补] 写记录失败 iid={iid}: {ex}')
-            state.JOBS.persist()
-            resp = {'ok': True, 'job': job_view(job)}
-        elif target.kind == 'record':
-            json_path = require_record_json_path(target.json_path)
-            ppath = await asyncio.to_thread(save_api_result_png, out, label,
-                                            json_path.replace('_记录.json', '_优化图.png'))
-            if not ppath:
-                raise HTTPException(500, '结果保存失败')
-            msg = await asyncio.to_thread(append_edited_result_to_record, json_path, target.record_id,
-                                          target.result_id, out, prompt or label, label, ppath)
-            if not str(msg).startswith('✅'):
-                raise HTTPException(500, str(msg))
-            resp = {'ok': True, 'result_url': to_url(ppath)}
+        pending = entry.get('pending_commit')
+        if pending:
+            if entry.get('pending_commit_index') != req.index:
+                raise HTTPException(409, {'code': 'result_commit_pending', 'commit_id': pending,
+                    'message': '请先恢复上一次候选写入'})
+            resp = await asyncio.to_thread(result_commits.retry_commit, pending)
         else:
-            stem = os.path.splitext(os.path.basename(target.room_path))[0]
-            dest = safe_upload_path(f'{stem}_clean.png', 'room_')
-            if not dest:
-                raise HTTPException(500, '结果保存路径无效')
-            await asyncio.to_thread(lambda: out.convert('RGB').save(dest, format='PNG', optimize=True))
-            resp = {'ok': True, 'path': dest, 'url': to_url(dest), 'thumb': thumb_url(dest)}
-    except Exception:
+            if not os.path.isfile(cand_path):
+                raise HTTPException(410, '候选文件已被清理，请重新生成')
+            source = require_output_image_rel(target.image_rel) if target.kind == 'job' else ''
+            if target.kind == 'job':
+                job = result_commits.claim_target(target.jid, target.stage, source, 'inpaint_apply')
+            def open_candidate():
+                with Image.open(cand_path) as image:
+                    return image.convert('RGB').copy()
+            out = await asyncio.to_thread(open_candidate)
+            if target.kind in ('job', 'record'):
+                resp = await asyncio.to_thread(result_commits.commit_image, out, label=label,
+                    job=job, stage=target.stage or '',
+                    json_path=require_record_json_path(target.json_path) if target.kind == 'record' else '',
+                    record_id=target.record_id or '', source_result_id=target.result_id or None,
+                    source_path=source, edit_prompt=prompt or label)
+            else:
+                stem = os.path.splitext(os.path.basename(target.room_path))[0]
+                dest = safe_upload_path(f'{stem}_clean.png', 'room_')
+                if not dest:
+                    raise HTTPException(500, '结果保存路径无效')
+                await asyncio.to_thread(lambda: out.convert('RGB').save(dest, format='PNG', optimize=True))
+                resp = {'ok': True, 'path': dest, 'url': to_url(dest), 'thumb': thumb_url(dest)}
+    except Exception as error:
+        result_commits.fail_operation(job, error)
         with state.INPAINTS.locked() as entries:
             if entries.get(iid) is entry:
                 entry['status'] = 'done'
+                if isinstance(error, HTTPException) and isinstance(error.detail, dict) and error.detail.get('image_saved'):
+                    entry['pending_commit'] = error.detail['commit_id']
+                    entry['pending_commit_index'] = req.index
         raise
     entry = state.INPAINTS.pop(iid)   # pop 连带清取消标记
     state.delete_inpaint_files(entry)

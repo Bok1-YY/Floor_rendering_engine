@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 """工具路由 —— 地板识色+智能配方、本地地板可视化渲染、全图校色(预览/任务/记录)。"""
+from . import result_commits, records
 import asyncio
 import base64
 import io
 import os
 import tempfile
 import threading
+import uuid
 from typing import Literal, Optional
 
 from fastapi import APIRouter, HTTPException
@@ -50,6 +52,16 @@ from .server_schemas import (
 router = APIRouter()
 
 
+@router.get('/api/result-commits')
+def pending_result_commits():
+    return result_commits.list_pending_commits()
+
+
+@router.post('/api/result-commits/{commit_id}/retry')
+async def retry_result_commit(commit_id: str):
+    return await asyncio.to_thread(result_commits.retry_commit, commit_id)
+
+
 # ── 地板识色 + 智能配方 ──
 def _resolve_recipe(r: dict) -> dict:
     """把配方的 kw 提示用 pick_option_key 解析成前端可直接套用的具体选项值
@@ -76,13 +88,13 @@ def floor_analyze(path: str):
 
 _floor_render_lock = threading.Lock()  # 4K OpenCV working set is sizeable; serialize local renders.
 
-def _resolve_floor_source(target: FloorVisualizeTarget):
+def _resolve_floor_source(target: FloorVisualizeTarget, claimed_job=None):
     """Return detached RGB image plus the validated write-back context."""
     if target.kind == 'job':
         job = state.JOBS.get(target.jid)
         if not job:
             raise HTTPException(404, 'job not found')
-        if job.status in ('running', 'queued') or job.pro_polishing or job.operation_status == 'running':
+        if state.job_is_active(job) and job is not claimed_job:
             raise HTTPException(409, '任务进行中，请稍后贴地板')
         abs_src = require_output_image_rel(target.image_rel)
         ensure_model_runs(job)
@@ -126,14 +138,14 @@ def _resolve_floor_source(target: FloorVisualizeTarget):
     return src, {'room_path': room_path, 'source_path': room_path}
 
 
-def _run_floor_visualize(req: FloorVisualizeRequest, max_side: int = 0):
+def _run_floor_visualize(req: FloorVisualizeRequest, max_side: int = 0, claimed_job=None):
     if load_config().get('floor_visualizer_enabled', True) is False:
         raise HTTPException(503, '真实纹理投影已在配置中关闭')
     try:
         validate_calibration_quad(req.calibration_quad)
     except ValueError as ex:
         raise HTTPException(400, str(ex))
-    scene, context = _resolve_floor_source(req.target)
+    scene, context = _resolve_floor_source(req.target, claimed_job)
     texture_path = require_ref_image_path(req.texture_path)
     mask = decode_floor_mask(req.mask_b64)
     try:
@@ -184,41 +196,22 @@ def floor_visualize_preview(req: FloorVisualizeRequest):
 
 @router.post('/api/floor-visualize/apply')
 async def floor_visualize_apply(req: FloorVisualizeRequest):
-    out, metadata, context = await asyncio.to_thread(_run_floor_visualize, req, 0)
-    label = '真实纹理投影'
     target = req.target
+    job = None
+    source = require_output_image_rel(target.image_rel) if target.kind == 'job' else ''
     if target.kind == 'job':
-        job = context['job']
-        current = state.JOBS.get(job.job_id)
-        if current is not job:
-            raise HTTPException(409, '任务卡已被清除，无法写回')
-        if job.status in ('running', 'queued') or job.pro_polishing or job.operation_status == 'running':
-            raise HTTPException(409, '任务状态已变化，请稍后重试')
-        ppath = await asyncio.to_thread(save_api_result_png, out, label,
-                                        job.png_path or context['source_path'], metadata)
-        if not ppath:
-            raise HTTPException(500, '结果保存失败')
-        add_model_candidate(job, target.stage, ppath)
-        update_job(job, status=compute_runs_final_status(job))
-        if job.json_path and job.record_id:
-            await asyncio.to_thread(api_write_to_record, out, label, job.json_path,
-                                    job.record_id, ppath, metadata)
-        state.JOBS.persist()
-        logger.info(f'[真实贴地板] 任务候选已保存 job={job.job_id}, stage={target.stage}, path={ppath}')
-        return {'ok': True, 'job': job_view(job), 'url': to_url(ppath),
-                'warnings': metadata.get('warnings') or [], 'metadata': metadata}
-    if target.kind == 'record':
-        json_path = context['json_path']
-        ppath = await asyncio.to_thread(save_api_result_png, out, label,
-                                        context['source_path'], metadata)
-        if not ppath:
-            raise HTTPException(500, '结果保存失败')
-        result_id = await asyncio.to_thread(api_write_to_record, out, label, json_path,
-                                            target.record_id, ppath, metadata)
-        if not result_id:
-            raise HTTPException(500, '结果写入记录失败')
-        return {'ok': True, 'result_url': to_url(ppath), 'result_id': result_id,
-                'warnings': metadata.get('warnings') or [], 'metadata': metadata}
+        job = result_commits.claim_target(target.jid, target.stage, source, 'floor_visualize')
+    try:
+        out, metadata, context = await asyncio.to_thread(_run_floor_visualize, req, 0, job)
+        if target.kind in ('job', 'record'):
+            response = await asyncio.to_thread(result_commits.commit_image, out, label='真实纹理投影',
+                job=job, stage=target.stage or '', json_path=context.get('json_path', ''),
+                record_id=target.record_id or '', source_result_id=target.result_id or None,
+                source_path=source, metadata=metadata)
+            return {**response, 'warnings': metadata.get('warnings') or [], 'metadata': metadata}
+    except Exception as error:
+        result_commits.fail_operation(job, error)
+        raise
     room_path = context['room_path']
     stem = os.path.splitext(os.path.basename(room_path))[0]
     dest = safe_upload_path(f'{stem}_floor.png', 'room_')
@@ -418,15 +411,14 @@ async def job_color_match(jid: str, req: JobColorMatchRequest):
     job = state.JOBS.get(jid)
     if not job:
         raise HTTPException(404, 'job not found')
-    state.claim_job(job, operation='color_match', operation_status='running', operation_error='')
+    source = require_output_image_rel(req.image_rel)
+    job = result_commits.claim_target(jid, req.stage, source, 'color_match')
     try:
         state.JOBS.persist()
         result = await _apply_job_color_match(job, req)
-        job.operation_status = 'done'
         return result
     except Exception as exc:
-        job.operation_status = 'failed'
-        job.operation_error = str(exc)
+        result_commits.fail_operation(job, exc)
         raise
     finally:
         state.JOBS.persist()
@@ -449,7 +441,6 @@ async def _apply_job_color_match(job, req: JobColorMatchRequest):
         algorithm=req.algorithm, illumination_mode=req.illumination_mode,
         return_quality_report=True)
     out, quality_report = result
-    save_result = save_api_result_png if req.scope == 'floor_mask' else save_api_result_jpg
     metadata = {
         'operation': 'color_match', 'scope': req.scope,
         'adjustment_mode': req.adjustment_mode, 'strength': req.strength,
@@ -458,30 +449,14 @@ async def _apply_job_color_match(job, req: JobColorMatchRequest):
         'quality_report': quality_report.to_dict() if quality_report else None,
     }
     if req.scope == 'floor_mask':
-        ppath = await asyncio.to_thread(save_result, out, '局部校色',
-                                        job.png_path or abs_src, metadata)
-    else:
-        ppath = await asyncio.to_thread(save_result, out, '手动校色',
-                                        job.png_path or abs_src)
-    if not ppath:
-        raise HTTPException(500, '校色结果保存失败')
-    if req.scope == 'floor_mask':
         try:
-            metadata['mask_file'] = await asyncio.to_thread(
-                _save_color_mask, req.mask_b64, ppath, out.size)
-        except Exception as ex:
-            logger.warning(f'[校色] 蒙版留档失败 job={jid}: {ex}')
-    add_model_candidate(job, req.stage, ppath)
-    update_job(job, status=compute_runs_final_status(job))
-    if job.json_path and job.record_id:
-        try:
-            await asyncio.to_thread(api_write_to_record, out, '手动校色',
-                                    job.json_path, job.record_id, ppath, metadata)
-        except Exception as ex:
-            logger.warning(f"[校色] 写记录失败 job={jid}: {ex}")
-    state.JOBS.persist()   # 锁外调（内部自取锁）
-    logger.info(f"[校色] 完成 job={jid}, stage={req.stage}, strength={req.strength}, path={ppath}")
-    return job_view(job)
+            metadata['mask_file'] = await asyncio.to_thread(_save_color_mask, req.mask_b64,
+                os.path.join(records.MAIN_OUTPUT_DIR, f"result_{job.operation_id}.png"), out.size)
+        except Exception as error:
+            logger.warning('[校色] 蒙版留档失败: %s', error)
+    response = await asyncio.to_thread(result_commits.commit_image, out, label='手动校色',
+        job=job, stage=req.stage, metadata=metadata, source_path=abs_src)
+    return response['job']
 
 
 
@@ -525,28 +500,11 @@ def record_color_match(req: RecordColorMatchRequest):
         'illumination_mode': req.illumination_mode,
         'quality_report': quality_report.to_dict() if quality_report else None,
     }
-    if req.scope == 'floor_mask':
-        ppath = save_api_result_png(
-            out, '局部校色', json_path.replace('_记录.json', '_优化图.png'),
-            metadata)
-    else:
-        ppath = save_api_result_jpg(out, '手动校色', json_path.replace('_记录.json', '_优化图.png'))
-    if not ppath:
-        raise HTTPException(500, '校色结果保存失败')
+    commit_id = uuid.uuid4().hex
     if req.scope == 'floor_mask':
         try:
-            metadata['mask_file'] = _save_color_mask(req.mask_b64, ppath, out.size)
-        except Exception as ex:
-            logger.warning(f'[校色] 蒙版留档失败 record={req.record_id}: {ex}')
-    if req.scope == 'floor_mask' and req.adjustment_mode == 'auto':
-        label = f'地板局部自动{req.strength:.2f}'
-    elif req.adjustment_mode == 'auto':
-        label = f'自动强度{req.strength:.2f}'
-    else:
-        label = ('原图基准 · 手动微调' if any(req.adjustments.model_dump().values())
-                 else 'Gemini 原图')
-    msg = append_edited_result_to_record(json_path, req.record_id, req.result_id,
-                                         out, label, '手动校色', ppath, metadata)
-    if not str(msg).startswith('✅'):
-        raise HTTPException(500, str(msg))
-    return {'ok': True, 'result_url': to_url(ppath)}
+            metadata['mask_file'] = _save_color_mask(req.mask_b64, os.path.join(records.MAIN_OUTPUT_DIR, f"result_{commit_id}.png"), out.size)
+        except Exception as error:
+            logger.warning('[校色] 蒙版留档失败: %s', error)
+    return result_commits.commit_image(out, label='手动校色 Edit', json_path=json_path,
+        record_id=req.record_id, source_result_id=req.result_id, metadata=metadata, commit_id=commit_id)

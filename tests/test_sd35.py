@@ -83,7 +83,7 @@ def test_sd_fal_payload_requires_ip_adapter(monkeypatch, swatch_image):
 
     patch_provider(monkeypatch, "_call_fal_queue_json", fake_call)
     patch_provider(monkeypatch, "_fal_image_from_result",
-        lambda data, plural=True, direct=False: (Image.new("RGB", (64, 64)), None),
+        lambda data, plural=True, direct=False, **_kwargs: (Image.new("RGB", (64, 64)), None),
     )
     image, err, seed = api.call_fal_sd35_generate(
         "secret", "positive", "negative", swatch_image,

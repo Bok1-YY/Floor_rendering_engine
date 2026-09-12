@@ -1,4 +1,6 @@
 """HTTP job endpoints; workflow implementation lives in job_service."""
+from .billing_phases import require_retry_confirmation, phase_recovery
+from .models import model_run_current_path
 import asyncio
 import json
 import os
@@ -221,8 +223,16 @@ async def retry_job(jid: str, req: RetryJobRequest | None = None):
     ensure_model_runs(job)
     ambiguous = any(
         str((job.model_runs.get(key) or {}).get('retry_safety') or '') == 'ambiguous'
-        for key in job.model_targets
+        for key in job.model_targets if key != 'sd35'
     )
+    sd_run = job.model_runs.get('sd35')
+    if sd_run and not model_run_current_path(job, 'sd35'):
+        phase = 'upscale' if os.path.isfile(str(sd_run.get('base_path') or '')) else 'sd'
+        action = require_retry_confirmation(sd_run, phase, bool(req and req.confirm_possible_duplicate_charge))
+        if action == 'confirm':
+            settings = dict(sd_run.get('settings') or {})
+            settings.pop('upscale_queue' if phase == 'upscale' else 'sd_queue', None)
+            update_model_run(job, 'sd35', settings=settings)
     if ambiguous and not bool(req and req.confirm_possible_duplicate_charge):
         raise HTTPException(409, {
             'code': 'possible_duplicate_charge_confirmation_required',
@@ -243,19 +253,24 @@ async def retry_job(jid: str, req: RetryJobRequest | None = None):
 
 
 @router.post('/api/jobs/{jid}/sd-upscale')
-async def retry_sd_upscale(jid: str):
+async def retry_sd_upscale(jid: str, req: RetryJobRequest | None = None):
     job = state.JOBS.get(jid)
     if not job:
         raise HTTPException(404, 'job not found')
     ensure_model_runs(job)
     run = job.model_runs.get('sd35') or {}
     base_path = run.get('base_path') or ''
-    if run.get('delivery_status') != 'upscale_failed' or not os.path.isfile(base_path):
+    action = require_retry_confirmation(run, 'upscale', bool(req and req.confirm_possible_duplicate_charge))
+    if run.get('delivery_status') != 'upscale_failed' or (action != 'resume' and not os.path.isfile(base_path)):
         raise HTTPException(400, '没有可重试的 SD 基础图')
     if job.operation_status == 'running':
         raise HTTPException(409, '任务进行中')
     if not (load_config().get('fal_api_key') or '').strip():
         raise HTTPException(400, '重试 SD 超分需要 Fal API Key')
+    if action == 'confirm':
+        settings = dict(run.get('settings') or {})
+        settings.pop('upscale_queue', None)
+        update_model_run(job, 'sd35', settings=settings)
     state.claim_job(job, status='running', started_at=time.time(), operation='sd_upscale',
                operation_status='running', operation_error='')
     state.spawn(_retry_sd_upscale_bg(job))

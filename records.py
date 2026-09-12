@@ -29,12 +29,12 @@ from .storage_assets import (
 _path_locks_guard = threading.Lock()
 _path_locks: dict = {}
 
-def record_file_lock(json_path) -> threading.Lock:
+def record_file_lock(json_path):
     key = os.path.normcase(os.path.abspath(str(json_path)))
     with _path_locks_guard:
         lock = _path_locks.get(key)
         if lock is None:
-            lock = threading.Lock()
+            lock = threading.RLock()
             _path_locks[key] = lock
         return lock
 
@@ -568,7 +568,8 @@ def reveal_prompt_fn(json_path, record_id, input_password):
 def api_write_to_record(pil_img, model_key: str, json_path_val: str, record_id_val: str,
                          image_file: Optional[str] = None, metadata: Optional[dict] = None,
                          source_result_id: Optional[str] = None,
-                         comment: Optional[str] = None):
+                         comment: Optional[str] = None, *, commit_id: str | None = None,
+                         edit_prompt: str = '', require_source: bool = False):
     # 用 is not None 而不是 bool(pil_img)——PIL Image 在某些版本布尔求值会异常
     if pil_img is None or not json_path_val or not record_id_val:
         logger.warning(f"api_write_to_record 参数不全: img={pil_img is not None}, jpath={bool(json_path_val)}, rid={bool(record_id_val)}")
@@ -585,6 +586,10 @@ def api_write_to_record(pil_img, model_key: str, json_path_val: str, record_id_v
             'comment': comment or f'API 自动生成 ({pil_img.width}×{pil_img.height})',
             'model_label': model_key,
         }
+        if commit_id:
+            entry['commit_id'] = commit_id
+        if edit_prompt:
+            entry['edit_prompt'] = edit_prompt
         if source_result_id:
             entry['source_result_id'] = source_result_id
         if metadata:
@@ -598,6 +603,14 @@ def api_write_to_record(pil_img, model_key: str, json_path_val: str, record_id_v
             records = load_records_file(json_path_val)
             for r in records:
                 if r.get('id') == record_id_val:
+                    if commit_id:
+                        existing = next((item for item in r.get('results', []) if item.get('commit_id') == commit_id), None)
+                        if existing:
+                            return existing['result_id']
+                        if r.get('immutable_audit'):
+                            return None
+                    if require_source and not any(item.get('result_id') == source_result_id for item in r.get('results', [])):
+                        return None
                     r.setdefault('results', []).append(entry)
                     save_records_file(json_path_val, records)
                     matched = True

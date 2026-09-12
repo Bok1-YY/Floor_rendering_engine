@@ -62,6 +62,8 @@ class JobRecord:
     operation: str = 'generate'              # generate/retry/regen/polish/edit/record_edit
     operation_status: str = 'idle'           # idle/running/done/failed/cancelled
     operation_error: str = ''
+    operation_id: str = ''
+    pending_result_commit: str = ''
     operation_failure_code: str = ''
     operation_retry_safety: str = 'safe'
     operation_may_have_been_billed: bool = False
@@ -90,7 +92,7 @@ class JobRecord:
 def job_is_active(job: JobRecord) -> bool:
     """One lifecycle predicate shared by admission, eviction and HTTP operations."""
     return (job.status in ('queued', 'running') or job.pro_polishing
-            or job.operation_status == 'running')
+            or job.operation_status == 'running' or getattr(job, '_local_commit_active', False))
 
 
 def new_job(display_name: str, ts: str, model_filter: str = 'both') -> JobRecord:

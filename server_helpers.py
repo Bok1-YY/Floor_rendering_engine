@@ -8,6 +8,7 @@
 import os
 import uuid
 import time
+from .billing_phases import phase_recovery
 from typing import Optional
 
 from fastapi import HTTPException, UploadFile
@@ -126,6 +127,8 @@ def job_view(job: JobRecord) -> dict:
                 'metadata': dict(metadata),
             })
         runs[key] = {
+            **({'recovery_action': phase_recovery(run, 'upscale' if run.get('delivery_status') == 'upscale_failed' or os.path.isfile(str(run.get('base_path') or '')) else 'sd'),
+                'billing_phase': (run.get('settings') or {}).get('active_billing_phase', 'sd')} if key == 'sd35' else {}),
             'key': key,
             'label': run.get('label') or key,
             'provider': run.get('provider') or '',
@@ -153,6 +156,7 @@ def job_view(job: JobRecord) -> dict:
             'candidates': candidates,
         }
     return {
+        'pending_result_commit': job.pending_result_commit or None,
         'snapshot_at': time.time_ns() // 1000,
         'job_id': job.job_id,
         'display_name': job.display_name,

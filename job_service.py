@@ -1,4 +1,7 @@
 """Generation, retry and edit workflows with offline behavior regressions."""
+from .billing_phases import begin_phase, finish_phase
+from . import result_commits
+from .providers.common import ambiguous_provider_error
 import asyncio
 import base64
 import hashlib
@@ -277,10 +280,11 @@ async def _generate_sd35_model(job: JobRecord, *, fal_key: str, positive: str, n
                                options: dict, should_cancel):
     """SD3.5 基础图 + AuraSR 交付图；超分失败保留基础图并标 partial。"""
     key = 'sd35'
+    if jpt and rid:
+        update_job(job, json_path=jpt, record_id=rid)
     ensure_model_runs(job)
     sem = state.model_semaphores[key]
     started = time.time()
-    sd_usage_recorded = False
     previous = (job.model_runs or {}).get(key) or {}
     previous_base_path = str(previous.get('base_path') or '')
     # retry 可承接「SD 已落盘、AuraSR 未完成」的现场；regen 必须重新生成，不能复用旧基础图。
@@ -304,11 +308,11 @@ async def _generate_sd35_model(job: JobRecord, *, fal_key: str, positive: str, n
         async with sem:
             if existing_base:
                 # 程序可能在 SD 已落盘、AuraSR 未完成时重启；直接复用基础图，绝不重交 SD。
-                sd_usage_recorded = True
                 base = Image.open(existing_base); base.load()
                 base_path = existing_base
                 used_seed = previous.get('seed')
             else:
+                begin_phase(job, 'sd')
                 base, err, used_seed = await asyncio.to_thread(
                     call_fal_sd35_generate, fal_key, positive, negative, pnp, ar,
                     seed=options.get('seed'), steps=options.get('steps', 28),
@@ -320,18 +324,15 @@ async def _generate_sd35_model(job: JobRecord, *, fal_key: str, positive: str, n
                 )
                 update_model_run(job, key, seed=used_seed)
                 if base is None:
-                    if _fal_queue_is_terminal_error(err) or '取消' in str(err or ''):
+                    if _fal_queue_is_terminal_error(err):
                         _set_model_queue_handle(job, key, 'sd_queue', None)
-                    if '取消' not in str(err or ''):
-                        record_usage(job.workflow_mode, 'SD35', 'fal', False, job.operation)
-                        sd_usage_recorded = True
+                    finish_phase(job, 'sd', error=err)
                     update_model_run(job, key, status='failed', error=str(err or 'SD 生成失败'), stage='',
                                      seconds=round(time.time() - started, 1))
                     return None, str(err or 'SD 生成失败')
 
                 # API 已成功出图即产生费用；磁盘保存失败也必须按成功调用计成本。
-                record_usage(job.workflow_mode, 'SD35', 'fal', True, job.operation)
-                sd_usage_recorded = True
+                finish_phase(job, 'sd', success=True)
                 base_path = save_api_result_png(base, 'SD35_Base', pnp)
                 if not base_path:
                     update_model_run(job, key, status='failed', error='基础图保存失败', stage='')
@@ -345,32 +346,25 @@ async def _generate_sd35_model(job: JobRecord, *, fal_key: str, positive: str, n
             upscale_error = ''
             target_long = 4096 if str(ims).upper().startswith('4') else (2048 if str(ims).upper().startswith('2') else 0)
             if target_long:
+                begin_phase(job, 'upscale')
                 upscaled, up_err = await asyncio.to_thread(
                     call_fal_aura_upscale, fal_key, base, on_stage=_stage, should_cancel=should_cancel,
                     queue_handle=_model_queue_handle(job, key, 'upscale_queue'),
                     on_queue_submitted=lambda h: _set_model_queue_handle(job, key, 'upscale_queue', h))
                 if upscaled is None:
                     upscale_error = f'{target_long // 1024}K 超分失败：{up_err}'
-                    if _fal_queue_is_terminal_error(up_err) or '取消' in str(up_err or ''):
+                    if _fal_queue_is_terminal_error(up_err):
                         _set_model_queue_handle(job, key, 'upscale_queue', None)
-                    if '取消' not in str(up_err or ''):
-                        record_usage(job.workflow_mode, 'AuraSR', 'fal', False, 'upscale')
+                    finish_phase(job, 'upscale', error=up_err)
                 else:
-                    record_usage(job.workflow_mode, 'AuraSR', 'fal', True, 'upscale')
+                    finish_phase(job, 'upscale', success=True)
                     scale = target_long / max(upscaled.size)
                     if scale < 0.999:
                         upscaled = upscaled.resize(
                             (max(1, round(upscaled.width * scale)), max(1, round(upscaled.height * scale))),
                             Image.Resampling.LANCZOS,
                         )
-                    saved_upscale = save_api_result_png(upscaled, 'SD35_4K', pnp)
-                    if saved_upscale:
-                        final_image = upscaled
-                        final_path = saved_upscale
-                        _set_model_queue_handle(job, key, 'upscale_queue', None)
-                    else:
-                        upscale_error = '超分已完成但保存失败，已保留基础图'
-            add_model_candidate(job, key, final_path)
+                    final_image = upscaled
             metadata = {
                 'provider': 'fal', 'model': SD35_ENDPOINT, 'seed': used_seed,
                 'steps': options.get('steps', 28), 'guidance_scale': options.get('guidance_scale', 3.5),
@@ -379,21 +373,22 @@ async def _generate_sd35_model(job: JobRecord, *, fal_key: str, positive: str, n
                 'prompt_sha256': hashlib.sha256(positive.encode()).hexdigest(),
                 'negative_prompt_sha256': hashlib.sha256(negative.encode()).hexdigest(),
             }
-            try:
-                await asyncio.to_thread(api_write_to_record, final_image, 'SD 3.5', jpt, rid, final_path, metadata)
-            except Exception as ex:
-                logger.warning(f'写 SD 记录失败 job={job.job_id}: {ex}')
-            update_model_run(
-                job, key, status=('partial' if upscale_error else 'done'), error=upscale_error,
-                stage='', seconds=round(time.time() - started, 1),
-                delivery_status=('upscale_failed' if upscale_error else ('upscaled' if target_long else 'base_ready')),
-            )
+            response = await asyncio.to_thread(result_commits.commit_generated_image, final_image,
+                job=job, label='SD 3.5', stage=key, metadata=metadata,
+                run_updates=dict(status=('partial' if upscale_error else 'done'), error=upscale_error,
+                    stage='', seconds=round(time.time() - started, 1),
+                    delivery_status=('upscale_failed' if upscale_error else ('upscaled' if target_long else 'base_ready'))))
+            final_path = os.path.join(result_commits.records.MAIN_OUTPUT_DIR, f"result_{response['commit_id']}.png")
+            if target_long and not upscale_error:
+                _set_model_queue_handle(job, key, 'upscale_queue', None)
             return final_path, upscale_error
     except Exception as ex:
         logger.exception(f'[SD35] 生成异常 job={job.job_id}')
         update_model_run(job, key, status='failed', error=str(ex), stage='', seconds=round(time.time() - started, 1))
-        if not sd_usage_recorded:
-            record_usage(job.workflow_mode, 'SD35', 'fal', False, job.operation)
+        settings = (job.model_runs.get(key) or {}).get('settings') or {}
+        phase = settings.get('active_billing_phase')
+        if phase and ((settings.get('billing_stages') or {}).get(phase) or {}).get('status') == 'pending':
+            finish_phase(job, phase, error=ambiguous_provider_error(str(ex), failure_code='sd_worker_interrupted', attempts=[]))
         return None, str(ex)
 
 
@@ -761,8 +756,12 @@ async def _retry_sd_upscale_bg(job: JobRecord):
     generation = state.JOBS.generation
     try:
         update_model_run(job, 'sd35', status='running', stage='🔎 4K 超分中…', error='')
-        base = Image.open(base_path); base.load()
+        base = None
+        if os.path.isfile(base_path):
+            with Image.open(base_path) as source:
+                base = source.convert('RGB').copy()
         async with state.model_semaphores['sd35']:
+            begin_phase(job, 'upscale')
             out, err = await asyncio.to_thread(
                 call_fal_aura_upscale, fal_key, base,
                 on_stage=lambda t: update_model_run(job, 'sd35', stage=t),
@@ -771,36 +770,33 @@ async def _retry_sd_upscale_bg(job: JobRecord):
                 on_queue_submitted=lambda h: _set_model_queue_handle(job, 'sd35', 'upscale_queue', h),
             )
         if out is None:
-            if _fal_queue_is_terminal_error(err) or '取消' in str(err or ''):
+            if _fal_queue_is_terminal_error(err):
                 _set_model_queue_handle(job, 'sd35', 'upscale_queue', None)
             cancelled = '取消' in str(err or '') or state.JOBS.is_cancelled(job.job_id, generation)
-            if not cancelled:
-                record_usage(job.workflow_mode, 'AuraSR', 'fal', False, 'upscale')
+            finish_phase(job, 'upscale', error=err)
             label = '已取消' if cancelled else f'SD 超分失败：{err}'
             update_model_run(job, 'sd35', status='partial', stage='', error=label,
                              delivery_status='upscale_failed')
             update_job(job, status='partial',
-                       operation_status=('cancelled' if cancelled else 'failed'), operation_error=label)
+                       operation_status=('cancelled' if cancelled else 'failed'), operation_error=label, **failure_metadata(err))
             return
-        record_usage(job.workflow_mode, 'AuraSR', 'fal', True, 'upscale')
+        finish_phase(job, 'upscale', success=True)
         ims = str((job.retry_ctx or {}).get('ims') or '4K')
         target_long = 4096 if ims.upper().startswith('4') else 2048
         scale = target_long / max(out.size)
         if scale < 0.999:
             out = out.resize((round(out.width * scale), round(out.height * scale)), Image.Resampling.LANCZOS)
-        path = save_api_result_png(out, 'SD35_4K', job.png_path or base_path)
-        if not path:
-            raise RuntimeError('超分图保存失败')
-        add_model_candidate(job, 'sd35', path)
+        await asyncio.to_thread(result_commits.commit_generated_image, out, job=job, label='SD 3.5 · 4K重试', stage='sd35',
+            run_updates=dict(status='done', stage='', error='', delivery_status='upscaled'))
         _set_model_queue_handle(job, 'sd35', 'upscale_queue', None)
-        update_model_run(job, 'sd35', status='done', stage='', error='', delivery_status='upscaled')
-        try:
-            await asyncio.to_thread(api_write_to_record, out, 'SD 3.5 · 4K重试', job.json_path, job.record_id, path)
-        except Exception as ex:
-            logger.warning(f'写超分重试记录失败 job={job.job_id}: {ex}')
-        update_job(job, status=compute_runs_final_status(job), operation_status='done', operation_error='')
+        update_job(job, status=compute_runs_final_status(job), operation_status='done', operation_error='',
+                   operation_failure_code='', operation_retry_safety='safe',
+                   operation_may_have_been_billed=False, operation_attempts=[])
     except Exception as ex:
         logger.exception(f'[SD35] 重试超分失败 job={job.job_id}')
+        phase = (((job.model_runs.get('sd35') or {}).get('settings') or {}).get('billing_stages') or {}).get('upscale') or {}
+        if phase.get('status') == 'pending':
+            finish_phase(job, 'upscale', error=ambiguous_provider_error(str(ex), failure_code='upscale_worker_interrupted', attempts=[]))
         update_model_run(job, 'sd35', status='partial', stage='', error=str(ex), delivery_status='upscale_failed')
         update_job(job, status='partial', operation_status='failed', operation_error=str(ex))
     finally:

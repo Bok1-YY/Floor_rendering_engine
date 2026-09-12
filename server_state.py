@@ -71,7 +71,7 @@ def admit_job(job):
     JOBS.trim()
 
 
-def claim_job(job, **fields):
+def claim_job(job, *, _validate=None, _resume_commit_id=None, **fields):
     """Atomically transition a resident terminal job into a new operation."""
     from fastapi import HTTPException
     require_accepting()
@@ -80,6 +80,10 @@ def claim_job(job, **fields):
             raise HTTPException(404, 'job not found')
         if job_is_active(job):
             raise HTTPException(409, '任务进行中')
+        if job.pending_result_commit and job.pending_result_commit != _resume_commit_id:
+            raise HTTPException(409, {'code': 'result_commit_pending', 'commit_id': job.pending_result_commit, 'message': '请先恢复上一次本地结果写入'})
+        if _validate:
+            _validate(job)
         if sum(job_is_active(j) for j in entries.values()) >= 60:
             raise HTTPException(429, {'code': 'queue_full', 'message': '任务队列已满，请稍后再试'}, headers={'Retry-After': '5'})
         previous = deepcopy(job.__dict__)
@@ -89,6 +93,9 @@ def claim_job(job, **fields):
         JOBS.persist()
     except Exception as exc:
         with JOBS.locked():
+            for name in fields:
+                if name not in previous:
+                    job.__dict__.pop(name, None)
             job.__dict__.update(previous)
         raise HTTPException(503, '任务无法保存，尚未启动操作') from exc
 

@@ -62,6 +62,8 @@ async def lifespan(_app: FastAPI):
     state.init_runtime(lim)
     migrated = migrate_all_record_storage()
     state.JOBS.replace((j.job_id, j) for j in load_persisted_jobs())
+    from .result_commits import restore_pending_jobs
+    restore_pending_jobs()
     resumed = routes_whole_home_design.recover_background_tasks()
     logger.info(
         f"[server_api] 启动完成：迁移 {migrated} 个记录文件，恢复 {len(state.JOBS)} 条历史任务，"

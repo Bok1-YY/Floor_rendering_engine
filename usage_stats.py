@@ -8,6 +8,7 @@ import json
 import os
 import threading
 import time
+import hashlib
 from typing import Optional
 
 from .config import MAIN_OUTPUT_DIR, logger
@@ -79,7 +80,7 @@ def _save_usage_raw(data: dict) -> None:
         json.dump(data, f, ensure_ascii=False)
     os.replace(tmp, _USAGE_STATS_FILE)
 
-def record_usage(mode: str, model: str, provider: str, ok, operation: str = 'generate') -> None:
+def record_usage(mode: str, model: str, provider: str, ok, operation: str = 'generate', *, request_id: str | None = None) -> None:
     """累加一次调用结果。ok 兼容 bool，也接受 success/failed/uncertain。
     全程吞异常——统计绝不能影响生图。"""
     try:
@@ -100,6 +101,21 @@ def record_usage(mode: str, model: str, provider: str, ok, operation: str = 'gen
             status = {"success": "ok", "failed": "fail"}.get(status, status)
             if status not in ("ok", "fail", "uncertain"):
                 status = "fail"
+            if request_id:
+                # Identity is global to a provider request; keep its original bucket
+                # when a later retry resolves the same request.
+                token = hashlib.sha256(f'{prov}:{mdl}:{request_id}'.encode()).hexdigest()
+                ledger = data.setdefault('request_outcomes', {})
+                previous = ledger.get(token)
+                if previous:
+                    old_status = previous['status']
+                    if old_status == status or old_status == 'ok':
+                        return
+                    old = counts[previous['mode']][previous['operation']][previous['model']][previous['provider']]
+                    old[old_status] = max(0, int(old.get(old_status, 0)) - 1)
+                    row = old
+                    mkey, op, mdl, prov = (previous[k] for k in ('mode', 'operation', 'model', 'provider'))
+                ledger[token] = dict(mode=mkey, operation=op, model=mdl, provider=prov, status=status)
             row[status] = int(row.get(status, 0)) + 1
             _save_usage_raw(data)
     except Exception as ex:
