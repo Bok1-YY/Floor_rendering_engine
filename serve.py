@@ -68,6 +68,10 @@ def main():
         engine = importlib.import_module(f'{_PACKAGE_NAME}.tools.fastloop_research')
         bundle = json.loads(args.verify_local_model.read_text(encoding='utf-8-sig'))
         result = engine.run_research_model(bundle, args.output)
+        module_names = ['numpy', 'pymupdf', 'pymupdf.mupdf', 'ifcopenshell', 'ifcopenshell.util.pset', 'onnxruntime']
+        module_files = {name: str(importlib.import_module(name).__file__) for name in module_names}
+        args.output.mkdir(parents=True, exist_ok=True)
+        (args.output / 'runtime-modules.json').write_text(json.dumps(module_files, ensure_ascii=False, indent=2), encoding='utf-8')
         print(json.dumps(result, ensure_ascii=False))
         raise SystemExit(0 if result.get('status') == 'mechanical_verified' else 1)
     import uvicorn

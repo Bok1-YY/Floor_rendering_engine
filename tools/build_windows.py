@@ -78,6 +78,8 @@ def main():
     run([python, '-c', 'import sys; assert sys.version_info[:2] == (3, 12)'])
     run([python, '-m', 'pip', 'install', '--disable-pip-version-check', '-r', source / 'requirements-build.txt', '-r', source / 'requirements.txt'])
     run([python, '-m', 'pip', 'check'])
+    dependency_modules = json.loads(output([python, '-c', 'import importlib.metadata,json;print(json.dumps(sorted(importlib.metadata.packages_distributions())))']))
+    dependency_modules = [name for name in dependency_modules if name not in ('nuitka', 'pytest', 'Floor_engine_server')]
     npm = shutil.which('npm.cmd')
     if not npm: raise SystemExit('Node.js 20.9+ and npm are required.')
     run([npm, 'ci'], cwd=source / 'web')
@@ -102,7 +104,7 @@ def main():
         '--output-filename=FloorEngine.exe', f'--output-dir={dist}', '--product-name=Floor Engine',
         f'--file-version={version}.0', f'--product-version={version}.0', '--python-flag=isolated',
         '--include-package=Floor_engine_server', '--include-package=uvicorn', '--include-package=anyio',
-        '--noinclude-custom-mode=pymupdf.mupdf:bytecode', '--include-package=PIL', '--include-package=cv2', '--include-package=onnxruntime', '--include-package=multipart',
+        *['--noinclude-custom-mode=' + name + ':bytecode' for name in dependency_modules], '--include-package=PIL', '--include-package=cv2', '--include-package=onnxruntime', '--include-package=multipart',
         '--include-package=keyring', '--include-package=keyring.backends', '--include-package=pymupdf', '--include-package=ifcopenshell',
         '--include-distribution-metadata=keyring', '--include-package-data=certifi', '--include-package-data=pptx', '--include-package-data=ifcopenshell',
         '--nofollow-import-to=pytest,tkinter,IPython,ifcopenshell.express.rules,onnxruntime.backend,onnxruntime.transformers,onnxruntime.tools,onnxruntime.quantization',
@@ -111,7 +113,7 @@ def main():
         f'--include-data-files={research / "blender-runtime.zip"}=Floor_engine_server/tools/fastloop_research/blender-runtime.zip',
         f'--report={attempt / "nuitka-report.xml"}', package / 'serve.py']
     manifest = {'version': version, 'source_sha': sha, 'work_dir': str(work), 'attempt': str(attempt),
-        'compiler_header_workaround': header_workaround, 'pymupdf_binding_mode': 'embedded-bytecode',
+        'compiler_header_workaround': header_workaround, 'pymupdf_binding_mode': 'embedded-bytecode', 'dependency_bytecode_modules': dependency_modules,
         'python': output([python, '--version']), 'node': output(['node', '--version']),
         'dependencies': output([python, '-m', 'pip', 'freeze']).splitlines(), 'command': [str(x) for x in command], 'status': 'building'}
     report = attempt / 'build-report.json'
