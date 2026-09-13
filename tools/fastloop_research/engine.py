@@ -144,6 +144,28 @@ def _python_has_ifcopenshell(executable: Path) -> bool:
     return completed.returncode == 0 and bool(completed.stdout.strip())
 
 
+import threading as _source_threading
+_BLENDER_SOURCE_LOCK = _source_threading.Lock()
+
+
+def _blender_python_sources(package_dir: Path) -> Path:
+    """Materialize audited source resources for Blender's separate interpreter."""
+    if not _running_frozen() or (package_dir / 'blender_builder.py').is_file():
+        return package_dir
+    import zipfile
+    destination = package_dir / '_blender_sources'
+    with _BLENDER_SOURCE_LOCK:
+        archive = package_dir / 'blender-runtime.zip'
+        with zipfile.ZipFile(archive) as source:
+            for entry in source.infolist():
+                target = (destination / entry.filename).resolve()
+                if not target.is_relative_to(destination.resolve()) or target.suffix != '.py':
+                    raise ValueError('Invalid bundled Blender source resource')
+                target.parent.mkdir(parents=True, exist_ok=True)
+                if not target.exists():
+                    target.write_bytes(source.read(entry))
+    return destination / 'tools' / 'fastloop_research'
+
 def _running_frozen() -> bool:
     return bool(getattr(sys, "frozen", False) or "__compiled__" in globals())
 
@@ -295,7 +317,7 @@ def run_research_model(
             structure_hash=validated["structure_hash"],
         )
 
-    package_dir = Path(__file__).resolve().parent
+    package_dir = _blender_python_sources(Path(__file__).resolve().parent)
     repository_root = package_dir.parents[1]
     build_command = [
         os.fspath(blender),

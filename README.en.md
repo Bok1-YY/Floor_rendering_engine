@@ -1,10 +1,10 @@
 # Floor Rendering Engine
 
-![Release](https://img.shields.io/badge/release-2026.08-blue)
+![Release](https://img.shields.io/badge/version-7.1.1-blue)
 ![License](https://img.shields.io/badge/license-AGPL--3.0--only-blue)
-![Python](https://img.shields.io/badge/python-3.10%2B-3776AB)
-![Node](https://img.shields.io/badge/node-20%2B-339933)
-![Tests](https://img.shields.io/badge/tests-315%20passed-brightgreen)
+![Python](https://img.shields.io/badge/python-3.12-3776AB)
+![Node](https://img.shields.io/badge/node-20.9%2B-339933)
+[Validation / 验证记录](./docs/VALIDATION_CURRENT.md)
 
 Turn real flooring swatches and residential floor plans into spatial content that can be verified, edited, and delivered.
 
@@ -21,7 +21,13 @@ This is neither a generic “home interior” prompt preset nor a way to relabel
 
 ![End-to-end workflow: swatch to batch generation, automatic color locking, and smart inpainting](./docs/media/hero-demo.gif)
 
-## What's New in 2026.08
+## Current engineering update — September 2026
+
+Five refactoring rounds separate provider implementations, task orchestration, image editor sessions, generation state, record drafts and job cards. Batch submissions retain only unsuccessful selections; uncertain submissions require an explicit decision. Saved local images can finish their record commit without another model call. Record review/edit drafts survive file switching within the current page session. Candidate reads share a four-request limit per card.
+
+See the [current validation record](./docs/VALIDATION_CURRENT.md) and [Windows release procedure](./docs/WINDOWS_RELEASE.md). Release binaries are validated in isolated directories on the build machine, not on a clean Windows installation.
+
+### Product milestones from August 2026
 
 - **Experimental whole-home design now includes a local research-model fast lane:** upload a floor-plan image or PDF, anchor rooms, the entrance, and exactly one two-point scale, then answer nine plain-language structure questions. A strict wall/opening/adjacency contract can drive Blender 5.2 and IfcOpenShell to produce Blend, GLB, research IFC, and three orthographic views. The two 2K concepts run in parallel and never become geometric authority. If Gemini is unavailable, local artifacts remain available under `external_review_pending`; they are not mislabeled as construction BIM or a product failure.
 - **A redesigned production workspace:** Product → Scene → Output replaces the long parameter column. Core room, style, lighting, and camera controls stay close at hand, while B2 / Pro tabs, candidate thumbnails, and pass / alternative / reject / favorite actions now live directly on result cards.
@@ -158,7 +164,7 @@ FastAPI / task orchestration / queue recovery
 
 - B2, Pro, and SD use independent concurrency slots. The service binds to `127.0.0.1` by default.
 - Configuration, outputs, logs, and queue recovery state remain in the local data directory.
-- Regression coverage includes prompt snapshots, route contracts, path security, queue recovery, OS-keyring secrets, billing-safe retries, storage lifecycle, cinematic planning, whole-home anchors/nine-question review/structure contracts/Blend/GLB/research IFC, floor coverage, color matching, standalone sample matching, smart selection, and record lineage. This release is verified at **315 tests passed, 1 skipped**.
+- Regression coverage includes prompt snapshots, route contracts, path security, queue recovery, OS-keyring secrets, billing-safe retries, storage lifecycle, cinematic planning, whole-home anchors/nine-question review/structure contracts/Blend/GLB/research IFC, floor coverage, color matching, standalone sample matching, smart selection, and record lineage. Dated test results and remaining validation gaps are maintained in the [validation index](./docs/VALIDATION_CURRENT.md).
 
 ## My Role
 
@@ -174,7 +180,7 @@ The [full product case study](./docs/PRODUCT_CASE_STUDY.en.md) covers context, t
 
 ## Quick Start
 
-Requirements: Python 3.10+, Node.js 20+, and at least one configured image-model API — either [Google AI Studio](https://aistudio.google.com/) (Gemini) or [fal.ai](https://fal.ai/) is enough; a self-hosted ComfyUI instance is also supported with zero API cost. The MobileSAM model asset is included.
+Source setup: Python 3.12 and Node.js 20.9+. Cloud generation needs a configured image-model API — either [Google AI Studio](https://aistudio.google.com/) (Gemini) or [fal.ai](https://fal.ai/) is enough; a self-hosted ComfyUI instance is also supported with zero API cost. The MobileSAM model asset is included.
 
 ### If you only need sample color matching
 
@@ -189,7 +195,8 @@ See the [standalone color matcher guide](./standalone_color_calibrator/README.md
 ### Windows
 
 ```text
-Install_Project_Dependencies.bat   # first-time setup
+Install_Project_Dependencies.bat   # installs this checkout only
+Install_Project_Dependencies.bat -Development  # also installs test dependencies
 start-windows.bat                  # http://127.0.0.1:7870
 dev-windows.bat                    # FastAPI 7870 + Next.js 3000
 ```
@@ -198,7 +205,7 @@ dev-windows.bat                    # FastAPI 7870 + Next.js 3000
 
 Local whole-home research models require Blender 5.2. Floor Engine checks `BLENDER_EXECUTABLE`, the system PATH, and standard Windows Blender locations. IfcOpenShell is installed with the Python dependencies. Without Blender, image generation, records, color matching, and 2K whole-home concepts remain available, while local Blend/GLB/IFC runs report a missing dependency explicitly.
 
-### Linux / macOS
+### Linux / macOS source setup (not validated in this Windows release)
 
 ```bash
 python -m venv .venv
@@ -209,6 +216,12 @@ python serve.py
 ```
 
 Enter API keys on the Settings page after first launch. Keys are stored in the current user's OS keyring rather than `engine_config.json`; re-enter them after moving the runnable to another machine. See [DEVGUIDE.md](./DEVGUIDE.md) for ports, configuration, and module details.
+
+## Runtime and release boundaries
+
+The server is a local, single-worker application. API keys stay in the current user's OS keyring; do not copy runtime data into a release archive. Review/edit drafts and candidate caches are page-local and are not promised to survive browser reloads. Cancellation is best effort; a model request already accepted upstream may still be billed. Durable creation-request idempotency across refreshes/restarts is not yet implemented.
+
+[Windows build and release instructions](./docs/WINDOWS_RELEASE.md) describe the fixed source commit, portable archive, checksums and cleanup. Python/Node are build-time requirements; whether a particular binary passes isolated execution is recorded in that release's report. Blender remains an external dependency. No clean-system, signed-binary or live-provider validation is implied.
 
 ## Repository Guide
 

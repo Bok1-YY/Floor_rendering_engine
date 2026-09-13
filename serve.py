@@ -56,6 +56,20 @@ def _open_browser_later(url: str):
 
 
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] == '--verify-local-model':
+        # Release verification only: local contract/Blender/IFC, no model API.
+        import argparse
+        import json
+        from pathlib import Path
+        parser = argparse.ArgumentParser(description='Verify local research model resources')
+        parser.add_argument('--verify-local-model', type=Path, required=True)
+        parser.add_argument('--output', type=Path, required=True)
+        args = parser.parse_args()
+        engine = importlib.import_module(f'{_PACKAGE_NAME}.tools.fastloop_research')
+        bundle = json.loads(args.verify_local_model.read_text(encoding='utf-8-sig'))
+        result = engine.run_research_model(bundle, args.output)
+        print(json.dumps(result, ensure_ascii=False))
+        raise SystemExit(0 if result.get('status') == 'mechanical_verified' else 1)
     import uvicorn
     host = os.environ.get('FLOOR_API_HOST', '127.0.0.1')
     if host not in ('127.0.0.1', 'localhost', '::1'):

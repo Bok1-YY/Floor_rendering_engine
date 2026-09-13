@@ -1,48 +1,37 @@
-# Floor Engine 桌面可运行副本
+# Floor Engine Windows Runnable 使用说明
 
-这是基于 `433c16e2dab99c32c1f2b89c187f5b36481889a0` 持续维护的独立 runnable。它保留自己的 Python 环境、Node 依赖、模型资产和 `data/`，不依赖 handoff 开发目录。当前分支在原有可用性修复上，继续收录场景提示词、系统密钥环、计费安全重试、存储生命周期，以及全屋设计本地研究建模快线。
+当前源版本见 [VERSION](./VERSION)。本副本独立运行，不依赖名为 test 的上级目录。完整开发说明见 [DEVGUIDE](./DEVGUIDE.md)。
 
-## 启动
+## 源码副本
 
-双击桌面的 **Floor Engine - 可运行副本** 快捷方式，或直接双击本目录的 `start-windows.bat`。保留弹出的服务窗口；浏览器会自动打开 `http://127.0.0.1:7870/`，全屋设计入口为 `http://127.0.0.1:7870/design/`。
+先安装 Python 3.12 和 Node.js 20.9+，然后运行本目录的 Install_Project_Dependencies.bat。它只安装当前仓库；需要测试环境时添加 -Development。
 
-如果 7870 已有本副本服务，只刷新浏览器，不要重复启动。停止服务时在服务窗口按 `Ctrl+C`，或关闭该窗口。
+双击 start-windows.bat，在 http://127.0.0.1:7870 使用应用。脚本检查并按需重建静态前端，运行数据在本目录 data 下。已有该副本服务时使用现有页面，避免重复启动。开发模式使用 dev-windows.bat，同时运行前端 3000 和后端 7870。
 
-## 当前全屋设计流程
+## Release 便携包
 
-1. 上传户型图片或 PDF。
-2. 在原图上确认空间、主入口和且仅一条两点比例尺；比例尺输入实际毫米值。
-3. 补充容易识别错误的门窗或固定结构锚点。
-4. 让 Gemini 提议外轮廓、墙、门窗、空间和邻接图，再回答九个普通结构问题。
-5. 严格结构合同通过后，直接生成 Blend、GLB、研究 IFC、正上方和两张轴测图。
-6. 两张 2K 概念图可以并行生成，但只负责家具、材料和氛围，不能改变结构。
+从项目正式 Release 下载 Windows x64 ZIP，核对附件 SHA256SUMS.txt 后解压到当前用户可写目录，运行 FloorEngine.exe。应用只监听本机。默认配置和输出写在 exe 旁；不要直接在压缩包内运行，也不要放在不可写的系统目录。
 
-本地研究灰模需要 Blender 5.2。程序会读取 `BLENDER_EXECUTABLE`、PATH 和 Blender 标准 Windows 安装路径；IfcOpenShell 由 `requirements.txt` 安装。缺少 Blender 时，其他 Floor Engine 功能仍可用，模型任务会明确显示缺少本地依赖。
+可用 FLOOR_DATA_DIR 指定其他数据目录、FLOOR_API_PORT 指定端口、FLOOR_NO_BROWSER=1 关闭自动打开浏览器。保留程序窗口，使用 Ctrl+C 停止；底层网络线程可能等待超时，立即关闭窗口不等于所有远端请求已取消。
 
-## 保留的 Runnable 修复
+升级前停止旧程序并备份数据目录。只替换程序与随包说明，不删除配置、output_files 或用户数据。密钥保存在当前用户系统密钥环，迁移机器后重新填写；便携包不包含你的密钥、配置或历史记录。
 
-- 项目列表会先加载详情，避免缺少 `plan_summary` 导致页面崩溃。
-- 全屋页面拥有独立纵向滚动容器。
-- 两张 2K 候选的文本状态按 `candidate_id` 隔离。
-- 2K 候选支持全屏放大、滚轮缩放和拖动。
-- API Key 保存到当前用户系统密钥环，不写入 `engine_config.json`。
-- 不确定是否扣费的请求不会自动重复提交。
-- 存储清理先审计、备份或隔离，不直接永久删除共享资产。
+## 恢复与输入保留
 
-## 2026-08-31 验证
+- 服务重启恢复任务历史，并标明中断情况；未知付费结果不自动创建新请求。
+- 有效超分请求可恢复已有句柄；需要新请求时保留可能重复计费的确认。
+- 图片已保存但记录写入未完成时，可使用本地补写恢复入口，不再生成图片。
+- 批量成功项移出选择；未确认提交先核对列表，再决定是否重发。
+- 生成参数草稿可跨刷新恢复。记录页评审与二改草稿按目标保留于本次页面会话，刷新后不保证保留。
 
-- Python 全量：`315 passed, 1 skipped`。
-- 前端：design `9/9`、scene `3/3`、storage `2/2`、security `3/3`。
-- ESLint 与 Next.js production build 通过，生成 7 个页面路由。
-- 源码服务在独立端口 7898 启动，health、`/design/`、OpenAPI、户型上传、项目创建和项目详情均返回 200。
-- 使用 1308 户型图创建了真实临时项目，正确进入“等待人工锚点确认”。
-- 产品适配器实际调用 Blender 5.2 与 IfcOpenShell；Blend 冷开、GLB 冷导入、IFC4 回读及三张结构视图通过。
-- 没有触发 Gemini/Fal 付费生图。
+## 全屋研究建模
 
-日常 commit/push 不再运行 Nuitka onefile；只有明确要求发布 exe 时才执行打包。此前中断的 `.buildenv`、`.nuitka_stage` 和 `dist` 已移入 Windows 回收站，`web/out` 作为正常 runnable 前端保留。
+上传图/PDF，确认人工空间、入口、唯一两点毫米比例尺及必要锚点，回答九问并通过结构合同后进行本地建模。概念图描述氛围，不改变墙体权威。
 
-## 能力边界
+本地研究建模需要外部 Blender 5.2，程序检查 BLENDER_EXECUTABLE、PATH 和标准安装目录；IfcOpenShell 包含在构建依赖中。缺少 Blender 时其他功能仍可使用，模型任务报告依赖缺失。输出为研究灰模，不是施工级 BIM；Gemini 外部复审不可用时不得声称正式审查通过。
 
-当前输出是非商业研究和流程验证用途的结构灰模，不是施工图或施工级 BIM。1308 与 121㎡复杂样本仍需继续通过最终 Goal 0；两轮自动纠错、逐顶点机械评分和复杂墙体 junction 也仍是后续门槛。Gemini 不可用时，本地产物会保留并显示“等待 Gemini 复审”，不会伪装成正式通过。
+## 验证范围
 
-机器可读验证记录见 `RUNNABLE_BASELINE.json`。
+[当前验证索引](./docs/VALIDATION_CURRENT.md)记录源码检查。每个 Release 的附件记录其可执行文件测试、源 SHA 和校验和。本轮使用本机隔离目录验证，没有全新 Windows 系统、代码签名或付费云模型质量验证。
+
+原 [RUNNABLE_BASELINE.json](./RUNNABLE_BASELINE.json) 是 2026-08-31 历史基线，不代表当前构建或发布已通过。完整打包仅在发布任务执行，结束后按[发布说明](./docs/WINDOWS_RELEASE.md)清理本轮临时目录，保留正常运行环境和数据。

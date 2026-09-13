@@ -1,10 +1,10 @@
 # Floor Rendering Engine
 
-![Release](https://img.shields.io/badge/release-2026.08-blue)
+![Release](https://img.shields.io/badge/version-7.1.1-blue)
 ![License](https://img.shields.io/badge/license-AGPL--3.0--only-blue)
-![Python](https://img.shields.io/badge/python-3.10%2B-3776AB)
-![Node](https://img.shields.io/badge/node-20%2B-339933)
-![Tests](https://img.shields.io/badge/tests-315%20passed-brightgreen)
+![Python](https://img.shields.io/badge/python-3.12-3776AB)
+![Node](https://img.shields.io/badge/node-20.9%2B-339933)
+[Validation / 验证记录](./docs/VALIDATION_CURRENT.md)
 
 把真实地板色板与住宅户型图，转化为可验证、可编辑、可交付的空间内容。
 
@@ -21,7 +21,13 @@ Floor Rendering Engine 现在是一套本地 AI 空间设计与视觉生产工�
 
 ![从色板到批量生成、自动校色与智能修补的完整工作流](./docs/media/hero-demo.gif)
 
-## 2026.08 最新更新
+## 2026.09 工程更新
+
+五轮重构已分离 provider、任务编排、图像编辑会话、生成状态、记录草稿和任务卡。批量成功项移出选择，提交结果未确认时不自动重试；已保存的本地图片可恢复补写记录，无需再调模型。记录评审与二改草稿在本次页面会话内按目标保留；任务卡候选读取每卡最多 4 个并发请求。
+
+验证结果与限制见[当前验证索引](./docs/VALIDATION_CURRENT.md)，可执行文件构建与清理见[Windows 发布说明](./docs/WINDOWS_RELEASE.md)。本轮发布按本机隔离验证设计，不声称已经在全新 Windows 系统验证。
+
+### 2026.08 产品里程碑
 
 - **实验性全屋设计加入本地研究建模快线**：上传户型图片或 PDF，先用人工空间、入口和唯一两点比例尺约束 Gemini，再回答九个普通结构问题。通过严格 wall/opening/adjacency 合同后，产品可直接调用 Blender 5.2 和 IfcOpenShell 输出 Blend、GLB、研究 IFC 与三视图；2K 概念图并行生成且永远不是墙体权威。Gemini 线路不可用时状态为 `external_review_pending`，不会冒充正式 BIM 或计作产品失败。
 - **生成工作台重构**：用“产品 → 场景 → 输出”三步手风琴替代长参数列，常用的房间、风格、光线和镜头保持在核心层；结果区新增 B2 / Pro 页签、候选缩略条，并可直接完成通过、备选、淘汰和收藏。
@@ -158,7 +164,7 @@ FastAPI / task orchestration / queue recovery
 
 - B2、Pro 与 SD 使用独立并发槽；服务默认只监听 `127.0.0.1`。
 - 配置、输出、日志和任务恢复状态保存在本机数据目录。
-- 当前回归集覆盖提示词黄金样本、路由契约、路径安全、队列恢复、系统密钥环、计费安全重试、存储生命周期、电影规划、全屋设计人工锚点/九问结构图/revision/Blender/GLB/IFC研究快线、地板占比、校色、独立样品对色、智能选区和记录链路；当前为 **315 tests passed，1 skipped**。
+- 当前回归集覆盖提示词黄金样本、路由契约、路径安全、队列恢复、系统密钥环、计费安全重试、存储生命周期、电影规划、全屋设计人工锚点/九问结构图/revision/Blender/GLB/IFC研究快线、地板占比、校色、独立样品对色、智能选区和记录链路；具体计数、日期与验证缺口集中记录在[当前验证索引](./docs/VALIDATION_CURRENT.md)。
 
 ## My Role
 
@@ -174,7 +180,7 @@ FastAPI / task orchestration / queue recovery
 
 ## Quick Start
 
-要求：Python 3.10+、Node.js 20+，并至少配置一个可用图像模型 API——[Google AI Studio](https://aistudio.google.com/)（Gemini）或 [fal.ai](https://fal.ai/) 任一即可；也可连接自备的 ComfyUI 实例，本地算力零 API 费用。MobileSAM 模型资产已包含在仓库中。
+源码环境使用 Python 3.12、Node.js 20.9+。云端生成至少配置一个可用图像模型 API——[Google AI Studio](https://aistudio.google.com/)（Gemini）或 [fal.ai](https://fal.ai/) 任一即可；也可连接自备的 ComfyUI 实例，本地算力零 API 费用。MobileSAM 模型资产已包含在仓库中。
 
 ### 只需要样品对色
 
@@ -189,7 +195,8 @@ python standalone_color_calibrator/app.py --source 新大图.jpg --reference 旧
 ### Windows
 
 ```text
-Install_Project_Dependencies.bat   # 首次安装
+Install_Project_Dependencies.bat   # 仅安装当前仓库
+Install_Project_Dependencies.bat -Development  # 额外安装测试依赖
 start-windows.bat                  # http://127.0.0.1:7870
 dev-windows.bat                    # FastAPI 7870 + Next.js 3000
 ```
@@ -198,7 +205,7 @@ dev-windows.bat                    # FastAPI 7870 + Next.js 3000
 
 全屋研究灰模需要本机安装 Blender 5.2；程序会依次读取 `BLENDER_EXECUTABLE`、系统 PATH 和 Blender 的标准 Windows 安装路径。IfcOpenShell 随 Python 依赖安装。未安装 Blender 时，普通效果图、记录、对色和 2K 全屋概念图仍可使用，但本地 Blend/GLB/IFC 会明确显示“缺少本地依赖”。
 
-### Linux / macOS
+### Linux / macOS 源码安装（本轮 Windows 发布未验证）
 
 ```bash
 python -m venv .venv
@@ -209,6 +216,12 @@ python serve.py
 ```
 
 首次启动后在“设置”页填写 API Key。Key 保存到当前用户的系统密钥环，不写入 `engine_config.json`；把程序复制到新电脑后需要重新填写。开发端口、配置和模块说明见 [DEVGUIDE.md](./DEVGUIDE.md)。
+
+## 运行与发布边界
+
+服务为本机单 worker 应用。API Key 属于当前用户系统密钥环；发布包不包含用户配置、历史记录或真实素材。评审/二改草稿及候选缓存只属于当前页面会话，刷新不保证保留。取消是尽力请求，上游已接受的模型调用仍可能计费；跨刷新/重启的创建请求持久化幂等协议尚未实现。
+
+[Windows 发布说明](./docs/WINDOWS_RELEASE.md)约定固定源提交、便携包、校验和与清理。Python/Node 是构建环境依赖，某个可执行文件的隔离运行验证结果以该 Release 的报告为准。Blender 仍为外部依赖；没有暗示干净系统验证、代码签名或真实云服务验收已经完成。
 
 ## Repository Guide
 
