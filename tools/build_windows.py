@@ -79,7 +79,7 @@ def main():
     run([python, '-m', 'pip', 'install', '--disable-pip-version-check', '-r', source / 'requirements-build.txt', '-r', source / 'requirements.txt'])
     run([python, '-m', 'pip', 'check'])
     dependency_modules = json.loads(output([python, '-c', 'import importlib.metadata,json;print(json.dumps(sorted(importlib.metadata.packages_distributions())))']))
-    dependency_modules = [name for name in dependency_modules if name not in ('nuitka', 'pytest', 'Floor_engine_server')]
+    dependency_modules = [name for name in dependency_modules if name not in ('nuitka', 'pytest', 'Floor_engine_server', 'anyio')]
     npm = shutil.which('npm.cmd')
     if not npm: raise SystemExit('Node.js 20.9+ and npm are required.')
     run([npm, 'ci'], cwd=source / 'web')
