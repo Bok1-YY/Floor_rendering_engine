@@ -24,6 +24,29 @@ def run(args, *, cwd=ROOT, env=None):
 def output(args, cwd=ROOT):
     return subprocess.check_output([str(a) for a in args], cwd=cwd, text=True).strip()
 
+def prepare_compiler(work: Path, python: Path, env: dict) -> dict:
+    """Fail early on compiler setup; work around the pinned MinGW header lookup."""
+    overlay = work / 'compiler-headers'
+    overlay.mkdir(exist_ok=True)
+    probe = work / 'compiler_probe.py'
+    probe.write_text("print('compiler probe ok')\n", encoding='utf-8')
+    copied = {}
+    for attempt in range(2):
+        headers = list((work / 'compiler-cache' / 'downloads' / 'gcc').glob('**/include/structuredquerycondition.h'))
+        if headers:
+            header = headers[0]
+            shutil.copy2(header, overlay / header.name)
+            env['CPATH'] = str(overlay)
+            copied = {'name': header.name, 'sha256': hashlib.sha256(header.read_bytes()).hexdigest()}
+        command = [python, '-m', 'nuitka', '--mode=onefile', '--mingw64', '--jobs=2', '--low-memory',
+                   '--assume-yes-for-downloads', f'--output-dir={work / "compiler-probe"}', probe]
+        with (work / f'compiler-probe-{attempt}.log').open('wb') as stream:
+            result = subprocess.run([str(x) for x in command], env=env, stdout=stream, stderr=subprocess.STDOUT)
+        if result.returncode == 0:
+            return copied
+    raise SystemExit(f'Compiler preflight failed; inspect logs under {work}')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--work-dir', type=Path)
@@ -73,12 +96,13 @@ def main():
         for file in (source / 'tools' / 'fastloop_research').glob('*.py'):
             z.write(file, 'tools/fastloop_research/' + file.name)
     env = os.environ.copy(); env['PYTHONPATH'] = str(package.parent); env['NUITKA_CACHE_DIR'] = str(work / 'compiler-cache')
+    header_workaround = prepare_compiler(work, python, env)
     dist = attempt / 'dist'
-    command = [python, '-m', 'nuitka', '--mode=onefile', '--jobs=4', '--mingw64', '--assume-yes-for-downloads',
+    command = [python, '-m', 'nuitka', '--mode=onefile', '--jobs=2', '--low-memory', '--mingw64', '--assume-yes-for-downloads',
         '--output-filename=FloorEngine.exe', f'--output-dir={dist}', '--product-name=Floor Engine',
         f'--file-version={version}.0', f'--product-version={version}.0', '--python-flag=isolated',
         '--include-package=Floor_engine_server', '--include-package=uvicorn', '--include-package=anyio',
-        '--include-package=PIL', '--include-package=cv2', '--include-package=onnxruntime', '--include-package=multipart',
+        '--noinclude-custom-mode=pymupdf.mupdf:bytecode', '--include-package=PIL', '--include-package=cv2', '--include-package=onnxruntime', '--include-package=multipart',
         '--include-package=keyring', '--include-package=keyring.backends', '--include-package=pymupdf', '--include-package=ifcopenshell',
         '--include-distribution-metadata=keyring', '--include-package-data=certifi', '--include-package-data=pptx', '--include-package-data=ifcopenshell',
         '--nofollow-import-to=pytest,tkinter,IPython,ifcopenshell.express.rules,onnxruntime.backend,onnxruntime.transformers,onnxruntime.tools,onnxruntime.quantization',
@@ -87,6 +111,7 @@ def main():
         f'--include-data-files={research / "blender-runtime.zip"}=Floor_engine_server/tools/fastloop_research/blender-runtime.zip',
         f'--report={attempt / "nuitka-report.xml"}', package / 'serve.py']
     manifest = {'version': version, 'source_sha': sha, 'work_dir': str(work), 'attempt': str(attempt),
+        'compiler_header_workaround': header_workaround, 'pymupdf_binding_mode': 'embedded-bytecode',
         'python': output([python, '--version']), 'node': output(['node', '--version']),
         'dependencies': output([python, '-m', 'pip', 'freeze']).splitlines(), 'command': [str(x) for x in command], 'status': 'building'}
     report = attempt / 'build-report.json'
