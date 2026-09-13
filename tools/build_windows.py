@@ -110,7 +110,7 @@ def main():
         *['--noinclude-custom-mode=' + name + ':bytecode' for name in dependency_modules], '--include-package=PIL', '--include-package=cv2', '--include-package=onnxruntime', '--include-package=multipart',
         '--include-package=keyring', '--include-package=keyring.backends', '--include-package=pymupdf', '--include-package=ifcopenshell',
         '--include-distribution-metadata=keyring', '--include-package-data=certifi', '--include-package-data=pptx', '--include-package-data=ifcopenshell',
-        '--nofollow-import-to=pytest,tkinter,IPython,ifcopenshell.express.rules,onnxruntime.backend,onnxruntime.transformers,onnxruntime.tools,onnxruntime.quantization',
+        '--nofollow-import-to=pytest,tkinter,IPython,onnxruntime.backend,onnxruntime.transformers,onnxruntime.tools,onnxruntime.quantization',
         f'--include-data-dir={source / "web" / "out"}=Floor_engine_server/web/out',
         f'--include-data-dir={source / "assets"}=Floor_engine_server/assets',
         f'--include-data-files={research / "blender-runtime.zip"}=Floor_engine_server/tools/fastloop_research/blender-runtime.zip',
