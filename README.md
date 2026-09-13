@@ -219,6 +219,9 @@ python serve.py
 
 ## 运行与发布边界
 
+Windows 可执行文件需要当前版本的 Microsoft Visual C++ v14 x64 运行库。发布包提供官方下载入口，不内置或自动安装该组件，说明见[微软运行库文档](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist)。
+
+
 服务为本机单 worker 应用。API Key 属于当前用户系统密钥环；发布包不包含用户配置、历史记录或真实素材。评审/二改草稿及候选缓存只属于当前页面会话，刷新不保证保留。取消是尽力请求，上游已接受的模型调用仍可能计费；跨刷新/重启的创建请求持久化幂等协议尚未实现。
 
 [Windows 发布说明](./docs/WINDOWS_RELEASE.md)约定固定源提交、便携包、校验和与清理。Python/Node 是构建环境依赖，某个可执行文件的隔离运行验证结果以该 Release 的报告为准。Blender 仍为外部依赖；没有暗示干净系统验证、代码签名或真实云服务验收已经完成。

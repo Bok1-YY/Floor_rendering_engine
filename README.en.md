@@ -219,6 +219,9 @@ Enter API keys on the Settings page after first launch. Keys are stored in the c
 
 ## Runtime and release boundaries
 
+Windows binaries require a current Microsoft Visual C++ v14 x64 runtime. The release archive provides an official download shortcut; the runtime is not bundled or installed automatically. See [Microsoft’s runtime documentation](https://learn.microsoft.com/en-us/cpp/windows/latest-supported-vc-redist).
+
+
 The server is a local, single-worker application. API keys stay in the current user's OS keyring; do not copy runtime data into a release archive. Review/edit drafts and candidate caches are page-local and are not promised to survive browser reloads. Cancellation is best effort; a model request already accepted upstream may still be billed. Durable creation-request idempotency across refreshes/restarts is not yet implemented.
 
 [Windows build and release instructions](./docs/WINDOWS_RELEASE.md) describe the fixed source commit, portable archive, checksums and cleanup. Python/Node are build-time requirements; whether a particular binary passes isolated execution is recorded in that release's report. Blender remains an external dependency. No clean-system, signed-binary or live-provider validation is implied.
