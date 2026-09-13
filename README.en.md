@@ -126,6 +126,8 @@ API originals, automatic color matching, local edits, generation parameters, pro
 
 ## Production Evidence
 
+The following figures are historical internal observations documented in August 2026; they were not remeasured during this refactoring and release round.
+
 These are internal production observations, not offline benchmarks:
 
 - Approximately **10** internal users;
@@ -179,6 +181,8 @@ I independently owned the core product from problem definition to engineering de
 The [full product case study](./docs/PRODUCT_CASE_STUDY.en.md) covers context, tradeoffs, measurement definitions, and responsibility boundaries.
 
 ## Quick Start
+
+Windows download: [v7.1.1 formal release](https://github.com/Bok1-YY/Floor_rendering_engine/releases/tag/v7.1.1).
 
 Source setup: Python 3.12 and Node.js 20.9+. Cloud generation needs a configured image-model API — either [Google AI Studio](https://aistudio.google.com/) (Gemini) or [fal.ai](https://fal.ai/) is enough; a self-hosted ComfyUI instance is also supported with zero API cost. The MobileSAM model asset is included.
 

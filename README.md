@@ -126,6 +126,8 @@ API 原图、自动校色、局部修补、生成参数、模型路线、耗时�
 
 ## Production Evidence
 
+以下为 2026.08 文档中记录的内部运营观察，本轮重构与发布没有重新统计这些业务指标。
+
 这些数据来自公司社媒组的实际使用，不是离线 benchmark：
 
 - 约 **10 名**内部用户；
@@ -179,6 +181,8 @@ FastAPI / task orchestration / queue recovery
 更完整的背景、取舍、指标口径和职责边界见[产品案例](./docs/PRODUCT_CASE_STUDY.zh-CN.md)。
 
 ## Quick Start
+
+Windows 下载：[v7.1.1 正式 Release](https://github.com/Bok1-YY/Floor_rendering_engine/releases/tag/v7.1.1)。
 
 源码环境使用 Python 3.12、Node.js 20.9+。云端生成至少配置一个可用图像模型 API——[Google AI Studio](https://aistudio.google.com/)（Gemini）或 [fal.ai](https://fal.ai/) 任一即可；也可连接自备的 ComfyUI 实例，本地算力零 API 费用。MobileSAM 模型资产已包含在仓库中。
 
