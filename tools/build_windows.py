@@ -97,6 +97,9 @@ def main():
         z.writestr('tools/__init__.py', '')
         for file in (source / 'tools' / 'fastloop_research').glob('*.py'):
             z.write(file, 'tools/fastloop_research/' + file.name)
+    ifc_parser = buildenv / 'Lib' / 'site-packages' / 'ifcopenshell' / 'express' / 'express_parser.py'
+    with zipfile.ZipFile(package / 'ifc-parser.zip', 'w', zipfile.ZIP_DEFLATED) as z:
+        z.write(ifc_parser, 'express_parser.py')
     env = os.environ.copy(); env['PYTHONPATH'] = str(package.parent); env['NUITKA_CACHE_DIR'] = str(work / 'compiler-cache')
     header_workaround = prepare_compiler(work, python, env)
     dist = attempt / 'dist'
@@ -111,6 +114,7 @@ def main():
         f'--include-data-dir={source / "web" / "out"}=Floor_engine_server/web/out',
         f'--include-data-dir={source / "assets"}=Floor_engine_server/assets',
         f'--include-data-files={research / "blender-runtime.zip"}=Floor_engine_server/tools/fastloop_research/blender-runtime.zip',
+        f'--include-data-files={package / "ifc-parser.zip"}=Floor_engine_server/ifc-parser.zip',
         f'--report={attempt / "nuitka-report.xml"}', package / 'serve.py']
     manifest = {'version': version, 'source_sha': sha, 'work_dir': str(work), 'attempt': str(attempt),
         'compiler_header_workaround': header_workaround, 'pymupdf_binding_mode': 'embedded-bytecode', 'dependency_bytecode_modules': dependency_modules,

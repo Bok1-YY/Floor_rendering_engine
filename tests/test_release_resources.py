@@ -22,3 +22,32 @@ def test_blender_source_archive_rejects_unsafe_entries(tmp_path, monkeypatch, na
     monkeypatch.setattr(engine, '_running_frozen', lambda: True)
     with pytest.raises(ValueError, match='Invalid bundled'):
         engine._blender_python_sources(tmp_path)
+
+def test_ifc_parser_resource_is_materialized_and_not_overwritten(tmp_path, monkeypatch):
+    import sys
+    from types import SimpleNamespace
+    package = tmp_path / 'package'
+    package.mkdir()
+    monkeypatch.setattr(engine, '__file__', str(package / 'tools/fastloop_research/engine.py'))
+    library = tmp_path / 'ifcopenshell'
+    library.mkdir()
+    monkeypatch.setitem(sys.modules, 'ifcopenshell', SimpleNamespace(__file__=str(library/'__init__.py')))
+    with zipfile.ZipFile(package / 'ifc-parser.zip', 'w') as archive:
+        archive.writestr('express_parser.py', 'parser_version = 1\n')
+    engine._prepare_ifc_parser_resource()
+    parser = library/'express/express_parser.py'
+    assert parser.read_text() == 'parser_version = 1\n'
+    parser.write_text('existing parser\n')
+    engine._prepare_ifc_parser_resource()
+    assert parser.read_text() == 'existing parser\n'
+
+def test_ifc_parser_resource_rejects_unexpected_entries(tmp_path, monkeypatch):
+    import sys
+    from types import SimpleNamespace
+    package=tmp_path/'package';package.mkdir()
+    monkeypatch.setattr(engine, '__file__', str(package/'tools/fastloop_research/engine.py'))
+    monkeypatch.setitem(sys.modules, 'ifcopenshell', SimpleNamespace(__file__=str(tmp_path/'library/__init__.py')))
+    with zipfile.ZipFile(package/'ifc-parser.zip','w') as archive:
+        archive.writestr('../bad.py','bad')
+    with pytest.raises(ValueError, match='Invalid IFC'):
+        engine._prepare_ifc_parser_resource()

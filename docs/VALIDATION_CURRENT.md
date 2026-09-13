@@ -6,7 +6,7 @@
 
 第五轮结束后的完整验证：后端 **344 passed、1 skipped**；Node **47 passed**；浏览器 **42 passed**；TypeScript、ESLint、Next 静态构建通过。跳过项是缺少操作员彩膜素材，包含真实本地 Blender/IFC 集成。
 
-第六轮增加打包资源回归后，源码完整验证为 **347 passed、1 skipped**；Node **47 passed**、浏览器 **42 passed**，类型、ESLint、静态构建与 7 份维护文档检查通过。API 契约覆盖 101 个路径/方法条目。可执行文件是否已构建、是否通过隔离验证及是否发布，必须以 Release 附件报告和真实链接为准。
+第六轮增加打包资源回归后，源码完整验证为 **349 passed、1 skipped**；Node **47 passed**、浏览器 **42 passed**，类型、ESLint、静态构建与 7 份维护文档检查通过。API 契约覆盖 101 个路径/方法条目。可执行文件是否已构建、是否通过隔离验证及是否发布，必须以 Release 附件报告和真实链接为准。
 
 ```powershell
 .\.venv\Scripts\python.exe tools/verify.py --integration

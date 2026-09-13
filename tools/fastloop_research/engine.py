@@ -166,6 +166,25 @@ def _blender_python_sources(package_dir: Path) -> Path:
                     target.write_bytes(source.read(entry))
     return destination / 'tools' / 'fastloop_research'
 
+def _prepare_ifc_parser_resource() -> None:
+    """IfcOpenShell checks this generated source before importing its parser."""
+    import ifcopenshell
+    import zipfile
+    parser = Path(ifcopenshell.__file__).resolve().parent / 'express' / 'express_parser.py'
+    if parser.is_file():
+        return
+    archive = Path(__file__).resolve().parents[2] / 'ifc-parser.zip'
+    with _BLENDER_SOURCE_LOCK:
+        if parser.is_file():
+            return
+        with zipfile.ZipFile(archive) as source:
+            if source.namelist() != ['express_parser.py']:
+                raise ValueError('Invalid IFC parser resource')
+            content = source.read('express_parser.py')
+        parser.parent.mkdir(parents=True, exist_ok=True)
+        parser.write_bytes(content)
+
+
 def _running_frozen() -> bool:
     return bool(getattr(sys, "frozen", False) or "__compiled__" in globals())
 
@@ -468,6 +487,7 @@ def run_research_model(
     if in_process_ifc:
         started = datetime.now(timezone.utc)
         try:
+            _prepare_ifc_parser_resource()
             from .ifc_builder import build as build_ifc_in_process
             build_ifc_in_process(validated_path, run_dir / "research.ifc", ifc_report_path)
             returncode, stderr = 0, ""
