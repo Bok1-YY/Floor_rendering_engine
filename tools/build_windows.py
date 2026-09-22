@@ -75,15 +75,18 @@ def main():
     buildenv = work / 'buildenv'
     python = buildenv / 'Scripts' / 'python.exe'
     if not python.exists(): run([sys.executable, '-m', 'venv', buildenv])
+    install_env = os.environ.copy()
+    install_env['PIP_CACHE_DIR'] = str(work / 'pip-cache')
+    install_env['npm_config_cache'] = str(work / 'npm-cache')
     run([python, '-c', 'import sys; assert sys.version_info[:2] == (3, 12)'])
-    run([python, '-m', 'pip', 'install', '--disable-pip-version-check', '-r', source / 'requirements-build.txt', '-r', source / 'requirements.txt'])
+    run([python, '-m', 'pip', 'install', '--disable-pip-version-check', '-r', source / 'requirements-build.txt', '-r', source / 'requirements.txt'], env=install_env)
     run([python, '-m', 'pip', 'check'])
     dependency_modules = json.loads(output([python, '-c', 'import importlib.metadata,json;print(json.dumps(sorted(importlib.metadata.packages_distributions())))']))
     dependency_modules = [name for name in dependency_modules if name not in ('nuitka', 'pytest', 'Floor_engine_server', 'anyio')]
     npm = shutil.which('npm.cmd')
     if not npm: raise SystemExit('Node.js 20.9+ and npm are required.')
-    run([npm, 'ci'], cwd=source / 'web')
-    run([npm, 'run', 'build'], cwd=source / 'web')
+    run([npm, 'ci'], cwd=source / 'web', env=install_env)
+    run([npm, 'run', 'build'], cwd=source / 'web', env=install_env)
     package = attempt / 'stage' / 'Floor_engine_server'; package.mkdir(parents=True)
     for file in source.glob('*.py'): shutil.copy2(file, package / file.name)
     shutil.copytree(source / 'providers', package / 'providers')
