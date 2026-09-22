@@ -186,7 +186,7 @@ FastAPI / task orchestration / queue recovery
 
 ## Quick Start
 
-Windows 下载：[v7.1.1 正式 Release](https://github.com/Bok1-YY/Floor_rendering_engine/releases/tag/v7.1.1)。
+Windows 下载：[v7.1.2 正式 Release](https://github.com/Bok1-YY/Floor_rendering_engine/releases/tag/v7.1.2)。
 
 源码环境使用 Python 3.12、Node.js 20.9+。云端生成至少配置一个可用图像模型 API——[Google AI Studio](https://aistudio.google.com/)（Gemini）或 [fal.ai](https://fal.ai/) 任一即可；也可连接自备的 ComfyUI 实例，本地算力零 API 费用。MobileSAM 模型资产已包含在仓库中。
 

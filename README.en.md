@@ -186,7 +186,7 @@ The [full product case study](./docs/PRODUCT_CASE_STUDY.en.md) covers context, t
 
 ## Quick Start
 
-Windows download: [v7.1.1 formal release](https://github.com/Bok1-YY/Floor_rendering_engine/releases/tag/v7.1.1).
+Windows download: [v7.1.2 formal release](https://github.com/Bok1-YY/Floor_rendering_engine/releases/tag/v7.1.2).
 
 Source setup: Python 3.12 and Node.js 20.9+. Cloud generation needs a configured image-model API — either [Google AI Studio](https://aistudio.google.com/) (Gemini) or [fal.ai](https://fal.ai/) is enough; a self-hosted ComfyUI instance is also supported with zero API cost. The MobileSAM model asset is included.
 

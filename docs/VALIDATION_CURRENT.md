@@ -6,7 +6,15 @@
 
 第七轮提交恢复实现：[协议与行为报告](./SUBMISSION_RELIABILITY_ROUND_7.md)。当前后端全套 **371 passed、1 skipped**（含本地 Blender/IFC 集成），Node **52 passed**，浏览器 **55 passed**，类型、ESLint、静态构建与 7 份文档检查通过。路由契约为 102 个路径/方法条目。独立构建环境的实际依赖也通过后端全套 371 项、跳过 1 项。跳过项仍是缺少操作员彩膜素材。新增测试不调用付费模型；断响应浏览器用例连接真实隔离提交 API 和离线 worker。包含查询途中清卡后释放迟到响应的回归。
 
-7.1.2 可执行文件及正式发布正在按 Windows 发布流程验证，完成后在本页记录实际产物与校验结果；以下 7.1.1 结果属于上一轮。
+## v7.1.2 正式发布结果
+
+[v7.1.2 正式 Release](https://github.com/Bok1-YY/Floor_rendering_engine/releases/tag/v7.1.2) 已发布，非 Draft、非 Prerelease。标签指向已验证源提交 e30662876c3ca11d3ee00ac839f1451dc28780fe。Windows ZIP 为 168,231,907 字节，SHA-256 为 6cb2580619ff80ead5fcaca76ab966fb17f2c2e0c611e925bcc009f401b8a104；exe 为 167,486,976 字节，SHA-256 为 cbbd24dea9e736b3950751ba0107a52105c7682608e7edd74779bc4c6fd614c9。
+
+同一份 exe 在仓库外中文及空格路径、独立数据根和仅系统目录 PATH 下通过 18 组检查：提交实例与凭据重放、参数和实例冲突、损坏凭据、清卡后查询、正常关闭重启、默认 exe 旁数据根、真实页面及图片解码、PDF、校色与 MobileSAM、记录评审/收藏/HTML/PPTX、本地补写，以及 Blender 冷开、GLB 导入和 IFC 写出回读。第三方模块路径来自 onefile 临时运行目录。源码浏览器用例验证首次受理与响应丢失，exe 使用预置隔离凭据重放；没有调用付费模型。
+
+本机隔离验证不等于全新 Windows 验证。包未签名；Microsoft Visual C++ v14 x64 运行库及 Blender 仍为外部依赖，包内提供微软运行库下载入口。完整机器可读结果见 [v7.1.2 验证记录](./validation/v7.1.2.json)。
+
+三份公开附件均已匿名重新下载，哈希全部与已验证本地文件一致。清理例外：自动审批同时拒绝了经所有权核对的批量清理和单个临时目录的直接删除，只返回 blocked by policy，没有具体原因，删除命令没有执行。本机 .tools/release-round7 工作目录及 12 个外部隔离测试目录仍保留；该工作目录内已准备 cleanup-round7.ps1 手动清理脚本及所有权清单，脚本只做语法检查，未代为执行。正常开发环境、静态前端和用户数据保留。
 
 第五轮结束后的完整验证：后端 **344 passed、1 skipped**；Node **47 passed**；浏览器 **42 passed**；TypeScript、ESLint、Next 静态构建通过。跳过项是缺少操作员彩膜素材，包含真实本地 Blender/IFC 集成。
 
