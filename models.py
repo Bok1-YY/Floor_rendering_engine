@@ -41,6 +41,7 @@ class JobRecord:
     display_name: str
     ts: str
     status: str = 'queued'
+    submission_id: str = ''
     model_filter: str = 'both'  # "b2" | "pro" | "both"
     workflow_mode: str = ''     # 提交时的工作流模式(纯效果图/地板替换/宠物友好/参照模式)，用量统计按它归类
     # perspective=普通透视效果图；direct_cubemap_atlas=单球心六面图集直出 ERP。

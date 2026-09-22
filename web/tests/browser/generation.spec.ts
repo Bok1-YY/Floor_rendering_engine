@@ -10,9 +10,11 @@ async function setup(page: Page, reuse = false, configure?: () => Promise<void>)
   await page.route('**/api/**', route => {
     const path = new URL(route.request().url()).pathname;
     if (path === '/api/options') return route.continue();
+    if (path === '/api/healthz') return route.fulfill({ json: { ok: true, submissions: { version: 1, ready: true, store_id: '11111111-1111-4111-8111-111111111111' } } });
+    if (path.startsWith('/api/job-submissions/')) return route.fulfill({ json: { status: 'not_found', submission_id: path.split('/').pop(), can_continue: true } });
     if (path === '/api/jobs' && route.request().method() === 'POST') {
       submissions.push(route.request().postDataJSON());
-      return route.fulfill({ json: { job_id: `created-${submissions.length}`, status: 'queued', model_targets: ['b2'], model_runs: {}, workflow_mode: '纯效果图', display_name: 'baseline-created' } });
+      return route.fulfill({ json: { job_id: `created-${submissions.length}`, submission_id: route.request().postDataJSON().submission_id, status: 'queued', model_targets: ['b2'], model_runs: {}, workflow_mode: '纯效果图', display_name: 'baseline-created' } });
     }
     if (path === '/api/config') return route.fulfill({ json: { sd_enabled: true } });
     return route.fulfill({ json: [] });
@@ -56,7 +58,7 @@ test('partial room batch removes successful selections before retry', async ({ p
     const room = route.request().postDataJSON().params.room_type; attempts.push(room);
     if (!rejectedRoom) rejectedRoom = room;
     if (attempts.length === 1) return route.fulfill({ status: 422, json: { detail: 'invalid fixture' } });
-    return route.fulfill({ json: { job_id: `ok-${attempts.length}`, workflow_mode: '纯效果图', status: 'queued', model_targets: ['b2'], model_runs: {} } });
+    return route.fulfill({ json: { job_id: `ok-${attempts.length}`, submission_id: route.request().postDataJSON().submission_id, workflow_mode: '纯效果图', status: 'queued', model_targets: ['b2'], model_runs: {} } });
   });
   await page.getByRole('button', { name: '批量', exact: true }).click();
   const dialog = page.getByRole('dialog');
@@ -70,12 +72,12 @@ test('partial room batch removes successful selections before retry', async ({ p
   expect(attempts.slice(count)).toEqual([rejectedRoom]);
 });
 
-test('unknown batch result needs explicit confirmation before a new submission', async ({ page }) => {
+test('unknown batch result is only resent by a manual action with the same identities', async ({ page }) => {
   await setup(page);
-  let attempts = 0;
+  let attempts = 0; const ids: string[] = [];
   await page.route('**/api/jobs', route => {
     if (route.request().method() !== 'POST') return route.fallback();
-    attempts++; return route.abort('failed');
+    attempts++; ids.push(route.request().postDataJSON().submission_id); return route.abort('failed');
   });
   await page.getByRole('button', { name: '批量', exact: true }).click();
   const dialog = page.getByRole('dialog');
@@ -83,12 +85,9 @@ test('unknown batch result needs explicit confirmation before a new submission',
   await dialog.getByRole('button', { name: '提交批量', exact: true }).click();
   await expect(dialog.getByRole('status')).toContainText('提交结果未确认');
   const before = attempts;
-  page.once('dialog', prompt => prompt.dismiss());
-  await dialog.getByRole('button', { name: '提交批量', exact: true }).click();
-  expect(attempts).toBe(before);
-  page.once('dialog', prompt => prompt.accept());
   await dialog.getByRole('button', { name: '提交批量', exact: true }).click();
   await expect.poll(() => attempts).toBe(before * 2);
+  expect(new Set(ids).size).toBe(before);
 });
 
 test('multi-floor batch sends individual analysis with existing fallback', async ({ page }) => {

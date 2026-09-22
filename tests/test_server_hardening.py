@@ -233,7 +233,8 @@ def test_asgi_lifespan_health_and_origin_guard(monkeypatch):
 
     async def exercise():
         async with server_api.lifespan(server_api.app):
-            assert server_api.healthz() == {"ok": True}
+            assert server_api.healthz()['ok'] is True
+            assert server_api.healthz()['submissions']['ready'] is True
             request = server_api.Request({
                 "type": "http",
                 "method": "POST",

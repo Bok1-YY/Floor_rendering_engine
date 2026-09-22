@@ -5,6 +5,7 @@
 改字段前先确认前端同步。
 """
 import re
+from uuid import UUID
 from typing import List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -98,7 +99,21 @@ class SDOptions(BaseModel):
     negative_addition: str = Field(default='', max_length=1000)
 
 
-class JobSubmitRequest(BaseModel):
+class SubmissionIdentity(BaseModel):
+    submission_id: Optional[UUID] = None
+    submission_store_id: Optional[UUID] = None
+
+    @model_validator(mode='after')
+    def paired_identity(self):
+        if (self.submission_id is None) != (self.submission_store_id is None):
+            raise ValueError('submission_id and submission_store_id must be provided together')
+        if any(value is not None and value.version != 4 for value in
+               (self.submission_id, self.submission_store_id)):
+            raise ValueError('submission identities must be UUID v4')
+        return self
+
+
+class JobSubmitRequest(SubmissionIdentity):
     model_config = {'protected_namespaces': ()}   # 允许 model_filter
 
     image_path: str                       # /api/uploads/floor 返回的绝对路径
@@ -111,7 +126,7 @@ class JobSubmitRequest(BaseModel):
     params: GenParams
 
 
-class FreeJobSubmitRequest(BaseModel):
+class FreeJobSubmitRequest(SubmissionIdentity):
     """自由创作任务：用户提示词原样透传，图片按列表顺序交给模型。"""
     model_config = {'protected_namespaces': ()}
 

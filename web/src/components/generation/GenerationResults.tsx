@@ -112,11 +112,9 @@ export function GenerationResults({
         ) : (
           <div className="grid items-start gap-4 [grid-template-columns:repeat(auto-fill,minmax(320px,1fr))] max-[1100px]:[grid-template-columns:1fr]">
             {jobs.map((j) => (
-              <JobCard
-                key={j.job_id}
-                initial={j}
-                onRemove={removeJob}
-              />
+              <div key={j.job_id} id={`job-${j.job_id}`}>
+                <JobCard initial={j} onRemove={removeJob} />
+              </div>
             ))}
           </div>
         )}

@@ -1,6 +1,6 @@
 # Floor Rendering Engine 开发指南
 
-本指南描述当前源码与维护边界，更新于 2026-09-13。版本读取 [VERSION](./VERSION)。产品介绍见 [README](./README.md)，发布流程见 [Windows 发布说明](./docs/WINDOWS_RELEASE.md)，历史改动见 [验证索引](./docs/VALIDATION_CURRENT.md)。
+本指南描述当前源码与维护边界，更新于 2026-09-22。版本读取 [VERSION](./VERSION)。产品介绍见 [README](./README.md)，发布流程见 [Windows 发布说明](./docs/WINDOWS_RELEASE.md)，历史改动见 [验证索引](./docs/VALIDATION_CURRENT.md)。
 
 ## 1. 环境与启动
 
@@ -59,6 +59,7 @@ Next.js 静态前端 / HTTP + SSE
 | 生命周期和共享状态 | `server_state.py`、`task_registry.py`、`models.py`；主状态通过规定锁与更新入口修改 |
 | 付费阶段与计数 | `billing_phases.py`、`usage_stats.py`，SD 与超分分别记录风险与请求身份 |
 | 本地写入恢复 | `result_commits.py`，图片、记录、任务快照的可恢复分步提交，不是数据库事务 |
+| 初始任务受理 | `submission_store.py` 持久化凭据；`job_submissions.py` 串行受理、启动边界、查询与重启核对 |
 | 记录与导出 | `records.py`、`exports.py`、`custom_recipes.py`、`reveal_security.py` |
 | 提示词与素材 | `prompt_data.py`、`prompts.py`、`sd_prompts.py`、`image_prep.py`、`cinematic_planner.py` |
 | 本地图像处理 | `color_match.py`、`floor_segmentation.py`、`floor_renderer.py`、`image_ops.py` |
@@ -75,6 +76,7 @@ Next.js 静态前端 / HTTP + SSE
 | output_files | 图片、记录 JSON、任务状态、研究模型与导出内容 |
 | output_files/.queue_state.json | 活动任务及最多 60 条终态历史的持久化快照 |
 | output_files/.result_commits | 本地分步提交日志与恢复回执 |
+| output_files/.job_submissions | 数据实例身份与永久提交凭据，随数据备份，不随清卡或图片清理删除 |
 | output_files/_samples | 内容寻址的记录小样 |
 | output_files/_whole_home_design | 全屋项目、素材、模型运行与导出 |
 | engine_config.json | 线路、网络、输出等非敏感配置 |
@@ -115,7 +117,15 @@ SD 与超分各自保存请求身份、重试风险和不确定计数。有效 F
 | 结果身份 | `web/src/lib/results/`：文件/记录/结果组成的稳定身份、唯一定位与操作锁 |
 | 设计系统 | `web/src/app/globals.css`、`web/src/components/AppShell.tsx`、`web/src/components/dc-ui.tsx` 和 ui 基础组件；不依赖仓库外设计文件 |
 
-生成参数与草稿只使用一份规范快照。历史复用优先于普通草稿，默认值补齐；初始化期间已编辑字段保留。提交使用点击时的独立快照。批量成功项移出选择，未确认项再次提交前提示核对任务，不自动重试。
+生成参数与草稿只使用一份规范快照。历史复用优先于普通草稿，默认值补齐；初始化期间已编辑字段保留。正式提交先把固定快照与 UUID 写入 IndexedDB，再携带 submission_id/submission_store_id 发送。批量条目各有身份，并发最多 4；已发送地板不重新识色。同一批次继续时沿用原快照，不读取后来修改的表单。
+
+提交恢复由生成模块内的 submission-store、submission-client、useSubmissionRecovery 和 SubmissionRecovery 分别负责本地事务、网络协议、生命周期与展示。自动恢复只 GET 查询；点击继续才 POST。未解决记录不自动过期，隐藏不删除；确认受理后移除完整快照，轻量凭据保留 30 天。存储失败不降级发送。跨标签页由 IndexedDB 事务复用未解决身份，后端凭据是最终去重依据。
+
+后端协议 v1：请求体两个身份字段须同时为 UUID v4。旧客户端不传时每个请求分配内部身份，不保证跨请求去重。GET /api/job-submissions/{submission_id}?store_id=... 返回 not_found、prepared、accepted、job_unavailable。健康接口保留 ok 并增加 submissions。请求摘要来自补齐默认值的请求模型，排除密钥和传输身份；重放先于配置、文件和容量检查。
+
+受理持有提交锁，按 prepared 凭据 → 队列落盘 → dispatch_committed 凭据 → spawn 顺序同步执行短临界区，不执行网络请求，也不在其中 await，因此浏览器取消不能中途拆断受理决定。持久化期间不持 JOB_STATE_LOCK。启动权一旦持久化就不再经创建接口使用；启动边界之后崩溃可能导致一次任务没有执行，但不会猜测重跑。损坏凭据返回 503；任务卡消失返回原受理信息而不重建。服务只支持单进程单 worker，不能用此本地锁声明多进程安全。
+
+备份和升级保留队列、凭据及原数据。清浏览器站点数据会丢失本地待确认入口；手工删除凭据、复制不一致的数据集或降级到不认识协议的服务器不在保证范围。详见[第七轮实现报告](./docs/SUBMISSION_RELIABILITY_ROUND_7.md)。
 
 SSE、父级列表及任务动作回执统一进入卡片快照处理器，带时间戳的旧快照不能覆盖新值。候选读取每张卡片最多 4 个在途请求，同请求合并、模型切回复用、候选增加补缺项。评审先按所属记录内完整路径匹配，旧文件名回退必须唯一。
 

@@ -150,6 +150,7 @@ export interface FailureKB {
 
 /** /api/jobs 系列返回的任务视图（_job_view 的 JSON） */
 export interface JobView {
+  submission_id?: string;
   pending_result_commit?: string | null;
   snapshot_at?: number;
   job_id: string;
@@ -299,6 +300,8 @@ export interface SceneCatalog {
 }
 
 export interface JobSubmit {
+  submission_id?: string;
+  submission_store_id?: string;
   image_path: string;
   model_filter: "b2" | "pro" | "both";
   model_targets?: GenerationModelKey[];
@@ -310,6 +313,8 @@ export interface JobSubmit {
 }
 
 export interface FreeJobSubmit {
+  submission_id?: string;
+  submission_store_id?: string;
   prompt: string;
   image_paths: string[];
   model_targets: Array<"b2" | "pro">;

@@ -159,6 +159,7 @@ def job_view(job: JobRecord) -> dict:
         'pending_result_commit': job.pending_result_commit or None,
         'snapshot_at': time.time_ns() // 1000,
         'job_id': job.job_id,
+        'submission_id': job.submission_id,
         'display_name': job.display_name,
         'ts': job.ts,
         'status': job.status,

@@ -60,8 +60,11 @@ async def lifespan(_app: FastAPI):
         logger.warning(f"读取 max_concurrent_per_model 失败，用默认 1: {ex}")
         lim = 1
     state.init_runtime(lim)
+    from . import submission_store, job_submissions
+    submission_store.health()
     migrated = migrate_all_record_storage()
     state.JOBS.replace((j.job_id, j) for j in load_persisted_jobs())
+    job_submissions.recover()
     from .result_commits import restore_pending_jobs
     restore_pending_jobs()
     resumed = routes_whole_home_design.recover_background_tasks()
@@ -118,7 +121,8 @@ async def reject_cross_origin_mutations(request: Request, call_next):
 # ── 健康检查 ──
 @app.get('/api/healthz')
 def healthz():
-    return {'ok': True}
+    from .submission_store import health
+    return {'ok': True, 'submissions': health()}
 
 
 # ── 业务路由 ──

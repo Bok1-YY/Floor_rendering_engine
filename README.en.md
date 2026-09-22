@@ -1,6 +1,6 @@
 # Floor Rendering Engine
 
-![Release](https://img.shields.io/badge/version-7.1.1-blue)
+![Release](https://img.shields.io/badge/version-7.1.2-blue)
 ![License](https://img.shields.io/badge/license-AGPL--3.0--only-blue)
 ![Python](https://img.shields.io/badge/python-3.12-3776AB)
 ![Node](https://img.shields.io/badge/node-20.9%2B-339933)
@@ -24,6 +24,10 @@ This is neither a generic “home interior” prompt preset nor a way to relabel
 ## Current engineering update — September 2026
 
 Five refactoring rounds separate provider implementations, task orchestration, image editor sessions, generation state, record drafts and job cards. Batch submissions retain only unsuccessful selections; uncertain submissions require an explicit decision. Saved local images can finish their record commit without another model call. Record review/edit drafts survive file switching within the current page session. Candidate reads share a four-request limit per card.
+
+Round seven adds durable identities to ordinary, free-form and batch generation. After a lost response or reload, the recovery panel looks up the original task. Sending an unaccepted intent requires a click and reuses its saved parameters and identity. Removing a card does not remove its receipt. Restarting the server never automatically resubmits these tasks. See the [round-seven notes](./docs/SUBMISSION_RELIABILITY_ROUND_7.md).
+
+IndexedDB failures, incompatible backend protocols and data-instance mismatches block protected submissions. Keep output_files/.job_submissions in data backups. Clearing browser site data removes its pending list. This protects initial task admission for one identity, not exactly-once external billing. Older clients and downgraded servers cannot provide the complete guarantee.
 
 See the [current validation record](./docs/VALIDATION_CURRENT.md) and [Windows release procedure](./docs/WINDOWS_RELEASE.md). Release binaries are validated in isolated directories on the build machine, not on a clean Windows installation.
 

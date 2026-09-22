@@ -5,6 +5,8 @@ import asyncio
 import json
 import os
 import time
+from uuid import UUID
+from . import job_submissions
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
@@ -55,6 +57,10 @@ _AUTO_COLOR_WORKFLOWS = ('纯效果图', '地板替换', '宠物友好', '参照
 # ── 任务：提交 / 列表 / 详情 / SSE / 取消 / 重试 ──
 @router.post('/api/jobs')
 async def create_job(req: JobSubmitRequest):
+    return job_submissions.submit('job', req, _prepare_job, _run_job_bg)
+
+
+def _prepare_job(req):
     if '自由创作' in (req.params.workflow_mode or ''):
         raise HTTPException(422, '自由创作请使用 /api/jobs/free')
     cfg = load_config()
@@ -85,13 +91,15 @@ async def create_job(req: JobSubmitRequest):
     job.model_targets = targets
     ensure_model_runs(job)
     job.workflow_mode = req.params.workflow_mode
-    state.admit_job(job)   # 登记并顺手收口最旧的终态卡，防长会话内存缓涨
-    state.spawn(_run_job_bg(job, req))   # 立即返回，不为整个 4K 生成挂起 HTTP
-    return job_view(job)
+    return job
 
 
 @router.post('/api/jobs/free')
 async def create_free_job(req: FreeJobSubmitRequest):
+    return job_submissions.submit('free', req, _prepare_free_job, _run_free_job_bg)
+
+
+def _prepare_free_job(req):
     cfg = load_config()
     targets = list(req.model_targets)
     if not targets or len(targets) != len(set(targets)):
@@ -112,9 +120,14 @@ async def create_free_job(req: FreeJobSubmitRequest):
     job.model_targets = targets
     ensure_model_runs(job)
     job.workflow_mode = '自由创作 (自定义提示词/多图)'
-    state.admit_job(job)
-    state.spawn(_run_free_job_bg(job, req))
-    return job_view(job)
+    return job
+
+
+@router.get('/api/job-submissions/{submission_id}')
+def get_submission(submission_id: UUID, store_id: UUID):
+    if submission_id.version != 4 or store_id.version != 4:
+        raise HTTPException(422, '提交标识必须为 UUID v4')
+    return job_submissions.lookup(str(submission_id), str(store_id))
 
 
 @router.get('/api/jobs')

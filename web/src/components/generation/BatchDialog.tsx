@@ -16,6 +16,7 @@ export function BatchDialog({
   batchFloors,
   recentFloors,
   batchNotice,
+  recovery,
   setBatchOpen,
   runBatch,
   runBatchFloors,
@@ -23,7 +24,7 @@ export function BatchDialog({
   setBatchRooms,
   setBatchFloors,
   batchRoomOptions
-}: Pick<GenerationWorkspaceModel, "options" | "modelTargets" | "params" | "batchSubmitting" | "batchOpen" | "batchTab" | "batchRooms" | "batchFloors" | "recentFloors" | "batchNotice" | "setBatchOpen" | "runBatch" | "runBatchFloors" | "setBatchTab" | "setBatchRooms" | "setBatchFloors" | "batchRoomOptions">) {
+}: Pick<GenerationWorkspaceModel, "options" | "modelTargets" | "params" | "batchSubmitting" | "batchOpen" | "batchTab" | "batchRooms" | "batchFloors" | "recentFloors" | "batchNotice" | "recovery" | "setBatchOpen" | "runBatch" | "runBatchFloors" | "setBatchTab" | "setBatchRooms" | "setBatchFloors" | "batchRoomOptions">) {
   return <>      {/* 批量：多房间 × 同地板 ｜ 多地板 × 同场景 */}
     <Dialog open={batchOpen} onOpenChange={setBatchOpen}>
       <DialogContent className="max-h-[90vh] overflow-y-auto max-w-[min(92vw,560px)] rounded-[18px]">
@@ -143,6 +144,12 @@ export function BatchDialog({
           </div>
 
           {batchNotice && <p role="status" className="text-sm text-destructive">{batchNotice}</p>}
+          {batchNotice && <ul aria-label="批量条目状态" className="space-y-1 text-xs text-muted-foreground">
+            {recovery.intents.filter(row => row.batch && (batchTab === 'rooms'
+              ? batchRooms.some(room => row.item === `room:${room}`)
+              : batchFloors.some(floor => row.item === `floor:${floor.path}`))).slice(0, 20).map(row =>
+                <li key={row.id}>{row.name}：{row.status === 'accepted' ? '已找到原任务' : row.status === 'unavailable' ? '已受理，请核对历史记录' : row.status === 'rejected' ? `提交被拒绝：${row.error}` : row.canContinue ? '尚未受理，点击提交批量可继续' : '待确认，正在查询原任务'}</li>)}
+          </ul>}
           <div className="flex items-center justify-between gap-3 border-t border-border pt-4">
             <div className="min-w-0 text-[11.5px] leading-relaxed text-muted-foreground">
               将提交 {batchTab === "rooms" ? batchRooms.length : batchFloors.length} 个任务 × {modelTargets.length} 模型 = {(batchTab === "rooms" ? batchRooms.length : batchFloors.length) * modelTargets.length} 张起

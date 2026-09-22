@@ -1,6 +1,6 @@
 # Floor Rendering Engine
 
-![Release](https://img.shields.io/badge/version-7.1.1-blue)
+![Release](https://img.shields.io/badge/version-7.1.2-blue)
 ![License](https://img.shields.io/badge/license-AGPL--3.0--only-blue)
 ![Python](https://img.shields.io/badge/python-3.12-3776AB)
 ![Node](https://img.shields.io/badge/node-20.9%2B-339933)
@@ -24,6 +24,10 @@ Floor Rendering Engine 现在是一套本地 AI 空间设计与视觉生产工�
 ## 2026.09 工程更新
 
 五轮重构已分离 provider、任务编排、图像编辑会话、生成状态、记录草稿和任务卡。批量成功项移出选择，提交结果未确认时不自动重试；已保存的本地图片可恢复补写记录，无需再调模型。记录评审与二改草稿在本次页面会话内按目标保留；任务卡候选读取每卡最多 4 个并发请求。
+
+第七轮为普通生成、自由创作和批量条目增加持久化提交身份。响应丢失或刷新页面后，“待确认提交”自动查询原任务；只有点击“继续本次提交”才补发，且沿用原参数和标识。清掉任务卡不会清掉去重凭据。服务重启不自动重发生成；已受理但已清卡的提交提示核对历史记录。详见[第七轮说明](./docs/SUBMISSION_RELIABILITY_ROUND_7.md)。
+
+浏览器 IndexedDB 无法保存提交、后端协议过旧或数据目录身份不符时，会停止新提交并提示原因。备份数据时保留 output_files/.job_submissions；清除浏览器站点数据会丢失本机待确认列表。保护范围是同一提交的初始任务受理，不等于外部模型绝对只计费一次；旧客户端及降级版本不具备完整保护。
 
 验证结果与限制见[当前验证索引](./docs/VALIDATION_CURRENT.md)，可执行文件构建与清理见[Windows 发布说明](./docs/WINDOWS_RELEASE.md)。本轮发布按本机隔离验证设计，不声称已经在全新 Windows 系统验证。
 

@@ -5,6 +5,7 @@ import { BatchDialog } from './BatchDialog';
 import { GenerationResults } from './GenerationResults';
 import { SceneOutputSteps } from './SceneOutputSteps';
 import { ProductStep } from './ProductStep';
+import { SubmissionRecovery } from './SubmissionRecovery';
 
 import { Eye, Grid2X2, Sparkles } from "lucide-react";
 
@@ -83,6 +84,7 @@ export function GenerationView({ model }: { model: GenerationWorkspaceModel }) {
       {/* ── 左：参数列 ── */}
       <section className="flex w-[clamp(430px,40vw,540px)] min-w-[430px] flex-none flex-col border-r border-border bg-panel max-[980px]:min-w-[410px]">
         <div className="flex flex-1 flex-col gap-[10px] overflow-y-auto px-[18px] py-4 max-[1080px]:px-4">
+          <SubmissionRecovery recovery={model.recovery} />
 
           <ProductStep
             floor={floor}
@@ -189,6 +191,7 @@ export function GenerationView({ model }: { model: GenerationWorkspaceModel }) {
         isFreeMode={isFreeMode}
       />
       <BatchDialog
+        recovery={model.recovery}
         options={options}
         modelTargets={modelTargets}
         params={params}

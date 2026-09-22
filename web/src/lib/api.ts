@@ -110,7 +110,11 @@ async function upload<T = Swatch>(path: string, file: File): Promise<T> {
 export const api = {
   /** 把后端给的相对 URL(/outputs.. /thumb..)拼成可用的绝对地址 */
   imgUrl: (p: string) => (!p ? "" : p.startsWith("http") ? p : API + p),
-  health: () => jget<{ ok: boolean }>("/api/healthz"),
+  health: () => jget<{ ok: boolean; submissions?: { version: number; store_id: string | null; ready: boolean } }>("/api/healthz", AbortSignal.timeout(15000)),
+  submission: (id: string, store: string, signal?: AbortSignal) => jget<{
+    status: 'not_found' | 'prepared' | 'accepted' | 'job_unavailable';
+    submission_id: string; job_id?: string; can_continue: boolean; job?: JobView | null;
+  }>(`/api/job-submissions/${encodeURIComponent(id)}?store_id=${encodeURIComponent(store)}`, signal ? AbortSignal.any([signal, AbortSignal.timeout(15000)]) : AbortSignal.timeout(15000)),
 
   uploadDesignFloorplan: (f: File) =>
     upload<DesignFloorplanUpload>("/api/uploads/design-floorplan", f),
@@ -196,8 +200,8 @@ export const api = {
   uploadRoom: (f: File) => upload("/api/uploads/room", f),
   uploadRef: (f: File) => upload("/api/uploads/ref", f),
 
-  createJob: (req: JobSubmit) => jsend<JobView>("/api/jobs", "POST", req),
-  createFreeJob: (req: FreeJobSubmit) => jsend<JobView>("/api/jobs/free", "POST", req),
+  createJob: (req: JobSubmit) => jsend<JobView>("/api/jobs", "POST", req, AbortSignal.timeout(20000)),
+  createFreeJob: (req: FreeJobSubmit) => jsend<JobView>("/api/jobs/free", "POST", req, AbortSignal.timeout(20000)),
   listJobs: (limit = 50) => jget<JobView[]>(`/api/jobs?limit=${limit}`),
   getJob: (id: string) => jget<JobView>(`/api/jobs/${id}`),
   cancelJob: (id: string) =>
