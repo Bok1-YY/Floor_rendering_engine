@@ -63,6 +63,15 @@ test('duplicate job acknowledgements never produce duplicate cards', () => {
   c.accept(c.begin(), [{ job_id: 'one', snapshot_at: 3 }, { job_id: 'one', snapshot_at: 3 }]);
   assert.equal(c.values().length, 1); assert.equal(c.values()[0].snapshot_at, 3);
 });
+
+test('late admission and recovery acknowledgements cannot resurrect deleted or cleared cards', () => {
+  const c = new JobCollection();
+  c.add([{ job_id: 'deleted', status: 'done' }]); c.remove('deleted');
+  c.clearPendingCompleted(['cleared-before-ack']);
+  c.add([{ job_id: 'deleted', status: 'done' }, { job_id: 'cleared-before-ack', status: 'queued' }, { job_id: 'fresh', status: 'queued' }]);
+  c.accept(c.begin(), [{ job_id: 'deleted', status: 'done' }, { job_id: 'cleared-before-ack', status: 'done' }]);
+  assert.deepEqual(c.values().map(job => job.job_id), ['fresh']);
+});
 test('draft validation retains legacy and nullable fields while discarding malformed values', () => {
   const draft = normalizeDraft({ params: { workflow_mode: 5, style_type: [], floor_tone: 'warm', film_width_mm: null, cn_facilities: null, cn_mode: 'false', avoid_items: [5] }, modelFilter: 'pro', modelTargets: ['b2', 'bad', 'b2'], floor: { path: [] }, freeImages: {}, sdOptions: { steps: 'bad', seed: null } });
   assert.deepEqual(draft.params, { floor_tone: 'warm', film_width_mm: null, cn_facilities: null });

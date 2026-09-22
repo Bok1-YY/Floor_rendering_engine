@@ -23,12 +23,14 @@ export class JobCollection {
     return true;
   }
   add(jobs: JobView[]) {
+    jobs = jobs.filter(job => !this.removed.has(job.job_id));
     const merged = new Map(this.jobs.map(job => [job.job_id, job]));
     for (const job of jobs) { this.pending.set(job.job_id, newer(merged.get(job.job_id), job)); merged.delete(job.job_id); }
     this.jobs = [...new Set(jobs.map(job => job.job_id))].map(id => this.pending.get(id)!).concat([...merged.values()]);
   }
   remove(id: string) { this.removed.add(id); this.pending.delete(id); this.jobs = this.jobs.filter(job => job.job_id !== id); }
-  clearPendingCompleted() {
-    for (const [id, job] of this.pending) if (job.status !== 'queued' && job.status !== 'running' && !job.pro_polishing && job.operation_status !== 'running') this.pending.delete(id);
+  clearPendingCompleted(ids?: string[]) {
+    const cleared = ids ?? this.jobs.filter(job => job.status === 'done' && !job.pro_polishing && job.operation_status !== 'running').map(job => job.job_id);
+    for (const id of cleared) this.remove(id);
   }
 }

@@ -214,3 +214,24 @@ test('hidden pending intent survives reload and an explicit new generation gets 
   await expect.poll(async () => (await intents(page)).length).toBe(2);
   expect(new Set((await intents(page)).map(row => row.id)).size).toBe(2);
 });
+
+test('late recovery lookup cannot resurrect a card cleared while that lookup was in flight', async ({ page }) => {
+  await setup(page);
+  await page.getByRole('button', { name: '生成效果图', exact: true }).click();
+  await expect(page.getByText('已找到原任务', { exact: true })).toBeVisible();
+  const id = (await (await page.request.get('/api/jobs')).json())[0].job_id;
+  await expect(page.locator(`[id="job-${id}"]`)).toBeVisible();
+  let respond: (() => Promise<void>) | undefined;
+  await page.route('**/api/job-submissions/*?*', async route => {
+    const response = await route.fetch(); respond = () => route.fulfill({ response });
+  });
+  await page.getByRole('button', { name: '定位原任务', exact: true }).click();
+  await expect.poll(() => !!respond).toBe(true);
+  await page.getByRole('button', { name: '清除已完成任务卡', exact: true }).click();
+  await expect(page.getByText('已清除 1 个已完成任务卡；图片和历史记录均已保留', { exact: true })).toBeVisible();
+  await respond!();
+  await expect(page.locator(`[id="job-${id}"]`)).toHaveCount(0);
+  await page.getByRole('button', { name: '刷新任务', exact: true }).click();
+  await expect(page.locator(`[id="job-${id}"]`)).toHaveCount(0);
+  expect((await (await page.request.get('/__test/submissions')).json()).calls).toHaveLength(1);
+});

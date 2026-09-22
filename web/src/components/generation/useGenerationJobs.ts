@@ -31,7 +31,8 @@ export function useGenerationJobs() {
   async function clearCompleted() {
     try {
       const r = await api.clearCompleted(); if (!collection.active) return;
-      collection.clearPendingCompleted(); toast.success(`已清除 ${r.cleared} 个已完成任务卡；图片和历史记录均已保留`); await refreshJobs();
+      collection.clearPendingCompleted(r.cleared_job_ids); store.set('jobs', collection.values());
+      toast.success(`已清除 ${r.cleared} 个已完成任务卡；图片和历史记录均已保留`); await refreshJobs();
     } catch (e) { if (collection.active) toast.error((e as Error).message); }
   }
   async function cancelAll() {

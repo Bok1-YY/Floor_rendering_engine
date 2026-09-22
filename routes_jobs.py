@@ -205,7 +205,7 @@ def clear_completed():
             state.JOBS.clear_cancelled(jid)
             removed += 1
     state.JOBS.persist()  # 必须在 locked() 外：persist 内部会再取同一把锁（不可重入）
-    return {'cleared': removed}
+    return {'cleared': removed, 'cleared_job_ids': victims}
 
 
 @router.post('/api/jobs/{jid}/delete')

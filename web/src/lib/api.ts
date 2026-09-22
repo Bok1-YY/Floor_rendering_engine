@@ -208,7 +208,7 @@ export const api = {
     jsend<{ cancelled: boolean }>(`/api/jobs/${id}/cancel`, "POST"),
   cancelAll: () => jsend<{ stopped: number }>(`/api/jobs/cancel-all`, "POST"),
   clearCompleted: () =>
-    jsend<{ cleared: number }>(`/api/jobs/clear-completed`, "POST"),
+    jsend<{ cleared: number; cleared_job_ids?: string[] }>(`/api/jobs/clear-completed`, "POST"),
   deleteJob: (id: string) =>
     jsend<{ deleted: number }>(`/api/jobs/${id}/delete`, "POST"),
   retryJob: (id: string, confirmPossibleDuplicateCharge = false) =>

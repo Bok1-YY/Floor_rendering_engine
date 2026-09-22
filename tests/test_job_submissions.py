@@ -210,6 +210,15 @@ def test_queue_full_and_missing_input_do_not_prepare_or_dispatch(context):
     assert context[1] == []
 
 
+def test_clear_returns_authoritative_ids_for_late_client_acknowledgements(context):
+    finished = submit(request(context))
+    active = submit(request(context))
+    state.JOBS.get(finished['job_id']).status = 'done'
+    result = routes_jobs.clear_completed()
+    assert result == {'cleared': 1, 'cleared_job_ids': [finished['job_id']]}
+    assert state.JOBS.get(active['job_id']) is not None
+
+
 def test_http_contract_validation_and_missing_lookup(context):
     from Floor_engine_server.server_api import app
     async def run():

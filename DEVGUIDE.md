@@ -1,6 +1,6 @@
 # Floor Rendering Engine 开发指南
 
-本指南描述当前源码与维护边界，更新于 2026-09-22。版本读取 [VERSION](./VERSION)。产品介绍见 [README](./README.md)，发布流程见 [Windows 发布说明](./docs/WINDOWS_RELEASE.md)，历史改动见 [验证索引](./docs/VALIDATION_CURRENT.md)。
+本指南描述当前源码与维护边界，更新于 2026-09-23。版本读取 [VERSION](./VERSION)。产品介绍见 [README](./README.md)，发布流程见 [Windows 发布说明](./docs/WINDOWS_RELEASE.md)，历史改动见 [验证索引](./docs/VALIDATION_CURRENT.md)。
 
 ## 1. 环境与启动
 
@@ -122,6 +122,8 @@ SD 与超分各自保存请求身份、重试风险和不确定计数。有效 F
 提交恢复由生成模块内的 submission-store、submission-client、useSubmissionRecovery 和 SubmissionRecovery 分别负责本地事务、网络协议、生命周期与展示。自动恢复只 GET 查询；点击继续才 POST。未解决记录不自动过期，隐藏不删除；确认受理后移除完整快照，轻量凭据保留 30 天。存储失败不降级发送。跨标签页由 IndexedDB 事务复用未解决身份，后端凭据是最终去重依据。
 
 后端协议 v1：请求体两个身份字段须同时为 UUID v4。旧客户端不传时每个请求分配内部身份，不保证跨请求去重。GET /api/job-submissions/{submission_id}?store_id=... 返回 not_found、prepared、accepted、job_unavailable。健康接口保留 ok 并增加 submissions。请求摘要来自补齐默认值的请求模型，排除密钥和传输身份；重放先于配置、文件和容量检查。
+
+清除完成任务的响应额外返回 cleared_job_ids，使前端能够标记尚未收到创建确认的已清卡任务。JobCollection 的列表合并和 add 都遵守删除标记，避免迟到的提交确认或恢复查询重新显示旧卡；旧服务缺少 ID 列表时只按当前已知完成卡退回处理。
 
 受理持有提交锁，按 prepared 凭据 → 队列落盘 → dispatch_committed 凭据 → spawn 顺序同步执行短临界区，不执行网络请求，也不在其中 await，因此浏览器取消不能中途拆断受理决定。持久化期间不持 JOB_STATE_LOCK。启动权一旦持久化就不再经创建接口使用；启动边界之后崩溃可能导致一次任务没有执行，但不会猜测重跑。损坏凭据返回 503；任务卡消失返回原受理信息而不重建。服务只支持单进程单 worker，不能用此本地锁声明多进程安全。
 

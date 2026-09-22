@@ -41,7 +41,7 @@ def prepare_compiler(work: Path, python: Path, env: dict) -> dict:
         command = [python, '-m', 'nuitka', '--mode=onefile', '--mingw64', '--jobs=2', '--low-memory',
                    '--assume-yes-for-downloads', f'--output-dir={work / "compiler-probe"}', probe]
         with (work / f'compiler-probe-{attempt}.log').open('wb') as stream:
-            result = subprocess.run([str(x) for x in command], env=env, stdout=stream, stderr=subprocess.STDOUT)
+            result = subprocess.run([str(x) for x in command], cwd=work, env=env, stdout=stream, stderr=subprocess.STDOUT)
         if result.returncode == 0:
             return copied
     raise SystemExit(f'Compiler preflight failed; inspect logs under {work}')

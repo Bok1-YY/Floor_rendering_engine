@@ -25,6 +25,7 @@ export async function checkIntent(row: Intent, signal?: AbortSignal): Promise<{ 
 
 export async function sendIntent(input: Intent, valid: () => boolean): Promise<{ row: Intent; job?: JobView }> {
   let row = input;
+  if (!valid()) return { row };
   const instance = await submissionStore();
   if (row.backend !== API || row.store !== instance) throw new Error('当前数据目录与原提交不同，已停止补发');
   if (resolved(row)) return { row };
